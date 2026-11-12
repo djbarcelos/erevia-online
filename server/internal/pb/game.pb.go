@@ -928,6 +928,7 @@ type Welcome struct {
 	Entities      []*Entity              `protobuf:"bytes,4,rep,name=entities,proto3" json:"entities,omitempty"`
 	Skills        []*SkillInfo           `protobuf:"bytes,5,rep,name=skills,proto3" json:"skills,omitempty"`
 	SafeRadius    float32                `protobuf:"fixed32,6,opt,name=safe_radius,json=safeRadius,proto3" json:"safe_radius,omitempty"`
+	Zones         []*MapZone             `protobuf:"bytes,7,rep,name=zones,proto3" json:"zones,omitempty"` // zonas de caça (para o mapa)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1004,6 +1005,122 @@ func (x *Welcome) GetSafeRadius() float32 {
 	return 0
 }
 
+func (x *Welcome) GetZones() []*MapZone {
+	if x != nil {
+		return x.Zones
+	}
+	return nil
+}
+
+// Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
+type MapZone struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // nomes dos monstros
+	RMin          float32                `protobuf:"fixed32,2,opt,name=r_min,json=rMin,proto3" json:"r_min,omitempty"`
+	RMax          float32                `protobuf:"fixed32,3,opt,name=r_max,json=rMax,proto3" json:"r_max,omitempty"`
+	LevelMin      uint32                 `protobuf:"varint,4,opt,name=level_min,json=levelMin,proto3" json:"level_min,omitempty"`
+	LevelMax      uint32                 `protobuf:"varint,5,opt,name=level_max,json=levelMax,proto3" json:"level_max,omitempty"`
+	Fixed         bool                   `protobuf:"varint,6,opt,name=fixed,proto3" json:"fixed,omitempty"` // ponto fixo em (x, z)
+	X             float32                `protobuf:"fixed32,7,opt,name=x,proto3" json:"x,omitempty"`
+	Z             float32                `protobuf:"fixed32,8,opt,name=z,proto3" json:"z,omitempty"`
+	Boss          bool                   `protobuf:"varint,9,opt,name=boss,proto3" json:"boss,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MapZone) Reset() {
+	*x = MapZone{}
+	mi := &file_erevia_v1_game_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MapZone) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MapZone) ProtoMessage() {}
+
+func (x *MapZone) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MapZone.ProtoReflect.Descriptor instead.
+func (*MapZone) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *MapZone) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *MapZone) GetRMin() float32 {
+	if x != nil {
+		return x.RMin
+	}
+	return 0
+}
+
+func (x *MapZone) GetRMax() float32 {
+	if x != nil {
+		return x.RMax
+	}
+	return 0
+}
+
+func (x *MapZone) GetLevelMin() uint32 {
+	if x != nil {
+		return x.LevelMin
+	}
+	return 0
+}
+
+func (x *MapZone) GetLevelMax() uint32 {
+	if x != nil {
+		return x.LevelMax
+	}
+	return 0
+}
+
+func (x *MapZone) GetFixed() bool {
+	if x != nil {
+		return x.Fixed
+	}
+	return false
+}
+
+func (x *MapZone) GetX() float32 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *MapZone) GetZ() float32 {
+	if x != nil {
+		return x.Z
+	}
+	return 0
+}
+
+func (x *MapZone) GetBoss() bool {
+	if x != nil {
+		return x.Boss
+	}
+	return false
+}
+
 type Spawn struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Entity        *Entity                `protobuf:"bytes,1,opt,name=entity,proto3" json:"entity,omitempty"`
@@ -1013,7 +1130,7 @@ type Spawn struct {
 
 func (x *Spawn) Reset() {
 	*x = Spawn{}
-	mi := &file_erevia_v1_game_proto_msgTypes[10]
+	mi := &file_erevia_v1_game_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1025,7 +1142,7 @@ func (x *Spawn) String() string {
 func (*Spawn) ProtoMessage() {}
 
 func (x *Spawn) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[10]
+	mi := &file_erevia_v1_game_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1038,7 +1155,7 @@ func (x *Spawn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Spawn.ProtoReflect.Descriptor instead.
 func (*Spawn) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{10}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Spawn) GetEntity() *Entity {
@@ -1057,7 +1174,7 @@ type Despawn struct {
 
 func (x *Despawn) Reset() {
 	*x = Despawn{}
-	mi := &file_erevia_v1_game_proto_msgTypes[11]
+	mi := &file_erevia_v1_game_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1069,7 +1186,7 @@ func (x *Despawn) String() string {
 func (*Despawn) ProtoMessage() {}
 
 func (x *Despawn) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[11]
+	mi := &file_erevia_v1_game_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1082,7 +1199,7 @@ func (x *Despawn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Despawn.ProtoReflect.Descriptor instead.
 func (*Despawn) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{11}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Despawn) GetId() uint32 {
@@ -1109,7 +1226,7 @@ type Snapshot struct {
 
 func (x *Snapshot) Reset() {
 	*x = Snapshot{}
-	mi := &file_erevia_v1_game_proto_msgTypes[12]
+	mi := &file_erevia_v1_game_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1121,7 +1238,7 @@ func (x *Snapshot) String() string {
 func (*Snapshot) ProtoMessage() {}
 
 func (x *Snapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[12]
+	mi := &file_erevia_v1_game_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1134,7 +1251,7 @@ func (x *Snapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Snapshot.ProtoReflect.Descriptor instead.
 func (*Snapshot) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{12}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Snapshot) GetTick() uint32 {
@@ -1202,7 +1319,7 @@ type Pong struct {
 
 func (x *Pong) Reset() {
 	*x = Pong{}
-	mi := &file_erevia_v1_game_proto_msgTypes[13]
+	mi := &file_erevia_v1_game_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1214,7 +1331,7 @@ func (x *Pong) String() string {
 func (*Pong) ProtoMessage() {}
 
 func (x *Pong) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[13]
+	mi := &file_erevia_v1_game_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1227,7 +1344,7 @@ func (x *Pong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pong.ProtoReflect.Descriptor instead.
 func (*Pong) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{13}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Pong) GetClientTime() float64 {
@@ -1250,7 +1367,7 @@ type ChatMessage struct {
 
 func (x *ChatMessage) Reset() {
 	*x = ChatMessage{}
-	mi := &file_erevia_v1_game_proto_msgTypes[14]
+	mi := &file_erevia_v1_game_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1262,7 +1379,7 @@ func (x *ChatMessage) String() string {
 func (*ChatMessage) ProtoMessage() {}
 
 func (x *ChatMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[14]
+	mi := &file_erevia_v1_game_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1275,7 +1392,7 @@ func (x *ChatMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatMessage.ProtoReflect.Descriptor instead.
 func (*ChatMessage) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{14}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ChatMessage) GetChannel() ChatChannel {
@@ -1323,7 +1440,7 @@ type Kicked struct {
 
 func (x *Kicked) Reset() {
 	*x = Kicked{}
-	mi := &file_erevia_v1_game_proto_msgTypes[15]
+	mi := &file_erevia_v1_game_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1335,7 +1452,7 @@ func (x *Kicked) String() string {
 func (*Kicked) ProtoMessage() {}
 
 func (x *Kicked) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[15]
+	mi := &file_erevia_v1_game_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1348,7 +1465,7 @@ func (x *Kicked) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Kicked.ProtoReflect.Descriptor instead.
 func (*Kicked) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{15}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Kicked) GetReason() string {
@@ -1380,7 +1497,7 @@ type SelfStats struct {
 
 func (x *SelfStats) Reset() {
 	*x = SelfStats{}
-	mi := &file_erevia_v1_game_proto_msgTypes[16]
+	mi := &file_erevia_v1_game_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1392,7 +1509,7 @@ func (x *SelfStats) String() string {
 func (*SelfStats) ProtoMessage() {}
 
 func (x *SelfStats) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[16]
+	mi := &file_erevia_v1_game_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1405,7 +1522,7 @@ func (x *SelfStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelfStats.ProtoReflect.Descriptor instead.
 func (*SelfStats) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{16}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SelfStats) GetHp() uint32 {
@@ -1510,7 +1627,7 @@ type SkillCooldown struct {
 
 func (x *SkillCooldown) Reset() {
 	*x = SkillCooldown{}
-	mi := &file_erevia_v1_game_proto_msgTypes[17]
+	mi := &file_erevia_v1_game_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1522,7 +1639,7 @@ func (x *SkillCooldown) String() string {
 func (*SkillCooldown) ProtoMessage() {}
 
 func (x *SkillCooldown) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[17]
+	mi := &file_erevia_v1_game_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1535,7 +1652,7 @@ func (x *SkillCooldown) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillCooldown.ProtoReflect.Descriptor instead.
 func (*SkillCooldown) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{17}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SkillCooldown) GetSkillId() uint32 {
@@ -1568,13 +1685,14 @@ type Entity struct {
 	MaxHp         uint32                 `protobuf:"varint,12,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
 	Dead          bool                   `protobuf:"varint,13,opt,name=dead,proto3" json:"dead,omitempty"`
 	Scale         float32                `protobuf:"fixed32,14,opt,name=scale,proto3" json:"scale,omitempty"` // tamanho visual (0 = 1)
+	Boss          bool                   `protobuf:"varint,15,opt,name=boss,proto3" json:"boss,omitempty"`    // chefe
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Entity) Reset() {
 	*x = Entity{}
-	mi := &file_erevia_v1_game_proto_msgTypes[18]
+	mi := &file_erevia_v1_game_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1586,7 +1704,7 @@ func (x *Entity) String() string {
 func (*Entity) ProtoMessage() {}
 
 func (x *Entity) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[18]
+	mi := &file_erevia_v1_game_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1599,7 +1717,7 @@ func (x *Entity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Entity.ProtoReflect.Descriptor instead.
 func (*Entity) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{18}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Entity) GetId() uint32 {
@@ -1700,6 +1818,13 @@ func (x *Entity) GetScale() float32 {
 	return 0
 }
 
+func (x *Entity) GetBoss() bool {
+	if x != nil {
+		return x.Boss
+	}
+	return false
+}
+
 type EntityState struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1714,7 +1839,7 @@ type EntityState struct {
 
 func (x *EntityState) Reset() {
 	*x = EntityState{}
-	mi := &file_erevia_v1_game_proto_msgTypes[19]
+	mi := &file_erevia_v1_game_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1726,7 +1851,7 @@ func (x *EntityState) String() string {
 func (*EntityState) ProtoMessage() {}
 
 func (x *EntityState) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[19]
+	mi := &file_erevia_v1_game_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1739,7 +1864,7 @@ func (x *EntityState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EntityState.ProtoReflect.Descriptor instead.
 func (*EntityState) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{19}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *EntityState) GetId() uint32 {
@@ -1795,7 +1920,7 @@ type HpUpdate struct {
 
 func (x *HpUpdate) Reset() {
 	*x = HpUpdate{}
-	mi := &file_erevia_v1_game_proto_msgTypes[20]
+	mi := &file_erevia_v1_game_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1807,7 +1932,7 @@ func (x *HpUpdate) String() string {
 func (*HpUpdate) ProtoMessage() {}
 
 func (x *HpUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[20]
+	mi := &file_erevia_v1_game_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1820,7 +1945,7 @@ func (x *HpUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HpUpdate.ProtoReflect.Descriptor instead.
 func (*HpUpdate) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{20}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *HpUpdate) GetId() uint32 {
@@ -1859,7 +1984,7 @@ type CombatEvent struct {
 
 func (x *CombatEvent) Reset() {
 	*x = CombatEvent{}
-	mi := &file_erevia_v1_game_proto_msgTypes[21]
+	mi := &file_erevia_v1_game_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1871,7 +1996,7 @@ func (x *CombatEvent) String() string {
 func (*CombatEvent) ProtoMessage() {}
 
 func (x *CombatEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[21]
+	mi := &file_erevia_v1_game_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1884,7 +2009,7 @@ func (x *CombatEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CombatEvent.ProtoReflect.Descriptor instead.
 func (*CombatEvent) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{21}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *CombatEvent) GetSourceId() uint32 {
@@ -1947,7 +2072,7 @@ type EffectEvent struct {
 
 func (x *EffectEvent) Reset() {
 	*x = EffectEvent{}
-	mi := &file_erevia_v1_game_proto_msgTypes[22]
+	mi := &file_erevia_v1_game_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1959,7 +2084,7 @@ func (x *EffectEvent) String() string {
 func (*EffectEvent) ProtoMessage() {}
 
 func (x *EffectEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[22]
+	mi := &file_erevia_v1_game_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1972,7 +2097,7 @@ func (x *EffectEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EffectEvent.ProtoReflect.Descriptor instead.
 func (*EffectEvent) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{22}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *EffectEvent) GetTargetId() uint32 {
@@ -2009,7 +2134,7 @@ type Revive struct {
 
 func (x *Revive) Reset() {
 	*x = Revive{}
-	mi := &file_erevia_v1_game_proto_msgTypes[23]
+	mi := &file_erevia_v1_game_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2021,7 +2146,7 @@ func (x *Revive) String() string {
 func (*Revive) ProtoMessage() {}
 
 func (x *Revive) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[23]
+	mi := &file_erevia_v1_game_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2034,7 +2159,7 @@ func (x *Revive) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Revive.ProtoReflect.Descriptor instead.
 func (*Revive) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{23}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Revive) GetId() uint32 {
@@ -2083,7 +2208,7 @@ type LevelUp struct {
 
 func (x *LevelUp) Reset() {
 	*x = LevelUp{}
-	mi := &file_erevia_v1_game_proto_msgTypes[24]
+	mi := &file_erevia_v1_game_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2095,7 +2220,7 @@ func (x *LevelUp) String() string {
 func (*LevelUp) ProtoMessage() {}
 
 func (x *LevelUp) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[24]
+	mi := &file_erevia_v1_game_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2108,7 +2233,7 @@ func (x *LevelUp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LevelUp.ProtoReflect.Descriptor instead.
 func (*LevelUp) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{24}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *LevelUp) GetId() uint32 {
@@ -2147,7 +2272,7 @@ type SkillInfo struct {
 
 func (x *SkillInfo) Reset() {
 	*x = SkillInfo{}
-	mi := &file_erevia_v1_game_proto_msgTypes[25]
+	mi := &file_erevia_v1_game_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2159,7 +2284,7 @@ func (x *SkillInfo) String() string {
 func (*SkillInfo) ProtoMessage() {}
 
 func (x *SkillInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[25]
+	mi := &file_erevia_v1_game_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2172,7 +2297,7 @@ func (x *SkillInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SkillInfo.ProtoReflect.Descriptor instead.
 func (*SkillInfo) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{25}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SkillInfo) GetId() uint32 {
@@ -2266,7 +2391,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\n" +
 	"self_stats\x18\b \x01(\v2\x14.erevia.v1.SelfStatsH\x00R\tselfStats\x12A\n" +
 	"\x0eskill_cooldown\x18\t \x01(\v2\x18.erevia.v1.SkillCooldownH\x00R\rskillCooldownB\x05\n" +
-	"\x03msg\"\xda\x01\n" +
+	"\x03msg\"\x84\x02\n" +
 	"\aWelcome\x12\x17\n" +
 	"\ayour_id\x18\x01 \x01(\rR\x06yourId\x12\x1b\n" +
 	"\ttick_rate\x18\x02 \x01(\rR\btickRate\x12\x1b\n" +
@@ -2274,7 +2399,18 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\bentities\x18\x04 \x03(\v2\x11.erevia.v1.EntityR\bentities\x12,\n" +
 	"\x06skills\x18\x05 \x03(\v2\x14.erevia.v1.SkillInfoR\x06skills\x12\x1f\n" +
 	"\vsafe_radius\x18\x06 \x01(\x02R\n" +
-	"safeRadius\"2\n" +
+	"safeRadius\x12(\n" +
+	"\x05zones\x18\a \x03(\v2\x12.erevia.v1.MapZoneR\x05zones\"\xc7\x01\n" +
+	"\aMapZone\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x13\n" +
+	"\x05r_min\x18\x02 \x01(\x02R\x04rMin\x12\x13\n" +
+	"\x05r_max\x18\x03 \x01(\x02R\x04rMax\x12\x1b\n" +
+	"\tlevel_min\x18\x04 \x01(\rR\blevelMin\x12\x1b\n" +
+	"\tlevel_max\x18\x05 \x01(\rR\blevelMax\x12\x14\n" +
+	"\x05fixed\x18\x06 \x01(\bR\x05fixed\x12\f\n" +
+	"\x01x\x18\a \x01(\x02R\x01x\x12\f\n" +
+	"\x01z\x18\b \x01(\x02R\x01z\x12\x12\n" +
+	"\x04boss\x18\t \x01(\bR\x04boss\"2\n" +
 	"\x05Spawn\x12)\n" +
 	"\x06entity\x18\x01 \x01(\v2\x11.erevia.v1.EntityR\x06entity\"\x19\n" +
 	"\aDespawn\x12\x0e\n" +
@@ -2316,7 +2452,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x04dead\x18\r \x01(\bR\x04dead\"J\n" +
 	"\rSkillCooldown\x12\x19\n" +
 	"\bskill_id\x18\x01 \x01(\rR\askillId\x12\x1e\n" +
-	"\vready_in_ms\x18\x02 \x01(\rR\treadyInMs\"\xbc\x02\n" +
+	"\vready_in_ms\x18\x02 \x01(\rR\treadyInMs\"\xd0\x02\n" +
 	"\x06Entity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\f\n" +
@@ -2332,7 +2468,8 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x02hp\x18\v \x01(\rR\x02hp\x12\x15\n" +
 	"\x06max_hp\x18\f \x01(\rR\x05maxHp\x12\x12\n" +
 	"\x04dead\x18\r \x01(\bR\x04dead\x12\x14\n" +
-	"\x05scale\x18\x0e \x01(\x02R\x05scale\"\x85\x01\n" +
+	"\x05scale\x18\x0e \x01(\x02R\x05scale\x12\x12\n" +
+	"\x04boss\x18\x0f \x01(\bR\x04boss\"\x85\x01\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
@@ -2412,7 +2549,7 @@ func file_erevia_v1_game_proto_rawDescGZIP() []byte {
 }
 
 var file_erevia_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_erevia_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_erevia_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_erevia_v1_game_proto_goTypes = []any{
 	(ChatChannel)(0),      // 0: erevia.v1.ChatChannel
 	(EntityKind)(0),       // 1: erevia.v1.EntityKind
@@ -2428,22 +2565,23 @@ var file_erevia_v1_game_proto_goTypes = []any{
 	(*Respawn)(nil),       // 11: erevia.v1.Respawn
 	(*ServerMessage)(nil), // 12: erevia.v1.ServerMessage
 	(*Welcome)(nil),       // 13: erevia.v1.Welcome
-	(*Spawn)(nil),         // 14: erevia.v1.Spawn
-	(*Despawn)(nil),       // 15: erevia.v1.Despawn
-	(*Snapshot)(nil),      // 16: erevia.v1.Snapshot
-	(*Pong)(nil),          // 17: erevia.v1.Pong
-	(*ChatMessage)(nil),   // 18: erevia.v1.ChatMessage
-	(*Kicked)(nil),        // 19: erevia.v1.Kicked
-	(*SelfStats)(nil),     // 20: erevia.v1.SelfStats
-	(*SkillCooldown)(nil), // 21: erevia.v1.SkillCooldown
-	(*Entity)(nil),        // 22: erevia.v1.Entity
-	(*EntityState)(nil),   // 23: erevia.v1.EntityState
-	(*HpUpdate)(nil),      // 24: erevia.v1.HpUpdate
-	(*CombatEvent)(nil),   // 25: erevia.v1.CombatEvent
-	(*EffectEvent)(nil),   // 26: erevia.v1.EffectEvent
-	(*Revive)(nil),        // 27: erevia.v1.Revive
-	(*LevelUp)(nil),       // 28: erevia.v1.LevelUp
-	(*SkillInfo)(nil),     // 29: erevia.v1.SkillInfo
+	(*MapZone)(nil),       // 14: erevia.v1.MapZone
+	(*Spawn)(nil),         // 15: erevia.v1.Spawn
+	(*Despawn)(nil),       // 16: erevia.v1.Despawn
+	(*Snapshot)(nil),      // 17: erevia.v1.Snapshot
+	(*Pong)(nil),          // 18: erevia.v1.Pong
+	(*ChatMessage)(nil),   // 19: erevia.v1.ChatMessage
+	(*Kicked)(nil),        // 20: erevia.v1.Kicked
+	(*SelfStats)(nil),     // 21: erevia.v1.SelfStats
+	(*SkillCooldown)(nil), // 22: erevia.v1.SkillCooldown
+	(*Entity)(nil),        // 23: erevia.v1.Entity
+	(*EntityState)(nil),   // 24: erevia.v1.EntityState
+	(*HpUpdate)(nil),      // 25: erevia.v1.HpUpdate
+	(*CombatEvent)(nil),   // 26: erevia.v1.CombatEvent
+	(*EffectEvent)(nil),   // 27: erevia.v1.EffectEvent
+	(*Revive)(nil),        // 28: erevia.v1.Revive
+	(*LevelUp)(nil),       // 29: erevia.v1.LevelUp
+	(*SkillInfo)(nil),     // 30: erevia.v1.SkillInfo
 }
 var file_erevia_v1_game_proto_depIdxs = []int32{
 	5,  // 0: erevia.v1.ClientMessage.join:type_name -> erevia.v1.Join
@@ -2454,32 +2592,33 @@ var file_erevia_v1_game_proto_depIdxs = []int32{
 	10, // 5: erevia.v1.ClientMessage.use_skill:type_name -> erevia.v1.UseSkill
 	11, // 6: erevia.v1.ClientMessage.respawn:type_name -> erevia.v1.Respawn
 	13, // 7: erevia.v1.ServerMessage.welcome:type_name -> erevia.v1.Welcome
-	14, // 8: erevia.v1.ServerMessage.spawn:type_name -> erevia.v1.Spawn
-	15, // 9: erevia.v1.ServerMessage.despawn:type_name -> erevia.v1.Despawn
-	16, // 10: erevia.v1.ServerMessage.snapshot:type_name -> erevia.v1.Snapshot
-	17, // 11: erevia.v1.ServerMessage.pong:type_name -> erevia.v1.Pong
-	18, // 12: erevia.v1.ServerMessage.chat:type_name -> erevia.v1.ChatMessage
-	19, // 13: erevia.v1.ServerMessage.kicked:type_name -> erevia.v1.Kicked
-	20, // 14: erevia.v1.ServerMessage.self_stats:type_name -> erevia.v1.SelfStats
-	21, // 15: erevia.v1.ServerMessage.skill_cooldown:type_name -> erevia.v1.SkillCooldown
-	22, // 16: erevia.v1.Welcome.entities:type_name -> erevia.v1.Entity
-	29, // 17: erevia.v1.Welcome.skills:type_name -> erevia.v1.SkillInfo
-	22, // 18: erevia.v1.Spawn.entity:type_name -> erevia.v1.Entity
-	23, // 19: erevia.v1.Snapshot.states:type_name -> erevia.v1.EntityState
-	24, // 20: erevia.v1.Snapshot.hp:type_name -> erevia.v1.HpUpdate
-	25, // 21: erevia.v1.Snapshot.combat:type_name -> erevia.v1.CombatEvent
-	26, // 22: erevia.v1.Snapshot.effects:type_name -> erevia.v1.EffectEvent
-	27, // 23: erevia.v1.Snapshot.revives:type_name -> erevia.v1.Revive
-	28, // 24: erevia.v1.Snapshot.level_ups:type_name -> erevia.v1.LevelUp
-	0,  // 25: erevia.v1.ChatMessage.channel:type_name -> erevia.v1.ChatChannel
-	1,  // 26: erevia.v1.Entity.kind:type_name -> erevia.v1.EntityKind
-	2,  // 27: erevia.v1.EffectEvent.effect:type_name -> erevia.v1.Effect
-	3,  // 28: erevia.v1.SkillInfo.target:type_name -> erevia.v1.SkillTarget
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	15, // 8: erevia.v1.ServerMessage.spawn:type_name -> erevia.v1.Spawn
+	16, // 9: erevia.v1.ServerMessage.despawn:type_name -> erevia.v1.Despawn
+	17, // 10: erevia.v1.ServerMessage.snapshot:type_name -> erevia.v1.Snapshot
+	18, // 11: erevia.v1.ServerMessage.pong:type_name -> erevia.v1.Pong
+	19, // 12: erevia.v1.ServerMessage.chat:type_name -> erevia.v1.ChatMessage
+	20, // 13: erevia.v1.ServerMessage.kicked:type_name -> erevia.v1.Kicked
+	21, // 14: erevia.v1.ServerMessage.self_stats:type_name -> erevia.v1.SelfStats
+	22, // 15: erevia.v1.ServerMessage.skill_cooldown:type_name -> erevia.v1.SkillCooldown
+	23, // 16: erevia.v1.Welcome.entities:type_name -> erevia.v1.Entity
+	30, // 17: erevia.v1.Welcome.skills:type_name -> erevia.v1.SkillInfo
+	14, // 18: erevia.v1.Welcome.zones:type_name -> erevia.v1.MapZone
+	23, // 19: erevia.v1.Spawn.entity:type_name -> erevia.v1.Entity
+	24, // 20: erevia.v1.Snapshot.states:type_name -> erevia.v1.EntityState
+	25, // 21: erevia.v1.Snapshot.hp:type_name -> erevia.v1.HpUpdate
+	26, // 22: erevia.v1.Snapshot.combat:type_name -> erevia.v1.CombatEvent
+	27, // 23: erevia.v1.Snapshot.effects:type_name -> erevia.v1.EffectEvent
+	28, // 24: erevia.v1.Snapshot.revives:type_name -> erevia.v1.Revive
+	29, // 25: erevia.v1.Snapshot.level_ups:type_name -> erevia.v1.LevelUp
+	0,  // 26: erevia.v1.ChatMessage.channel:type_name -> erevia.v1.ChatChannel
+	1,  // 27: erevia.v1.Entity.kind:type_name -> erevia.v1.EntityKind
+	2,  // 28: erevia.v1.EffectEvent.effect:type_name -> erevia.v1.Effect
+	3,  // 29: erevia.v1.SkillInfo.target:type_name -> erevia.v1.SkillTarget
+	30, // [30:30] is the sub-list for method output_type
+	30, // [30:30] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_erevia_v1_game_proto_init() }
@@ -2513,7 +2652,7 @@ func file_erevia_v1_game_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_erevia_v1_game_proto_rawDesc), len(file_erevia_v1_game_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   26,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

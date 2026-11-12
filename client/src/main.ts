@@ -5,11 +5,14 @@ import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
 import { Hud } from "./ui/hud";
+import { Minimap } from "./ui/minimap";
+import { WorldMap } from "./ui/worldmap";
 import { setupPerfPanel } from "./ui/perf";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
 import { CharacterModels } from "./world/models";
 import { loadEnvironment, type Environment } from "./world/environment";
+import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
 import { Collision, loadWorldData } from "./world/world-data";
 
@@ -81,8 +84,7 @@ function play(character: CharacterInfo): void {
   conn.onClose = (reason) => {
     $("chat").hidden = true;
     $("hud").hidden = true;
-    $("help").hidden = true;
-    document.querySelector(".game-hud")?.remove();
+    for (const e of document.querySelectorAll(".game-hud, .minimap, .worldmap")) e.remove();
     const text = kickedReason || (started ? `A conexão caiu (${reason}).` : `Não foi possível entrar (${reason}).`);
     showMessage(started ? "Desconectado" : "Erro ao entrar", text, "Voltar", () => location.reload());
   };
@@ -95,7 +97,6 @@ interface Game {
 async function startGame(conn: Connection, character: CharacterInfo, welcome: Welcome): Promise<Game> {
   showScreen(null);
   $("hud").hidden = false;
-  $("help").hidden = false;
 
   const worldData = await loadWorldData();
   const world = await createWorldScene(canvas, worldData);
@@ -143,9 +144,29 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   };
   const hud = new Hud(welcome.skills, useSkill, () => conn.respawn());
 
+  // ---------- Mapa ----------
+  const mapSource = {
+    world: worldData,
+    mapCanvas: renderMapCanvas(worldData),
+    forEachMarker: entities.forEachMarker.bind(entities),
+    // A câmera fica em target + (cos α, sin α)·r e olha para o alvo: direção = -(cos α, sin α).
+    cameraHeading: () => Math.atan2(-Math.cos(world.camera.alpha), -Math.sin(world.camera.alpha)),
+  };
+  const worldMap = new WorldMap(mapSource, welcome.zones, welcome.safeRadius);
+  const minimap = new Minimap(mapSource, () => worldMap.toggle());
+
   window.addEventListener("keydown", (ev) => {
     if (document.activeElement instanceof HTMLInputElement) return; // digitando no chat
-    if (ev.key === "Escape") selectTarget(0);
+    if (ev.key === "m" || ev.key === "M") {
+      ev.preventDefault();
+      worldMap.toggle();
+      return;
+    }
+    if (ev.key === "Escape") {
+      if (worldMap.isOpen) worldMap.close(); // Esc fecha o mapa antes de limpar o alvo
+      else selectTarget(0);
+      return;
+    }
     const s = welcome.skills.find((k) => String(k.key) === ev.key);
     if (s) {
       ev.preventDefault();
@@ -208,6 +229,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       nearestMonster: () => entities.nearestMonster(),
       scene: world.scene,
       env: () => env,
+      minimap,
+      worldMap,
     };
   }
 

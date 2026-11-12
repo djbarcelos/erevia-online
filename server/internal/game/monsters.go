@@ -20,6 +20,7 @@ type MonsterDef struct {
 	Aggressive bool
 	XPBase     float64
 	Scale      float64 // tamanho visual (1 = normal)
+	Boss       bool    // chefe (marcado no mapa)
 }
 
 var Monsters = map[string]*MonsterDef{
@@ -32,7 +33,7 @@ var Monsters = map[string]*MonsterDef{
 	"skeleton_mage": {ID: "skeleton_mage", Name: "Esqueleto Mago", Model: "skeleton_mage",
 		HP: 45, HPLvl: 14, Atk: 10, AtkLv: 2.4, Def: 6, DefLv: 1.6, Range: 10, Interval: 2.0, Speed: 3.5, Magic: true, Aggressive: true, XPBase: 18, Scale: 1},
 	"bone_lord": {ID: "bone_lord", Name: "Senhor dos Ossos", Model: "skeleton_warrior",
-		HP: 400, HPLvl: 60, Atk: 14, AtkLv: 3, Def: 20, DefLv: 4, Range: 2.8, Interval: 1.8, Speed: 4, Aggressive: true, XPBase: 120, Scale: 1.6},
+		HP: 400, HPLvl: 60, Atk: 14, AtkLv: 3, Def: 20, DefLv: 4, Range: 2.8, Interval: 1.8, Speed: 4, Aggressive: true, XPBase: 120, Scale: 1.6, Boss: true},
 }
 
 // MonsterStats calcula os atributos do monstro num nível.

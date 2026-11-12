@@ -57,8 +57,22 @@ export interface EntityInfo {
   dead: boolean;
 }
 
+/** O que o mapa precisa saber de cada entidade. */
+export interface MapMarker {
+  id: number;
+  x: number;
+  z: number;
+  kind: EntityKind;
+  boss: boolean;
+  local: boolean;
+  target: boolean;
+  /** Para onde está virado: 0 = norte (+Z), crescendo no sentido horário (π/2 = leste). */
+  heading: number;
+}
+
 interface View extends EntityInfo {
   model: string;
+  boss: boolean;
   scale: number;
   speed: number;
   /** Posição do servidor, extrapolada localmente em direção ao destino. */
@@ -216,7 +230,7 @@ export class EntityManager {
 
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead,
-      model: e.model, scale, speed: e.speed,
+      model: e.model, boss: e.boss, scale, speed: e.speed,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
@@ -447,6 +461,17 @@ export class EntityManager {
 
   localPosition(): Vector3 | undefined {
     return this.local?.root.position;
+  }
+
+  /** Entidades vivas para o mapa (posição desenhada, não a do servidor). */
+  forEachMarker(cb: (m: MapMarker) => void): void {
+    for (const v of this.views.values()) {
+      if (v.dead) continue;
+      cb({
+        id: v.id, x: v.root.position.x, z: v.root.position.z, kind: v.kind, boss: v.boss,
+        local: v.id === this.localId, target: v.id === this.targetId, heading: v.visual.rotation.y,
+      });
+    }
   }
 
   /** Pontos que a câmera precisa enxergar (meio do corpo do jogador e do alvo). */

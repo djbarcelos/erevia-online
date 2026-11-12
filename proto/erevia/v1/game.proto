@@ -78,6 +78,20 @@ message Welcome {
   repeated Entity entities = 4;
   repeated SkillInfo skills = 5;
   float safe_radius = 6;
+  repeated MapZone zones = 7; // zonas de caça (para o mapa)
+}
+
+// Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
+message MapZone {
+  string name = 1; // nomes dos monstros
+  float r_min = 2;
+  float r_max = 3;
+  uint32 level_min = 4;
+  uint32 level_max = 5;
+  bool fixed = 6; // ponto fixo em (x, z)
+  float x = 7;
+  float z = 8;
+  bool boss = 9;
 }
 
 message Spawn {
@@ -170,6 +184,7 @@ message Entity {
   uint32 max_hp = 12;
   bool dead = 13;
   float scale = 14; // tamanho visual (0 = 1)
+  bool boss = 15; // chefe
 }
 
 message EntityState {

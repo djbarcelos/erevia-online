@@ -305,6 +305,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Entities:   entities,
 		Skills:     skills,
 		SafeRadius: float32(z.cfg.SafeRadius),
+		Zones:      mapZones(z.cfg.Spawns),
 	}}})
 	z.sendSelfStats(p)
 
@@ -532,6 +533,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		Speed: float32(e.speed(z.now)),
 		Level: uint32(e.level), Hp: uint32(e.hpInt()), MaxHp: uint32(e.maxHPInt()),
 		Dead: e.dead, Scale: float32(e.scale),
+		Boss: e.mon != nil && e.mon.def.Boss,
 	}
 }
 
