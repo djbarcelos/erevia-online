@@ -8,7 +8,9 @@ import { Hud } from "./ui/hud";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
 import { CharacterModels } from "./world/models";
+import { loadEnvironment } from "./world/environment";
 import { createWorldScene } from "./world/scene";
+import { Collision, loadWorldData } from "./world/world-data";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("game");
@@ -94,10 +96,17 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   $("hud").hidden = false;
   $("help").hidden = false;
 
-  const world = await createWorldScene(canvas, welcome.zoneSize, welcome.safeRadius);
+  const worldData = await loadWorldData();
+  const world = await createWorldScene(canvas, worldData);
   const fx = new Fx(world.scene, world.gui);
-  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, welcome.zoneSize / 2, fx);
+  const collision = new Collision(worldData);
+  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, welcome.zoneSize / 2, fx, world.shadows, collision);
   for (const e of welcome.entities) entities.add(e);
+
+  // Cenário (árvores, cidade, montanhas) em segundo plano.
+  loadEnvironment(world.scene, worldData, world.shadows)
+    .then((n) => console.info(`cenário: ${n} objetos`))
+    .catch((err) => console.warn("cenário indisponível", err));
 
   // Modelos 3D carregam em segundo plano; até lá, cápsulas coloridas.
   CharacterModels.load(world.scene)
@@ -162,6 +171,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       world.camera.target.x = pos.x;
       world.camera.target.y = 1.4;
       world.camera.target.z = pos.z;
+      world.followShadows(pos.x, pos.z);
     }
   });
 

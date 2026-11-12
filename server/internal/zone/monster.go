@@ -32,7 +32,7 @@ func (z *Zone) spawnMonsters() {
 	points := game.ExpandSpawns(z.cfg.Spawns, z.rng)
 	for i, sp := range points {
 		id := monsterIDBase + uint32(i)
-		home := clampToZone(Vec2{X: sp.X, Z: sp.Z}, z.cfg.Size/2)
+		home := z.freeSpot(clampToZone(Vec2{X: sp.X, Z: sp.Z}, z.cfg.Size/2))
 		m := &entity{
 			id: id, kind: pb.EntityKind_ENTITY_KIND_MONSTER,
 			name: sp.Monster.Name, model: sp.Monster.Model, level: sp.Level, scale: sp.Monster.Scale,
@@ -61,7 +61,7 @@ func (z *Zone) think(m *entity) {
 			ms.returning = false
 			m.hp = m.stats.MaxHP
 		} else {
-			m.setDest(ms.home)
+			z.moveToward(m, ms.home)
 		}
 		return
 	}
@@ -97,7 +97,7 @@ func (z *Zone) think(m *entity) {
 	}
 	if dist(m.pos, ms.home) > wanderRadius+1 {
 		ms.returning = true
-		m.setDest(ms.home)
+		z.moveToward(m, ms.home)
 		return
 	}
 	if z.now >= ms.nextWander {
@@ -105,7 +105,10 @@ func (z *Zone) think(m *entity) {
 		if z.nearestPlayer(m.pos, wakeRange) != nil {
 			a := z.rng.Float64() * 2 * math.Pi
 			r := z.rng.Float64() * wanderRadius
-			m.setDest(clampToZone(Vec2{X: ms.home.X + r*math.Cos(a), Z: ms.home.Z + r*math.Sin(a)}, z.cfg.Size/2))
+			spot := clampToZone(Vec2{X: ms.home.X + r*math.Cos(a), Z: ms.home.Z + r*math.Sin(a)}, z.cfg.Size/2)
+			if z.walkable(spot) && (z.cfg.World == nil || z.cfg.World.SegmentClear(toPt(m.pos), toPt(spot))) {
+				m.setDest(spot)
+			}
 		}
 	}
 }
@@ -115,7 +118,8 @@ func (z *Zone) resetMonster(m *entity) {
 	m.mon.hate = map[uint32]float64{}
 	m.mon.returning = true
 	m.clearAction()
-	m.setDest(m.mon.home)
+	m.repathAt = 0
+	z.moveToward(m, m.mon.home)
 }
 
 // updateDeadMonster some com o corpo e faz o monstro renascer no ponto de origem.
@@ -130,7 +134,7 @@ func (z *Zone) updateDeadMonster(m *entity) {
 		ms.hidden = false
 		ms.returning = false
 		ms.hate = map[uint32]float64{}
-		m.pos, m.dest = ms.home, ms.home
+		m.pos, m.dest, m.path = ms.home, ms.home, nil
 		m.hp = m.stats.MaxHP
 		m.effects = nil
 		m.clearAction()

@@ -1,4 +1,15 @@
-import { AbstractMesh, Color3, Matrix, Mesh, MeshBuilder, Scene, StandardMaterial, TransformNode, Vector3 } from "@babylonjs/core";
+import {
+  AbstractMesh,
+  Color3,
+  Matrix,
+  Mesh,
+  MeshBuilder,
+  Scene,
+  ShadowGenerator,
+  StandardMaterial,
+  TransformNode,
+  Vector3,
+} from "@babylonjs/core";
 import { AdvancedDynamicTexture, Rectangle, StackPanel, TextBlock } from "@babylonjs/gui";
 import { classInfo } from "../classes";
 import {
@@ -15,6 +26,7 @@ import {
 import { AnimController } from "./anim";
 import type { Fx } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
+import type { Collision } from "./world-data";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -77,6 +89,8 @@ export class EntityManager {
     readonly localId: number,
     private zoneHalf: number,
     private fx: Fx,
+    private shadows: ShadowGenerator,
+    private collision: Collision,
   ) {
     this.ringMat = new StandardMaterial("localRing", scene);
     this.ringMat.emissiveColor = new Color3(0.95, 0.8, 0.4);
@@ -212,6 +226,7 @@ export class EntityManager {
   remove(id: number): void {
     const v = this.views.get(id);
     if (!v) return;
+    for (const m of v.root.getChildMeshes(false)) this.shadows.removeShadowCaster(m, false);
     if (this.targetId === id) this.setTarget(0);
     v.label.dispose();
     v.model3d?.dispose();
@@ -254,9 +269,15 @@ export class EntityManager {
     if (!v || v.dead) return null;
     const cx = clamp(x, -this.zoneHalf, this.zoneHalf);
     const cz = clamp(z, -this.zoneHalf, this.zoneHalf);
-    v.target.x = cx;
-    v.target.z = cz;
-    this.localPending = { x: cx, z: cz, at: performance.now() };
+    // Só prevê em linha reta se não houver obstáculo; senão espera o caminho do servidor
+    // (que contorna casas e muralhas) chegar no próximo snapshot.
+    if (this.collision.segmentClear(v.server.x, v.server.z, cx, cz)) {
+      v.target.x = cx;
+      v.target.z = cz;
+      this.localPending = { x: cx, z: cz, at: performance.now() };
+    } else {
+      this.localPending = null;
+    }
     return { x: cx, z: cz };
   }
 
@@ -460,7 +481,9 @@ export class EntityManager {
     if (!inst) return;
     inst.root.parent = v.visual;
     inst.root.scaling.scaleInPlace(v.scale);
-    this.makePickable(inst.root.getChildMeshes(false), v.id);
+    const meshes = inst.root.getChildMeshes(false);
+    this.makePickable(meshes, v.id);
+    for (const m of meshes) this.shadows.addShadowCaster(m, false);
     v.model3d = inst;
     v.anim = new AnimController(inst.anims);
     v.capsule?.dispose();

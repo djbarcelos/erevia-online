@@ -33,7 +33,7 @@ func (z *Zone) runAction(e *entity) {
 	}
 	if d := dist(e.pos, t.pos); d > rng {
 		dir := Vec2{X: (e.pos.X - t.pos.X) / d, Z: (e.pos.Z - t.pos.Z) / d}
-		e.setDest(Vec2{X: t.pos.X + dir.X*rng*approachFactor, Z: t.pos.Z + dir.Z*rng*approachFactor})
+		z.moveToward(e, Vec2{X: t.pos.X + dir.X*rng*approachFactor, Z: t.pos.Z + dir.Z*rng*approachFactor})
 		return
 	}
 	e.stopMoving()

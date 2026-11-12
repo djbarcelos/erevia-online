@@ -16,6 +16,7 @@ import (
 	"erevia/server/internal/api"
 	gamenet "erevia/server/internal/net"
 	"erevia/server/internal/store"
+	"erevia/server/internal/world"
 	"erevia/server/internal/zone"
 )
 
@@ -81,7 +82,15 @@ func run(log *slog.Logger) error {
 		}
 	}()
 
-	z := zone.New(zone.DefaultConfig(), log.With("zone", "starter"), saves)
+	wld, err := world.Load()
+	if err != nil {
+		return err
+	}
+	zcfg := zone.DefaultConfig()
+	zcfg.World = wld
+	zcfg.Size = wld.Size
+	zcfg.SafeRadius = wld.SafeRadius
+	z := zone.New(zcfg, log.With("zone", "starter"), saves)
 	zoneDone := make(chan struct{})
 	go func() { z.Run(ctx); close(zoneDone) }()
 

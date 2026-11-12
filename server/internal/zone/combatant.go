@@ -38,7 +38,9 @@ type entity struct {
 	scale float64
 
 	pos, dest Vec2
-	moved     bool // destino/velocidade mudou: vai no próximo snapshot mesmo parado
+	path      []Vec2  // próximos pontos do caminho (depois de dest)
+	repathAt  float64 // próximo recálculo de caminho permitido
+	moved     bool    // destino/velocidade mudou: vai no próximo snapshot mesmo parado
 
 	stats      game.Stats
 	hp, mp     float64
@@ -146,6 +148,7 @@ func (e *entity) clearAction() { e.act = action{} }
 
 // stopMoving faz a entidade parar onde está.
 func (e *entity) stopMoving() {
+	e.path = nil
 	if e.dest != e.pos {
 		e.dest = e.pos
 		e.moved = true

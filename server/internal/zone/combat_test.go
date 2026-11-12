@@ -158,9 +158,9 @@ func TestAutoAttackApproachesAndRespectsRate(t *testing.T) {
 }
 
 func TestSkillCooldownAndMana(t *testing.T) {
-	z := newCombatZone(fixed("skeleton_minion", 10, 30, 0))
+	z := newCombatZone(fixed("skeleton_minion", 10, 40, 0))
 	m := z.onlyMonster()
-	p, peer := joinAt(z, 1, "mage", 18, 0, 0) // 12 m: dentro do alcance da Bola de Fogo (20 m)
+	p, peer := joinAt(z, 1, "mage", 28, 0, 0) // 12 m: dentro do alcance da Bola de Fogo (20 m)
 	mp0 := p.mp
 
 	z.handle(skillEvent{id: p.id, skill: game.SkillFireball, target: m.id})

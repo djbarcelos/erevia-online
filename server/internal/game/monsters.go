@@ -74,7 +74,7 @@ type SpawnPoint struct {
 // DefaultSpawns: 3 anéis de caça + chefe.
 func DefaultSpawns() []Spawn {
 	return []Spawn{
-		{Monster: "skeleton_minion", Count: 24, RMin: 20, RMax: 50, LevelMin: 1, LevelMax: 5, Respawn: 20},
+		{Monster: "skeleton_minion", Count: 24, RMin: 26, RMax: 50, LevelMin: 1, LevelMax: 5, Respawn: 20},
 		{Monster: "skeleton_warrior", Count: 10, RMin: 55, RMax: 78, LevelMin: 6, LevelMax: 12, Respawn: 30},
 		{Monster: "skeleton_rogue", Count: 10, RMin: 55, RMax: 78, LevelMin: 6, LevelMax: 12, Respawn: 30},
 		{Monster: "skeleton_mage", Count: 8, RMin: 80, RMax: 96, LevelMin: 13, LevelMax: 20, Respawn: 40},

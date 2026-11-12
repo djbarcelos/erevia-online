@@ -19,6 +19,7 @@ import (
 
 	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
+	"erevia/server/internal/world"
 )
 
 // Peer é o lado "conexão" de um jogador, visto pela zona.
@@ -39,13 +40,14 @@ type Config struct {
 	SafeRadius     float64       // raio da cidade (sem combate)
 	Spawns         []game.Spawn  // monstros da zona
 	Seed           uint64        // semente do sorteio (posições, dano…)
+	World          *world.World  // obstáculos e caminhos (nil = campo aberto)
 }
 
 func DefaultConfig() Config {
 	return Config{
 		Size: 200, TickRate: 20, MaxMovesPerSec: 10,
 		ChatPerSec: 1, ChatBurst: 3, SaveEvery: 30 * time.Second,
-		SafeRadius: 15, Spawns: game.DefaultSpawns(), Seed: 20261112,
+		SafeRadius: 20, Spawns: game.DefaultSpawns(), Seed: 20261112,
 	}
 }
 
@@ -253,7 +255,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 
 	level := game.LevelForXP(info.XP)
 	stats := game.ClassStats(info.Class, level)
-	pos := clampToZone(Vec2{X: info.X, Z: info.Z}, z.cfg.Size/2)
+	pos := z.freeSpot(clampToZone(Vec2{X: info.X, Z: info.Z}, z.cfg.Size/2))
 	p := &entity{
 		id: info.ID, kind: pb.EntityKind_ENTITY_KIND_PLAYER,
 		name: info.Name, model: info.Class, level: level, scale: 1,
@@ -318,8 +320,7 @@ func (z *Zone) onMove(e moveEvent) {
 	if p.stunned(z.now) {
 		return
 	}
-	p.dest = clampToZone(Vec2{X: e.x, Z: e.z}, z.cfg.Size/2)
-	p.moved = true
+	z.goTo(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.cfg.Size/2))
 }
 
 func (z *Zone) onChat(e chatEvent) {
@@ -434,11 +435,7 @@ func (z *Zone) step(e *entity, dt float64) {
 	if e.stunned(z.now) {
 		return
 	}
-	newPos, moved := step(e.pos, e.dest, e.speed(z.now)*dt)
-	if moved {
-		e.pos = newPos
-		e.moved = true
-	}
+	z.advance(e, e.speed(z.now)*dt)
 }
 
 func (z *Zone) flushSnapshot() {

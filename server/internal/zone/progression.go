@@ -78,8 +78,9 @@ func (z *Zone) respawnPlayer(p *entity) {
 	}
 	a := z.rng.Float64() * 2 * math.Pi
 	r := z.rng.Float64() * townSpawnRadius
-	p.pos = Vec2{X: r * math.Cos(a), Z: r * math.Sin(a)}
+	p.pos = z.freeSpot(Vec2{X: r * math.Cos(a), Z: r * math.Sin(a)})
 	p.dest = p.pos
+	p.path = nil
 	p.dead = false
 	p.hp, p.mp = p.stats.MaxHP, p.stats.MaxMP
 	p.lastCombat = -math.MaxFloat64 / 2

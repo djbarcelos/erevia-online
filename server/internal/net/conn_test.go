@@ -48,6 +48,7 @@ func startServer(t *testing.T) (url string, ctx context.Context) {
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	cfg := zone.DefaultConfig()
+	cfg.SafeRadius = 0 // os testes lutam perto da origem
 	cfg.Spawns = []game.Spawn{{Monster: "skeleton_minion", Count: 1, Fixed: true, X: 18, Z: 0, LevelMin: 1, Respawn: 5}}
 	z := zone.New(cfg, log, nil)
 	go z.Run(ctx)
