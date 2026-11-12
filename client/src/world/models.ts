@@ -180,7 +180,9 @@ export class CharacterModels {
       dispose: () => {
         for (const a of cloned.values()) a.dispose();
         for (const s of entries.skeletons) s.dispose();
-        root.dispose(false, true);
+        // Nunca descartar materiais/texturas aqui: são compartilhados por todas as cópias
+        // do modelo (descartá-los deixava os outros personagens brancos).
+        root.dispose(false, false);
       },
     };
   }

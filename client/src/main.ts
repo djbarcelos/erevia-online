@@ -5,6 +5,7 @@ import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
 import { Hud } from "./ui/hud";
+import { setupPerfPanel } from "./ui/perf";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
 import { CharacterModels } from "./world/models";
@@ -187,6 +188,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     const p = entities.localPosition();
     posEl.textContent = p ? `${p.x.toFixed(1)}, ${p.z.toFixed(1)}` : "–";
   }, 500);
+  setupPerfPanel(world.scene, world.gui, $("hud"));
 
   canvas.focus();
 
@@ -198,6 +200,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       targetId: () => targetId,
       screenPos: (id: number) => entities.screenPos(id, world.scene),
       nearestMonster: () => entities.nearestMonster(),
+      scene: world.scene,
     };
   }
 

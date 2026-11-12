@@ -44,6 +44,11 @@ export interface WorldScene {
 export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldData): Promise<WorldScene> {
   const engine = await createEngine(canvas);
   const scene = new Scene(engine);
+  // O Babylon faz picking a cada movimento do mouse contra todas as malhas clicáveis; o jogo
+  // só precisa de pick no clique e no hover (feito à mão, com intervalo), então desligamos.
+  scene.skipPointerMovePicking = true;
+  // A esfera do céu cobre a tela inteira: não precisa limpar a cor (a profundidade continua).
+  scene.autoClear = false;
   scene.clearColor = new Color4(HORIZON.r, HORIZON.g, HORIZON.b, 1);
   scene.ambientColor = new Color3(0.3, 0.27, 0.32);
   scene.fogMode = Scene.FOGMODE_EXP2;
@@ -74,6 +79,7 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   skybox.material = skyMat;
   skybox.isPickable = false;
   skybox.infiniteDistance = true;
+  skyMat.freeze();
 
   // Luz: céu + sol quente com sombras.
   const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), scene);
@@ -109,6 +115,7 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   outerMat.specularColor = Color3.Black();
   outer.material = outerMat;
   outer.isPickable = false;
+  outerMat.freeze();
 
   // Câmera estilo L2: orbita o personagem, botão direito gira, roda dá zoom.
   const camera = new ArcRotateCamera("cam", -Math.PI / 2, 1.0, 18, Vector3.Zero(), scene);

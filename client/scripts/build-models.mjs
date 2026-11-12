@@ -3,13 +3,14 @@
 // Uso: node scripts/build-models.mjs <pasta-com-os-zips-descompactados>
 //   ex.: node scripts/build-models.mjs ../assets-src/kaykit/x
 //
-// - Personagens: copiados como estão (.glb, textura embutida).
+// - Personagens: as peças com esqueleto (braços, pernas, cabeça...) viram uma malha por
+//   material — 1 draw call por personagem em vez de ~9.
 // - Animações: só as que o jogo usa, sem as malhas do manequim.
 // - Armas: .gltf + .bin + .png viram um .glb cada.
 // - Monstros: KayKit Skeletons (mesmo esqueleto Rig_Medium dos heróis).
 import { NodeIO } from '@gltf-transform/core';
-import { dedup, prune, resample } from '@gltf-transform/functions';
-import { copyFileSync, mkdirSync, statSync } from 'node:fs';
+import { dedup, joinPrimitives, prune, resample } from '@gltf-transform/functions';
+import { mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const src = resolve(process.argv[2] ?? '../assets-src/kaykit/x');
@@ -44,16 +45,55 @@ mkdirSync(join(out, 'weapons'), { recursive: true });
 const report = [];
 const size = (f) => `${(statSync(f).size / 1024).toFixed(0)} KB`;
 
-for (const [id, name] of Object.entries(CHARACTERS)) {
+/**
+ * O join() do gltf-transform ignora malhas com skin. Aqui juntamos as peças irmãs que usam a
+ * mesma skin e o mesmo material: no glTF a transformação do nó de uma malha com skin é
+ * ignorada (os vértices já estão no espaço do bind pose), então basta concatenar.
+ */
+function joinSkinned(doc) {
+  const groups = new Map();
+  for (const node of doc.getRoot().listNodes()) {
+    const mesh = node.getMesh();
+    const skin = node.getSkin();
+    if (!mesh || !skin) continue;
+    for (const prim of mesh.listPrimitives()) {
+      if (prim.listTargets().length) continue;
+      const attrs = prim.listSemantics().sort().map((s) => `${s}:${prim.getAttribute(s).getComponentType()}`).join(',');
+      const key = [node.getParentNode()?.getName(), doc.getRoot().listSkins().indexOf(skin), prim.getMaterial()?.getName(), prim.getMode(), attrs].join('|');
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ node, mesh, prim });
+    }
+  }
+  let joined = 0;
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const merged = joinPrimitives(list.map((e) => e.prim));
+    const keep = list[0];
+    keep.node.setName(`${keep.node.getName().split('_')[0]}_${keep.prim.getMaterial()?.getName() ?? 'mesh'}`);
+    const mesh = doc.createMesh(keep.node.getName()).addPrimitive(merged);
+    keep.node.setMesh(mesh);
+    for (const e of list.slice(1)) e.node.dispose();
+    joined += list.length;
+  }
+  return joined;
+}
+
+async function buildCharacter(srcFile, id) {
+  const doc = await io.read(srcFile);
+  const n = joinSkinned(doc);
+  await doc.transform(prune());
   const dst = join(out, `${id}.glb`);
-  copyFileSync(join(adventurers, 'Characters/gltf', `${name}.glb`), dst);
-  report.push(`${id}.glb ${size(dst)}`);
+  await io.write(dst, doc);
+  const meshes = doc.getRoot().listMeshes().length;
+  report.push(`${id}.glb ${size(dst)} (${n} peças → ${meshes} malhas)`);
+}
+
+for (const [id, name] of Object.entries(CHARACTERS)) {
+  await buildCharacter(join(adventurers, 'Characters/gltf', `${name}.glb`), id);
 }
 
 for (const [id, name] of Object.entries(MONSTERS)) {
-  const dst = join(out, `${id}.glb`);
-  copyFileSync(join(skeletons, 'characters/gltf', `${name}.glb`), dst);
-  report.push(`${id}.glb ${size(dst)}`);
+  await buildCharacter(join(skeletons, 'characters/gltf', `${name}.glb`), id);
 }
 
 for (const w of MONSTER_WEAPONS) {

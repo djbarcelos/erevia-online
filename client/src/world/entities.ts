@@ -36,6 +36,10 @@ const PENDING_TIMEOUT_MS = 1000;
 const RUN_ANIM_SPEED = 5;
 /** Nomes e barras só aparecem até esta distância do jogador (o alvo sempre aparece). */
 const LABEL_DISTANCE = 30;
+/** Além desta distância da câmera (ou fora da tela) o personagem congela a animação. */
+const ANIM_DISTANCE = 50;
+/** Só personagens até esta distância do jogador projetam sombra. */
+const SHADOW_DISTANCE = 35;
 const BONE_COLOR = "#d9d2c0";
 
 /** Visual de cada skill (vale para skills de qualquer jogador). */
@@ -66,6 +70,9 @@ interface View extends EntityInfo {
   capsule: Mesh | null;
   model3d: CharacterInstance | null;
   anim: AnimController | null;
+  /** Malhas do modelo (para sombra e teste de visibilidade). */
+  meshes: AbstractMesh[];
+  castsShadow: boolean;
   label: Rectangle;
   nameText: TextBlock;
   hpBar: Rectangle;
@@ -185,8 +192,9 @@ export class EntityManager {
     nameText.fontSize = 13;
     nameText.paddingLeft = nameText.paddingRight = "6px";
     nameText.color = isLocal ? "#f0d79a" : e.kind === EntityKind.MONSTER ? "#ffb4a8" : "#e6ecff";
-    nameText.shadowColor = "rgba(0,0,0,0.9)";
-    nameText.shadowBlur = 3;
+    // Contorno em vez de shadowBlur: o desfoque do canvas 2D é caro e a GUI redesenha muito.
+    nameText.outlineWidth = 3;
+    nameText.outlineColor = "rgba(0,0,0,0.85)";
     stack.addControl(nameText);
     const hpBar = new Rectangle();
     hpBar.width = "64px";
@@ -211,7 +219,7 @@ export class EntityManager {
       model: e.model, scale, speed: e.speed,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
-      root, visual, head, capsule: null, model3d: null, anim: null,
+      root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0,
     };
     this.views.set(e.id, v);
@@ -226,11 +234,13 @@ export class EntityManager {
   remove(id: number): void {
     const v = this.views.get(id);
     if (!v) return;
-    for (const m of v.root.getChildMeshes(false)) this.shadows.removeShadowCaster(m, false);
+    this.setShadow(v, false);
     if (this.targetId === id) this.setTarget(0);
+    if (this.selectRing.parent === v.root) this.selectRing.parent = null;
     v.label.dispose();
     v.model3d?.dispose();
-    v.root.dispose(false, true);
+    // Materiais são compartilhados (modelo, anel, efeitos): só as malhas são descartadas.
+    v.root.dispose(false, false);
     this.views.delete(id);
   }
 
@@ -382,10 +392,14 @@ export class EntityManager {
   update(dt: number): void {
     const blend = 1 - Math.exp(-CORRECTION_RATE * dt);
     const me = this.local?.root.position;
+    const cam = this.scene.activeCamera?.position;
+    const planes = this.scene.frustumPlanes;
     for (const v of this.views.values()) {
+      const always = v.id === this.localId || v.id === this.targetId;
       if (me) {
-        const near = Math.hypot(v.root.position.x - me.x, v.root.position.z - me.z) < LABEL_DISTANCE;
-        v.label.isVisible = near || v.id === this.targetId;
+        const d = Math.hypot(v.root.position.x - me.x, v.root.position.z - me.z);
+        v.label.isVisible = d < LABEL_DISTANCE || always;
+        this.setShadow(v, d < SHADOW_DISTANCE || always);
       }
       // Extrapola a posição do servidor (mesma regra de movimento do Go).
       const dx = v.target.x - v.server.x;
@@ -409,7 +423,25 @@ export class EntityManager {
 
       const moving = dist > 0.05 && !v.dead;
       if (moving) v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
-      v.anim?.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED));
+      if (v.anim) {
+        // LOD de animação: quem está fora da tela ou longe não tem os ossos recalculados.
+        let active = always;
+        if (!active) {
+          const near = !cam || Vector3.DistanceSquared(cam, pos) < ANIM_DISTANCE * ANIM_DISTANCE;
+          active = near && (!planes || v.meshes.some((m) => m.isInFrustum(planes)));
+        }
+        v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active);
+      }
+    }
+  }
+
+  /** Liga/desliga a sombra do personagem (só quem está perto projeta). */
+  private setShadow(v: View, on: boolean): void {
+    if (v.castsShadow === on) return;
+    v.castsShadow = on;
+    for (const m of v.meshes) {
+      if (on) this.shadows.addShadowCaster(m, false);
+      else this.shadows.removeShadowCaster(m, false);
     }
   }
 
@@ -483,7 +515,8 @@ export class EntityManager {
     inst.root.scaling.scaleInPlace(v.scale);
     const meshes = inst.root.getChildMeshes(false);
     this.makePickable(meshes, v.id);
-    for (const m of meshes) this.shadows.addShadowCaster(m, false);
+    this.setShadow(v, false);
+    v.meshes = meshes;
     v.model3d = inst;
     v.anim = new AnimController(inst.anims);
     v.capsule?.dispose();
@@ -497,6 +530,8 @@ export class EntityManager {
     body.position.y = 0.9 * v.scale;
     body.material = this.material(v.kind === EntityKind.MONSTER ? BONE_COLOR : classInfo(v.model).color);
     this.makePickable([body], v.id);
+    this.setShadow(v, false);
+    v.meshes = [body];
     return body;
   }
 

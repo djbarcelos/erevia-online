@@ -65,7 +65,15 @@ export class AnimController {
     this.actionWeight = 0;
   }
 
-  update(dt: number, moving: boolean, runSpeedRatio: number): void {
+  /**
+   * active = false (fora da tela ou longe): todos os pesos vão a 0 e o Babylon deixa de
+   * calcular as animações; o esqueleto fica congelado na última pose até voltar.
+   */
+  update(dt: number, moving: boolean, runSpeedRatio: number, active = true): void {
+    if (!active) {
+      for (const g of this.anims.values()) g.weight = 0;
+      return;
+    }
     const k = 1 - Math.exp(-BLEND_RATE * dt);
     this.runWeight += ((moving && !this.holding ? 1 : 0) - this.runWeight) * k;
     const actionActive = this.action !== null && (!this.actionDone || this.holding);
@@ -78,11 +86,17 @@ export class AnimController {
     const loco = 1 - this.actionWeight;
     const idle = this.anims.get("idle");
     const run = this.anims.get("run");
-    if (idle) idle.weight = loco * (1 - this.runWeight);
+    // Peso exatamente 0 faz o Babylon pular a animação (não calcula os ossos). As misturas
+    // convergem exponencialmente e nunca chegam a 0 sozinhas, então zeramos as sobras.
+    if (idle) idle.weight = snap(loco * (1 - this.runWeight));
     if (run) {
-      run.weight = loco * this.runWeight;
+      run.weight = snap(loco * this.runWeight);
       run.speedRatio = runSpeedRatio;
     }
     if (this.action) this.action.weight = Math.max(this.actionWeight, 0.001);
   }
+}
+
+function snap(w: number): number {
+  return w < 0.01 ? 0 : w > 0.99 ? 1 : w;
 }

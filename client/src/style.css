@@ -163,6 +163,7 @@ input:focus-visible, .btn:focus-visible, .class-card:focus-within {
   pointer-events: none;
 }
 #hud .k { color: var(--muted); display: inline-block; width: 52px; }
+#hud .perf { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
 
 #help {
   position: fixed;

@@ -20,6 +20,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - A posição é salva no banco ao sair, a cada 30 s e quando o servidor desliga.
 - Se o mesmo personagem entrar em outro lugar, a sessão antiga cai com um aviso.
 - O servidor decide tudo: movimento, limites do mapa, limite anti-spam e anti-flood. Clientes lentos são desconectados.
+- **Painel de desempenho:** tecla **F3** (ou `?debug=1` na URL) mostra tempo de frame, draw calls, malhas ativas e o tempo gasto em animação e na interface.
 
 ## Requisitos
 Go 1.26+, Node 22+ e Docker.

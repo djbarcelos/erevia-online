@@ -143,7 +143,7 @@ export class Fx {
         });
         return t < dur && !head.isDisposed();
       },
-      () => holder.dispose(false, true),
+      () => holder.dispose(false, false), // material das estrelas é compartilhado (cache)
     );
   }
 
