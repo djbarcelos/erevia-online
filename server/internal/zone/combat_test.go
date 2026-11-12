@@ -13,7 +13,7 @@ import (
 
 // newCombatZone cria uma zona com os monstros pedidos (sem os padrões).
 func newCombatZone(spawns ...game.Spawn) *Zone {
-	cfg := DefaultConfig()
+	cfg := testConfig()
 	cfg.Spawns = spawns
 	cfg.SafeRadius = 20 // os testes de combate lutam a 20–40 m da origem
 	return New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -356,7 +356,7 @@ func TestMonsterCorpseVanishesAndRespawns(t *testing.T) {
 }
 
 func TestDefaultZoneHasMonstersInRings(t *testing.T) {
-	z := New(DefaultConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	z := New(testConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	if len(z.monsters) < 50 {
 		t.Fatalf("only %d monsters", len(z.monsters))
 	}

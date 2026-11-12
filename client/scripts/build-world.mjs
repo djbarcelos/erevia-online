@@ -243,6 +243,31 @@ for (let t = -HALF - 24; t <= HALF + 24; t += 26) {
   }
 }
 
+// ---------- Tochas (acendem à noite) ----------
+// Posições fixas (sem sortear: não muda a sequência do PRNG do resto do mapa). Ladeiam as
+// avenidas dentro da muralha, os portões por fora e o poço; descarta o que bate em algo.
+const torches = [];
+const torchFree = (x, z) =>
+  freeOfColliders(x, z, 1.2) &&
+  objects.every((o) => o.k.startsWith('grass_') || Math.hypot(o.x - x, o.z - z) > 2.2) &&
+  torches.every((t) => Math.hypot(t.x - x, t.z - z) > 4);
+const torchCandidates = [];
+for (const a of [0, 90, 180, 270]) {
+  const th = (a * Math.PI) / 180;
+  const [ux, uz, nx, nz] = [Math.cos(th), Math.sin(th), -Math.sin(th), Math.cos(th)];
+  for (const r of [13, 21.5, 31]) for (const side of [-1, 1]) torchCandidates.push([ux * r + nx * side * 3.6, uz * r + nz * side * 3.6]);
+  for (const side of [-1, 1]) torchCandidates.push([ux * 46 + nx * side * 3.8, uz * 46 + nz * side * 3.8]);
+}
+for (const a of [45, 135, 225, 315]) {
+  const th = (a * Math.PI) / 180;
+  torchCandidates.push([Math.cos(th) * 6.5, Math.sin(th) * 6.5]);
+}
+for (const [x, z] of torchCandidates) {
+  if (!torchFree(x, z)) continue;
+  torches.push({ x: round(x), z: round(z) });
+  collide(x, z, 0.3);
+}
+
 // ---------- Saída ----------
 const world = {
   version: 1,
@@ -252,6 +277,7 @@ const world = {
   roads,
   colliders,
   objects,
+  torches,
 };
 const json = JSON.stringify(world);
 const outs = [resolve(here, '../public/world.json'), resolve(here, '../../server/internal/world/world.json')];

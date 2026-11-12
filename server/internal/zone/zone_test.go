@@ -58,7 +58,7 @@ func newTestZone(saves chan []SavedState) *Zone {
 	if saves != nil {
 		ch = saves
 	}
-	cfg := DefaultConfig()
+	cfg := testConfig()
 	cfg.Spawns = nil
 	return New(cfg, log, ch)
 }

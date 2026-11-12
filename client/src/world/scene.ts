@@ -21,10 +21,12 @@ import { addGroundDetail } from "./ground";
 import { paintTerrain } from "./map-painter";
 import type { WorldData } from "./world-data";
 
-/** Cor do horizonte ao entardecer (neblina e fundo). */
+/** Cor do horizonte ao entardecer (valor inicial; o ciclo dia/noite muda depois). */
 const HORIZON = new Color3(0.78, 0.6, 0.52);
-/** Direção da luz do sol (baixo, fim de tarde). */
+/** Direção inicial da luz do sol (baixo, fim de tarde). */
 const SUN_DIR = new Vector3(-0.55, -0.75, 0.35).normalize();
+/** Distância do sol até o centro da área de sombra (m). */
+const SUN_DISTANCE = 100;
 /** Lado da área coberta pelas sombras, centrada no jogador (m). */
 const SHADOW_AREA = 70;
 
@@ -35,6 +37,12 @@ export interface WorldScene {
   ground: Mesh;
   gui: AdvancedDynamicTexture;
   shadows: ShadowGenerator;
+  sun: DirectionalLight;
+  hemi: HemisphericLight;
+  /** Céu: esfera com um degradê vertical (canvas 4×512) pintado pelo ciclo dia/noite. */
+  sky: { mesh: Mesh; texture: DynamicTexture };
+  /** Material do chão de fora do mapa. */
+  outerMat: StandardMaterial;
   /** Move a área de sombra para acompanhar o jogador. */
   followShadows(x: number, z: number): void;
 }
@@ -81,7 +89,6 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   skybox.material = skyMat;
   skybox.isPickable = false;
   skybox.infiniteDistance = true;
-  skyMat.freeze();
 
   // Luz: céu + sol quente com sombras.
   const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), scene);
@@ -118,7 +125,6 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   outerMat.specularColor = Color3.Black();
   outer.material = outerMat;
   outer.isPickable = false;
-  outerMat.freeze();
 
   // Câmera estilo L2: orbita o personagem, botão direito gira, roda dá zoom.
   const camera = new ArcRotateCamera("cam", -Math.PI / 2, 1.0, 18, Vector3.Zero(), scene);
@@ -151,8 +157,14 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
     ground,
     gui,
     shadows,
+    sun,
+    hemi,
+    sky: { mesh: skybox, texture: skyTex },
+    outerMat,
     followShadows(x, z) {
-      sun.position.set(x - SUN_DIR.x * 100, -SUN_DIR.y * 100, z - SUN_DIR.z * 100);
+      // Usa a direção atual da luz (o ciclo dia/noite move o sol e a lua).
+      const d = sun.direction;
+      sun.position.set(x - d.x * SUN_DISTANCE, -d.y * SUN_DISTANCE, z - d.z * SUN_DISTANCE);
     },
   };
 }

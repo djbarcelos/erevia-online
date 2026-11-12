@@ -31,16 +31,17 @@ type Peer interface {
 }
 
 type Config struct {
-	Size           float64       // lado do quadrado jogável, em metros
-	TickRate       int           // ticks por segundo
-	MaxMovesPerSec float64       // limite de pedidos de movimento/ação por jogador
-	ChatPerSec     float64       // mensagens de chat por segundo (reposição)
-	ChatBurst      float64       // rajada máxima de mensagens
-	SaveEvery      time.Duration // intervalo do salvamento periódico
-	SafeRadius     float64       // raio da cidade (sem combate)
-	Spawns         []game.Spawn  // monstros da zona
-	Seed           uint64        // semente do sorteio (posições, dano…)
-	World          *world.World  // obstáculos e caminhos (nil = campo aberto)
+	Size           float64          // lado do quadrado jogável, em metros
+	TickRate       int              // ticks por segundo
+	MaxMovesPerSec float64          // limite de pedidos de movimento/ação por jogador
+	ChatPerSec     float64          // mensagens de chat por segundo (reposição)
+	ChatBurst      float64          // rajada máxima de mensagens
+	SaveEvery      time.Duration    // intervalo do salvamento periódico
+	SafeRadius     float64          // raio da cidade (sem combate)
+	Spawns         []game.Spawn     // monstros da zona
+	Seed           uint64           // semente do sorteio (posições, dano…)
+	World          *world.World     // obstáculos e caminhos (nil = campo aberto)
+	Clock          func() time.Time // relógio do ciclo dia/noite (nil = time.Now)
 }
 
 func DefaultConfig() Config {
@@ -124,6 +125,7 @@ type Zone struct {
 	rng      *rand.Rand
 	frame    frame
 	saves    chan<- []SavedState
+	night    bool // ciclo dia/noite (ver game.DayPhase)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -138,6 +140,10 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		rng:      rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:    saves,
 	}
+	if z.cfg.Clock == nil {
+		z.cfg.Clock = time.Now
+	}
+	z.night = game.IsNight(game.DayPhase(z.cfg.Clock()))
 	z.spawnMonsters()
 	return z
 }
@@ -299,13 +305,15 @@ func (z *Zone) onJoin(info JoinInfo) {
 		})
 	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
-		YourId:     p.id,
-		TickRate:   uint32(z.cfg.TickRate),
-		ZoneSize:   float32(z.cfg.Size),
-		Entities:   entities,
-		Skills:     skills,
-		SafeRadius: float32(z.cfg.SafeRadius),
-		Zones:      mapZones(z.cfg.Spawns),
+		YourId:       p.id,
+		TickRate:     uint32(z.cfg.TickRate),
+		ZoneSize:     float32(z.cfg.Size),
+		Entities:     entities,
+		Skills:       skills,
+		SafeRadius:   float32(z.cfg.SafeRadius),
+		Zones:        mapZones(z.cfg.Spawns),
+		ServerTimeMs: z.cfg.Clock().UnixMilli(),
+		DayCycleMs:   uint32(game.DayCycle.Milliseconds()),
 	}}})
 	z.sendSelfStats(p)
 
@@ -395,6 +403,7 @@ func (z *Zone) removePlayer(id uint32) {
 func (z *Zone) update(dt float64) {
 	z.tick++
 	z.now += dt
+	z.updateDaytime()
 
 	for _, p := range z.players {
 		p.pl.moveTokens = math.Min(z.cfg.MaxMovesPerSec, p.pl.moveTokens+z.cfg.MaxMovesPerSec*dt)

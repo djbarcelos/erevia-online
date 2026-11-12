@@ -25,7 +25,11 @@ func (z *Zone) kill(dead, killer *entity) {
 		ms.corpseEnd = z.now + corpseSeconds
 		ms.respawnAt = z.now + ms.spawn.Respawn*(1+z.rng.Float64())
 		if killer != nil && killer.pl != nil {
-			z.grantXP(killer, game.MonsterXP(ms.def, dead.level, killer.level))
+			xp := game.MonsterXP(ms.def, dead.level, killer.level)
+			if z.night {
+				xp = int64(math.Round(float64(xp) * game.NightXP))
+			}
+			z.grantXP(killer, xp)
 		}
 		return
 	}

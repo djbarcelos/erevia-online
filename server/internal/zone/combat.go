@@ -58,7 +58,7 @@ func (z *Zone) runAction(e *entity) {
 
 func (z *Zone) basicAttack(src, dst *entity) {
 	magic := src.stats.Magic
-	hit := game.RollHit(z.rng, src.atk(magic, z.now), dst.def(magic, z.now), 1, src.stats.Crit)
+	hit := game.RollHit(z.rng, z.attackPower(src, magic), dst.def(magic, z.now), 1, src.stats.Crit)
 	z.applyHit(src, dst, 0, hit)
 }
 
@@ -133,7 +133,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 }
 
 func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef) {
-	hit := game.RollHit(z.rng, src.atk(s.Magic, z.now), dst.def(s.Magic, z.now), s.Mult, src.stats.Crit+s.ExtraCrit)
+	hit := game.RollHit(z.rng, z.attackPower(src, s.Magic), dst.def(s.Magic, z.now), s.Mult, src.stats.Crit+s.ExtraCrit)
 	z.applyHit(src, dst, s.ID, hit)
 	if !hit.Miss && !dst.dead && s.OnTarget != nil {
 		z.applyEffect(dst, s.OnTarget)

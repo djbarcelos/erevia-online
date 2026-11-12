@@ -79,6 +79,8 @@ message Welcome {
   repeated SkillInfo skills = 5;
   float safe_radius = 6;
   repeated MapZone zones = 7; // zonas de caça (para o mapa)
+  int64 server_time_ms = 8; // relógio do servidor (Unix, ms) para o ciclo dia/noite
+  uint32 day_cycle_ms = 9; // duração do ciclo dia/noite
 }
 
 // Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).

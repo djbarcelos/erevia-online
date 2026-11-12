@@ -7,6 +7,8 @@ export interface WorldData {
   roads: { x1: number; z1: number; x2: number; z2: number; w: number }[];
   colliders: { x: number; z: number; r: number }[];
   objects: { k: string; x: number; z: number; r: number; s: [number, number, number] }[];
+  /** Tochas que acendem à noite. */
+  torches?: { x: number; z: number }[];
 }
 
 export async function loadWorldData(): Promise<WorldData> {

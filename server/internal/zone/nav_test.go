@@ -20,7 +20,7 @@ func wallWorld() *world.World {
 }
 
 func newNavZone(w *world.World, spawns ...game.Spawn) *Zone {
-	cfg := DefaultConfig()
+	cfg := testConfig()
 	cfg.Spawns = spawns
 	cfg.World = w
 	cfg.SafeRadius = 0 // os testes de navegação lutam perto da origem
@@ -98,7 +98,7 @@ func TestRealWorldIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := DefaultConfig()
+	cfg := testConfig()
 	cfg.World, cfg.Size, cfg.SafeRadius = w, w.Size, w.SafeRadius
 	z := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	for _, m := range z.monsters {

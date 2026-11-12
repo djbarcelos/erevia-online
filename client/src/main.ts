@@ -12,6 +12,7 @@ import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
 import { CharacterModels } from "./world/models";
 import { loadEnvironment, type Environment } from "./world/environment";
+import { DayNight, hourLabel, isNight, WorldClock } from "./world/daynight";
 import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
 import { Collision, loadWorldData } from "./world/world-data";
@@ -101,6 +102,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const worldData = await loadWorldData();
   const world = await createWorldScene(canvas, worldData);
   const fx = new Fx(world.scene, world.gui);
+  const clock = new WorldClock(Number(welcome.serverTimeMs), welcome.dayCycleMs);
+  const dayNight = new DayNight(world, worldData);
   const collision = new Collision(worldData);
   const entities = new EntityManager(world.scene, world.gui, welcome.yourId, welcome.zoneSize / 2, fx, world.shadows, collision);
   for (const e of welcome.entities) entities.add(e);
@@ -199,6 +202,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       world.camera.target.z = pos.z;
       world.followShadows(pos.x, pos.z);
     }
+    dayNight.update(clock.phase(), pos);
     // Árvores que tapam o jogador ou o alvo ficam translúcidas.
     env?.fader.update(dt, world.camera.position, entities.focusPoints());
   });
@@ -214,6 +218,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     onlineEl.textContent = String(entities.count);
     const p = entities.localPosition();
     posEl.textContent = p ? `${p.x.toFixed(1)}, ${p.z.toFixed(1)}` : "–";
+    const phase = clock.phase();
+    minimap.setClock(hourLabel(phase), isNight(phase), dayNight.night);
   }, 500);
   setupPerfPanel(world.scene, world.gui, $("hud"));
 
@@ -231,6 +237,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       env: () => env,
       minimap,
       worldMap,
+      /** Fixa a hora do dia (0–1) ou volta ao relógio do servidor (null). */
+      setTime: (p: number | null) => clock.setFixed(p),
+      phase: () => clock.phase(),
     };
   }
 

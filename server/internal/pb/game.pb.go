@@ -928,7 +928,9 @@ type Welcome struct {
 	Entities      []*Entity              `protobuf:"bytes,4,rep,name=entities,proto3" json:"entities,omitempty"`
 	Skills        []*SkillInfo           `protobuf:"bytes,5,rep,name=skills,proto3" json:"skills,omitempty"`
 	SafeRadius    float32                `protobuf:"fixed32,6,opt,name=safe_radius,json=safeRadius,proto3" json:"safe_radius,omitempty"`
-	Zones         []*MapZone             `protobuf:"bytes,7,rep,name=zones,proto3" json:"zones,omitempty"` // zonas de caça (para o mapa)
+	Zones         []*MapZone             `protobuf:"bytes,7,rep,name=zones,proto3" json:"zones,omitempty"`                                      // zonas de caça (para o mapa)
+	ServerTimeMs  int64                  `protobuf:"varint,8,opt,name=server_time_ms,json=serverTimeMs,proto3" json:"server_time_ms,omitempty"` // relógio do servidor (Unix, ms) para o ciclo dia/noite
+	DayCycleMs    uint32                 `protobuf:"varint,9,opt,name=day_cycle_ms,json=dayCycleMs,proto3" json:"day_cycle_ms,omitempty"`       // duração do ciclo dia/noite
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1010,6 +1012,20 @@ func (x *Welcome) GetZones() []*MapZone {
 		return x.Zones
 	}
 	return nil
+}
+
+func (x *Welcome) GetServerTimeMs() int64 {
+	if x != nil {
+		return x.ServerTimeMs
+	}
+	return 0
+}
+
+func (x *Welcome) GetDayCycleMs() uint32 {
+	if x != nil {
+		return x.DayCycleMs
+	}
+	return 0
 }
 
 // Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
@@ -2391,7 +2407,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\n" +
 	"self_stats\x18\b \x01(\v2\x14.erevia.v1.SelfStatsH\x00R\tselfStats\x12A\n" +
 	"\x0eskill_cooldown\x18\t \x01(\v2\x18.erevia.v1.SkillCooldownH\x00R\rskillCooldownB\x05\n" +
-	"\x03msg\"\x84\x02\n" +
+	"\x03msg\"\xcc\x02\n" +
 	"\aWelcome\x12\x17\n" +
 	"\ayour_id\x18\x01 \x01(\rR\x06yourId\x12\x1b\n" +
 	"\ttick_rate\x18\x02 \x01(\rR\btickRate\x12\x1b\n" +
@@ -2400,7 +2416,10 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x06skills\x18\x05 \x03(\v2\x14.erevia.v1.SkillInfoR\x06skills\x12\x1f\n" +
 	"\vsafe_radius\x18\x06 \x01(\x02R\n" +
 	"safeRadius\x12(\n" +
-	"\x05zones\x18\a \x03(\v2\x12.erevia.v1.MapZoneR\x05zones\"\xc7\x01\n" +
+	"\x05zones\x18\a \x03(\v2\x12.erevia.v1.MapZoneR\x05zones\x12$\n" +
+	"\x0eserver_time_ms\x18\b \x01(\x03R\fserverTimeMs\x12 \n" +
+	"\fday_cycle_ms\x18\t \x01(\rR\n" +
+	"dayCycleMs\"\xc7\x01\n" +
 	"\aMapZone\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x13\n" +
 	"\x05r_min\x18\x02 \x01(\x02R\x04rMin\x12\x13\n" +

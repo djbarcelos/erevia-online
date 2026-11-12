@@ -80,7 +80,7 @@ func (z *Zone) think(m *entity) {
 	}
 
 	if ms.def.Aggressive && len(ms.hate) == 0 {
-		if p := z.nearestPlayer(m.pos, aggroRange); p != nil {
+		if p := z.nearestPlayer(m.pos, z.aggroRange()); p != nil {
 			ms.hate[p.id] = 1
 		}
 	}

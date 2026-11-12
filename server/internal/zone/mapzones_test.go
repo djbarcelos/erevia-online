@@ -34,7 +34,7 @@ func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
 }
 
 func TestBossFlagOnEntity(t *testing.T) {
-	z := New(DefaultConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	z := New(testConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 	var found bool
 	for _, m := range z.monsters {
 		if m.mon.def.Boss {
