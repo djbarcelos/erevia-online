@@ -1,0 +1,107 @@
+:root {
+  --bg: #12101a;
+  --panel: rgba(18, 16, 26, 0.78);
+  --border: rgba(214, 180, 110, 0.35);
+  --gold: #d6b46e;
+  --text: #ece6da;
+  --muted: #9a93a6;
+  --error: #ff7a6b;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+#game {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  outline: none;
+  touch-action: none;
+}
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at center, rgba(40, 30, 60, 0.55), rgba(10, 8, 14, 0.92));
+}
+
+#overlay[hidden] { display: none; }
+
+#login {
+  width: min(340px, calc(100vw - 32px));
+  padding: 28px 24px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  text-align: center;
+}
+
+#login h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 2.4rem;
+  letter-spacing: 0.12em;
+  color: var(--gold);
+}
+
+#login .sub { margin: -6px 0 6px; color: var(--muted); font-size: 0.85rem; }
+
+#login input, #login button {
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+#login input { background: rgba(0, 0, 0, 0.35); color: var(--text); }
+#login input:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+#login button {
+  background: var(--gold);
+  color: #1b1408;
+  font-weight: 600;
+  cursor: pointer;
+}
+#login button:disabled { opacity: 0.6; cursor: wait; }
+
+#login .error { margin: 0; min-height: 1.2em; color: var(--error); font-size: 0.9rem; }
+#login .hint { margin: 0; color: var(--muted); font-size: 0.8rem; }
+
+#hud {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  pointer-events: none;
+}
+#hud .k { color: var(--muted); display: inline-block; width: 52px; }
+
+#help {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: var(--panel);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}

@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package erevia.v1;
+
+option go_package = "erevia/server/internal/pb;pb";
+
+// ---------- Cliente -> Servidor ----------
+
+message ClientMessage {
+  oneof msg {
+    Join join = 1;
+    MoveTo move_to = 2;
+    Ping ping = 3;
+  }
+}
+
+// Primeira mensagem após conectar.
+message Join {
+  string name = 1;
+}
+
+// Pedido para andar até um ponto do chão. O servidor valida.
+message MoveTo {
+  float x = 1;
+  float z = 2;
+}
+
+message Ping {
+  double client_time = 1;
+}
+
+// ---------- Servidor -> Cliente ----------
+
+message ServerMessage {
+  oneof msg {
+    Welcome welcome = 1;
+    Spawn spawn = 2;
+    Despawn despawn = 3;
+    Snapshot snapshot = 4;
+    Pong pong = 5;
+  }
+}
+
+// Resposta ao Join: quem você é e quem já está na zona.
+message Welcome {
+  uint32 your_id = 1;
+  uint32 tick_rate = 2;
+  float zone_size = 3;
+  repeated Entity entities = 4;
+}
+
+message Spawn {
+  Entity entity = 1;
+}
+
+message Despawn {
+  uint32 id = 1;
+}
+
+// Enviado a cada tick, apenas com as entidades que mudaram (delta).
+message Snapshot {
+  uint32 tick = 1;
+  repeated EntityState states = 2;
+}
+
+message Pong {
+  double client_time = 1;
+}
+
+// ---------- Tipos ----------
+
+message Entity {
+  uint32 id = 1;
+  string name = 2;
+  float x = 3;
+  float z = 4;
+  float target_x = 5;
+  float target_z = 6;
+  float speed = 7;
+}
+
+message EntityState {
+  uint32 id = 1;
+  float x = 2;
+  float z = 3;
+  float target_x = 4;
+  float target_z = 5;
+}
