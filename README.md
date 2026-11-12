@@ -58,7 +58,7 @@ client/
   src/net/                   conexão com o servidor
   src/gen/                   código TS gerado (não editar)
 infra/docker-compose.yml     Postgres local
-Dockerfile, railway.toml     publicação
+Dockerfile, .railway/        publicação (Railway: infraestrutura como código)
 ```
 
 ## Variáveis do servidor
