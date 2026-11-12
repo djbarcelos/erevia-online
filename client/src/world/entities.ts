@@ -15,16 +15,20 @@ import { classInfo } from "../classes";
 import {
   Effect,
   EntityKind,
+  SkillTarget,
   type CombatEvent,
+  type EffectEnd,
   type EffectEvent,
   type Entity,
   type EntityState,
   type HpUpdate,
   type LevelUp,
   type Revive,
+  type SkillCast,
+  type SkillInfo,
 } from "../gen/erevia/v1/game_pb";
 import { AnimController } from "./anim";
-import type { Fx } from "./fx";
+import type { Fx, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
 import type { Collision } from "./world-data";
 
@@ -42,10 +46,21 @@ const ANIM_DISTANCE = 50;
 const SHADOW_DISTANCE = 35;
 const BONE_COLOR = "#d9d2c0";
 
-/** Visual de cada skill (vale para skills de qualquer jogador). */
-const SKILL_FX: Record<number, "melee" | "buff" | "fireball" | "nova"> = {
-  1: "melee", 2: "buff", 3: "melee", 4: "buff", 5: "fireball", 6: "nova", 7: "melee", 8: "buff",
-};
+/** Velocidade dos projéteis (m/s): o dano só aparece quando o projétil chega. */
+const PROJECTILE_SPEED = 26;
+
+/** Efeito ativo numa entidade (para os ícones do HUD). */
+export interface ActiveEffect {
+  effect: Effect;
+  /** performance.now() em que acaba. */
+  until: number;
+  durationMs: number;
+  value: number;
+}
+
+interface TrackedEffect extends ActiveEffect {
+  visual: FxHandle | null;
+}
 
 export interface EntityInfo {
   id: number;
@@ -92,6 +107,7 @@ interface View extends EntityInfo {
   hpBar: Rectangle;
   hpFill: Rectangle;
   lastHurt: number;
+  effects: Map<Effect, TrackedEffect>;
 }
 
 /** Jogadores e monstros na tela: criação, movimento suave, animações e combate. */
@@ -103,6 +119,7 @@ export class EntityManager {
   private selectRing: Mesh;
   private models: CharacterModels | null = null;
   private targetId = 0;
+  private catalog = new Map<number, SkillInfo>();
 
   constructor(
     private scene: Scene,
@@ -234,7 +251,7 @@ export class EntityManager {
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
-      label, nameText, hpBar, hpFill, lastHurt: 0,
+      label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
     };
     this.views.set(e.id, v);
     this.refreshLabel(v);
@@ -251,6 +268,7 @@ export class EntityManager {
     this.setShadow(v, false);
     if (this.targetId === id) this.setTarget(0);
     if (this.selectRing.parent === v.root) this.selectRing.parent = null;
+    this.clearEffects(v);
     v.label.dispose();
     v.model3d?.dispose();
     // Materiais são compartilhados (modelo, anel, efeitos): só as malhas são descartadas.
@@ -305,71 +323,135 @@ export class EntityManager {
     return { x: cx, z: cz };
   }
 
+  /** Todas as skills do jogo (para desenhar as skills dos outros jogadores). */
+  setSkillCatalog(list: SkillInfo[]): void {
+    for (const sk of list) this.catalog.set(sk.id, sk);
+  }
+
+  skill(id: number): SkillInfo | undefined {
+    return this.catalog.get(id);
+  }
+
   onCombat(ev: CombatEvent): void {
     const src = this.views.get(ev.sourceId);
     const dst = this.views.get(ev.targetId);
-    const self = ev.sourceId === ev.targetId;
-    const kind = ev.skillId ? SKILL_FX[ev.skillId] : undefined;
-
-    if (src && dst && !self) this.face(src, dst);
-
-    if (src) {
-      if (self) {
-        if (kind === "nova") {
-          src.anim?.play("skill");
-          this.fx.nova(src.root.position, 6, new Color3(0.55, 0.85, 1));
-        } else {
-          src.anim?.play("buff");
-        }
-        return;
-      }
-      src.anim?.play(ev.skillId ? "skill" : "attack");
-    }
     if (!dst) return;
+    const sk = ev.skillId ? this.catalog.get(ev.skillId) : undefined;
+    const isArea = sk?.target === SkillTarget.AREA; // a animação e o nome já vieram no SkillCast
 
-    if (kind === "fireball" && src) {
-      this.fx.projectile(src.root.position.add(new Vector3(0, 1.2, 0)), dst.root.position.add(new Vector3(0, 1, 0)), new Color3(1, 0.5, 0.15));
-    } else if (src && src.model === "mage" && !ev.skillId) {
-      this.fx.projectile(src.root.position.add(new Vector3(0, 1.4, 0)), dst.root.position.add(new Vector3(0, 1, 0)), new Color3(0.6, 0.5, 1), 0.25);
+    if (src && src !== dst && !isArea) {
+      this.face(src, dst);
+      src.anim?.play(ev.skillId ? "skill" : "attack");
+      if (sk && sk.target === SkillTarget.ENEMY) this.fx.skillName(src.head, sk.name);
     }
 
+    // Projétil: Bola de Fogo, ou ataque básico de quem usa magia (magos e esqueletos magos).
+    const ranged = !!src && src !== dst && (sk?.fx === "fireball" || (!ev.skillId && isCaster(src.model)));
+    const land = () => this.landHit(ev, dst, sk);
+    if (ranged && src) {
+      const from = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
+      const to = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
+      const travel = Vector3.Distance(from, to) / PROJECTILE_SPEED;
+      if (sk) this.fx.projectile(from, to, new Color3(1, 0.5, 0.15), 0.4, travel);
+      else this.fx.projectile(from, to, new Color3(0.6, 0.5, 1), 0.25, travel);
+      window.setTimeout(land, travel * 1000);
+    } else {
+      land();
+    }
+  }
+
+  /** Número de dano e reação de quem levou o golpe. */
+  private landHit(ev: CombatEvent, dst: View, sk: SkillInfo | undefined): void {
+    if (!this.views.has(dst.id)) return;
     const mine = ev.sourceId === this.localId;
     const onMe = ev.targetId === this.localId;
     if (ev.miss) {
       this.fx.damageNumber(dst.head, "Errou", "#b9b4c2", false);
+      return;
+    }
+    let color = onMe ? "#ff6b5a" : ev.crit ? "#ffd34d" : mine ? "#ffffff" : "#e8e1d4";
+    if (sk && !onMe && !ev.crit) color = SKILL_NUMBER_COLOR[sk.fx] ?? color;
+    this.fx.damageNumber(dst.head, ev.crit ? `${ev.damage}!` : String(ev.damage), color, ev.crit || !!sk);
+    if (!ev.kill && !dst.dead) dst.anim?.play("hit");
+  }
+
+  /** Skill em si mesmo ou em área (o servidor avisa mesmo quando não acerta ninguém). */
+  onSkillCast(ev: SkillCast): void {
+    const src = this.views.get(ev.sourceId);
+    const sk = this.catalog.get(ev.skillId);
+    if (!src || !sk) return;
+    this.fx.skillName(src.head, sk.name);
+    if (sk.target === SkillTarget.AREA) {
+      src.anim?.play("skill");
+      this.fx.nova(src.root.position, sk.range, new Color3(0.55, 0.85, 1));
     } else {
-      const color = onMe ? "#ff6b5a" : ev.crit ? "#ffd34d" : mine ? "#ffffff" : "#e8e1d4";
-      this.fx.damageNumber(dst.head, ev.crit ? `${ev.damage}!` : String(ev.damage), color, ev.crit);
-      if (!ev.kill) dst.anim?.play("hit");
+      src.anim?.play("buff");
     }
   }
 
   onEffect(ev: EffectEvent): void {
     const v = this.views.get(ev.targetId);
-    if (!v) return;
+    if (!v || v.dead) return;
     const ms = ev.durationMs;
+    v.effects.get(ev.effect)?.visual?.stop(); // renovado: troca o visual
+    let visual: FxHandle | null = null;
     switch (ev.effect) {
       case Effect.STUN:
-        this.fx.stun(v.head, ms);
+        visual = this.fx.stun(v.head, ms);
         break;
       case Effect.SLOW:
-        this.fx.aura(v.root, new Color3(0.5, 0.8, 1), ms, v.scale);
+        visual = this.fx.aura(v.root, new Color3(0.5, 0.8, 1), ms, v.scale);
         break;
       case Effect.BUFF_DEF:
-        this.fx.aura(v.root, new Color3(0.45, 0.65, 1), ms, v.scale);
+        visual = this.fx.aura(v.root, new Color3(0.45, 0.65, 1), ms, v.scale);
         break;
       case Effect.BUFF_ATK:
-        this.fx.aura(v.root, new Color3(1, 0.35, 0.25), ms, v.scale);
+        visual = this.fx.aura(v.root, new Color3(1, 0.35, 0.25), ms, v.scale);
         break;
       case Effect.BUFF_SPEED:
-        this.fx.aura(v.root, new Color3(0.4, 1, 0.55), ms, v.scale);
+        visual = this.fx.aura(v.root, new Color3(0.4, 1, 0.55), ms, v.scale);
         break;
     }
+    v.effects.set(ev.effect, { effect: ev.effect, until: performance.now() + ms, durationMs: ms, value: ev.value, visual });
+  }
+
+  onEffectEnd(ev: EffectEnd): void {
+    const v = this.views.get(ev.targetId);
+    const ef = v?.effects.get(ev.effect);
+    if (!v || !ef) return;
+    ef.visual?.stop();
+    v.effects.delete(ev.effect);
+  }
+
+  /** Efeitos ativos (para os ícones do HUD), do que acaba antes para o que acaba depois. */
+  effectsOf(id: number): ActiveEffect[] {
+    const v = this.views.get(id);
+    if (!v) return [];
+    const now = performance.now();
+    const out: ActiveEffect[] = [];
+    for (const ef of v.effects.values()) {
+      if (ef.until > now) out.push({ effect: ef.effect, until: ef.until, durationMs: ef.durationMs, value: ef.value });
+    }
+    return out.sort((a, b) => a.until - b.until);
+  }
+
+  /** Distância (no chão) entre o jogador local e uma entidade. */
+  distanceTo(id: number): number | null {
+    const me = this.local;
+    const v = this.views.get(id);
+    if (!me || !v) return null;
+    return Math.hypot(v.root.position.x - me.root.position.x, v.root.position.z - me.root.position.z);
+  }
+
+  private clearEffects(v: View): void {
+    for (const ef of v.effects.values()) ef.visual?.stop();
+    v.effects.clear();
   }
 
   onDeath(id: number): void {
     const v = this.views.get(id);
     if (!v) return;
+    this.clearEffects(v);
     v.dead = true;
     v.hp = 0;
     v.target = { ...v.server };
@@ -586,6 +668,20 @@ export class EntityManager {
     }
     return mat;
   }
+}
+
+/** Cor do número de dano de cada skill. */
+const SKILL_NUMBER_COLOR: Record<string, string> = {
+  fireball: "#ffb14a",
+  ice_nova: "#9fe0ff",
+  shield_bash: "#cfe0ff",
+  brutal_strike: "#ff9a6a",
+  backstab: "#e0b4ff",
+};
+
+/** Modelos que atacam com magia à distância. */
+function isCaster(model: string): boolean {
+  return model === "mage" || model.includes("mage");
 }
 
 function clamp(v: number, lo: number, hi: number): number {

@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file erevia/v1/game.proto.
  */
 export const file_erevia_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChRlcmV2aWEvdjEvZ2FtZS5wcm90bxIJZXJldmlhLnYxIp4CCg1DbGllbnRNZXNzYWdlEh8KBGpvaW4YASABKAsyDy5lcmV2aWEudjEuSm9pbkgAEiQKB21vdmVfdG8YAiABKAsyES5lcmV2aWEudjEuTW92ZVRvSAASHwoEcGluZxgDIAEoCzIPLmVyZXZpYS52MS5QaW5nSAASKAoJY2hhdF9zZW5kGAQgASgLMhMuZXJldmlhLnYxLkNoYXRTZW5kSAASIwoGYXR0YWNrGAUgASgLMhEuZXJldmlhLnYxLkF0dGFja0gAEigKCXVzZV9za2lsbBgGIAEoCzITLmVyZXZpYS52MS5Vc2VTa2lsbEgAEiUKB3Jlc3Bhd24YByABKAsyEi5lcmV2aWEudjEuUmVzcGF3bkgAQgUKA21zZyIcCgRKb2luEhQKDGNoYXJhY3Rlcl9pZBgBIAEoDSIeCgZNb3ZlVG8SCQoBeBgBIAEoAhIJCgF6GAIgASgCIhsKBFBpbmcSEwoLY2xpZW50X3RpbWUYASABKAEiJAoIQ2hhdFNlbmQSDAoEdGV4dBgBIAEoCRIKCgJ0bxgCIAEoCSIbCgZBdHRhY2sSEQoJdGFyZ2V0X2lkGAEgASgNIi8KCFVzZVNraWxsEhAKCHNraWxsX2lkGAEgASgNEhEKCXRhcmdldF9pZBgCIAEoDSIJCgdSZXNwYXduIv4CCg1TZXJ2ZXJNZXNzYWdlEiUKB3dlbGNvbWUYASABKAsyEi5lcmV2aWEudjEuV2VsY29tZUgAEiEKBXNwYXduGAIgASgLMhAuZXJldmlhLnYxLlNwYXduSAASJQoHZGVzcGF3bhgDIAEoCzISLmVyZXZpYS52MS5EZXNwYXduSAASJwoIc25hcHNob3QYBCABKAsyEy5lcmV2aWEudjEuU25hcHNob3RIABIfCgRwb25nGAUgASgLMg8uZXJldmlhLnYxLlBvbmdIABImCgRjaGF0GAYgASgLMhYuZXJldmlhLnYxLkNoYXRNZXNzYWdlSAASIwoGa2lja2VkGAcgASgLMhEuZXJldmlhLnYxLktpY2tlZEgAEioKCnNlbGZfc3RhdHMYCCABKAsyFC5lcmV2aWEudjEuU2VsZlN0YXRzSAASMgoOc2tpbGxfY29vbGRvd24YCSABKAsyGC5lcmV2aWEudjEuU2tpbGxDb29sZG93bkgAQgUKA21zZyLxAQoHV2VsY29tZRIPCgd5b3VyX2lkGAEgASgNEhEKCXRpY2tfcmF0ZRgCIAEoDRIRCgl6b25lX3NpemUYAyABKAISIwoIZW50aXRpZXMYBCADKAsyES5lcmV2aWEudjEuRW50aXR5EiQKBnNraWxscxgFIAMoCzIULmVyZXZpYS52MS5Ta2lsbEluZm8SEwoLc2FmZV9yYWRpdXMYBiABKAISIQoFem9uZXMYByADKAsyEi5lcmV2aWEudjEuTWFwWm9uZRIWCg5zZXJ2ZXJfdGltZV9tcxgIIAEoAxIUCgxkYXlfY3ljbGVfbXMYCSABKA0ijgEKB01hcFpvbmUSDAoEbmFtZRgBIAEoCRINCgVyX21pbhgCIAEoAhINCgVyX21heBgDIAEoAhIRCglsZXZlbF9taW4YBCABKA0SEQoJbGV2ZWxfbWF4GAUgASgNEg0KBWZpeGVkGAYgASgIEgkKAXgYByABKAISCQoBehgIIAEoAhIMCgRib3NzGAkgASgIIioKBVNwYXduEiEKBmVudGl0eRgBIAEoCzIRLmVyZXZpYS52MS5FbnRpdHkiFQoHRGVzcGF3bhIKCgJpZBgBIAEoDSKNAgoIU25hcHNob3QSDAoEdGljaxgBIAEoDRImCgZzdGF0ZXMYAiADKAsyFi5lcmV2aWEudjEuRW50aXR5U3RhdGUSHwoCaHAYAyADKAsyEy5lcmV2aWEudjEuSHBVcGRhdGUSJgoGY29tYmF0GAQgAygLMhYuZXJldmlhLnYxLkNvbWJhdEV2ZW50EicKB2VmZmVjdHMYBSADKAsyFi5lcmV2aWEudjEuRWZmZWN0RXZlbnQSDgoGZGVhdGhzGAYgAygNEiIKB3Jldml2ZXMYByADKAsyES5lcmV2aWEudjEuUmV2aXZlEiUKCWxldmVsX3VwcxgIIAMoCzISLmVyZXZpYS52MS5MZXZlbFVwIhsKBFBvbmcSEwoLY2xpZW50X3RpbWUYASABKAEieQoLQ2hhdE1lc3NhZ2USJwoHY2hhbm5lbBgBIAEoDjIWLmVyZXZpYS52MS5DaGF0Q2hhbm5lbBIPCgdmcm9tX2lkGAIgASgNEhEKCWZyb21fbmFtZRgDIAEoCRIPCgd0b19uYW1lGAQgASgJEgwKBHRleHQYBSABKAkiGAoGS2lja2VkEg4KBnJlYXNvbhgBIAEoCSLXAQoJU2VsZlN0YXRzEgoKAmhwGAEgASgNEg4KBm1heF9ocBgCIAEoDRIKCgJtcBgDIAEoDRIOCgZtYXhfbXAYBCABKA0SDQoFbGV2ZWwYBSABKA0SCgoCeHAYBiABKAQSFgoOeHBfbGV2ZWxfc3RhcnQYByABKAQSFQoNeHBfbmV4dF9sZXZlbBgIIAEoBBINCgVwX2F0axgJIAEoDRINCgVtX2F0axgKIAEoDRINCgVwX2RlZhgLIAEoDRINCgVzcGVlZBgMIAEoAhIMCgRkZWFkGA0gASgIIjYKDVNraWxsQ29vbGRvd24SEAoIc2tpbGxfaWQYASABKA0SEwoLcmVhZHlfaW5fbXMYAiABKA0i9QEKBkVudGl0eRIKCgJpZBgBIAEoDRIMCgRuYW1lGAIgASgJEgkKAXgYAyABKAISCQoBehgEIAEoAhIQCgh0YXJnZXRfeBgFIAEoAhIQCgh0YXJnZXRfehgGIAEoAhINCgVzcGVlZBgHIAEoAhINCgVtb2RlbBgIIAEoCRIjCgRraW5kGAkgASgOMhUuZXJldmlhLnYxLkVudGl0eUtpbmQSDQoFbGV2ZWwYCiABKA0SCgoCaHAYCyABKA0SDgoGbWF4X2hwGAwgASgNEgwKBGRlYWQYDSABKAgSDQoFc2NhbGUYDiABKAISDAoEYm9zcxgPIAEoCCJiCgtFbnRpdHlTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXoYAyABKAISEAoIdGFyZ2V0X3gYBCABKAISEAoIdGFyZ2V0X3oYBSABKAISDQoFc3BlZWQYBiABKAIiMgoISHBVcGRhdGUSCgoCaWQYASABKA0SCgoCaHAYAiABKA0SDgoGbWF4X2hwGAMgASgNIn8KC0NvbWJhdEV2ZW50EhEKCXNvdXJjZV9pZBgBIAEoDRIRCgl0YXJnZXRfaWQYAiABKA0SEAoIc2tpbGxfaWQYAyABKA0SDgoGZGFtYWdlGAQgASgNEgwKBGNyaXQYBSABKAgSDAoEbWlzcxgGIAEoCBIMCgRraWxsGAcgASgIIlgKC0VmZmVjdEV2ZW50EhEKCXRhcmdldF9pZBgBIAEoDRIhCgZlZmZlY3QYAiABKA4yES5lcmV2aWEudjEuRWZmZWN0EhMKC2R1cmF0aW9uX21zGAMgASgNIkYKBlJldml2ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXoYAyABKAISCgoCaHAYBCABKA0SDgoGbWF4X2hwGAUgASgNIjQKB0xldmVsVXASCgoCaWQYASABKA0SDQoFbGV2ZWwYAiABKA0SDgoGbWF4X2hwGAMgASgNIo8BCglTa2lsbEluZm8SCgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRILCgNrZXkYAyABKA0SDwoHbXBfY29zdBgEIAEoDRITCgtjb29sZG93bl9tcxgFIAEoDRINCgVyYW5nZRgGIAEoAhImCgZ0YXJnZXQYByABKA4yFi5lcmV2aWEudjEuU2tpbGxUYXJnZXQqeAoLQ2hhdENoYW5uZWwSHAoYQ0hBVF9DSEFOTkVMX1VOU1BFQ0lGSUVEEAASGAoUQ0hBVF9DSEFOTkVMX0dFTkVSQUwQARIYChRDSEFUX0NIQU5ORUxfV0hJU1BFUhACEhcKE0NIQVRfQ0hBTk5FTF9TWVNURU0QAypaCgpFbnRpdHlLaW5kEhsKF0VOVElUWV9LSU5EX1VOU1BFQ0lGSUVEEAASFgoSRU5USVRZX0tJTkRfUExBWUVSEAESFwoTRU5USVRZX0tJTkRfTU9OU1RFUhACKoMBCgZFZmZlY3QSFgoSRUZGRUNUX1VOU1BFQ0lGSUVEEAASDwoLRUZGRUNUX1NUVU4QARIPCgtFRkZFQ1RfU0xPVxACEhMKD0VGRkVDVF9CVUZGX0RFRhADEhMKD0VGRkVDVF9CVUZGX0FUSxAEEhUKEUVGRkVDVF9CVUZGX1NQRUVEEAUqcQoLU2tpbGxUYXJnZXQSHAoYU0tJTExfVEFSR0VUX1VOU1BFQ0lGSUVEEAASFgoSU0tJTExfVEFSR0VUX0VORU1ZEAESFQoRU0tJTExfVEFSR0VUX1NFTEYQAhIVChFTS0lMTF9UQVJHRVRfQVJFQRADQh5aHGVyZXZpYS9zZXJ2ZXIvaW50ZXJuYWwvcGI7cGJiBnByb3RvMw");
+  fileDesc("ChRlcmV2aWEvdjEvZ2FtZS5wcm90bxIJZXJldmlhLnYxIp4CCg1DbGllbnRNZXNzYWdlEh8KBGpvaW4YASABKAsyDy5lcmV2aWEudjEuSm9pbkgAEiQKB21vdmVfdG8YAiABKAsyES5lcmV2aWEudjEuTW92ZVRvSAASHwoEcGluZxgDIAEoCzIPLmVyZXZpYS52MS5QaW5nSAASKAoJY2hhdF9zZW5kGAQgASgLMhMuZXJldmlhLnYxLkNoYXRTZW5kSAASIwoGYXR0YWNrGAUgASgLMhEuZXJldmlhLnYxLkF0dGFja0gAEigKCXVzZV9za2lsbBgGIAEoCzITLmVyZXZpYS52MS5Vc2VTa2lsbEgAEiUKB3Jlc3Bhd24YByABKAsyEi5lcmV2aWEudjEuUmVzcGF3bkgAQgUKA21zZyIcCgRKb2luEhQKDGNoYXJhY3Rlcl9pZBgBIAEoDSIeCgZNb3ZlVG8SCQoBeBgBIAEoAhIJCgF6GAIgASgCIhsKBFBpbmcSEwoLY2xpZW50X3RpbWUYASABKAEiJAoIQ2hhdFNlbmQSDAoEdGV4dBgBIAEoCRIKCgJ0bxgCIAEoCSIbCgZBdHRhY2sSEQoJdGFyZ2V0X2lkGAEgASgNIi8KCFVzZVNraWxsEhAKCHNraWxsX2lkGAEgASgNEhEKCXRhcmdldF9pZBgCIAEoDSIJCgdSZXNwYXduIv4CCg1TZXJ2ZXJNZXNzYWdlEiUKB3dlbGNvbWUYASABKAsyEi5lcmV2aWEudjEuV2VsY29tZUgAEiEKBXNwYXduGAIgASgLMhAuZXJldmlhLnYxLlNwYXduSAASJQoHZGVzcGF3bhgDIAEoCzISLmVyZXZpYS52MS5EZXNwYXduSAASJwoIc25hcHNob3QYBCABKAsyEy5lcmV2aWEudjEuU25hcHNob3RIABIfCgRwb25nGAUgASgLMg8uZXJldmlhLnYxLlBvbmdIABImCgRjaGF0GAYgASgLMhYuZXJldmlhLnYxLkNoYXRNZXNzYWdlSAASIwoGa2lja2VkGAcgASgLMhEuZXJldmlhLnYxLktpY2tlZEgAEioKCnNlbGZfc3RhdHMYCCABKAsyFC5lcmV2aWEudjEuU2VsZlN0YXRzSAASMgoOc2tpbGxfY29vbGRvd24YCSABKAsyGC5lcmV2aWEudjEuU2tpbGxDb29sZG93bkgAQgUKA21zZyKeAgoHV2VsY29tZRIPCgd5b3VyX2lkGAEgASgNEhEKCXRpY2tfcmF0ZRgCIAEoDRIRCgl6b25lX3NpemUYAyABKAISIwoIZW50aXRpZXMYBCADKAsyES5lcmV2aWEudjEuRW50aXR5EiQKBnNraWxscxgFIAMoCzIULmVyZXZpYS52MS5Ta2lsbEluZm8SEwoLc2FmZV9yYWRpdXMYBiABKAISIQoFem9uZXMYByADKAsyEi5lcmV2aWEudjEuTWFwWm9uZRIWCg5zZXJ2ZXJfdGltZV9tcxgIIAEoAxIUCgxkYXlfY3ljbGVfbXMYCSABKA0SKwoNc2tpbGxfY2F0YWxvZxgKIAMoCzIULmVyZXZpYS52MS5Ta2lsbEluZm8ijgEKB01hcFpvbmUSDAoEbmFtZRgBIAEoCRINCgVyX21pbhgCIAEoAhINCgVyX21heBgDIAEoAhIRCglsZXZlbF9taW4YBCABKA0SEQoJbGV2ZWxfbWF4GAUgASgNEg0KBWZpeGVkGAYgASgIEgkKAXgYByABKAISCQoBehgIIAEoAhIMCgRib3NzGAkgASgIIioKBVNwYXduEiEKBmVudGl0eRgBIAEoCzIRLmVyZXZpYS52MS5FbnRpdHkiFQoHRGVzcGF3bhIKCgJpZBgBIAEoDSLdAgoIU25hcHNob3QSDAoEdGljaxgBIAEoDRImCgZzdGF0ZXMYAiADKAsyFi5lcmV2aWEudjEuRW50aXR5U3RhdGUSHwoCaHAYAyADKAsyEy5lcmV2aWEudjEuSHBVcGRhdGUSJgoGY29tYmF0GAQgAygLMhYuZXJldmlhLnYxLkNvbWJhdEV2ZW50EicKB2VmZmVjdHMYBSADKAsyFi5lcmV2aWEudjEuRWZmZWN0RXZlbnQSDgoGZGVhdGhzGAYgAygNEiIKB3Jldml2ZXMYByADKAsyES5lcmV2aWEudjEuUmV2aXZlEiUKCWxldmVsX3VwcxgIIAMoCzISLmVyZXZpYS52MS5MZXZlbFVwEikKC2VmZmVjdF9lbmRzGAkgAygLMhQuZXJldmlhLnYxLkVmZmVjdEVuZBIjCgVjYXN0cxgKIAMoCzIULmVyZXZpYS52MS5Ta2lsbENhc3QiGwoEUG9uZxITCgtjbGllbnRfdGltZRgBIAEoASJ5CgtDaGF0TWVzc2FnZRInCgdjaGFubmVsGAEgASgOMhYuZXJldmlhLnYxLkNoYXRDaGFubmVsEg8KB2Zyb21faWQYAiABKA0SEQoJZnJvbV9uYW1lGAMgASgJEg8KB3RvX25hbWUYBCABKAkSDAoEdGV4dBgFIAEoCSIYCgZLaWNrZWQSDgoGcmVhc29uGAEgASgJItcBCglTZWxmU3RhdHMSCgoCaHAYASABKA0SDgoGbWF4X2hwGAIgASgNEgoKAm1wGAMgASgNEg4KBm1heF9tcBgEIAEoDRINCgVsZXZlbBgFIAEoDRIKCgJ4cBgGIAEoBBIWCg54cF9sZXZlbF9zdGFydBgHIAEoBBIVCg14cF9uZXh0X2xldmVsGAggASgEEg0KBXBfYXRrGAkgASgNEg0KBW1fYXRrGAogASgNEg0KBXBfZGVmGAsgASgNEg0KBXNwZWVkGAwgASgCEgwKBGRlYWQYDSABKAgiNgoNU2tpbGxDb29sZG93bhIQCghza2lsbF9pZBgBIAEoDRITCgtyZWFkeV9pbl9tcxgCIAEoDSL1AQoGRW50aXR5EgoKAmlkGAEgASgNEgwKBG5hbWUYAiABKAkSCQoBeBgDIAEoAhIJCgF6GAQgASgCEhAKCHRhcmdldF94GAUgASgCEhAKCHRhcmdldF96GAYgASgCEg0KBXNwZWVkGAcgASgCEg0KBW1vZGVsGAggASgJEiMKBGtpbmQYCSABKA4yFS5lcmV2aWEudjEuRW50aXR5S2luZBINCgVsZXZlbBgKIAEoDRIKCgJocBgLIAEoDRIOCgZtYXhfaHAYDCABKA0SDAoEZGVhZBgNIAEoCBINCgVzY2FsZRgOIAEoAhIMCgRib3NzGA8gASgIImIKC0VudGl0eVN0YXRlEgoKAmlkGAEgASgNEgkKAXgYAiABKAISCQoBehgDIAEoAhIQCgh0YXJnZXRfeBgEIAEoAhIQCgh0YXJnZXRfehgFIAEoAhINCgVzcGVlZBgGIAEoAiIyCghIcFVwZGF0ZRIKCgJpZBgBIAEoDRIKCgJocBgCIAEoDRIOCgZtYXhfaHAYAyABKA0ifwoLQ29tYmF0RXZlbnQSEQoJc291cmNlX2lkGAEgASgNEhEKCXRhcmdldF9pZBgCIAEoDRIQCghza2lsbF9pZBgDIAEoDRIOCgZkYW1hZ2UYBCABKA0SDAoEY3JpdBgFIAEoCBIMCgRtaXNzGAYgASgIEgwKBGtpbGwYByABKAgiegoLRWZmZWN0RXZlbnQSEQoJdGFyZ2V0X2lkGAEgASgNEiEKBmVmZmVjdBgCIAEoDjIRLmVyZXZpYS52MS5FZmZlY3QSEwoLZHVyYXRpb25fbXMYAyABKA0SEQoJc291cmNlX2lkGAQgASgNEg0KBXZhbHVlGAUgASgCIkEKCUVmZmVjdEVuZBIRCgl0YXJnZXRfaWQYASABKA0SIQoGZWZmZWN0GAIgASgOMhEuZXJldmlhLnYxLkVmZmVjdCIwCglTa2lsbENhc3QSEQoJc291cmNlX2lkGAEgASgNEhAKCHNraWxsX2lkGAIgASgNIkYKBlJldml2ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXoYAyABKAISCgoCaHAYBCABKA0SDgoGbWF4X2hwGAUgASgNIjQKB0xldmVsVXASCgoCaWQYASABKA0SDQoFbGV2ZWwYAiABKA0SDgoGbWF4X2hwGAMgASgNIsYCCglTa2lsbEluZm8SCgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRILCgNrZXkYAyABKA0SDwoHbXBfY29zdBgEIAEoDRITCgtjb29sZG93bl9tcxgFIAEoDRINCgVyYW5nZRgGIAEoAhImCgZ0YXJnZXQYByABKA4yFi5lcmV2aWEudjEuU2tpbGxUYXJnZXQSEwoLZGVzY3JpcHRpb24YCCABKAkSCgoCZngYCSABKAkSDQoFbWFnaWMYCiABKAgSDQoFcG93ZXIYCyABKAISIQoGZWZmZWN0GAwgASgOMhEuZXJldmlhLnYxLkVmZmVjdBIRCgllZmZlY3RfbXMYDSABKA0SFAoMZWZmZWN0X3ZhbHVlGA4gASgCEhYKDmVmZmVjdF9vbl9zZWxmGA8gASgIEhIKCmV4dHJhX2NyaXQYECABKAIqeAoLQ2hhdENoYW5uZWwSHAoYQ0hBVF9DSEFOTkVMX1VOU1BFQ0lGSUVEEAASGAoUQ0hBVF9DSEFOTkVMX0dFTkVSQUwQARIYChRDSEFUX0NIQU5ORUxfV0hJU1BFUhACEhcKE0NIQVRfQ0hBTk5FTF9TWVNURU0QAypaCgpFbnRpdHlLaW5kEhsKF0VOVElUWV9LSU5EX1VOU1BFQ0lGSUVEEAASFgoSRU5USVRZX0tJTkRfUExBWUVSEAESFwoTRU5USVRZX0tJTkRfTU9OU1RFUhACKoMBCgZFZmZlY3QSFgoSRUZGRUNUX1VOU1BFQ0lGSUVEEAASDwoLRUZGRUNUX1NUVU4QARIPCgtFRkZFQ1RfU0xPVxACEhMKD0VGRkVDVF9CVUZGX0RFRhADEhMKD0VGRkVDVF9CVUZGX0FUSxAEEhUKEUVGRkVDVF9CVUZGX1NQRUVEEAUqcQoLU2tpbGxUYXJnZXQSHAoYU0tJTExfVEFSR0VUX1VOU1BFQ0lGSUVEEAASFgoSU0tJTExfVEFSR0VUX0VORU1ZEAESFQoRU0tJTExfVEFSR0VUX1NFTEYQAhIVChFTS0lMTF9UQVJHRVRfQVJFQRADQh5aHGVyZXZpYS9zZXJ2ZXIvaW50ZXJuYWwvcGI7cGJiBnByb3RvMw");
 
 /**
  * @generated from message erevia.v1.ClientMessage
@@ -341,6 +341,13 @@ export type Welcome = Message<"erevia.v1.Welcome"> & {
    * @generated from field: uint32 day_cycle_ms = 9;
    */
   dayCycleMs: number;
+
+  /**
+   * todas as skills do jogo (visual das skills dos outros)
+   *
+   * @generated from field: repeated erevia.v1.SkillInfo skill_catalog = 10;
+   */
+  skillCatalog: SkillInfo[];
 };
 
 /**
@@ -492,6 +499,16 @@ export type Snapshot = Message<"erevia.v1.Snapshot"> & {
    * @generated from field: repeated erevia.v1.LevelUp level_ups = 8;
    */
   levelUps: LevelUp[];
+
+  /**
+   * @generated from field: repeated erevia.v1.EffectEnd effect_ends = 9;
+   */
+  effectEnds: EffectEnd[];
+
+  /**
+   * @generated from field: repeated erevia.v1.SkillCast casts = 10;
+   */
+  casts: SkillCast[];
 };
 
 /**
@@ -912,6 +929,20 @@ export type EffectEvent = Message<"erevia.v1.EffectEvent"> & {
    * @generated from field: uint32 duration_ms = 3;
    */
   durationMs: number;
+
+  /**
+   * quem aplicou
+   *
+   * @generated from field: uint32 source_id = 4;
+   */
+  sourceId: number;
+
+  /**
+   * intensidade (ex.: 0.5 = 50%)
+   *
+   * @generated from field: float value = 5;
+   */
+  value: number;
 };
 
 /**
@@ -920,6 +951,54 @@ export type EffectEvent = Message<"erevia.v1.EffectEvent"> & {
  */
 export const EffectEventSchema: GenMessage<EffectEvent> = /*@__PURE__*/
   messageDesc(file_erevia_v1_game, 23);
+
+/**
+ * Um efeito acabou (venceu ou o alvo morreu).
+ *
+ * @generated from message erevia.v1.EffectEnd
+ */
+export type EffectEnd = Message<"erevia.v1.EffectEnd"> & {
+  /**
+   * @generated from field: uint32 target_id = 1;
+   */
+  targetId: number;
+
+  /**
+   * @generated from field: erevia.v1.Effect effect = 2;
+   */
+  effect: Effect;
+};
+
+/**
+ * Describes the message erevia.v1.EffectEnd.
+ * Use `create(EffectEndSchema)` to create a new message.
+ */
+export const EffectEndSchema: GenMessage<EffectEnd> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 24);
+
+/**
+ * Skill em si mesmo ou em área foi usada (para mostrar o efeito mesmo sem acertar ninguém).
+ *
+ * @generated from message erevia.v1.SkillCast
+ */
+export type SkillCast = Message<"erevia.v1.SkillCast"> & {
+  /**
+   * @generated from field: uint32 source_id = 1;
+   */
+  sourceId: number;
+
+  /**
+   * @generated from field: uint32 skill_id = 2;
+   */
+  skillId: number;
+};
+
+/**
+ * Describes the message erevia.v1.SkillCast.
+ * Use `create(SkillCastSchema)` to create a new message.
+ */
+export const SkillCastSchema: GenMessage<SkillCast> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 25);
 
 /**
  * @generated from message erevia.v1.Revive
@@ -956,7 +1035,7 @@ export type Revive = Message<"erevia.v1.Revive"> & {
  * Use `create(ReviveSchema)` to create a new message.
  */
 export const ReviveSchema: GenMessage<Revive> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 24);
+  messageDesc(file_erevia_v1_game, 26);
 
 /**
  * @generated from message erevia.v1.LevelUp
@@ -983,7 +1062,7 @@ export type LevelUp = Message<"erevia.v1.LevelUp"> & {
  * Use `create(LevelUpSchema)` to create a new message.
  */
 export const LevelUpSchema: GenMessage<LevelUp> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 25);
+  messageDesc(file_erevia_v1_game, 27);
 
 /**
  * @generated from message erevia.v1.SkillInfo
@@ -1023,6 +1102,59 @@ export type SkillInfo = Message<"erevia.v1.SkillInfo"> & {
    * @generated from field: erevia.v1.SkillTarget target = 7;
    */
   target: SkillTarget;
+
+  /**
+   * @generated from field: string description = 8;
+   */
+  description: string;
+
+  /**
+   * id do visual e do ícone (ex.: "fireball")
+   *
+   * @generated from field: string fx = 9;
+   */
+  fx: string;
+
+  /**
+   * dano mágico (MAtk/MDef)
+   *
+   * @generated from field: bool magic = 10;
+   */
+  magic: boolean;
+
+  /**
+   * multiplicador de dano (0 = sem dano)
+   *
+   * @generated from field: float power = 11;
+   */
+  power: number;
+
+  /**
+   * efeito aplicado (no alvo ou em si mesmo)
+   *
+   * @generated from field: erevia.v1.Effect effect = 12;
+   */
+  effect: Effect;
+
+  /**
+   * @generated from field: uint32 effect_ms = 13;
+   */
+  effectMs: number;
+
+  /**
+   * @generated from field: float effect_value = 14;
+   */
+  effectValue: number;
+
+  /**
+   * @generated from field: bool effect_on_self = 15;
+   */
+  effectOnSelf: boolean;
+
+  /**
+   * @generated from field: float extra_crit = 16;
+   */
+  extraCrit: number;
 };
 
 /**
@@ -1030,7 +1162,7 @@ export type SkillInfo = Message<"erevia.v1.SkillInfo"> & {
  * Use `create(SkillInfoSchema)` to create a new message.
  */
 export const SkillInfoSchema: GenMessage<SkillInfo> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 26);
+  messageDesc(file_erevia_v1_game, 28);
 
 /**
  * @generated from enum erevia.v1.ChatChannel

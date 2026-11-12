@@ -6,6 +6,12 @@ interface Running {
   tick(t: number): boolean;
   start: number;
   dispose(): void;
+  stopped: boolean;
+}
+
+/** Efeito contínuo que pode ser encerrado antes da hora (ex.: o efeito acabou). */
+export interface FxHandle {
+  stop(): void;
 }
 
 /** Efeitos visuais simples (formas do Babylon, sem arte extra). */
@@ -20,15 +26,42 @@ export class Fx {
     scene.onBeforeRenderObservable.add(() => {
       const now = performance.now() / 1000;
       this.running = this.running.filter((r) => {
-        if (r.tick(now - r.start)) return true;
+        if (!r.stopped && r.tick(now - r.start)) return true;
         r.dispose();
         return false;
       });
     });
   }
 
-  private run(tick: Running["tick"], dispose: () => void): void {
-    this.running.push({ tick, dispose, start: performance.now() / 1000 });
+  private run(tick: Running["tick"], dispose: () => void): FxHandle {
+    const r: Running = { tick, dispose, start: performance.now() / 1000, stopped: false };
+    this.running.push(r);
+    return { stop: () => (r.stopped = true) };
+  }
+
+  /** Nome da skill subindo devagar sobre quem a usou. */
+  skillName(anchor: TransformNode, text: string): void {
+    const tb = new TextBlock();
+    tb.text = text;
+    tb.color = "#ffe7a8";
+    tb.fontSize = 13;
+    tb.fontStyle = "italic";
+    tb.fontWeight = "600";
+    tb.outlineWidth = 3;
+    tb.outlineColor = "rgba(0,0,0,0.85)";
+    tb.resizeToFit = true;
+    this.gui.addControl(tb);
+    tb.linkWithMesh(anchor);
+    const dur = 1.1;
+    this.run(
+      (t) => {
+        const k = t / dur;
+        tb.linkOffsetY = -34 - k * 18;
+        tb.alpha = k < 0.15 ? k / 0.15 : k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
+        return k < 1 && !anchor.isDisposed();
+      },
+      () => tb.dispose(),
+    );
   }
 
   private glow(color: Color3, alpha = 1): StandardMaterial {
@@ -71,13 +104,12 @@ export class Fx {
     );
   }
 
-  /** Projétil luminoso de "from" até "to". */
-  projectile(from: Vector3, to: Vector3, color: Color3, size = 0.35): void {
+  /** Projétil luminoso de "from" até "to" em `dur` segundos. */
+  projectile(from: Vector3, to: Vector3, color: Color3, size = 0.35, dur = Math.max(0.12, Vector3.Distance(from, to) / 30)): void {
     const ball = MeshBuilder.CreateSphere("fx-ball", { diameter: size, segments: 8 }, this.scene);
     ball.material = this.glow(color);
     ball.isPickable = false;
     ball.position.copyFrom(from);
-    const dur = Math.max(0.12, Vector3.Distance(from, to) / 30);
     this.run(
       (t) => {
         Vector3.LerpToRef(from, to, Math.min(1, t / dur), ball.position);
@@ -106,13 +138,13 @@ export class Fx {
   }
 
   /** Aura colorida ao redor dos pés durante o efeito. */
-  aura(root: TransformNode, color: Color3, ms: number, scale = 1): void {
+  aura(root: TransformNode, color: Color3, ms: number, scale = 1): FxHandle {
     const ring = MeshBuilder.CreateTorus("fx-aura", { diameter: 1.3 * scale, thickness: 0.05, tessellation: 32 }, this.scene);
     ring.material = this.glow(color, 0.9);
     ring.isPickable = false;
     ring.parent = root;
     const dur = ms / 1000;
-    this.run(
+    return this.run(
       (t) => {
         ring.position.y = 0.1 + 0.6 * (0.5 + 0.5 * Math.sin(t * 4));
         ring.visibility = t > dur - 0.3 ? Math.max(0, (dur - t) / 0.3) : 1;
@@ -123,7 +155,7 @@ export class Fx {
   }
 
   /** Estrelinhas girando sobre a cabeça (atordoado). */
-  stun(head: TransformNode, ms: number): void {
+  stun(head: TransformNode, ms: number): FxHandle {
     const holder = new TransformNode("fx-stun", this.scene);
     holder.parent = head;
     const stars: Mesh[] = [];
@@ -135,7 +167,7 @@ export class Fx {
       stars.push(s);
     }
     const dur = ms / 1000;
-    this.run(
+    return this.run(
       (t) => {
         stars.forEach((s, i) => {
           const a = t * 5 + (i * Math.PI * 2) / 3;

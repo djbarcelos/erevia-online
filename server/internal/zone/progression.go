@@ -14,6 +14,9 @@ const townSpawnRadius = 5.0
 func (z *Zone) kill(dead, killer *entity) {
 	dead.dead = true
 	dead.hp = 0
+	for _, ef := range dead.effects {
+		z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: dead.id, Effect: pb.Effect(ef.kind)})
+	}
 	dead.effects = nil
 	dead.clearAction()
 	dead.stopMoving()

@@ -41,6 +41,9 @@ type SkillDef struct {
 	ExtraCrit float64 // somado à chance de crítico
 	OnTarget  *EffectDef
 	OnSelf    *EffectDef
+	// Apresentação (cliente).
+	FX          string // id do visual e do ícone
+	Description string
 }
 
 const (
@@ -56,24 +59,32 @@ const (
 
 var Skills = map[uint32]*SkillDef{
 	SkillShieldBash: {ID: SkillShieldBash, Class: "knight", Name: "Golpe de Escudo", Key: 1, MPCost: 10, Cooldown: 8,
-		Range: 2.5, Target: TargetEnemy, Mult: 1.5, OnTarget: &EffectDef{Kind: EffectStun, Duration: 1.5}},
+		Range: 2.5, Target: TargetEnemy, Mult: 1.5, OnTarget: &EffectDef{Kind: EffectStun, Duration: 1.5},
+		FX: "shield_bash", Description: "Uma pancada seca com o escudo que deixa o inimigo atordoado."},
 	SkillFortress: {ID: SkillFortress, Class: "knight", Name: "Fortaleza", Key: 2, MPCost: 15, Cooldown: 25,
-		Target: TargetSelf, OnSelf: &EffectDef{Kind: EffectBuffDef, Duration: 10, Value: 0.5}},
+		Target: TargetSelf, OnSelf: &EffectDef{Kind: EffectBuffDef, Duration: 10, Value: 0.5},
+		FX: "fortress", Description: "Firma os pés e ergue a guarda, aguentando muito mais pancada."},
 
 	SkillBrutalStrike: {ID: SkillBrutalStrike, Class: "barbarian", Name: "Golpe Brutal", Key: 1, MPCost: 10, Cooldown: 6,
-		Range: 2.5, Target: TargetEnemy, Mult: 2.2},
+		Range: 2.5, Target: TargetEnemy, Mult: 2.2,
+		FX: "brutal_strike", Description: "Um golpe com toda a força do corpo."},
 	SkillFury: {ID: SkillFury, Class: "barbarian", Name: "Fúria", Key: 2, MPCost: 15, Cooldown: 25,
-		Target: TargetSelf, OnSelf: &EffectDef{Kind: EffectBuffAtk, Duration: 10, Value: 0.3}},
+		Target: TargetSelf, OnSelf: &EffectDef{Kind: EffectBuffAtk, Duration: 10, Value: 0.3},
+		FX: "fury", Description: "Entra em fúria e passa a bater mais forte."},
 
 	SkillFireball: {ID: SkillFireball, Class: "mage", Name: "Bola de Fogo", Key: 1, MPCost: 15, Cooldown: 3,
-		Range: 20, Target: TargetEnemy, Mult: 2.5, Magic: true},
+		Range: 20, Target: TargetEnemy, Mult: 2.5, Magic: true,
+		FX: "fireball", Description: "Lança uma bola de fogo que explode no alvo à distância."},
 	SkillIceNova: {ID: SkillIceNova, Class: "mage", Name: "Nova de Gelo", Key: 2, MPCost: 30, Cooldown: 10,
-		Range: 6, Target: TargetAreaSelf, Mult: 1.2, Magic: true, OnTarget: &EffectDef{Kind: EffectSlow, Duration: 3, Value: 0.5}},
+		Range: 6, Target: TargetAreaSelf, Mult: 1.2, Magic: true, OnTarget: &EffectDef{Kind: EffectSlow, Duration: 3, Value: 0.5},
+		FX: "ice_nova", Description: "Uma onda de gelo explode ao seu redor, ferindo e congelando os inimigos próximos."},
 
 	SkillBackstab: {ID: SkillBackstab, Class: "rogue", Name: "Golpe Furtivo", Key: 1, MPCost: 10, Cooldown: 6,
-		Range: 2.5, Target: TargetEnemy, Mult: 2.0, ExtraCrit: 0.5},
+		Range: 2.5, Target: TargetEnemy, Mult: 2.0, ExtraCrit: 0.5,
+		FX: "backstab", Description: "Um golpe traiçoeiro num ponto fraco, com grande chance de crítico."},
 	SkillShadowStep: {ID: SkillShadowStep, Class: "rogue", Name: "Passo Sombrio", Key: 2, MPCost: 12, Cooldown: 20,
-		Target: TargetSelf, OnSelf: &EffectDef{Kind: EffectBuffSpeed, Duration: 6, Value: 0.4}},
+		Target: TargetSelf, OnSelf: &EffectDef{Kind: EffectBuffSpeed, Duration: 6, Value: 0.4},
+		FX: "shadow_step", Description: "Funde-se às sombras e se move muito mais rápido."},
 }
 
 // ClassSkills devolve as skills de uma classe, na ordem das teclas.

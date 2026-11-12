@@ -81,6 +81,7 @@ message Welcome {
   repeated MapZone zones = 7; // zonas de caça (para o mapa)
   int64 server_time_ms = 8; // relógio do servidor (Unix, ms) para o ciclo dia/noite
   uint32 day_cycle_ms = 9; // duração do ciclo dia/noite
+  repeated SkillInfo skill_catalog = 10; // todas as skills do jogo (visual das skills dos outros)
 }
 
 // Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
@@ -114,6 +115,8 @@ message Snapshot {
   repeated uint32 deaths = 6;
   repeated Revive revives = 7;
   repeated LevelUp level_ups = 8;
+  repeated EffectEnd effect_ends = 9;
+  repeated SkillCast casts = 10;
 }
 
 message Pong {
@@ -227,6 +230,20 @@ message EffectEvent {
   uint32 target_id = 1;
   Effect effect = 2;
   uint32 duration_ms = 3;
+  uint32 source_id = 4; // quem aplicou
+  float value = 5; // intensidade (ex.: 0.5 = 50%)
+}
+
+// Um efeito acabou (venceu ou o alvo morreu).
+message EffectEnd {
+  uint32 target_id = 1;
+  Effect effect = 2;
+}
+
+// Skill em si mesmo ou em área foi usada (para mostrar o efeito mesmo sem acertar ninguém).
+message SkillCast {
+  uint32 source_id = 1;
+  uint32 skill_id = 2;
 }
 
 message Revive {
@@ -258,4 +275,13 @@ message SkillInfo {
   uint32 cooldown_ms = 5;
   float range = 6;
   SkillTarget target = 7;
+  string description = 8;
+  string fx = 9; // id do visual e do ícone (ex.: "fireball")
+  bool magic = 10; // dano mágico (MAtk/MDef)
+  float power = 11; // multiplicador de dano (0 = sem dano)
+  Effect effect = 12; // efeito aplicado (no alvo ou em si mesmo)
+  uint32 effect_ms = 13;
+  float effect_value = 14;
+  bool effect_on_self = 15;
+  float extra_crit = 16;
 }

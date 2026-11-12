@@ -85,6 +85,7 @@ function play(character: CharacterInfo): void {
   conn.onClose = (reason) => {
     $("chat").hidden = true;
     $("hud").hidden = true;
+    game?.dispose();
     for (const e of document.querySelectorAll(".game-hud, .minimap, .worldmap")) e.remove();
     const text = kickedReason || (started ? `A conexão caiu (${reason}).` : `Não foi possível entrar (${reason}).`);
     showMessage(started ? "Desconectado" : "Erro ao entrar", text, "Voltar", () => location.reload());
@@ -93,6 +94,8 @@ function play(character: CharacterInfo): void {
 
 interface Game {
   apply(msg: ServerMessage): void;
+  /** Para os loops e ouvintes do jogo (ao desconectar). */
+  dispose(): void;
 }
 
 async function startGame(conn: Connection, character: CharacterInfo, welcome: Welcome): Promise<Game> {
@@ -106,6 +109,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const dayNight = new DayNight(world, worldData);
   const collision = new Collision(worldData);
   const entities = new EntityManager(world.scene, world.gui, welcome.yourId, welcome.zoneSize / 2, fx, world.shadows, collision);
+  entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
   for (const e of welcome.entities) entities.add(e);
 
   // Cenário (árvores, cidade, montanhas) em segundo plano.
@@ -123,11 +127,14 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     .catch((err) => console.warn("modelos 3D indisponíveis, usando cápsulas", err));
 
   const chat = new Chat($("chat"), character.name, (text, to) => conn.chat(text, to));
-  chat.system(`Bem-vindo a Erevia, ${character.name}! Clique num monstro para atacar; teclas 1 e 2 usam suas skills.`);
+  const keys = [...welcome.skills].sort((a, b) => a.key - b.key).map((k) => k.key);
+  const keyText = keys.length > 1 ? `teclas ${keys.slice(0, -1).join(", ")} e ${keys[keys.length - 1]}` : `tecla ${keys[0] ?? 1}`;
+  chat.system(`Bem-vindo a Erevia, ${character.name}! Clique num monstro para atacar; ${keyText} usam suas skills.`);
 
   // ---------- Alvo e skills ----------
   let targetId = 0;
   const selectTarget = (id: number) => {
+    if (id !== targetId) hud.setQueued(0); // o servidor troca a ação ao mudar de alvo
     targetId = id;
     entities.setTarget(id);
     hud.setTarget(entities.info(id));
@@ -144,8 +151,15 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       return;
     }
     conn.useSkill(s.id, targetId);
+    // Skill de alvo pode precisar andar até o alcance: fica "na fila" até o servidor usar.
+    if (s.target === SkillTarget.ENEMY) hud.setQueued(s.id);
+    else hud.startLocalCooldown(s.id);
   };
-  const hud = new Hud(welcome.skills, useSkill, () => conn.respawn());
+  const hud = new Hud(welcome.skills, {
+    onSkill: useSkill,
+    onRespawn: () => conn.respawn(),
+    targetDistance: () => (entities.isEnemy(targetId) ? entities.distanceTo(targetId) : null),
+  });
 
   // ---------- Mapa ----------
   const mapSource = {
@@ -158,7 +172,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const worldMap = new WorldMap(mapSource, welcome.zones, welcome.safeRadius);
   const minimap = new Minimap(mapSource, () => worldMap.toggle());
 
-  window.addEventListener("keydown", (ev) => {
+  const onKey = (ev: KeyboardEvent) => {
     if (document.activeElement instanceof HTMLInputElement) return; // digitando no chat
     if (ev.key === "m" || ev.key === "M") {
       ev.preventDefault();
@@ -175,10 +189,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       ev.preventDefault();
       useSkill(s);
     }
-  });
+  };
+  window.addEventListener("keydown", onKey);
 
   setupInput(world.scene, world.ground, {
     onGround: (x, z) => {
+      hud.setQueued(0); // andar cancela a skill na fila
       const dest = entities.predictLocalMove(x, z);
       if (dest) conn.moveTo(dest.x, dest.z);
       return dest;
@@ -212,7 +228,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const pingEl = $("hud-ping");
   const onlineEl = $("hud-online");
   const posEl = $("hud-pos");
-  window.setInterval(() => {
+  const effectsTimer = window.setInterval(() => {
+    hud.setEffects(entities.effectsOf(welcome.yourId), targetId ? entities.effectsOf(targetId) : []);
+  }, 100);
+  const statsTimer = window.setInterval(() => {
     fpsEl.textContent = world.engine.getFps().toFixed(0);
     pingEl.textContent = `${conn.ping} ms`;
     onlineEl.textContent = String(entities.count);
@@ -240,10 +259,26 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       /** Fixa a hora do dia (0–1) ou volta ao relógio do servidor (null). */
       setTime: (p: number | null) => clock.setFixed(p),
       phase: () => clock.phase(),
+      moveTo: (x: number, z: number) => {
+        entities.predictLocalMove(x, z);
+        conn.moveTo(x, z);
+      },
+      attack: (id: number) => {
+        selectTarget(id);
+        conn.attack(id);
+      },
     };
   }
 
   return {
+    dispose() {
+      window.removeEventListener("keydown", onKey);
+      window.clearInterval(effectsTimer);
+      window.clearInterval(statsTimer);
+      hud.dispose();
+      minimap.dispose();
+      worldMap.dispose();
+    },
     apply(msg: ServerMessage) {
       switch (msg.msg.case) {
         case "spawn":
@@ -258,7 +293,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           for (const s of snap.states) entities.applyState(s);
           for (const u of snap.hp) entities.applyHp(u);
           for (const ev of snap.combat) entities.onCombat(ev);
+          for (const ev of snap.casts) entities.onSkillCast(ev);
           for (const ev of snap.effects) entities.onEffect(ev);
+          for (const ev of snap.effectEnds) entities.onEffectEnd(ev);
           for (const id of snap.deaths) entities.onDeath(id);
           for (const r of snap.revives) entities.onRevive(r);
           for (const l of snap.levelUps) entities.onLevelUp(l);

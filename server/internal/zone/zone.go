@@ -111,6 +111,8 @@ type frame struct {
 	deaths   []uint32
 	revives  []*pb.Revive
 	levelUps []*pb.LevelUp
+	ends     []*pb.EffectEnd
+	casts    []*pb.SkillCast
 }
 
 type Zone struct {
@@ -126,19 +128,23 @@ type Zone struct {
 	frame    frame
 	saves    chan<- []SavedState
 	night    bool // ciclo dia/noite (ver game.DayPhase)
+	// Recargas de quem saiu (personagem → skill → quando fica pronta, no relógio de
+	// parede): sair e entrar de novo não zera as recargas.
+	savedCooldowns map[uint32]map[uint32]time.Time
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
 func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 	z := &Zone{
-		cfg:      cfg,
-		log:      log,
-		events:   make(chan event, 4096),
-		players:  make(map[uint32]*entity),
-		monsters: make(map[uint32]*entity),
-		byName:   make(map[string]uint32),
-		rng:      rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
-		saves:    saves,
+		cfg:            cfg,
+		log:            log,
+		events:         make(chan event, 4096),
+		players:        make(map[uint32]*entity),
+		monsters:       make(map[uint32]*entity),
+		byName:         make(map[string]uint32),
+		savedCooldowns: map[uint32]map[uint32]time.Time{},
+		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
+		saves:          saves,
 	}
 	if z.cfg.Clock == nil {
 		z.cfg.Clock = time.Now
@@ -281,6 +287,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		p.mp = float64(info.MP)
 	}
 	p.sentHP, p.sentMaxHP = p.hpInt(), p.maxHPInt()
+	z.restoreCooldowns(p)
 	z.players[p.id] = p
 	z.byName[strings.ToLower(p.name)] = p.id
 
@@ -299,10 +306,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	}
 	var skills []*pb.SkillInfo
 	for _, s := range game.ClassSkills(info.Class) {
-		skills = append(skills, &pb.SkillInfo{
-			Id: s.ID, Name: s.Name, Key: uint32(s.Key), MpCost: uint32(s.MPCost),
-			CooldownMs: uint32(s.Cooldown * 1000), Range: float32(s.Range), Target: pb.SkillTarget(s.Target),
-		})
+		skills = append(skills, skillInfoPB(s))
 	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		YourId:       p.id,
@@ -314,8 +318,14 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Zones:        mapZones(z.cfg.Spawns),
 		ServerTimeMs: z.cfg.Clock().UnixMilli(),
 		DayCycleMs:   uint32(game.DayCycle.Milliseconds()),
+		SkillCatalog: skillCatalog(),
 	}}})
 	z.sendSelfStats(p)
+	for id, ready := range p.pl.cooldowns {
+		if ready > z.now {
+			z.sendCooldown(p, id, ready-z.now)
+		}
+	}
 
 	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
@@ -385,6 +395,7 @@ func (z *Zone) removePlayer(id uint32) {
 		return
 	}
 	delete(z.players, id)
+	z.saveCooldowns(p)
 	if z.byName[strings.ToLower(p.name)] == id {
 		delete(z.byName, strings.ToLower(p.name))
 	}
@@ -430,6 +441,7 @@ func (z *Zone) update(dt float64) {
 // step: efeitos, regeneração, ação e movimento de uma entidade viva.
 func (z *Zone) step(e *entity, dt float64) {
 	for _, k := range e.pruneEffects(z.now) {
+		z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: e.id, Effect: pb.Effect(k)})
 		if k == game.EffectSlow || k == game.EffectBuffSpeed {
 			e.moved = true
 		}
@@ -478,9 +490,12 @@ func (z *Zone) flushSnapshot() {
 	snap.Deaths = z.frame.deaths
 	snap.Revives = z.frame.revives
 	snap.LevelUps = z.frame.levelUps
+	snap.EffectEnds = z.frame.ends
+	snap.Casts = z.frame.casts
 	z.frame = frame{}
 
-	if len(snap.States)+len(snap.Hp)+len(snap.Combat)+len(snap.Effects)+len(snap.Deaths)+len(snap.Revives)+len(snap.LevelUps) == 0 {
+	if len(snap.States)+len(snap.Hp)+len(snap.Combat)+len(snap.Effects)+len(snap.Deaths)+len(snap.Revives)+
+		len(snap.LevelUps)+len(snap.EffectEnds)+len(snap.Casts) == 0 {
 		return
 	}
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Snapshot{Snapshot: snap}}, 0)

@@ -224,7 +224,7 @@ func TestSlowAndBuffChangeStats(t *testing.T) {
 	z := newCombatZone()
 	p, _ := joinAt(z, 1, "rogue", 0, 0, 0)
 	base := p.speed(z.now)
-	z.applyEffect(p, &game.EffectDef{Kind: game.EffectSlow, Duration: 2, Value: 0.5})
+	z.applyEffect(p, p, &game.EffectDef{Kind: game.EffectSlow, Duration: 2, Value: 0.5})
 	if got := p.speed(z.now); math.Abs(got-base*0.5) > 1e-9 {
 		t.Fatalf("slow: %v → %v", base, got)
 	}
@@ -233,7 +233,7 @@ func TestSlowAndBuffChangeStats(t *testing.T) {
 		t.Fatal("slow should expire")
 	}
 	def := p.def(false, z.now)
-	z.applyEffect(p, &game.EffectDef{Kind: game.EffectBuffDef, Duration: 5, Value: 0.5})
+	z.applyEffect(p, p, &game.EffectDef{Kind: game.EffectBuffDef, Duration: 5, Value: 0.5})
 	if p.def(false, z.now) != def*1.5 {
 		t.Fatal("defense buff not applied")
 	}

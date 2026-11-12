@@ -23,6 +23,7 @@ func (z *Zone) runAction(e *entity) {
 	}
 	t := z.get(e.act.target)
 	if t == nil || t.dead || t == e || (t.mon != nil && t.mon.hidden) {
+		z.cancelQueuedSkill(e)
 		e.clearAction()
 		return
 	}
@@ -40,6 +41,11 @@ func (z *Zone) runAction(e *entity) {
 
 	// Sem combate dentro da cidade (quem está lá dentro só anda).
 	if z.inSafe(e.pos) || z.inSafe(t.pos) {
+		if e.act.kind == actSkill {
+			z.system(e, "Não é possível lutar dentro da cidade.")
+			z.cancelQueuedSkill(e)
+			e.clearAction()
+		}
 		return
 	}
 
@@ -101,6 +107,10 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32) {
 // castSkill paga o custo, inicia a recarga e aplica o efeito.
 func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 	if src.pl != nil {
+		if ready := src.pl.cooldowns[s.ID]; z.now < ready {
+			z.sendCooldown(src, s.ID, ready-z.now)
+			return
+		}
 		if src.mp < s.MPCost {
 			z.system(src, "Mana insuficiente.")
 			return
@@ -112,7 +122,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 	}
 
 	if s.OnSelf != nil {
-		z.applyEffect(src, s.OnSelf)
+		z.applyEffect(src, src, s.OnSelf)
 	}
 
 	switch s.Target {
@@ -120,7 +130,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		z.skillHit(src, target, s)
 	case game.TargetAreaSelf:
 		// Mostra a skill mesmo sem acertar ninguém.
-		z.frame.combat = append(z.frame.combat, &pb.CombatEvent{SourceId: src.id, TargetId: src.id, SkillId: s.ID, Miss: true})
+		z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID})
 		for _, m := range z.monsters {
 			if m.dead || m.mon.hidden || dist(src.pos, m.pos) > s.Range {
 				continue
@@ -128,7 +138,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			z.skillHit(src, m, s)
 		}
 	case game.TargetSelf:
-		z.frame.combat = append(z.frame.combat, &pb.CombatEvent{SourceId: src.id, TargetId: src.id, SkillId: s.ID})
+		z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID})
 	}
 }
 
@@ -136,14 +146,15 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef) {
 	hit := game.RollHit(z.rng, z.attackPower(src, s.Magic), dst.def(s.Magic, z.now), s.Mult, src.stats.Crit+s.ExtraCrit)
 	z.applyHit(src, dst, s.ID, hit)
 	if !hit.Miss && !dst.dead && s.OnTarget != nil {
-		z.applyEffect(dst, s.OnTarget)
+		z.applyEffect(src, dst, s.OnTarget)
 	}
 }
 
-func (z *Zone) applyEffect(e *entity, def *game.EffectDef) {
+func (z *Zone) applyEffect(src, e *entity, def *game.EffectDef) {
 	e.addEffect(def, z.now)
 	z.frame.effects = append(z.frame.effects, &pb.EffectEvent{
 		TargetId: e.id, Effect: pb.Effect(def.Kind), DurationMs: uint32(def.Duration * 1000),
+		SourceId: src.id, Value: float32(def.Value),
 	})
 	if def.Kind == game.EffectStun {
 		e.stopMoving()
