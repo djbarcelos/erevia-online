@@ -51,13 +51,16 @@ func (f *fakePeer) chats() []*pb.ChatMessage {
 }
 
 // newTestZone cria uma zona sem rodar o loop: os testes chamam handle() direto.
-func newTestZone(saves chan []SavedPosition) *Zone {
+// Sem monstros: os testes de combate criam os seus com newCombatZone.
+func newTestZone(saves chan []SavedState) *Zone {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	var ch chan<- []SavedPosition
+	var ch chan<- []SavedState
 	if saves != nil {
 		ch = saves
 	}
-	return New(DefaultConfig(), log, ch)
+	cfg := DefaultConfig()
+	cfg.Spawns = nil
+	return New(cfg, log, ch)
 }
 
 func join(z *Zone, id uint32, name string) *fakePeer {
@@ -165,13 +168,13 @@ func TestReloginKicksOldSession(t *testing.T) {
 
 	// O Leave atrasado da conexão antiga não pode remover o novo login.
 	z.handle(leaveEvent{id: 1, peer: old})
-	if p, ok := z.players[1]; !ok || p.peer != newer {
+	if p, ok := z.players[1]; !ok || p.pl.peer != newer {
 		t.Fatal("new session must survive old session's leave")
 	}
 }
 
 func TestPositionsSavedOnLeaveAndShutdown(t *testing.T) {
-	saves := make(chan []SavedPosition, 10)
+	saves := make(chan []SavedState, 10)
 	z := newTestZone(saves)
 	a := &fakePeer{}
 	z.handle(joinEvent{info: JoinInfo{ID: 7, Name: "Ana", Class: "mage", X: 3, Z: 4, Peer: a}})
@@ -179,7 +182,7 @@ func TestPositionsSavedOnLeaveAndShutdown(t *testing.T) {
 
 	z.handle(leaveEvent{id: 7, peer: a})
 	got := <-saves
-	if len(got) != 1 || got[0] != (SavedPosition{ID: 7, X: 3, Z: 4}) {
+	if len(got) != 1 || got[0] != (SavedState{ID: 7, X: 3, Z: 4, Level: 1, HP: -1, MP: -1}) {
 		t.Fatalf("save on leave = %v", got)
 	}
 

@@ -84,11 +84,14 @@ func TestCharacters(t *testing.T) {
 		t.Fatalf("other account must not load character: %v", err)
 	}
 
-	if err := s.SavePositions(ctx, []store.Position{{CharacterID: c.ID, X: 12.5, Z: -7.25}}); err != nil {
+	if c.Level != 1 || c.XP != 0 || c.HP != -1 || c.MP != -1 {
+		t.Fatalf("new character should start at level 1 with full hp/mp: %+v", c)
+	}
+	if err := s.SaveStates(ctx, []store.CharacterState{{CharacterID: c.ID, X: 12.5, Z: -7.25, Level: 4, XP: 1234, HP: 50, MP: -1}}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.CharacterForAccount(ctx, acc, c.ID)
-	if err != nil || got.X != 12.5 || got.Z != -7.25 {
-		t.Fatalf("saved position = %+v, %v", got, err)
+	if err != nil || got.X != 12.5 || got.Z != -7.25 || got.Level != 4 || got.XP != 1234 || got.HP != 50 || got.MP != -1 {
+		t.Fatalf("saved state = %+v, %v", got, err)
 	}
 }

@@ -28,10 +28,12 @@ const (
 
 // Character é o que o backend devolve ao carregar um personagem para entrar no jogo.
 type Character struct {
-	ID    uint32
-	Name  string
-	Class string
-	X, Z  float64
+	ID     uint32
+	Name   string
+	Class  string
+	X, Z   float64
+	XP     int64
+	HP, MP int // <= 0 = cheio
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -97,7 +99,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	go sess.writePump(ctx)
 	s.zone.Join(ctx, zone.JoinInfo{
-		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z, Peer: sess,
+		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z,
+		XP: char.XP, HP: char.HP, MP: char.MP, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)
@@ -155,6 +158,12 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.Move(ctx, id, float64(m.MoveTo.X), float64(m.MoveTo.Z))
 		case *pb.ClientMessage_ChatSend:
 			s.zone.Chat(ctx, id, m.ChatSend.Text, m.ChatSend.To)
+		case *pb.ClientMessage_Attack:
+			s.zone.Attack(ctx, id, m.Attack.TargetId)
+		case *pb.ClientMessage_UseSkill:
+			s.zone.UseSkill(ctx, id, m.UseSkill.SkillId, m.UseSkill.TargetId)
+		case *pb.ClientMessage_Respawn:
+			s.zone.Respawn(ctx, id)
 		case *pb.ClientMessage_Ping:
 			// Respondido aqui mesmo, sem passar pela zona, para medir só a rede.
 			pong, _ := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Pong{

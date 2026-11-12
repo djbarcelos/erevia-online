@@ -54,13 +54,21 @@ type Character struct {
 	AccountID int64   `json:"-"`
 	Name      string  `json:"name"`
 	Class     string  `json:"class"`
+	Level     int     `json:"level"`
+	XP        int64   `json:"-"`
 	X         float64 `json:"-"`
 	Z         float64 `json:"-"`
+	HP        int     `json:"-"` // -1 = cheio
+	MP        int     `json:"-"` // -1 = cheio
 }
 
-type Position struct {
+// CharacterState é o que a zona salva periodicamente.
+type CharacterState struct {
 	CharacterID int64
 	X, Z        float64
+	Level       int
+	XP          int64
+	HP, MP      int // -1 = cheio
 }
 
 type Store struct {
@@ -185,7 +193,7 @@ func hashToken(token string) []byte {
 
 func (s *Store) ListCharacters(ctx context.Context, accountID int64) ([]Character, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, account_id, name, class, x, z FROM characters WHERE account_id = $1 ORDER BY id`, accountID)
+		`SELECT id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1) FROM characters WHERE account_id = $1 ORDER BY id`, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +222,7 @@ func (s *Store) CreateCharacter(ctx context.Context, accountID int64, name, clas
 		}
 		rows, err := tx.Query(ctx, `
 			INSERT INTO characters (account_id, name, class, x, z) VALUES ($1, $2, $3, $4, $5)
-			RETURNING id, account_id, name, class, x, z`, accountID, name, class, x, z)
+			RETURNING id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1)`, accountID, name, class, x, z)
 		if err != nil {
 			return err
 		}
@@ -231,7 +239,7 @@ func (s *Store) CreateCharacter(ctx context.Context, accountID int64, name, clas
 // CharacterForAccount carrega o personagem só se ele pertencer à conta.
 func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID int64) (Character, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, account_id, name, class, x, z FROM characters WHERE id = $1 AND account_id = $2`,
+		`SELECT id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1) FROM characters WHERE id = $1 AND account_id = $2`,
 		characterID, accountID)
 	if err != nil {
 		return Character{}, err
@@ -243,22 +251,30 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 	return c, err
 }
 
-// SavePositions grava várias posições numa única ida ao banco.
-func (s *Store) SavePositions(ctx context.Context, positions []Position) error {
-	if len(positions) == 0 {
+// SaveStates grava posição e progressão de vários personagens numa única ida ao banco.
+func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
+	if len(states) == 0 {
 		return nil
 	}
 	batch := &pgx.Batch{}
-	for _, p := range positions {
-		batch.Queue(`UPDATE characters SET x = $2, z = $3, last_seen_at = now() WHERE id = $1`, p.CharacterID, p.X, p.Z)
+	for _, c := range states {
+		batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, last_seen_at = now()
+			WHERE id = $1`, c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP))
 	}
 	return s.pool.SendBatch(ctx, batch).Close()
+}
+
+func nullIfFull(v int) *int {
+	if v < 0 {
+		return nil
+	}
+	return &v
 }
 
 func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var c Character
 	var x, z float32
-	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z)
+	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP)
 	c.X, c.Z = float64(x), float64(z)
 	return c, err
 }

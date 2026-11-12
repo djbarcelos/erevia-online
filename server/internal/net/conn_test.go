@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 	"google.golang.org/protobuf/proto"
 
+	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
 	"erevia/server/internal/zone"
 )
@@ -46,7 +47,9 @@ func startServer(t *testing.T) (url string, ctx context.Context) {
 	t.Cleanup(cancel)
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	z := zone.New(zone.DefaultConfig(), log, nil)
+	cfg := zone.DefaultConfig()
+	cfg.Spawns = []game.Spawn{{Monster: "skeleton_minion", Count: 1, Fixed: true, X: 18, Z: 0, LevelMin: 1, Respawn: 5}}
+	z := zone.New(cfg, log, nil)
 	go z.Run(ctx)
 
 	backend := &fakeBackend{chars: map[int64][]Character{
@@ -133,8 +136,16 @@ func TestTwoPlayersMoveAndChat(t *testing.T) {
 	if welcomeA.YourId != 10 {
 		t.Fatalf("your_id = %d, want character id 10", welcomeA.YourId)
 	}
-	self := welcomeA.Entities[0]
-	if self.X != 1 || self.Z != 2 || self.Class != "mage" {
+	var self *pb.Entity
+	for _, e := range welcomeA.Entities {
+		if e.Id == 10 {
+			self = e
+		}
+	}
+	if len(welcomeA.Skills) != 2 {
+		t.Fatalf("welcome should carry 2 class skills, got %d", len(welcomeA.Skills))
+	}
+	if self == nil || self.X != 1 || self.Z != 2 || self.Model != "mage" || self.Kind != pb.EntityKind_ENTITY_KIND_PLAYER {
 		t.Fatalf("saved position/class not used: %+v", self)
 	}
 
@@ -195,4 +206,35 @@ func TestReloginKicksFirstConnection(t *testing.T) {
 	// A segunda continua viva: responde ao ping.
 	send(t, ctx, second, &pb.ClientMessage{Msg: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTime: 1}}})
 	waitFor(t, ctx, second, "pong", func(m *pb.ServerMessage) bool { return m.GetPong() != nil })
+}
+
+func TestAttackMonsterOverWebSocket(t *testing.T) {
+	url, ctx := startServer(t)
+	c := join(t, ctx, url, 2, 20) // Bob, cavaleiro, em (0,0)
+	w := waitFor(t, ctx, c, "welcome", isWelcome).GetWelcome()
+	var monster *pb.Entity
+	for _, e := range w.Entities {
+		if e.Kind == pb.EntityKind_ENTITY_KIND_MONSTER {
+			monster = e
+		}
+	}
+	if monster == nil || monster.Level != 1 || monster.MaxHp == 0 {
+		t.Fatalf("welcome should include the monster: %+v", monster)
+	}
+	waitFor(t, ctx, c, "self stats", func(m *pb.ServerMessage) bool { return m.GetSelfStats().GetLevel() == 1 })
+
+	send(t, ctx, c, &pb.ClientMessage{Msg: &pb.ClientMessage_Attack{Attack: &pb.Attack{TargetId: monster.Id}}})
+	hit := waitFor(t, ctx, c, "combat event", func(m *pb.ServerMessage) bool {
+		for _, ev := range m.GetSnapshot().GetCombat() {
+			if ev.SourceId == 20 && ev.TargetId == monster.Id {
+				return true
+			}
+		}
+		return false
+	})
+	if hit == nil {
+		t.Fatal("no combat")
+	}
+	// Mata o lacaio (50 de vida) e ganha XP.
+	waitFor(t, ctx, c, "xp gained", func(m *pb.ServerMessage) bool { return m.GetSelfStats().GetXp() > 0 })
 }

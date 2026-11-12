@@ -63,19 +63,19 @@ func run(log *slog.Logger) error {
 	log.Info("auth providers", "google", cfg.Google != nil, "discord", cfg.Discord != nil, "dev", devLogin)
 	httpAPI := api.New(st, cfg, log)
 
-	// Persistência: a zona entrega posições por canal; esta goroutine grava em lote.
-	saves := make(chan []zone.SavedPosition, 1024)
+	// Persistência: a zona entrega estados por canal; esta goroutine grava em lote.
+	saves := make(chan []zone.SavedState, 1024)
 	persistDone := make(chan struct{})
 	go func() {
 		defer close(persistDone)
 		for batch := range saves {
-			positions := make([]store.Position, len(batch))
+			states := make([]store.CharacterState, len(batch))
 			for i, p := range batch {
-				positions[i] = store.Position{CharacterID: int64(p.ID), X: p.X, Z: p.Z}
+				states[i] = store.CharacterState{CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP}
 			}
 			sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			if err := st.SavePositions(sctx, positions); err != nil {
-				log.Error("save positions", "err", err, "count", len(positions))
+			if err := st.SaveStates(sctx, states); err != nil {
+				log.Error("save states", "err", err, "count", len(states))
 			}
 			cancel()
 		}
@@ -148,7 +148,10 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 	if err != nil {
 		return gamenet.Character{}, err
 	}
-	return gamenet.Character{ID: uint32(c.ID), Name: c.Name, Class: c.Class, X: c.X, Z: c.Z}, nil
+	return gamenet.Character{
+		ID: uint32(c.ID), Name: c.Name, Class: c.Class, X: c.X, Z: c.Z,
+		XP: c.XP, HP: c.HP, MP: c.MP,
+	}, nil
 }
 
 func env(key, def string) string {

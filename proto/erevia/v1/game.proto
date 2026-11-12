@@ -12,6 +12,9 @@ message ClientMessage {
     MoveTo move_to = 2;
     Ping ping = 3;
     ChatSend chat_send = 4;
+    Attack attack = 5;
+    UseSkill use_skill = 6;
+    Respawn respawn = 7;
   }
 }
 
@@ -21,7 +24,7 @@ message Join {
   uint32 character_id = 1;
 }
 
-// Pedido para andar até um ponto do chão. O servidor valida.
+// Pedido para andar até um ponto do chão. Cancela o ataque atual.
 message MoveTo {
   float x = 1;
   float z = 2;
@@ -37,6 +40,20 @@ message ChatSend {
   string to = 2;
 }
 
+// Seleciona o alvo e ataca automaticamente (anda até o alcance se precisar).
+message Attack {
+  uint32 target_id = 1;
+}
+
+// Usa uma skill. target_id é ignorado em skills de si mesmo/área.
+message UseSkill {
+  uint32 skill_id = 1;
+  uint32 target_id = 2;
+}
+
+// Morto: voltar à cidade.
+message Respawn {}
+
 // ---------- Servidor -> Cliente ----------
 
 message ServerMessage {
@@ -48,15 +65,19 @@ message ServerMessage {
     Pong pong = 5;
     ChatMessage chat = 6;
     Kicked kicked = 7;
+    SelfStats self_stats = 8;
+    SkillCooldown skill_cooldown = 9;
   }
 }
 
-// Resposta ao Join: quem você é e quem já está na zona.
+// Resposta ao Join: quem você é, quem já está na zona e suas skills.
 message Welcome {
   uint32 your_id = 1;
   uint32 tick_rate = 2;
   float zone_size = 3;
   repeated Entity entities = 4;
+  repeated SkillInfo skills = 5;
+  float safe_radius = 6;
 }
 
 message Spawn {
@@ -67,10 +88,16 @@ message Despawn {
   uint32 id = 1;
 }
 
-// Enviado a cada tick, apenas com as entidades que mudaram (delta).
+// Enviado a cada tick, apenas com o que mudou (delta).
 message Snapshot {
   uint32 tick = 1;
   repeated EntityState states = 2;
+  repeated HpUpdate hp = 3;
+  repeated CombatEvent combat = 4;
+  repeated EffectEvent effects = 5;
+  repeated uint32 deaths = 6;
+  repeated Revive revives = 7;
+  repeated LevelUp level_ups = 8;
 }
 
 message Pong {
@@ -97,7 +124,36 @@ message Kicked {
   string reason = 1;
 }
 
+// Atributos do próprio personagem (só para o dono).
+message SelfStats {
+  uint32 hp = 1;
+  uint32 max_hp = 2;
+  uint32 mp = 3;
+  uint32 max_mp = 4;
+  uint32 level = 5;
+  uint64 xp = 6;
+  uint64 xp_level_start = 7;
+  uint64 xp_next_level = 8; // XP total para o próximo nível (0 = nível máximo)
+  uint32 p_atk = 9;
+  uint32 m_atk = 10;
+  uint32 p_def = 11;
+  float speed = 12;
+  bool dead = 13;
+}
+
+// Recarga de skill (só para o dono).
+message SkillCooldown {
+  uint32 skill_id = 1;
+  uint32 ready_in_ms = 2;
+}
+
 // ---------- Tipos ----------
+
+enum EntityKind {
+  ENTITY_KIND_UNSPECIFIED = 0;
+  ENTITY_KIND_PLAYER = 1;
+  ENTITY_KIND_MONSTER = 2;
+}
 
 message Entity {
   uint32 id = 1;
@@ -107,7 +163,13 @@ message Entity {
   float target_x = 5;
   float target_z = 6;
   float speed = 7;
-  string class = 8; // knight, barbarian, mage, rogue
+  string model = 8; // classe do jogador ou tipo do monstro
+  EntityKind kind = 9;
+  uint32 level = 10;
+  uint32 hp = 11;
+  uint32 max_hp = 12;
+  bool dead = 13;
+  float scale = 14; // tamanho visual (0 = 1)
 }
 
 message EntityState {
@@ -116,4 +178,67 @@ message EntityState {
   float z = 3;
   float target_x = 4;
   float target_z = 5;
+  float speed = 6; // velocidade atual (buffs/lentidão)
+}
+
+message HpUpdate {
+  uint32 id = 1;
+  uint32 hp = 2;
+  uint32 max_hp = 3;
+}
+
+message CombatEvent {
+  uint32 source_id = 1;
+  uint32 target_id = 2;
+  uint32 skill_id = 3; // 0 = ataque básico
+  uint32 damage = 4;
+  bool crit = 5;
+  bool miss = 6;
+  bool kill = 7;
+}
+
+enum Effect {
+  EFFECT_UNSPECIFIED = 0;
+  EFFECT_STUN = 1;
+  EFFECT_SLOW = 2;
+  EFFECT_BUFF_DEF = 3;
+  EFFECT_BUFF_ATK = 4;
+  EFFECT_BUFF_SPEED = 5;
+}
+
+message EffectEvent {
+  uint32 target_id = 1;
+  Effect effect = 2;
+  uint32 duration_ms = 3;
+}
+
+message Revive {
+  uint32 id = 1;
+  float x = 2;
+  float z = 3;
+  uint32 hp = 4;
+  uint32 max_hp = 5;
+}
+
+message LevelUp {
+  uint32 id = 1;
+  uint32 level = 2;
+  uint32 max_hp = 3;
+}
+
+enum SkillTarget {
+  SKILL_TARGET_UNSPECIFIED = 0;
+  SKILL_TARGET_ENEMY = 1;
+  SKILL_TARGET_SELF = 2;
+  SKILL_TARGET_AREA = 3;
+}
+
+message SkillInfo {
+  uint32 id = 1;
+  string name = 2;
+  uint32 key = 3;
+  uint32 mp_cost = 4;
+  uint32 cooldown_ms = 5;
+  float range = 6;
+  SkillTarget target = 7;
 }

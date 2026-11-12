@@ -1,18 +1,23 @@
 // Package zone contém a simulação autoritativa de uma zona do mapa.
 //
 // Uma única goroutine (Run) é dona de todo o estado da zona. Conexões falam com ela
-// apenas por canal (Join, Leave, Move, Chat), então não há mutex nem condição de corrida.
+// apenas por canal (Join, Leave, Move, Chat, Attack, Skill, Respawn), então não há
+// mutex nem condição de corrida. O tempo da simulação (z.now) avança por tick, e o
+// sorteio usa um gerador com semente: os testes ficam determinísticos.
 package zone
 
 import (
 	"context"
 	"log/slog"
+	"math"
+	"math/rand/v2"
 	"regexp"
 	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
 )
 
@@ -27,17 +32,20 @@ type Peer interface {
 type Config struct {
 	Size           float64       // lado do quadrado jogável, em metros
 	TickRate       int           // ticks por segundo
-	Speed          float64       // metros por segundo
-	MaxMovesPerSec float64       // limite de pedidos de movimento por jogador
+	MaxMovesPerSec float64       // limite de pedidos de movimento/ação por jogador
 	ChatPerSec     float64       // mensagens de chat por segundo (reposição)
 	ChatBurst      float64       // rajada máxima de mensagens
-	SaveEvery      time.Duration // intervalo do salvamento periódico de posições
+	SaveEvery      time.Duration // intervalo do salvamento periódico
+	SafeRadius     float64       // raio da cidade (sem combate)
+	Spawns         []game.Spawn  // monstros da zona
+	Seed           uint64        // semente do sorteio (posições, dano…)
 }
 
 func DefaultConfig() Config {
 	return Config{
-		Size: 200, TickRate: 20, Speed: 5, MaxMovesPerSec: 10,
+		Size: 200, TickRate: 20, MaxMovesPerSec: 10,
 		ChatPerSec: 1, ChatBurst: 3, SaveEvery: 30 * time.Second,
+		SafeRadius: 15, Spawns: game.DefaultSpawns(), Seed: 20261112,
 	}
 }
 
@@ -48,30 +56,22 @@ func ValidName(name string) bool { return nameRe.MatchString(name) }
 
 // JoinInfo é o personagem já carregado e validado por quem chama.
 type JoinInfo struct {
-	ID    uint32
-	Name  string
-	Class string
-	X, Z  float64
-	Peer  Peer
+	ID     uint32
+	Name   string
+	Class  string
+	X, Z   float64
+	XP     int64
+	HP, MP int // <= 0 = cheio
+	Peer   Peer
 }
 
-// SavedPosition é enviada ao canal de persistência.
-type SavedPosition struct {
-	ID   uint32
-	X, Z float64
-}
-
-type player struct {
-	id      uint32
-	name    string
-	class   string
-	peer    Peer
-	pos     Vec2
-	target  Vec2
-	changed bool // destino mudou neste tick: precisa ir no snapshot mesmo parado
-
-	moveTokens float64 // token bucket para limitar MoveTo
-	chatTokens float64 // token bucket para limitar chat
+// SavedState é enviado ao canal de persistência.
+type SavedState struct {
+	ID     uint32
+	X, Z   float64
+	Level  int
+	XP     int64
+	HP, MP int // -1 = cheio
 }
 
 type event interface{ isEvent() }
@@ -89,53 +89,76 @@ type chatEvent struct {
 	id       uint32
 	text, to string
 }
+type attackEvent struct{ id, target uint32 }
+type skillEvent struct{ id, skill, target uint32 }
+type respawnEvent struct{ id uint32 }
 
-func (joinEvent) isEvent()  {}
-func (leaveEvent) isEvent() {}
-func (moveEvent) isEvent()  {}
-func (chatEvent) isEvent()  {}
+func (joinEvent) isEvent()    {}
+func (leaveEvent) isEvent()   {}
+func (moveEvent) isEvent()    {}
+func (chatEvent) isEvent()    {}
+func (attackEvent) isEvent()  {}
+func (skillEvent) isEvent()   {}
+func (respawnEvent) isEvent() {}
+
+// frame acumula o que aconteceu desde o último snapshot.
+type frame struct {
+	combat   []*pb.CombatEvent
+	effects  []*pb.EffectEvent
+	deaths   []uint32
+	revives  []*pb.Revive
+	levelUps []*pb.LevelUp
+}
 
 type Zone struct {
-	cfg     Config
-	log     *slog.Logger
-	events  chan event
-	players map[uint32]*player
-	byName  map[string]uint32 // nome em minúsculas → id
-	tick    uint32
-	saves   chan<- []SavedPosition
+	cfg      Config
+	log      *slog.Logger
+	events   chan event
+	players  map[uint32]*entity
+	monsters map[uint32]*entity
+	byName   map[string]uint32 // nome em minúsculas → id
+	tick     uint32
+	now      float64 // segundos de simulação
+	rng      *rand.Rand
+	frame    frame
+	saves    chan<- []SavedState
 }
 
-// New cria a zona. saves pode ser nil (sem persistência, ex.: testes).
-func New(cfg Config, log *slog.Logger, saves chan<- []SavedPosition) *Zone {
-	return &Zone{
-		cfg:     cfg,
-		log:     log,
-		events:  make(chan event, 4096),
-		players: make(map[uint32]*player),
-		byName:  make(map[string]uint32),
-		saves:   saves,
+// New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
+func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
+	z := &Zone{
+		cfg:      cfg,
+		log:      log,
+		events:   make(chan event, 4096),
+		players:  make(map[uint32]*entity),
+		monsters: make(map[uint32]*entity),
+		byName:   make(map[string]uint32),
+		rng:      rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
+		saves:    saves,
 	}
+	z.spawnMonsters()
+	return z
 }
 
-// Join coloca o personagem na zona. Se ele já estiver online, a conexão antiga cai.
-func (z *Zone) Join(ctx context.Context, info JoinInfo) {
-	z.post(ctx, joinEvent{info: info})
-}
+// ---------- API usada pelas conexões (thread-safe via canal) ----------
 
-// Leave remove o jogador se peer ainda for a conexão dele. Repetir não tem efeito.
+func (z *Zone) Join(ctx context.Context, info JoinInfo) { z.post(ctx, joinEvent{info: info}) }
 func (z *Zone) Leave(ctx context.Context, id uint32, peer Peer) {
 	z.post(ctx, leaveEvent{id: id, peer: peer})
 }
-
-// Move registra o pedido do jogador de andar até (x, z). A zona valida.
 func (z *Zone) Move(ctx context.Context, id uint32, x, z2 float64) {
 	z.post(ctx, moveEvent{id: id, x: x, z: z2})
 }
-
-// Chat envia uma mensagem: geral se to == "", sussurro caso contrário.
 func (z *Zone) Chat(ctx context.Context, id uint32, text, to string) {
 	z.post(ctx, chatEvent{id: id, text: text, to: to})
 }
+func (z *Zone) Attack(ctx context.Context, id, target uint32) {
+	z.post(ctx, attackEvent{id: id, target: target})
+}
+func (z *Zone) UseSkill(ctx context.Context, id, skill, target uint32) {
+	z.post(ctx, skillEvent{id: id, skill: skill, target: target})
+}
+func (z *Zone) Respawn(ctx context.Context, id uint32) { z.post(ctx, respawnEvent{id: id}) }
 
 func (z *Zone) post(ctx context.Context, e event) {
 	select {
@@ -144,8 +167,8 @@ func (z *Zone) post(ctx context.Context, e event) {
 	}
 }
 
-// Run executa o loop da zona até ctx ser cancelado. Ao terminar, salva todas as
-// posições e fecha o canal de persistência.
+// Run executa o loop da zona até ctx ser cancelado. Ao terminar, salva todos os
+// jogadores e fecha o canal de persistência.
 func (z *Zone) Run(ctx context.Context) {
 	dt := time.Second / time.Duration(z.cfg.TickRate)
 	ticker := time.NewTicker(dt)
@@ -176,14 +199,46 @@ func (z *Zone) handle(e event) {
 	case joinEvent:
 		z.onJoin(e.info)
 	case leaveEvent:
-		if p, ok := z.players[e.id]; ok && p.peer == e.peer {
+		if p, ok := z.players[e.id]; ok && p.pl.peer == e.peer {
 			z.removePlayer(e.id)
 		}
 	case moveEvent:
 		z.onMove(e)
 	case chatEvent:
 		z.onChat(e)
+	case attackEvent:
+		if p := z.players[e.id]; p != nil && !p.dead && z.spendAction(p) {
+			if t := z.monsters[e.target]; t != nil && !t.dead && !t.mon.hidden {
+				if p.act.kind != actAttack || p.act.target != t.id {
+					p.act = action{kind: actAttack, target: t.id}
+				}
+			}
+		}
+	case skillEvent:
+		if p := z.players[e.id]; p != nil && z.spendAction(p) {
+			z.requestSkill(p, e.skill, e.target)
+		}
+	case respawnEvent:
+		if p := z.players[e.id]; p != nil {
+			z.respawnPlayer(p)
+		}
 	}
+}
+
+// spendAction limita pedidos de ação (movimento, ataque, skill) por jogador.
+func (z *Zone) spendAction(p *entity) bool {
+	if p.pl.moveTokens < 1 {
+		return false
+	}
+	p.pl.moveTokens--
+	return true
+}
+
+func (z *Zone) get(id uint32) *entity {
+	if id >= monsterIDBase {
+		return z.monsters[id]
+	}
+	return z.players[id]
 }
 
 func (z *Zone) onJoin(info JoinInfo) {
@@ -192,49 +247,79 @@ func (z *Zone) onJoin(info JoinInfo) {
 		z.sendTo(old, &pb.ServerMessage{Msg: &pb.ServerMessage_Kicked{Kicked: &pb.Kicked{
 			Reason: "Este personagem entrou em outro lugar.",
 		}}})
-		old.peer.Close("relogin")
+		old.pl.peer.Close("relogin")
 		z.removePlayer(info.ID)
 	}
 
+	level := game.LevelForXP(info.XP)
+	stats := game.ClassStats(info.Class, level)
 	pos := clampToZone(Vec2{X: info.X, Z: info.Z}, z.cfg.Size/2)
-	p := &player{
-		id: info.ID, name: info.Name, class: info.Class, peer: info.Peer,
-		pos: pos, target: pos,
-		moveTokens: z.cfg.MaxMovesPerSec,
-		chatTokens: z.cfg.ChatBurst,
+	p := &entity{
+		id: info.ID, kind: pb.EntityKind_ENTITY_KIND_PLAYER,
+		name: info.Name, model: info.Class, level: level, scale: 1,
+		pos: pos, dest: pos, stats: stats,
+		hp: stats.MaxHP, mp: stats.MaxMP,
+		lastCombat: -math.MaxFloat64 / 2,
+		pl: &playerState{
+			peer: info.Peer, class: info.Class, xp: info.XP,
+			cooldowns:  map[uint32]float64{},
+			moveTokens: z.cfg.MaxMovesPerSec, chatTokens: z.cfg.ChatBurst,
+		},
 	}
+	if info.HP > 0 && float64(info.HP) < stats.MaxHP {
+		p.hp = float64(info.HP)
+	}
+	if info.MP > 0 && float64(info.MP) < stats.MaxMP {
+		p.mp = float64(info.MP)
+	}
+	p.sentHP, p.sentMaxHP = p.hpInt(), p.maxHPInt()
 	z.players[p.id] = p
 	z.byName[strings.ToLower(p.name)] = p.id
 
 	// Avisa os outros que alguém chegou.
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entity(p)}}}, p.id)
+	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(p)}}}, p.id)
 
-	// Diz ao novo jogador quem ele é e quem já está aqui (inclui ele mesmo).
-	entities := make([]*pb.Entity, 0, len(z.players))
+	// Diz ao novo jogador quem ele é, quem já está aqui (inclui ele mesmo) e suas skills.
+	entities := make([]*pb.Entity, 0, len(z.players)+len(z.monsters))
 	for _, other := range z.players {
-		entities = append(entities, z.entity(other))
+		entities = append(entities, z.entityPB(other))
+	}
+	for _, m := range z.monsters {
+		if !m.mon.hidden {
+			entities = append(entities, z.entityPB(m))
+		}
+	}
+	var skills []*pb.SkillInfo
+	for _, s := range game.ClassSkills(info.Class) {
+		skills = append(skills, &pb.SkillInfo{
+			Id: s.ID, Name: s.Name, Key: uint32(s.Key), MpCost: uint32(s.MPCost),
+			CooldownMs: uint32(s.Cooldown * 1000), Range: float32(s.Range), Target: pb.SkillTarget(s.Target),
+		})
 	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
-		YourId:   p.id,
-		TickRate: uint32(z.cfg.TickRate),
-		ZoneSize: float32(z.cfg.Size),
-		Entities: entities,
+		YourId:     p.id,
+		TickRate:   uint32(z.cfg.TickRate),
+		ZoneSize:   float32(z.cfg.Size),
+		Entities:   entities,
+		Skills:     skills,
+		SafeRadius: float32(z.cfg.SafeRadius),
 	}}})
+	z.sendSelfStats(p)
 
-	z.log.Info("player joined", "id", p.id, "name", p.name, "online", len(z.players))
+	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
 
 func (z *Zone) onMove(e moveEvent) {
 	p, ok := z.players[e.id]
-	if !ok {
+	if !ok || p.dead || !z.spendAction(p) {
 		return
 	}
-	if p.moveTokens < 1 {
-		return // excedeu o limite de pedidos: descarta
+	p.clearAction() // clicar no chão cancela o ataque
+	if p.stunned(z.now) {
+		return
 	}
-	p.moveTokens--
-	p.target = clampToZone(Vec2{X: e.x, Z: e.z}, z.cfg.Size/2)
-	p.changed = true
+	p.dest = clampToZone(Vec2{X: e.x, Z: e.z}, z.cfg.Size/2)
+	p.moved = true
 }
 
 func (z *Zone) onChat(e chatEvent) {
@@ -246,11 +331,11 @@ func (z *Zone) onChat(e chatEvent) {
 	if text == "" {
 		return
 	}
-	if p.chatTokens < 1 {
+	if p.pl.chatTokens < 1 {
 		z.system(p, "Calma! Você está enviando mensagens rápido demais.")
 		return
 	}
-	p.chatTokens--
+	p.pl.chatTokens--
 
 	to := strings.TrimSpace(e.to)
 	if to == "" {
@@ -275,7 +360,10 @@ func (z *Zone) onChat(e chatEvent) {
 	}
 }
 
-func (z *Zone) system(p *player, text string) {
+func (z *Zone) system(p *entity, text string) {
+	if p.pl == nil {
+		return
+	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
 		Channel: pb.ChatChannel_CHAT_CHANNEL_SYSTEM, Text: text,
 	}}})
@@ -290,7 +378,13 @@ func (z *Zone) removePlayer(id uint32) {
 	if z.byName[strings.ToLower(p.name)] == id {
 		delete(z.byName, strings.ToLower(p.name))
 	}
-	z.save([]SavedPosition{{ID: p.id, X: p.pos.X, Z: p.pos.Z}}, false)
+	for _, m := range z.monsters {
+		delete(m.mon.hate, id)
+		if m.act.target == id {
+			m.clearAction()
+		}
+	}
+	z.save([]SavedState{z.savedState(p)}, false)
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: id}}}, 0)
 	z.log.Info("player left", "id", id, "name", p.name, "online", len(z.players))
 }
@@ -298,46 +392,127 @@ func (z *Zone) removePlayer(id uint32) {
 // update avança a simulação um tick e envia o delta para todos.
 func (z *Zone) update(dt float64) {
 	z.tick++
-	var states []*pb.EntityState
+	z.now += dt
 
 	for _, p := range z.players {
-		p.moveTokens = min(z.cfg.MaxMovesPerSec, p.moveTokens+z.cfg.MaxMovesPerSec*dt)
-		p.chatTokens = min(z.cfg.ChatBurst, p.chatTokens+z.cfg.ChatPerSec*dt)
+		p.pl.moveTokens = math.Min(z.cfg.MaxMovesPerSec, p.pl.moveTokens+z.cfg.MaxMovesPerSec*dt)
+		p.pl.chatTokens = math.Min(z.cfg.ChatBurst, p.pl.chatTokens+z.cfg.ChatPerSec*dt)
+		z.step(p, dt)
+	}
+	for _, m := range z.monsters {
+		if m.dead {
+			z.updateDeadMonster(m)
+			continue
+		}
+		z.think(m)
+		z.step(m, dt)
+	}
 
-		newPos, moved := step(p.pos, p.target, z.cfg.Speed*dt)
-		if moved || p.changed {
-			p.pos = newPos
-			p.changed = false
-			states = append(states, &pb.EntityState{
-				Id: p.id,
-				X:  float32(p.pos.X), Z: float32(p.pos.Z),
-				TargetX: float32(p.target.X), TargetZ: float32(p.target.Z),
-			})
+	z.flushSnapshot()
+	for _, p := range z.players {
+		if p.pl.statsDirty || p.hpInt() != p.sentHP || int(math.Floor(p.mp)) != p.pl.sentMP {
+			z.sendSelfStats(p)
 		}
 	}
+}
 
-	if len(states) == 0 {
+// step: efeitos, regeneração, ação e movimento de uma entidade viva.
+func (z *Zone) step(e *entity, dt float64) {
+	for _, k := range e.pruneEffects(z.now) {
+		if k == game.EffectSlow || k == game.EffectBuffSpeed {
+			e.moved = true
+		}
+		if e.pl != nil {
+			e.pl.statsDirty = true
+		}
+	}
+	if e.dead {
 		return
 	}
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Snapshot{Snapshot: &pb.Snapshot{
-		Tick: z.tick, States: states,
-	}}}, 0)
+	z.regen(e, dt)
+	z.runAction(e)
+	if e.stunned(z.now) {
+		return
+	}
+	newPos, moved := step(e.pos, e.dest, e.speed(z.now)*dt)
+	if moved {
+		e.pos = newPos
+		e.moved = true
+	}
+}
+
+func (z *Zone) flushSnapshot() {
+	snap := &pb.Snapshot{Tick: z.tick}
+	collect := func(e *entity) {
+		if e.moved && !e.dead {
+			snap.States = append(snap.States, &pb.EntityState{
+				Id: e.id,
+				X:  float32(e.pos.X), Z: float32(e.pos.Z),
+				TargetX: float32(e.dest.X), TargetZ: float32(e.dest.Z),
+				Speed: float32(e.speed(z.now)),
+			})
+		}
+		e.moved = false
+		if hp, max := e.hpInt(), e.maxHPInt(); hp != e.sentHP || max != e.sentMaxHP {
+			snap.Hp = append(snap.Hp, &pb.HpUpdate{Id: e.id, Hp: uint32(hp), MaxHp: uint32(max)})
+			e.sentHP, e.sentMaxHP = hp, max
+		}
+	}
+	for _, p := range z.players {
+		collect(p)
+	}
+	for _, m := range z.monsters {
+		if !m.mon.hidden {
+			collect(m)
+		}
+	}
+	snap.Combat = z.frame.combat
+	snap.Effects = z.frame.effects
+	snap.Deaths = z.frame.deaths
+	snap.Revives = z.frame.revives
+	snap.LevelUps = z.frame.levelUps
+	z.frame = frame{}
+
+	if len(snap.States)+len(snap.Hp)+len(snap.Combat)+len(snap.Effects)+len(snap.Deaths)+len(snap.Revives)+len(snap.LevelUps) == 0 {
+		return
+	}
+	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Snapshot{Snapshot: snap}}, 0)
+}
+
+func (z *Zone) sendSelfStats(p *entity) {
+	p.pl.statsDirty = false
+	p.pl.sentMP = int(math.Floor(p.mp))
+	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_SelfStats{SelfStats: z.selfStats(p)}})
+}
+
+func (z *Zone) savedState(p *entity) SavedState {
+	s := SavedState{ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: int(math.Floor(p.mp))}
+	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
+		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
+	}
+	if s.HP >= p.maxHPInt() {
+		s.HP = -1
+	}
+	if float64(s.MP) >= math.Floor(p.stats.MaxMP) {
+		s.MP = -1
+	}
+	return s
 }
 
 func (z *Zone) saveAll(blocking bool) {
 	if len(z.players) == 0 {
 		return
 	}
-	batch := make([]SavedPosition, 0, len(z.players))
+	batch := make([]SavedState, 0, len(z.players))
 	for _, p := range z.players {
-		batch = append(batch, SavedPosition{ID: p.id, X: p.pos.X, Z: p.pos.Z})
+		batch = append(batch, z.savedState(p))
 	}
 	z.save(batch, blocking)
 }
 
-// save entrega posições à goroutine de persistência. Fora do desligamento nunca
+// save entrega estados à goroutine de persistência. Fora do desligamento nunca
 // bloqueia: se o canal estiver cheio, o próximo salvamento periódico cobre.
-func (z *Zone) save(batch []SavedPosition, blocking bool) {
+func (z *Zone) save(batch []SavedState, blocking bool) {
 	if z.saves == nil {
 		return
 	}
@@ -352,12 +527,14 @@ func (z *Zone) save(batch []SavedPosition, blocking bool) {
 	}
 }
 
-func (z *Zone) entity(p *player) *pb.Entity {
+func (z *Zone) entityPB(e *entity) *pb.Entity {
 	return &pb.Entity{
-		Id: p.id, Name: p.name, Class: p.class,
-		X: float32(p.pos.X), Z: float32(p.pos.Z),
-		TargetX: float32(p.target.X), TargetZ: float32(p.target.Z),
-		Speed: float32(z.cfg.Speed),
+		Id: e.id, Name: e.name, Model: e.model, Kind: e.kind,
+		X: float32(e.pos.X), Z: float32(e.pos.Z),
+		TargetX: float32(e.dest.X), TargetZ: float32(e.dest.Z),
+		Speed: float32(e.speed(z.now)),
+		Level: uint32(e.level), Hp: uint32(e.hpInt()), MaxHp: uint32(e.maxHPInt()),
+		Dead: e.dead, Scale: float32(e.scale),
 	}
 }
 
@@ -373,7 +550,7 @@ func (z *Zone) broadcast(msg *pb.ServerMessage, skip uint32) {
 		if id == skip {
 			continue
 		}
-		if !p.peer.Send(data) {
+		if !p.pl.peer.Send(data) {
 			slow = append(slow, id)
 		}
 	}
@@ -382,13 +559,16 @@ func (z *Zone) broadcast(msg *pb.ServerMessage, skip uint32) {
 	}
 }
 
-func (z *Zone) sendTo(p *player, msg *pb.ServerMessage) {
+func (z *Zone) sendTo(p *entity, msg *pb.ServerMessage) {
+	if p.pl == nil {
+		return
+	}
 	data, err := proto.Marshal(msg)
 	if err != nil {
 		z.log.Error("marshal", "err", err)
 		return
 	}
-	if !p.peer.Send(data) {
+	if !p.pl.peer.Send(data) {
 		z.dropSlow(p.id)
 	}
 }
@@ -399,6 +579,6 @@ func (z *Zone) dropSlow(id uint32) {
 	if !ok {
 		return
 	}
-	p.peer.Close("send queue full")
+	p.pl.peer.Close("send queue full")
 	z.removePlayer(id)
 }

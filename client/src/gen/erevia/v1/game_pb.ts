@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file erevia/v1/game.proto.
  */
 export const file_erevia_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChRlcmV2aWEvdjEvZ2FtZS5wcm90bxIJZXJldmlhLnYxIqgBCg1DbGllbnRNZXNzYWdlEh8KBGpvaW4YASABKAsyDy5lcmV2aWEudjEuSm9pbkgAEiQKB21vdmVfdG8YAiABKAsyES5lcmV2aWEudjEuTW92ZVRvSAASHwoEcGluZxgDIAEoCzIPLmVyZXZpYS52MS5QaW5nSAASKAoJY2hhdF9zZW5kGAQgASgLMhMuZXJldmlhLnYxLkNoYXRTZW5kSABCBQoDbXNnIhwKBEpvaW4SFAoMY2hhcmFjdGVyX2lkGAEgASgNIh4KBk1vdmVUbxIJCgF4GAEgASgCEgkKAXoYAiABKAIiGwoEUGluZxITCgtjbGllbnRfdGltZRgBIAEoASIkCghDaGF0U2VuZBIMCgR0ZXh0GAEgASgJEgoKAnRvGAIgASgJIp4CCg1TZXJ2ZXJNZXNzYWdlEiUKB3dlbGNvbWUYASABKAsyEi5lcmV2aWEudjEuV2VsY29tZUgAEiEKBXNwYXduGAIgASgLMhAuZXJldmlhLnYxLlNwYXduSAASJQoHZGVzcGF3bhgDIAEoCzISLmVyZXZpYS52MS5EZXNwYXduSAASJwoIc25hcHNob3QYBCABKAsyEy5lcmV2aWEudjEuU25hcHNob3RIABIfCgRwb25nGAUgASgLMg8uZXJldmlhLnYxLlBvbmdIABImCgRjaGF0GAYgASgLMhYuZXJldmlhLnYxLkNoYXRNZXNzYWdlSAASIwoGa2lja2VkGAcgASgLMhEuZXJldmlhLnYxLktpY2tlZEgAQgUKA21zZyJlCgdXZWxjb21lEg8KB3lvdXJfaWQYASABKA0SEQoJdGlja19yYXRlGAIgASgNEhEKCXpvbmVfc2l6ZRgDIAEoAhIjCghlbnRpdGllcxgEIAMoCzIRLmVyZXZpYS52MS5FbnRpdHkiKgoFU3Bhd24SIQoGZW50aXR5GAEgASgLMhEuZXJldmlhLnYxLkVudGl0eSIVCgdEZXNwYXduEgoKAmlkGAEgASgNIkAKCFNuYXBzaG90EgwKBHRpY2sYASABKA0SJgoGc3RhdGVzGAIgAygLMhYuZXJldmlhLnYxLkVudGl0eVN0YXRlIhsKBFBvbmcSEwoLY2xpZW50X3RpbWUYASABKAEieQoLQ2hhdE1lc3NhZ2USJwoHY2hhbm5lbBgBIAEoDjIWLmVyZXZpYS52MS5DaGF0Q2hhbm5lbBIPCgdmcm9tX2lkGAIgASgNEhEKCWZyb21fbmFtZRgDIAEoCRIPCgd0b19uYW1lGAQgASgJEgwKBHRleHQYBSABKAkiGAoGS2lja2VkEg4KBnJlYXNvbhgBIAEoCSJ6CgZFbnRpdHkSCgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRIJCgF4GAMgASgCEgkKAXoYBCABKAISEAoIdGFyZ2V0X3gYBSABKAISEAoIdGFyZ2V0X3oYBiABKAISDQoFc3BlZWQYByABKAISDQoFY2xhc3MYCCABKAkiUwoLRW50aXR5U3RhdGUSCgoCaWQYASABKA0SCQoBeBgCIAEoAhIJCgF6GAMgASgCEhAKCHRhcmdldF94GAQgASgCEhAKCHRhcmdldF96GAUgASgCKngKC0NoYXRDaGFubmVsEhwKGENIQVRfQ0hBTk5FTF9VTlNQRUNJRklFRBAAEhgKFENIQVRfQ0hBTk5FTF9HRU5FUkFMEAESGAoUQ0hBVF9DSEFOTkVMX1dISVNQRVIQAhIXChNDSEFUX0NIQU5ORUxfU1lTVEVNEANCHlocZXJldmlhL3NlcnZlci9pbnRlcm5hbC9wYjtwYmIGcHJvdG8z");
+  fileDesc("ChRlcmV2aWEvdjEvZ2FtZS5wcm90bxIJZXJldmlhLnYxIp4CCg1DbGllbnRNZXNzYWdlEh8KBGpvaW4YASABKAsyDy5lcmV2aWEudjEuSm9pbkgAEiQKB21vdmVfdG8YAiABKAsyES5lcmV2aWEudjEuTW92ZVRvSAASHwoEcGluZxgDIAEoCzIPLmVyZXZpYS52MS5QaW5nSAASKAoJY2hhdF9zZW5kGAQgASgLMhMuZXJldmlhLnYxLkNoYXRTZW5kSAASIwoGYXR0YWNrGAUgASgLMhEuZXJldmlhLnYxLkF0dGFja0gAEigKCXVzZV9za2lsbBgGIAEoCzITLmVyZXZpYS52MS5Vc2VTa2lsbEgAEiUKB3Jlc3Bhd24YByABKAsyEi5lcmV2aWEudjEuUmVzcGF3bkgAQgUKA21zZyIcCgRKb2luEhQKDGNoYXJhY3Rlcl9pZBgBIAEoDSIeCgZNb3ZlVG8SCQoBeBgBIAEoAhIJCgF6GAIgASgCIhsKBFBpbmcSEwoLY2xpZW50X3RpbWUYASABKAEiJAoIQ2hhdFNlbmQSDAoEdGV4dBgBIAEoCRIKCgJ0bxgCIAEoCSIbCgZBdHRhY2sSEQoJdGFyZ2V0X2lkGAEgASgNIi8KCFVzZVNraWxsEhAKCHNraWxsX2lkGAEgASgNEhEKCXRhcmdldF9pZBgCIAEoDSIJCgdSZXNwYXduIv4CCg1TZXJ2ZXJNZXNzYWdlEiUKB3dlbGNvbWUYASABKAsyEi5lcmV2aWEudjEuV2VsY29tZUgAEiEKBXNwYXduGAIgASgLMhAuZXJldmlhLnYxLlNwYXduSAASJQoHZGVzcGF3bhgDIAEoCzISLmVyZXZpYS52MS5EZXNwYXduSAASJwoIc25hcHNob3QYBCABKAsyEy5lcmV2aWEudjEuU25hcHNob3RIABIfCgRwb25nGAUgASgLMg8uZXJldmlhLnYxLlBvbmdIABImCgRjaGF0GAYgASgLMhYuZXJldmlhLnYxLkNoYXRNZXNzYWdlSAASIwoGa2lja2VkGAcgASgLMhEuZXJldmlhLnYxLktpY2tlZEgAEioKCnNlbGZfc3RhdHMYCCABKAsyFC5lcmV2aWEudjEuU2VsZlN0YXRzSAASMgoOc2tpbGxfY29vbGRvd24YCSABKAsyGC5lcmV2aWEudjEuU2tpbGxDb29sZG93bkgAQgUKA21zZyKgAQoHV2VsY29tZRIPCgd5b3VyX2lkGAEgASgNEhEKCXRpY2tfcmF0ZRgCIAEoDRIRCgl6b25lX3NpemUYAyABKAISIwoIZW50aXRpZXMYBCADKAsyES5lcmV2aWEudjEuRW50aXR5EiQKBnNraWxscxgFIAMoCzIULmVyZXZpYS52MS5Ta2lsbEluZm8SEwoLc2FmZV9yYWRpdXMYBiABKAIiKgoFU3Bhd24SIQoGZW50aXR5GAEgASgLMhEuZXJldmlhLnYxLkVudGl0eSIVCgdEZXNwYXduEgoKAmlkGAEgASgNIo0CCghTbmFwc2hvdBIMCgR0aWNrGAEgASgNEiYKBnN0YXRlcxgCIAMoCzIWLmVyZXZpYS52MS5FbnRpdHlTdGF0ZRIfCgJocBgDIAMoCzITLmVyZXZpYS52MS5IcFVwZGF0ZRImCgZjb21iYXQYBCADKAsyFi5lcmV2aWEudjEuQ29tYmF0RXZlbnQSJwoHZWZmZWN0cxgFIAMoCzIWLmVyZXZpYS52MS5FZmZlY3RFdmVudBIOCgZkZWF0aHMYBiADKA0SIgoHcmV2aXZlcxgHIAMoCzIRLmVyZXZpYS52MS5SZXZpdmUSJQoJbGV2ZWxfdXBzGAggAygLMhIuZXJldmlhLnYxLkxldmVsVXAiGwoEUG9uZxITCgtjbGllbnRfdGltZRgBIAEoASJ5CgtDaGF0TWVzc2FnZRInCgdjaGFubmVsGAEgASgOMhYuZXJldmlhLnYxLkNoYXRDaGFubmVsEg8KB2Zyb21faWQYAiABKA0SEQoJZnJvbV9uYW1lGAMgASgJEg8KB3RvX25hbWUYBCABKAkSDAoEdGV4dBgFIAEoCSIYCgZLaWNrZWQSDgoGcmVhc29uGAEgASgJItcBCglTZWxmU3RhdHMSCgoCaHAYASABKA0SDgoGbWF4X2hwGAIgASgNEgoKAm1wGAMgASgNEg4KBm1heF9tcBgEIAEoDRINCgVsZXZlbBgFIAEoDRIKCgJ4cBgGIAEoBBIWCg54cF9sZXZlbF9zdGFydBgHIAEoBBIVCg14cF9uZXh0X2xldmVsGAggASgEEg0KBXBfYXRrGAkgASgNEg0KBW1fYXRrGAogASgNEg0KBXBfZGVmGAsgASgNEg0KBXNwZWVkGAwgASgCEgwKBGRlYWQYDSABKAgiNgoNU2tpbGxDb29sZG93bhIQCghza2lsbF9pZBgBIAEoDRITCgtyZWFkeV9pbl9tcxgCIAEoDSLnAQoGRW50aXR5EgoKAmlkGAEgASgNEgwKBG5hbWUYAiABKAkSCQoBeBgDIAEoAhIJCgF6GAQgASgCEhAKCHRhcmdldF94GAUgASgCEhAKCHRhcmdldF96GAYgASgCEg0KBXNwZWVkGAcgASgCEg0KBW1vZGVsGAggASgJEiMKBGtpbmQYCSABKA4yFS5lcmV2aWEudjEuRW50aXR5S2luZBINCgVsZXZlbBgKIAEoDRIKCgJocBgLIAEoDRIOCgZtYXhfaHAYDCABKA0SDAoEZGVhZBgNIAEoCBINCgVzY2FsZRgOIAEoAiJiCgtFbnRpdHlTdGF0ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXoYAyABKAISEAoIdGFyZ2V0X3gYBCABKAISEAoIdGFyZ2V0X3oYBSABKAISDQoFc3BlZWQYBiABKAIiMgoISHBVcGRhdGUSCgoCaWQYASABKA0SCgoCaHAYAiABKA0SDgoGbWF4X2hwGAMgASgNIn8KC0NvbWJhdEV2ZW50EhEKCXNvdXJjZV9pZBgBIAEoDRIRCgl0YXJnZXRfaWQYAiABKA0SEAoIc2tpbGxfaWQYAyABKA0SDgoGZGFtYWdlGAQgASgNEgwKBGNyaXQYBSABKAgSDAoEbWlzcxgGIAEoCBIMCgRraWxsGAcgASgIIlgKC0VmZmVjdEV2ZW50EhEKCXRhcmdldF9pZBgBIAEoDRIhCgZlZmZlY3QYAiABKA4yES5lcmV2aWEudjEuRWZmZWN0EhMKC2R1cmF0aW9uX21zGAMgASgNIkYKBlJldml2ZRIKCgJpZBgBIAEoDRIJCgF4GAIgASgCEgkKAXoYAyABKAISCgoCaHAYBCABKA0SDgoGbWF4X2hwGAUgASgNIjQKB0xldmVsVXASCgoCaWQYASABKA0SDQoFbGV2ZWwYAiABKA0SDgoGbWF4X2hwGAMgASgNIo8BCglTa2lsbEluZm8SCgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRILCgNrZXkYAyABKA0SDwoHbXBfY29zdBgEIAEoDRITCgtjb29sZG93bl9tcxgFIAEoDRINCgVyYW5nZRgGIAEoAhImCgZ0YXJnZXQYByABKA4yFi5lcmV2aWEudjEuU2tpbGxUYXJnZXQqeAoLQ2hhdENoYW5uZWwSHAoYQ0hBVF9DSEFOTkVMX1VOU1BFQ0lGSUVEEAASGAoUQ0hBVF9DSEFOTkVMX0dFTkVSQUwQARIYChRDSEFUX0NIQU5ORUxfV0hJU1BFUhACEhcKE0NIQVRfQ0hBTk5FTF9TWVNURU0QAypaCgpFbnRpdHlLaW5kEhsKF0VOVElUWV9LSU5EX1VOU1BFQ0lGSUVEEAASFgoSRU5USVRZX0tJTkRfUExBWUVSEAESFwoTRU5USVRZX0tJTkRfTU9OU1RFUhACKoMBCgZFZmZlY3QSFgoSRUZGRUNUX1VOU1BFQ0lGSUVEEAASDwoLRUZGRUNUX1NUVU4QARIPCgtFRkZFQ1RfU0xPVxACEhMKD0VGRkVDVF9CVUZGX0RFRhADEhMKD0VGRkVDVF9CVUZGX0FUSxAEEhUKEUVGRkVDVF9CVUZGX1NQRUVEEAUqcQoLU2tpbGxUYXJnZXQSHAoYU0tJTExfVEFSR0VUX1VOU1BFQ0lGSUVEEAASFgoSU0tJTExfVEFSR0VUX0VORU1ZEAESFQoRU0tJTExfVEFSR0VUX1NFTEYQAhIVChFTS0lMTF9UQVJHRVRfQVJFQRADQh5aHGVyZXZpYS9zZXJ2ZXIvaW50ZXJuYWwvcGI7cGJiBnByb3RvMw");
 
 /**
  * @generated from message erevia.v1.ClientMessage
@@ -43,6 +43,24 @@ export type ClientMessage = Message<"erevia.v1.ClientMessage"> & {
      */
     value: ChatSend;
     case: "chatSend";
+  } | {
+    /**
+     * @generated from field: erevia.v1.Attack attack = 5;
+     */
+    value: Attack;
+    case: "attack";
+  } | {
+    /**
+     * @generated from field: erevia.v1.UseSkill use_skill = 6;
+     */
+    value: UseSkill;
+    case: "useSkill";
+  } | {
+    /**
+     * @generated from field: erevia.v1.Respawn respawn = 7;
+     */
+    value: Respawn;
+    case: "respawn";
   } | { case: undefined; value?: undefined };
 };
 
@@ -74,7 +92,7 @@ export const JoinSchema: GenMessage<Join> = /*@__PURE__*/
   messageDesc(file_erevia_v1_game, 1);
 
 /**
- * Pedido para andar até um ponto do chão. O servidor valida.
+ * Pedido para andar até um ponto do chão. Cancela o ataque atual.
  *
  * @generated from message erevia.v1.MoveTo
  */
@@ -139,6 +157,64 @@ export const ChatSendSchema: GenMessage<ChatSend> = /*@__PURE__*/
   messageDesc(file_erevia_v1_game, 4);
 
 /**
+ * Seleciona o alvo e ataca automaticamente (anda até o alcance se precisar).
+ *
+ * @generated from message erevia.v1.Attack
+ */
+export type Attack = Message<"erevia.v1.Attack"> & {
+  /**
+   * @generated from field: uint32 target_id = 1;
+   */
+  targetId: number;
+};
+
+/**
+ * Describes the message erevia.v1.Attack.
+ * Use `create(AttackSchema)` to create a new message.
+ */
+export const AttackSchema: GenMessage<Attack> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 5);
+
+/**
+ * Usa uma skill. target_id é ignorado em skills de si mesmo/área.
+ *
+ * @generated from message erevia.v1.UseSkill
+ */
+export type UseSkill = Message<"erevia.v1.UseSkill"> & {
+  /**
+   * @generated from field: uint32 skill_id = 1;
+   */
+  skillId: number;
+
+  /**
+   * @generated from field: uint32 target_id = 2;
+   */
+  targetId: number;
+};
+
+/**
+ * Describes the message erevia.v1.UseSkill.
+ * Use `create(UseSkillSchema)` to create a new message.
+ */
+export const UseSkillSchema: GenMessage<UseSkill> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 6);
+
+/**
+ * Morto: voltar à cidade.
+ *
+ * @generated from message erevia.v1.Respawn
+ */
+export type Respawn = Message<"erevia.v1.Respawn"> & {
+};
+
+/**
+ * Describes the message erevia.v1.Respawn.
+ * Use `create(RespawnSchema)` to create a new message.
+ */
+export const RespawnSchema: GenMessage<Respawn> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 7);
+
+/**
  * @generated from message erevia.v1.ServerMessage
  */
 export type ServerMessage = Message<"erevia.v1.ServerMessage"> & {
@@ -187,6 +263,18 @@ export type ServerMessage = Message<"erevia.v1.ServerMessage"> & {
      */
     value: Kicked;
     case: "kicked";
+  } | {
+    /**
+     * @generated from field: erevia.v1.SelfStats self_stats = 8;
+     */
+    value: SelfStats;
+    case: "selfStats";
+  } | {
+    /**
+     * @generated from field: erevia.v1.SkillCooldown skill_cooldown = 9;
+     */
+    value: SkillCooldown;
+    case: "skillCooldown";
   } | { case: undefined; value?: undefined };
 };
 
@@ -195,10 +283,10 @@ export type ServerMessage = Message<"erevia.v1.ServerMessage"> & {
  * Use `create(ServerMessageSchema)` to create a new message.
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 5);
+  messageDesc(file_erevia_v1_game, 8);
 
 /**
- * Resposta ao Join: quem você é e quem já está na zona.
+ * Resposta ao Join: quem você é, quem já está na zona e suas skills.
  *
  * @generated from message erevia.v1.Welcome
  */
@@ -222,6 +310,16 @@ export type Welcome = Message<"erevia.v1.Welcome"> & {
    * @generated from field: repeated erevia.v1.Entity entities = 4;
    */
   entities: Entity[];
+
+  /**
+   * @generated from field: repeated erevia.v1.SkillInfo skills = 5;
+   */
+  skills: SkillInfo[];
+
+  /**
+   * @generated from field: float safe_radius = 6;
+   */
+  safeRadius: number;
 };
 
 /**
@@ -229,7 +327,7 @@ export type Welcome = Message<"erevia.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 6);
+  messageDesc(file_erevia_v1_game, 9);
 
 /**
  * @generated from message erevia.v1.Spawn
@@ -246,7 +344,7 @@ export type Spawn = Message<"erevia.v1.Spawn"> & {
  * Use `create(SpawnSchema)` to create a new message.
  */
 export const SpawnSchema: GenMessage<Spawn> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 7);
+  messageDesc(file_erevia_v1_game, 10);
 
 /**
  * @generated from message erevia.v1.Despawn
@@ -263,10 +361,10 @@ export type Despawn = Message<"erevia.v1.Despawn"> & {
  * Use `create(DespawnSchema)` to create a new message.
  */
 export const DespawnSchema: GenMessage<Despawn> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 8);
+  messageDesc(file_erevia_v1_game, 11);
 
 /**
- * Enviado a cada tick, apenas com as entidades que mudaram (delta).
+ * Enviado a cada tick, apenas com o que mudou (delta).
  *
  * @generated from message erevia.v1.Snapshot
  */
@@ -280,6 +378,36 @@ export type Snapshot = Message<"erevia.v1.Snapshot"> & {
    * @generated from field: repeated erevia.v1.EntityState states = 2;
    */
   states: EntityState[];
+
+  /**
+   * @generated from field: repeated erevia.v1.HpUpdate hp = 3;
+   */
+  hp: HpUpdate[];
+
+  /**
+   * @generated from field: repeated erevia.v1.CombatEvent combat = 4;
+   */
+  combat: CombatEvent[];
+
+  /**
+   * @generated from field: repeated erevia.v1.EffectEvent effects = 5;
+   */
+  effects: EffectEvent[];
+
+  /**
+   * @generated from field: repeated uint32 deaths = 6;
+   */
+  deaths: number[];
+
+  /**
+   * @generated from field: repeated erevia.v1.Revive revives = 7;
+   */
+  revives: Revive[];
+
+  /**
+   * @generated from field: repeated erevia.v1.LevelUp level_ups = 8;
+   */
+  levelUps: LevelUp[];
 };
 
 /**
@@ -287,7 +415,7 @@ export type Snapshot = Message<"erevia.v1.Snapshot"> & {
  * Use `create(SnapshotSchema)` to create a new message.
  */
 export const SnapshotSchema: GenMessage<Snapshot> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 9);
+  messageDesc(file_erevia_v1_game, 12);
 
 /**
  * @generated from message erevia.v1.Pong
@@ -304,7 +432,7 @@ export type Pong = Message<"erevia.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 10);
+  messageDesc(file_erevia_v1_game, 13);
 
 /**
  * @generated from message erevia.v1.ChatMessage
@@ -343,7 +471,7 @@ export type ChatMessage = Message<"erevia.v1.ChatMessage"> & {
  * Use `create(ChatMessageSchema)` to create a new message.
  */
 export const ChatMessageSchema: GenMessage<ChatMessage> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 11);
+  messageDesc(file_erevia_v1_game, 14);
 
 /**
  * O servidor vai encerrar a conexão (ex.: o mesmo personagem entrou em outro lugar).
@@ -362,7 +490,112 @@ export type Kicked = Message<"erevia.v1.Kicked"> & {
  * Use `create(KickedSchema)` to create a new message.
  */
 export const KickedSchema: GenMessage<Kicked> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 12);
+  messageDesc(file_erevia_v1_game, 15);
+
+/**
+ * Atributos do próprio personagem (só para o dono).
+ *
+ * @generated from message erevia.v1.SelfStats
+ */
+export type SelfStats = Message<"erevia.v1.SelfStats"> & {
+  /**
+   * @generated from field: uint32 hp = 1;
+   */
+  hp: number;
+
+  /**
+   * @generated from field: uint32 max_hp = 2;
+   */
+  maxHp: number;
+
+  /**
+   * @generated from field: uint32 mp = 3;
+   */
+  mp: number;
+
+  /**
+   * @generated from field: uint32 max_mp = 4;
+   */
+  maxMp: number;
+
+  /**
+   * @generated from field: uint32 level = 5;
+   */
+  level: number;
+
+  /**
+   * @generated from field: uint64 xp = 6;
+   */
+  xp: bigint;
+
+  /**
+   * @generated from field: uint64 xp_level_start = 7;
+   */
+  xpLevelStart: bigint;
+
+  /**
+   * XP total para o próximo nível (0 = nível máximo)
+   *
+   * @generated from field: uint64 xp_next_level = 8;
+   */
+  xpNextLevel: bigint;
+
+  /**
+   * @generated from field: uint32 p_atk = 9;
+   */
+  pAtk: number;
+
+  /**
+   * @generated from field: uint32 m_atk = 10;
+   */
+  mAtk: number;
+
+  /**
+   * @generated from field: uint32 p_def = 11;
+   */
+  pDef: number;
+
+  /**
+   * @generated from field: float speed = 12;
+   */
+  speed: number;
+
+  /**
+   * @generated from field: bool dead = 13;
+   */
+  dead: boolean;
+};
+
+/**
+ * Describes the message erevia.v1.SelfStats.
+ * Use `create(SelfStatsSchema)` to create a new message.
+ */
+export const SelfStatsSchema: GenMessage<SelfStats> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 16);
+
+/**
+ * Recarga de skill (só para o dono).
+ *
+ * @generated from message erevia.v1.SkillCooldown
+ */
+export type SkillCooldown = Message<"erevia.v1.SkillCooldown"> & {
+  /**
+   * @generated from field: uint32 skill_id = 1;
+   */
+  skillId: number;
+
+  /**
+   * @generated from field: uint32 ready_in_ms = 2;
+   */
+  readyInMs: number;
+};
+
+/**
+ * Describes the message erevia.v1.SkillCooldown.
+ * Use `create(SkillCooldownSchema)` to create a new message.
+ */
+export const SkillCooldownSchema: GenMessage<SkillCooldown> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 17);
 
 /**
  * @generated from message erevia.v1.Entity
@@ -404,11 +637,43 @@ export type Entity = Message<"erevia.v1.Entity"> & {
   speed: number;
 
   /**
-   * knight, barbarian, mage, rogue
+   * classe do jogador ou tipo do monstro
    *
-   * @generated from field: string class = 8;
+   * @generated from field: string model = 8;
    */
-  class: string;
+  model: string;
+
+  /**
+   * @generated from field: erevia.v1.EntityKind kind = 9;
+   */
+  kind: EntityKind;
+
+  /**
+   * @generated from field: uint32 level = 10;
+   */
+  level: number;
+
+  /**
+   * @generated from field: uint32 hp = 11;
+   */
+  hp: number;
+
+  /**
+   * @generated from field: uint32 max_hp = 12;
+   */
+  maxHp: number;
+
+  /**
+   * @generated from field: bool dead = 13;
+   */
+  dead: boolean;
+
+  /**
+   * tamanho visual (0 = 1)
+   *
+   * @generated from field: float scale = 14;
+   */
+  scale: number;
 };
 
 /**
@@ -416,7 +681,7 @@ export type Entity = Message<"erevia.v1.Entity"> & {
  * Use `create(EntitySchema)` to create a new message.
  */
 export const EntitySchema: GenMessage<Entity> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 13);
+  messageDesc(file_erevia_v1_game, 18);
 
 /**
  * @generated from message erevia.v1.EntityState
@@ -446,6 +711,13 @@ export type EntityState = Message<"erevia.v1.EntityState"> & {
    * @generated from field: float target_z = 5;
    */
   targetZ: number;
+
+  /**
+   * velocidade atual (buffs/lentidão)
+   *
+   * @generated from field: float speed = 6;
+   */
+  speed: number;
 };
 
 /**
@@ -453,7 +725,221 @@ export type EntityState = Message<"erevia.v1.EntityState"> & {
  * Use `create(EntityStateSchema)` to create a new message.
  */
 export const EntityStateSchema: GenMessage<EntityState> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 14);
+  messageDesc(file_erevia_v1_game, 19);
+
+/**
+ * @generated from message erevia.v1.HpUpdate
+ */
+export type HpUpdate = Message<"erevia.v1.HpUpdate"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * @generated from field: uint32 hp = 2;
+   */
+  hp: number;
+
+  /**
+   * @generated from field: uint32 max_hp = 3;
+   */
+  maxHp: number;
+};
+
+/**
+ * Describes the message erevia.v1.HpUpdate.
+ * Use `create(HpUpdateSchema)` to create a new message.
+ */
+export const HpUpdateSchema: GenMessage<HpUpdate> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 20);
+
+/**
+ * @generated from message erevia.v1.CombatEvent
+ */
+export type CombatEvent = Message<"erevia.v1.CombatEvent"> & {
+  /**
+   * @generated from field: uint32 source_id = 1;
+   */
+  sourceId: number;
+
+  /**
+   * @generated from field: uint32 target_id = 2;
+   */
+  targetId: number;
+
+  /**
+   * 0 = ataque básico
+   *
+   * @generated from field: uint32 skill_id = 3;
+   */
+  skillId: number;
+
+  /**
+   * @generated from field: uint32 damage = 4;
+   */
+  damage: number;
+
+  /**
+   * @generated from field: bool crit = 5;
+   */
+  crit: boolean;
+
+  /**
+   * @generated from field: bool miss = 6;
+   */
+  miss: boolean;
+
+  /**
+   * @generated from field: bool kill = 7;
+   */
+  kill: boolean;
+};
+
+/**
+ * Describes the message erevia.v1.CombatEvent.
+ * Use `create(CombatEventSchema)` to create a new message.
+ */
+export const CombatEventSchema: GenMessage<CombatEvent> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 21);
+
+/**
+ * @generated from message erevia.v1.EffectEvent
+ */
+export type EffectEvent = Message<"erevia.v1.EffectEvent"> & {
+  /**
+   * @generated from field: uint32 target_id = 1;
+   */
+  targetId: number;
+
+  /**
+   * @generated from field: erevia.v1.Effect effect = 2;
+   */
+  effect: Effect;
+
+  /**
+   * @generated from field: uint32 duration_ms = 3;
+   */
+  durationMs: number;
+};
+
+/**
+ * Describes the message erevia.v1.EffectEvent.
+ * Use `create(EffectEventSchema)` to create a new message.
+ */
+export const EffectEventSchema: GenMessage<EffectEvent> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 22);
+
+/**
+ * @generated from message erevia.v1.Revive
+ */
+export type Revive = Message<"erevia.v1.Revive"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * @generated from field: float x = 2;
+   */
+  x: number;
+
+  /**
+   * @generated from field: float z = 3;
+   */
+  z: number;
+
+  /**
+   * @generated from field: uint32 hp = 4;
+   */
+  hp: number;
+
+  /**
+   * @generated from field: uint32 max_hp = 5;
+   */
+  maxHp: number;
+};
+
+/**
+ * Describes the message erevia.v1.Revive.
+ * Use `create(ReviveSchema)` to create a new message.
+ */
+export const ReviveSchema: GenMessage<Revive> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 23);
+
+/**
+ * @generated from message erevia.v1.LevelUp
+ */
+export type LevelUp = Message<"erevia.v1.LevelUp"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * @generated from field: uint32 level = 2;
+   */
+  level: number;
+
+  /**
+   * @generated from field: uint32 max_hp = 3;
+   */
+  maxHp: number;
+};
+
+/**
+ * Describes the message erevia.v1.LevelUp.
+ * Use `create(LevelUpSchema)` to create a new message.
+ */
+export const LevelUpSchema: GenMessage<LevelUp> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 24);
+
+/**
+ * @generated from message erevia.v1.SkillInfo
+ */
+export type SkillInfo = Message<"erevia.v1.SkillInfo"> & {
+  /**
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: uint32 key = 3;
+   */
+  key: number;
+
+  /**
+   * @generated from field: uint32 mp_cost = 4;
+   */
+  mpCost: number;
+
+  /**
+   * @generated from field: uint32 cooldown_ms = 5;
+   */
+  cooldownMs: number;
+
+  /**
+   * @generated from field: float range = 6;
+   */
+  range: number;
+
+  /**
+   * @generated from field: erevia.v1.SkillTarget target = 7;
+   */
+  target: SkillTarget;
+};
+
+/**
+ * Describes the message erevia.v1.SkillInfo.
+ * Use `create(SkillInfoSchema)` to create a new message.
+ */
+export const SkillInfoSchema: GenMessage<SkillInfo> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 25);
 
 /**
  * @generated from enum erevia.v1.ChatChannel
@@ -485,4 +971,102 @@ export enum ChatChannel {
  */
 export const ChatChannelSchema: GenEnum<ChatChannel> = /*@__PURE__*/
   enumDesc(file_erevia_v1_game, 0);
+
+/**
+ * @generated from enum erevia.v1.EntityKind
+ */
+export enum EntityKind {
+  /**
+   * @generated from enum value: ENTITY_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: ENTITY_KIND_PLAYER = 1;
+   */
+  PLAYER = 1,
+
+  /**
+   * @generated from enum value: ENTITY_KIND_MONSTER = 2;
+   */
+  MONSTER = 2,
+}
+
+/**
+ * Describes the enum erevia.v1.EntityKind.
+ */
+export const EntityKindSchema: GenEnum<EntityKind> = /*@__PURE__*/
+  enumDesc(file_erevia_v1_game, 1);
+
+/**
+ * @generated from enum erevia.v1.Effect
+ */
+export enum Effect {
+  /**
+   * @generated from enum value: EFFECT_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: EFFECT_STUN = 1;
+   */
+  STUN = 1,
+
+  /**
+   * @generated from enum value: EFFECT_SLOW = 2;
+   */
+  SLOW = 2,
+
+  /**
+   * @generated from enum value: EFFECT_BUFF_DEF = 3;
+   */
+  BUFF_DEF = 3,
+
+  /**
+   * @generated from enum value: EFFECT_BUFF_ATK = 4;
+   */
+  BUFF_ATK = 4,
+
+  /**
+   * @generated from enum value: EFFECT_BUFF_SPEED = 5;
+   */
+  BUFF_SPEED = 5,
+}
+
+/**
+ * Describes the enum erevia.v1.Effect.
+ */
+export const EffectSchema: GenEnum<Effect> = /*@__PURE__*/
+  enumDesc(file_erevia_v1_game, 2);
+
+/**
+ * @generated from enum erevia.v1.SkillTarget
+ */
+export enum SkillTarget {
+  /**
+   * @generated from enum value: SKILL_TARGET_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: SKILL_TARGET_ENEMY = 1;
+   */
+  ENEMY = 1,
+
+  /**
+   * @generated from enum value: SKILL_TARGET_SELF = 2;
+   */
+  SELF = 2,
+
+  /**
+   * @generated from enum value: SKILL_TARGET_AREA = 3;
+   */
+  AREA = 3,
+}
+
+/**
+ * Describes the enum erevia.v1.SkillTarget.
+ */
+export const SkillTargetSchema: GenEnum<SkillTarget> = /*@__PURE__*/
+  enumDesc(file_erevia_v1_game, 3);
 
