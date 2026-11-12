@@ -1,0 +1,8 @@
+{
+  "name": "erevia",
+  "private": true,
+  "description": "Raiz do monorepo. Só guarda o SDK da Railway usado por .railway/railway.ts (infra como código).",
+  "devDependencies": {
+    "railway": "^3.16.0"
+  }
+}
