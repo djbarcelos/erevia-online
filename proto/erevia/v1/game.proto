@@ -11,12 +11,14 @@ message ClientMessage {
     Join join = 1;
     MoveTo move_to = 2;
     Ping ping = 3;
+    ChatSend chat_send = 4;
   }
 }
 
-// Primeira mensagem após conectar.
+// Primeira mensagem após conectar. A conta vem do cookie de sessão;
+// o servidor confere se o personagem pertence a ela.
 message Join {
-  string name = 1;
+  uint32 character_id = 1;
 }
 
 // Pedido para andar até um ponto do chão. O servidor valida.
@@ -29,6 +31,12 @@ message Ping {
   double client_time = 1;
 }
 
+// Mensagem de chat. "to" vazio = canal geral; preenchido = sussurro para esse nome.
+message ChatSend {
+  string text = 1;
+  string to = 2;
+}
+
 // ---------- Servidor -> Cliente ----------
 
 message ServerMessage {
@@ -38,6 +46,8 @@ message ServerMessage {
     Despawn despawn = 3;
     Snapshot snapshot = 4;
     Pong pong = 5;
+    ChatMessage chat = 6;
+    Kicked kicked = 7;
   }
 }
 
@@ -67,6 +77,26 @@ message Pong {
   double client_time = 1;
 }
 
+enum ChatChannel {
+  CHAT_CHANNEL_UNSPECIFIED = 0;
+  CHAT_CHANNEL_GENERAL = 1;
+  CHAT_CHANNEL_WHISPER = 2;
+  CHAT_CHANNEL_SYSTEM = 3;
+}
+
+message ChatMessage {
+  ChatChannel channel = 1;
+  uint32 from_id = 2;
+  string from_name = 3;
+  string to_name = 4; // só em sussurros
+  string text = 5;
+}
+
+// O servidor vai encerrar a conexão (ex.: o mesmo personagem entrou em outro lugar).
+message Kicked {
+  string reason = 1;
+}
+
 // ---------- Tipos ----------
 
 message Entity {
@@ -77,6 +107,7 @@ message Entity {
   float target_x = 5;
   float target_z = 6;
   float speed = 7;
+  string class = 8; // knight, barbarian, mage, rogue
 }
 
 message EntityState {

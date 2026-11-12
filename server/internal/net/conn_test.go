@@ -4,7 +4,9 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,28 +18,64 @@ import (
 	"erevia/server/internal/zone"
 )
 
+// fakeBackend: o cookie "acc" diz a conta; personagens fixos por conta.
+type fakeBackend struct {
+	chars map[int64][]Character
+}
+
+func (f *fakeBackend) Authenticate(r *http.Request) (int64, error) {
+	c, err := r.Cookie("acc")
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(c.Value, 10, 64)
+}
+
+func (f *fakeBackend) LoadCharacter(_ context.Context, accountID int64, id uint32) (Character, error) {
+	for _, c := range f.chars[accountID] {
+		if c.ID == id {
+			return c, nil
+		}
+	}
+	return Character{}, ErrCharacterNotFound
+}
+
 func startServer(t *testing.T) (url string, ctx context.Context) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	t.Cleanup(cancel)
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	z := zone.New(zone.DefaultConfig(), log)
+	z := zone.New(zone.DefaultConfig(), log, nil)
 	go z.Run(ctx)
 
-	srv := httptest.NewServer(NewServer(z, log, []string{"*"}))
+	backend := &fakeBackend{chars: map[int64][]Character{
+		1: {{ID: 10, Name: "Alice", Class: "mage", X: 1, Z: 2}},
+		2: {{ID: 20, Name: "Bob", Class: "knight"}},
+	}}
+	srv := httptest.NewServer(NewServer(z, backend, log, []string{"*"}))
 	t.Cleanup(srv.Close)
 	return "ws" + strings.TrimPrefix(srv.URL, "http"), ctx
 }
 
-func dial(t *testing.T, ctx context.Context, url, name string) *websocket.Conn {
+func dialAs(t *testing.T, ctx context.Context, url string, account int64) (*websocket.Conn, error) {
 	t.Helper()
-	c, _, err := websocket.Dial(ctx, url, nil)
+	h := http.Header{}
+	h.Set("Cookie", "acc="+strconv.FormatInt(account, 10))
+	c, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{HTTPHeader: h})
+	if err == nil {
+		t.Cleanup(func() { c.CloseNow() })
+	}
+	return c, err
+}
+
+func join(t *testing.T, ctx context.Context, url string, account int64, charID uint32) *websocket.Conn {
+	t.Helper()
+	c, err := dialAs(t, ctx, url, account)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { c.CloseNow() })
-	send(t, ctx, c, &pb.ClientMessage{Msg: &pb.ClientMessage_Join{Join: &pb.Join{Name: name}}})
+	send(t, ctx, c, &pb.ClientMessage{Msg: &pb.ClientMessage_Join{Join: &pb.Join{CharacterId: charID}}})
 	return c
 }
 
@@ -67,71 +105,94 @@ func waitFor(t *testing.T, ctx context.Context, c *websocket.Conn, what string, 
 	}
 }
 
-func TestTwoPlayersSeeEachOtherMove(t *testing.T) {
+func isWelcome(m *pb.ServerMessage) bool { return m.GetWelcome() != nil }
+
+func TestUnauthenticatedIsRejected(t *testing.T) {
+	url, ctx := startServer(t)
+	c, _, err := websocket.Dial(ctx, url, nil)
+	if err == nil {
+		c.CloseNow()
+		t.Fatal("dial without session should fail")
+	}
+}
+
+func TestCannotJoinWithOtherAccountsCharacter(t *testing.T) {
+	url, ctx := startServer(t)
+	c := join(t, ctx, url, 2, 10) // conta 2 tentando usar personagem da conta 1
+	_, _, err := c.Read(ctx)
+	if websocket.CloseStatus(err) != websocket.StatusPolicyViolation {
+		t.Fatalf("expected policy violation, got %v", err)
+	}
+}
+
+func TestTwoPlayersMoveAndChat(t *testing.T) {
 	url, ctx := startServer(t)
 
-	a := dial(t, ctx, url, "Alice")
-	welcomeA := waitFor(t, ctx, a, "welcome A", func(m *pb.ServerMessage) bool { return m.GetWelcome() != nil }).GetWelcome()
-	idA := welcomeA.YourId
-
-	b := dial(t, ctx, url, "Bob")
-	welcomeB := waitFor(t, ctx, b, "welcome B", func(m *pb.ServerMessage) bool { return m.GetWelcome() != nil }).GetWelcome()
-	if len(welcomeB.Entities) != 2 {
-		t.Fatalf("Bob should see 2 entities on join, got %d", len(welcomeB.Entities))
+	a := join(t, ctx, url, 1, 10)
+	welcomeA := waitFor(t, ctx, a, "welcome A", isWelcome).GetWelcome()
+	if welcomeA.YourId != 10 {
+		t.Fatalf("your_id = %d, want character id 10", welcomeA.YourId)
+	}
+	self := welcomeA.Entities[0]
+	if self.X != 1 || self.Z != 2 || self.Class != "mage" {
+		t.Fatalf("saved position/class not used: %+v", self)
 	}
 
-	// Alice recebe o Spawn do Bob.
+	b := join(t, ctx, url, 2, 20)
+	waitFor(t, ctx, b, "welcome B", isWelcome)
 	waitFor(t, ctx, a, "spawn Bob", func(m *pb.ServerMessage) bool {
-		return m.GetSpawn() != nil && m.GetSpawn().Entity.Name == "Bob"
+		return m.GetSpawn().GetEntity().GetName() == "Bob"
 	})
 
-	// Alice anda; Bob deve ver Alice se mover em direção ao destino.
+	// Movimento
 	send(t, ctx, a, &pb.ClientMessage{Msg: &pb.ClientMessage_MoveTo{MoveTo: &pb.MoveTo{X: 20, Z: 0}}})
-	snap := waitFor(t, ctx, b, "snapshot with Alice", func(m *pb.ServerMessage) bool {
+	waitFor(t, ctx, b, "snapshot with Alice", func(m *pb.ServerMessage) bool {
 		for _, s := range m.GetSnapshot().GetStates() {
-			if s.Id == idA && s.TargetX == 20 {
+			if s.Id == 10 && s.TargetX == 20 {
 				return true
 			}
 		}
 		return false
 	})
-	if snap.GetSnapshot().Tick == 0 {
-		t.Fatal("snapshot tick should be > 0")
+
+	// Chat geral
+	send(t, ctx, a, &pb.ClientMessage{Msg: &pb.ClientMessage_ChatSend{ChatSend: &pb.ChatSend{Text: "olá"}}})
+	got := waitFor(t, ctx, b, "general chat", func(m *pb.ServerMessage) bool { return m.GetChat() != nil }).GetChat()
+	if got.Text != "olá" || got.FromName != "Alice" || got.Channel != pb.ChatChannel_CHAT_CHANNEL_GENERAL {
+		t.Fatalf("chat = %+v", got)
 	}
 
-	// Destino fora do mapa é limitado pelo servidor.
-	send(t, ctx, a, &pb.ClientMessage{Msg: &pb.ClientMessage_MoveTo{MoveTo: &pb.MoveTo{X: 9999, Z: -9999}}})
-	waitFor(t, ctx, b, "clamped target", func(m *pb.ServerMessage) bool {
-		for _, s := range m.GetSnapshot().GetStates() {
-			if s.Id == idA && s.TargetX == 100 && s.TargetZ == -100 {
-				return true
-			}
-		}
-		return false
-	})
+	// Sussurro
+	send(t, ctx, b, &pb.ClientMessage{Msg: &pb.ClientMessage_ChatSend{ChatSend: &pb.ChatSend{Text: "psiu", To: "alice"}}})
+	w := waitFor(t, ctx, a, "whisper", func(m *pb.ServerMessage) bool {
+		return m.GetChat().GetChannel() == pb.ChatChannel_CHAT_CHANNEL_WHISPER
+	}).GetChat()
+	if w.Text != "psiu" || w.FromName != "Bob" || w.ToName != "Alice" {
+		t.Fatalf("whisper = %+v", w)
+	}
 
 	// Alice sai; Bob recebe Despawn.
 	a.Close(websocket.StatusNormalClosure, "")
 	waitFor(t, ctx, b, "despawn Alice", func(m *pb.ServerMessage) bool {
-		return m.GetDespawn() != nil && m.GetDespawn().Id == idA
+		return m.GetDespawn() != nil && m.GetDespawn().Id == 10
 	})
 }
 
-func TestPingPong(t *testing.T) {
+func TestReloginKicksFirstConnection(t *testing.T) {
 	url, ctx := startServer(t)
-	c := dial(t, ctx, url, "Pinger")
-	send(t, ctx, c, &pb.ClientMessage{Msg: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTime: 123.5}}})
-	m := waitFor(t, ctx, c, "pong", func(m *pb.ServerMessage) bool { return m.GetPong() != nil })
-	if m.GetPong().ClientTime != 123.5 {
-		t.Fatalf("pong time = %v", m.GetPong().ClientTime)
-	}
-}
+	first := join(t, ctx, url, 1, 10)
+	waitFor(t, ctx, first, "welcome 1", isWelcome)
 
-func TestInvalidNameIsRejected(t *testing.T) {
-	url, ctx := startServer(t)
-	c := dial(t, ctx, url, "x")
-	_, _, err := c.Read(ctx)
+	second := join(t, ctx, url, 1, 10)
+	waitFor(t, ctx, second, "welcome 2", isWelcome)
+
+	waitFor(t, ctx, first, "kicked", func(m *pb.ServerMessage) bool { return m.GetKicked() != nil })
+	_, _, err := first.Read(ctx)
 	if websocket.CloseStatus(err) != websocket.StatusPolicyViolation {
-		t.Fatalf("expected policy violation close, got %v", err)
+		t.Fatalf("first connection should be closed, got %v", err)
 	}
+
+	// A segunda continua viva: responde ao ping.
+	send(t, ctx, second, &pb.ClientMessage{Msg: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTime: 1}}})
+	waitFor(t, ctx, second, "pong", func(m *pb.ServerMessage) bool { return m.GetPong() != nil })
 }

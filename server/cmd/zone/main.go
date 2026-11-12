@@ -1,4 +1,4 @@
-// Comando zone: servidor de jogo do Erevia (uma zona por processo, por enquanto).
+// Comando zone: servidor de jogo do Erevia (API HTTP + WebSocket + uma zona).
 package main
 
 import (
@@ -13,41 +13,94 @@ import (
 	"syscall"
 	"time"
 
-	"erevia/server/internal/db"
+	"erevia/server/internal/api"
 	gamenet "erevia/server/internal/net"
+	"erevia/server/internal/store"
 	"erevia/server/internal/zone"
 )
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	if err := run(log); err != nil {
+		log.Error("fatal", "err", err)
+		os.Exit(1)
+	}
+}
 
-	addr := env("ADDR", ":8080")
-	origins := strings.Split(env("ALLOWED_ORIGINS", "localhost:*,127.0.0.1:*"), ",")
+func run(log *slog.Logger) error {
+	addr := env("ADDR", "")
+	if addr == "" {
+		addr = ":" + env("PORT", "8080") // a Railway define PORT
+	}
+	publicURL := strings.TrimRight(env("PUBLIC_URL", "http://localhost:5173"), "/")
 	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		return errors.New("DATABASE_URL é obrigatória (use `make db-up` localmente)")
+	}
+	origins := strings.Split(env("ALLOWED_ORIGINS", "localhost:*,127.0.0.1:*"), ",")
+	devLogin := os.Getenv("DEV_LOGIN") == "true"
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	if dbURL != "" {
-		pool, err := db.Connect(ctx, dbURL)
-		if err != nil {
-			log.Error("database", "err", err)
-			os.Exit(1)
-		}
-		defer pool.Close()
-		log.Info("postgres connected")
-	} else {
-		log.Warn("DATABASE_URL vazio: rodando sem banco")
+	st, err := store.Open(ctx, dbURL)
+	if err != nil {
+		return err
 	}
+	defer st.Close()
+	log.Info("postgres ready (migrations applied)")
 
-	z := zone.New(zone.DefaultConfig(), log.With("zone", "starter"))
-	go z.Run(ctx)
+	cfg := api.Config{PublicURL: publicURL, DevLogin: devLogin}
+	if id, secret := os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"); id != "" && secret != "" {
+		cfg.Google = api.NewGoogle(id, secret, publicURL)
+	}
+	if id, secret := os.Getenv("DISCORD_CLIENT_ID"), os.Getenv("DISCORD_CLIENT_SECRET"); id != "" && secret != "" {
+		cfg.Discord = api.NewDiscord(id, secret, publicURL)
+	}
+	if devLogin {
+		log.Warn("DEV_LOGIN ativo: qualquer um entra sem senha. Nunca use em produção.")
+	}
+	log.Info("auth providers", "google", cfg.Google != nil, "discord", cfg.Discord != nil, "dev", devLogin)
+	httpAPI := api.New(st, cfg, log)
+
+	// Persistência: a zona entrega posições por canal; esta goroutine grava em lote.
+	saves := make(chan []zone.SavedPosition, 1024)
+	persistDone := make(chan struct{})
+	go func() {
+		defer close(persistDone)
+		for batch := range saves {
+			positions := make([]store.Position, len(batch))
+			for i, p := range batch {
+				positions[i] = store.Position{CharacterID: int64(p.ID), X: p.X, Z: p.Z}
+			}
+			sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if err := st.SavePositions(sctx, positions); err != nil {
+				log.Error("save positions", "err", err, "count", len(positions))
+			}
+			cancel()
+		}
+	}()
+
+	z := zone.New(zone.DefaultConfig(), log.With("zone", "starter"), saves)
+	zoneDone := make(chan struct{})
+	go func() { z.Run(ctx); close(zoneDone) }()
 
 	mux := http.NewServeMux()
-	mux.Handle("/ws", gamenet.NewServer(z, log, origins))
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+	httpAPI.Register(mux)
+	mux.Handle("/ws", gamenet.NewServer(z, &wsBackend{api: httpAPI, store: st}, log, origins))
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		pctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := st.Ping(pctx); err != nil {
+			http.Error(w, "db down", http.StatusServiceUnavailable)
+			return
+		}
 		w.Write([]byte("ok"))
 	})
+	if dir := os.Getenv("STATIC_DIR"); dir != "" {
+		mux.Handle("/", staticHandler(dir))
+		log.Info("serving client", "dir", dir)
+	}
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -56,7 +109,6 @@ func main() {
 		// Conexões WebSocket herdam ctx e são encerradas no SIGINT.
 		BaseContext: func(stdnet.Listener) context.Context { return ctx },
 	}
-
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -64,12 +116,39 @@ func main() {
 		srv.Shutdown(shutdownCtx)
 	}()
 
-	log.Info("listening", "addr", addr)
+	log.Info("listening", "addr", addr, "public_url", publicURL)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Error("http", "err", err)
-		os.Exit(1)
+		return err
+	}
+
+	// Espera a zona salvar todo mundo e a persistência terminar de gravar.
+	<-zoneDone
+	select {
+	case <-persistDone:
+	case <-time.After(10 * time.Second):
+		log.Warn("persistence did not finish in time")
 	}
 	log.Info("bye")
+	return nil
+}
+
+// wsBackend liga o WebSocket à sessão HTTP e ao banco.
+type wsBackend struct {
+	api   *api.API
+	store *store.Store
+}
+
+func (b *wsBackend) Authenticate(r *http.Request) (int64, error) { return b.api.Authenticate(r) }
+
+func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint32) (gamenet.Character, error) {
+	c, err := b.store.CharacterForAccount(ctx, accountID, int64(id))
+	if errors.Is(err, store.ErrNotFound) {
+		return gamenet.Character{}, gamenet.ErrCharacterNotFound
+	}
+	if err != nil {
+		return gamenet.Character{}, err
+	}
+	return gamenet.Character{ID: uint32(c.ID), Name: c.Name, Class: c.Class, X: c.X, Z: c.Z}, nil
 }
 
 func env(key, def string) string {

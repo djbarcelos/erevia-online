@@ -2,15 +2,15 @@
 // @generated from file erevia/v1/game.proto (package erevia.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file erevia/v1/game.proto.
  */
 export const file_erevia_v1_game: GenFile = /*@__PURE__*/
-  fileDesc("ChRlcmV2aWEvdjEvZ2FtZS5wcm90bxIJZXJldmlhLnYxIn4KDUNsaWVudE1lc3NhZ2USHwoEam9pbhgBIAEoCzIPLmVyZXZpYS52MS5Kb2luSAASJAoHbW92ZV90bxgCIAEoCzIRLmVyZXZpYS52MS5Nb3ZlVG9IABIfCgRwaW5nGAMgASgLMg8uZXJldmlhLnYxLlBpbmdIAEIFCgNtc2ciFAoESm9pbhIMCgRuYW1lGAEgASgJIh4KBk1vdmVUbxIJCgF4GAEgASgCEgkKAXoYAiABKAIiGwoEUGluZxITCgtjbGllbnRfdGltZRgBIAEoASLRAQoNU2VydmVyTWVzc2FnZRIlCgd3ZWxjb21lGAEgASgLMhIuZXJldmlhLnYxLldlbGNvbWVIABIhCgVzcGF3bhgCIAEoCzIQLmVyZXZpYS52MS5TcGF3bkgAEiUKB2Rlc3Bhd24YAyABKAsyEi5lcmV2aWEudjEuRGVzcGF3bkgAEicKCHNuYXBzaG90GAQgASgLMhMuZXJldmlhLnYxLlNuYXBzaG90SAASHwoEcG9uZxgFIAEoCzIPLmVyZXZpYS52MS5Qb25nSABCBQoDbXNnImUKB1dlbGNvbWUSDwoHeW91cl9pZBgBIAEoDRIRCgl0aWNrX3JhdGUYAiABKA0SEQoJem9uZV9zaXplGAMgASgCEiMKCGVudGl0aWVzGAQgAygLMhEuZXJldmlhLnYxLkVudGl0eSIqCgVTcGF3bhIhCgZlbnRpdHkYASABKAsyES5lcmV2aWEudjEuRW50aXR5IhUKB0Rlc3Bhd24SCgoCaWQYASABKA0iQAoIU25hcHNob3QSDAoEdGljaxgBIAEoDRImCgZzdGF0ZXMYAiADKAsyFi5lcmV2aWEudjEuRW50aXR5U3RhdGUiGwoEUG9uZxITCgtjbGllbnRfdGltZRgBIAEoASJrCgZFbnRpdHkSCgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRIJCgF4GAMgASgCEgkKAXoYBCABKAISEAoIdGFyZ2V0X3gYBSABKAISEAoIdGFyZ2V0X3oYBiABKAISDQoFc3BlZWQYByABKAIiUwoLRW50aXR5U3RhdGUSCgoCaWQYASABKA0SCQoBeBgCIAEoAhIJCgF6GAMgASgCEhAKCHRhcmdldF94GAQgASgCEhAKCHRhcmdldF96GAUgASgCQh5aHGVyZXZpYS9zZXJ2ZXIvaW50ZXJuYWwvcGI7cGJiBnByb3RvMw");
+  fileDesc("ChRlcmV2aWEvdjEvZ2FtZS5wcm90bxIJZXJldmlhLnYxIqgBCg1DbGllbnRNZXNzYWdlEh8KBGpvaW4YASABKAsyDy5lcmV2aWEudjEuSm9pbkgAEiQKB21vdmVfdG8YAiABKAsyES5lcmV2aWEudjEuTW92ZVRvSAASHwoEcGluZxgDIAEoCzIPLmVyZXZpYS52MS5QaW5nSAASKAoJY2hhdF9zZW5kGAQgASgLMhMuZXJldmlhLnYxLkNoYXRTZW5kSABCBQoDbXNnIhwKBEpvaW4SFAoMY2hhcmFjdGVyX2lkGAEgASgNIh4KBk1vdmVUbxIJCgF4GAEgASgCEgkKAXoYAiABKAIiGwoEUGluZxITCgtjbGllbnRfdGltZRgBIAEoASIkCghDaGF0U2VuZBIMCgR0ZXh0GAEgASgJEgoKAnRvGAIgASgJIp4CCg1TZXJ2ZXJNZXNzYWdlEiUKB3dlbGNvbWUYASABKAsyEi5lcmV2aWEudjEuV2VsY29tZUgAEiEKBXNwYXduGAIgASgLMhAuZXJldmlhLnYxLlNwYXduSAASJQoHZGVzcGF3bhgDIAEoCzISLmVyZXZpYS52MS5EZXNwYXduSAASJwoIc25hcHNob3QYBCABKAsyEy5lcmV2aWEudjEuU25hcHNob3RIABIfCgRwb25nGAUgASgLMg8uZXJldmlhLnYxLlBvbmdIABImCgRjaGF0GAYgASgLMhYuZXJldmlhLnYxLkNoYXRNZXNzYWdlSAASIwoGa2lja2VkGAcgASgLMhEuZXJldmlhLnYxLktpY2tlZEgAQgUKA21zZyJlCgdXZWxjb21lEg8KB3lvdXJfaWQYASABKA0SEQoJdGlja19yYXRlGAIgASgNEhEKCXpvbmVfc2l6ZRgDIAEoAhIjCghlbnRpdGllcxgEIAMoCzIRLmVyZXZpYS52MS5FbnRpdHkiKgoFU3Bhd24SIQoGZW50aXR5GAEgASgLMhEuZXJldmlhLnYxLkVudGl0eSIVCgdEZXNwYXduEgoKAmlkGAEgASgNIkAKCFNuYXBzaG90EgwKBHRpY2sYASABKA0SJgoGc3RhdGVzGAIgAygLMhYuZXJldmlhLnYxLkVudGl0eVN0YXRlIhsKBFBvbmcSEwoLY2xpZW50X3RpbWUYASABKAEieQoLQ2hhdE1lc3NhZ2USJwoHY2hhbm5lbBgBIAEoDjIWLmVyZXZpYS52MS5DaGF0Q2hhbm5lbBIPCgdmcm9tX2lkGAIgASgNEhEKCWZyb21fbmFtZRgDIAEoCRIPCgd0b19uYW1lGAQgASgJEgwKBHRleHQYBSABKAkiGAoGS2lja2VkEg4KBnJlYXNvbhgBIAEoCSJ6CgZFbnRpdHkSCgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRIJCgF4GAMgASgCEgkKAXoYBCABKAISEAoIdGFyZ2V0X3gYBSABKAISEAoIdGFyZ2V0X3oYBiABKAISDQoFc3BlZWQYByABKAISDQoFY2xhc3MYCCABKAkiUwoLRW50aXR5U3RhdGUSCgoCaWQYASABKA0SCQoBeBgCIAEoAhIJCgF6GAMgASgCEhAKCHRhcmdldF94GAQgASgCEhAKCHRhcmdldF96GAUgASgCKngKC0NoYXRDaGFubmVsEhwKGENIQVRfQ0hBTk5FTF9VTlNQRUNJRklFRBAAEhgKFENIQVRfQ0hBTk5FTF9HRU5FUkFMEAESGAoUQ0hBVF9DSEFOTkVMX1dISVNQRVIQAhIXChNDSEFUX0NIQU5ORUxfU1lTVEVNEANCHlocZXJldmlhL3NlcnZlci9pbnRlcm5hbC9wYjtwYmIGcHJvdG8z");
 
 /**
  * @generated from message erevia.v1.ClientMessage
@@ -37,6 +37,12 @@ export type ClientMessage = Message<"erevia.v1.ClientMessage"> & {
      */
     value: Ping;
     case: "ping";
+  } | {
+    /**
+     * @generated from field: erevia.v1.ChatSend chat_send = 4;
+     */
+    value: ChatSend;
+    case: "chatSend";
   } | { case: undefined; value?: undefined };
 };
 
@@ -48,15 +54,16 @@ export const ClientMessageSchema: GenMessage<ClientMessage> = /*@__PURE__*/
   messageDesc(file_erevia_v1_game, 0);
 
 /**
- * Primeira mensagem após conectar.
+ * Primeira mensagem após conectar. A conta vem do cookie de sessão;
+ * o servidor confere se o personagem pertence a ela.
  *
  * @generated from message erevia.v1.Join
  */
 export type Join = Message<"erevia.v1.Join"> & {
   /**
-   * @generated from field: string name = 1;
+   * @generated from field: uint32 character_id = 1;
    */
-  name: string;
+  characterId: number;
 };
 
 /**
@@ -108,6 +115,30 @@ export const PingSchema: GenMessage<Ping> = /*@__PURE__*/
   messageDesc(file_erevia_v1_game, 3);
 
 /**
+ * Mensagem de chat. "to" vazio = canal geral; preenchido = sussurro para esse nome.
+ *
+ * @generated from message erevia.v1.ChatSend
+ */
+export type ChatSend = Message<"erevia.v1.ChatSend"> & {
+  /**
+   * @generated from field: string text = 1;
+   */
+  text: string;
+
+  /**
+   * @generated from field: string to = 2;
+   */
+  to: string;
+};
+
+/**
+ * Describes the message erevia.v1.ChatSend.
+ * Use `create(ChatSendSchema)` to create a new message.
+ */
+export const ChatSendSchema: GenMessage<ChatSend> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 4);
+
+/**
  * @generated from message erevia.v1.ServerMessage
  */
 export type ServerMessage = Message<"erevia.v1.ServerMessage"> & {
@@ -144,6 +175,18 @@ export type ServerMessage = Message<"erevia.v1.ServerMessage"> & {
      */
     value: Pong;
     case: "pong";
+  } | {
+    /**
+     * @generated from field: erevia.v1.ChatMessage chat = 6;
+     */
+    value: ChatMessage;
+    case: "chat";
+  } | {
+    /**
+     * @generated from field: erevia.v1.Kicked kicked = 7;
+     */
+    value: Kicked;
+    case: "kicked";
   } | { case: undefined; value?: undefined };
 };
 
@@ -152,7 +195,7 @@ export type ServerMessage = Message<"erevia.v1.ServerMessage"> & {
  * Use `create(ServerMessageSchema)` to create a new message.
  */
 export const ServerMessageSchema: GenMessage<ServerMessage> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 4);
+  messageDesc(file_erevia_v1_game, 5);
 
 /**
  * Resposta ao Join: quem você é e quem já está na zona.
@@ -186,7 +229,7 @@ export type Welcome = Message<"erevia.v1.Welcome"> & {
  * Use `create(WelcomeSchema)` to create a new message.
  */
 export const WelcomeSchema: GenMessage<Welcome> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 5);
+  messageDesc(file_erevia_v1_game, 6);
 
 /**
  * @generated from message erevia.v1.Spawn
@@ -203,7 +246,7 @@ export type Spawn = Message<"erevia.v1.Spawn"> & {
  * Use `create(SpawnSchema)` to create a new message.
  */
 export const SpawnSchema: GenMessage<Spawn> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 6);
+  messageDesc(file_erevia_v1_game, 7);
 
 /**
  * @generated from message erevia.v1.Despawn
@@ -220,7 +263,7 @@ export type Despawn = Message<"erevia.v1.Despawn"> & {
  * Use `create(DespawnSchema)` to create a new message.
  */
 export const DespawnSchema: GenMessage<Despawn> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 7);
+  messageDesc(file_erevia_v1_game, 8);
 
 /**
  * Enviado a cada tick, apenas com as entidades que mudaram (delta).
@@ -244,7 +287,7 @@ export type Snapshot = Message<"erevia.v1.Snapshot"> & {
  * Use `create(SnapshotSchema)` to create a new message.
  */
 export const SnapshotSchema: GenMessage<Snapshot> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 8);
+  messageDesc(file_erevia_v1_game, 9);
 
 /**
  * @generated from message erevia.v1.Pong
@@ -261,7 +304,65 @@ export type Pong = Message<"erevia.v1.Pong"> & {
  * Use `create(PongSchema)` to create a new message.
  */
 export const PongSchema: GenMessage<Pong> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 9);
+  messageDesc(file_erevia_v1_game, 10);
+
+/**
+ * @generated from message erevia.v1.ChatMessage
+ */
+export type ChatMessage = Message<"erevia.v1.ChatMessage"> & {
+  /**
+   * @generated from field: erevia.v1.ChatChannel channel = 1;
+   */
+  channel: ChatChannel;
+
+  /**
+   * @generated from field: uint32 from_id = 2;
+   */
+  fromId: number;
+
+  /**
+   * @generated from field: string from_name = 3;
+   */
+  fromName: string;
+
+  /**
+   * só em sussurros
+   *
+   * @generated from field: string to_name = 4;
+   */
+  toName: string;
+
+  /**
+   * @generated from field: string text = 5;
+   */
+  text: string;
+};
+
+/**
+ * Describes the message erevia.v1.ChatMessage.
+ * Use `create(ChatMessageSchema)` to create a new message.
+ */
+export const ChatMessageSchema: GenMessage<ChatMessage> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 11);
+
+/**
+ * O servidor vai encerrar a conexão (ex.: o mesmo personagem entrou em outro lugar).
+ *
+ * @generated from message erevia.v1.Kicked
+ */
+export type Kicked = Message<"erevia.v1.Kicked"> & {
+  /**
+   * @generated from field: string reason = 1;
+   */
+  reason: string;
+};
+
+/**
+ * Describes the message erevia.v1.Kicked.
+ * Use `create(KickedSchema)` to create a new message.
+ */
+export const KickedSchema: GenMessage<Kicked> = /*@__PURE__*/
+  messageDesc(file_erevia_v1_game, 12);
 
 /**
  * @generated from message erevia.v1.Entity
@@ -301,6 +402,13 @@ export type Entity = Message<"erevia.v1.Entity"> & {
    * @generated from field: float speed = 7;
    */
   speed: number;
+
+  /**
+   * knight, barbarian, mage, rogue
+   *
+   * @generated from field: string class = 8;
+   */
+  class: string;
 };
 
 /**
@@ -308,7 +416,7 @@ export type Entity = Message<"erevia.v1.Entity"> & {
  * Use `create(EntitySchema)` to create a new message.
  */
 export const EntitySchema: GenMessage<Entity> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 10);
+  messageDesc(file_erevia_v1_game, 13);
 
 /**
  * @generated from message erevia.v1.EntityState
@@ -345,5 +453,36 @@ export type EntityState = Message<"erevia.v1.EntityState"> & {
  * Use `create(EntityStateSchema)` to create a new message.
  */
 export const EntityStateSchema: GenMessage<EntityState> = /*@__PURE__*/
-  messageDesc(file_erevia_v1_game, 11);
+  messageDesc(file_erevia_v1_game, 14);
+
+/**
+ * @generated from enum erevia.v1.ChatChannel
+ */
+export enum ChatChannel {
+  /**
+   * @generated from enum value: CHAT_CHANNEL_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: CHAT_CHANNEL_GENERAL = 1;
+   */
+  GENERAL = 1,
+
+  /**
+   * @generated from enum value: CHAT_CHANNEL_WHISPER = 2;
+   */
+  WHISPER = 2,
+
+  /**
+   * @generated from enum value: CHAT_CHANNEL_SYSTEM = 3;
+   */
+  SYSTEM = 3,
+}
+
+/**
+ * Describes the enum erevia.v1.ChatChannel.
+ */
+export const ChatChannelSchema: GenEnum<ChatChannel> = /*@__PURE__*/
+  enumDesc(file_erevia_v1_game, 0);
 

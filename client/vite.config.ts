@@ -6,6 +6,7 @@ export default defineConfig({
     proxy: {
       // O navegador fala com o Vite, e o Vite repassa o WebSocket ao servidor Go.
       "/ws": { target: "ws://localhost:8080", ws: true },
+      "/api": { target: "http://localhost:8080" },
     },
   },
   build: {

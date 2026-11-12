@@ -1,15 +1,14 @@
 // Package zone contém a simulação autoritativa de uma zona do mapa.
 //
 // Uma única goroutine (Run) é dona de todo o estado da zona. Conexões falam com ela
-// apenas por canal (Join, Leave, Move), então não há mutex nem condição de corrida.
+// apenas por canal (Join, Leave, Move, Chat), então não há mutex nem condição de corrida.
 package zone
 
 import (
 	"context"
 	"log/slog"
-	"math"
-	"math/rand/v2"
 	"regexp"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -26,15 +25,20 @@ type Peer interface {
 }
 
 type Config struct {
-	Size           float64 // lado do quadrado jogável, em metros
-	TickRate       int     // ticks por segundo
-	Speed          float64 // metros por segundo
-	MaxMovesPerSec float64 // limite de pedidos de movimento por jogador
-	SpawnRadius    float64
+	Size           float64       // lado do quadrado jogável, em metros
+	TickRate       int           // ticks por segundo
+	Speed          float64       // metros por segundo
+	MaxMovesPerSec float64       // limite de pedidos de movimento por jogador
+	ChatPerSec     float64       // mensagens de chat por segundo (reposição)
+	ChatBurst      float64       // rajada máxima de mensagens
+	SaveEvery      time.Duration // intervalo do salvamento periódico de posições
 }
 
 func DefaultConfig() Config {
-	return Config{Size: 200, TickRate: 20, Speed: 5, MaxMovesPerSec: 10, SpawnRadius: 8}
+	return Config{
+		Size: 200, TickRate: 20, Speed: 5, MaxMovesPerSec: 10,
+		ChatPerSec: 1, ChatBurst: 3, SaveEvery: 30 * time.Second,
+	}
 }
 
 var nameRe = regexp.MustCompile(`^[A-Za-z0-9]{3,16}$`)
@@ -42,64 +46,95 @@ var nameRe = regexp.MustCompile(`^[A-Za-z0-9]{3,16}$`)
 // ValidName informa se o nome do personagem é aceito (3–16 letras/números).
 func ValidName(name string) bool { return nameRe.MatchString(name) }
 
+// JoinInfo é o personagem já carregado e validado por quem chama.
+type JoinInfo struct {
+	ID    uint32
+	Name  string
+	Class string
+	X, Z  float64
+	Peer  Peer
+}
+
+// SavedPosition é enviada ao canal de persistência.
+type SavedPosition struct {
+	ID   uint32
+	X, Z float64
+}
+
 type player struct {
 	id      uint32
 	name    string
+	class   string
 	peer    Peer
 	pos     Vec2
 	target  Vec2
 	changed bool // destino mudou neste tick: precisa ir no snapshot mesmo parado
 
 	moveTokens float64 // token bucket para limitar MoveTo
+	chatTokens float64 // token bucket para limitar chat
 }
 
 type event interface{ isEvent() }
 
-type joinEvent struct {
+type joinEvent struct{ info JoinInfo }
+type leaveEvent struct {
 	id   uint32
-	name string
-	peer Peer
+	peer Peer // só remove se ainda for a mesma conexão (evita derrubar um relogin)
 }
-type leaveEvent struct{ id uint32 }
 type moveEvent struct {
 	id   uint32
 	x, z float64
+}
+type chatEvent struct {
+	id       uint32
+	text, to string
 }
 
 func (joinEvent) isEvent()  {}
 func (leaveEvent) isEvent() {}
 func (moveEvent) isEvent()  {}
+func (chatEvent) isEvent()  {}
 
 type Zone struct {
 	cfg     Config
 	log     *slog.Logger
 	events  chan event
 	players map[uint32]*player
+	byName  map[string]uint32 // nome em minúsculas → id
 	tick    uint32
+	saves   chan<- []SavedPosition
 }
 
-func New(cfg Config, log *slog.Logger) *Zone {
+// New cria a zona. saves pode ser nil (sem persistência, ex.: testes).
+func New(cfg Config, log *slog.Logger, saves chan<- []SavedPosition) *Zone {
 	return &Zone{
 		cfg:     cfg,
 		log:     log,
 		events:  make(chan event, 4096),
 		players: make(map[uint32]*player),
+		byName:  make(map[string]uint32),
+		saves:   saves,
 	}
 }
 
-// Join coloca um jogador na zona. O id é gerado por quem chama (único no processo).
-func (z *Zone) Join(ctx context.Context, id uint32, name string, peer Peer) {
-	z.post(ctx, joinEvent{id: id, name: name, peer: peer})
+// Join coloca o personagem na zona. Se ele já estiver online, a conexão antiga cai.
+func (z *Zone) Join(ctx context.Context, info JoinInfo) {
+	z.post(ctx, joinEvent{info: info})
 }
 
-// Leave remove o jogador. Chamar para um id que já saiu não tem efeito.
-func (z *Zone) Leave(ctx context.Context, id uint32) {
-	z.post(ctx, leaveEvent{id: id})
+// Leave remove o jogador se peer ainda for a conexão dele. Repetir não tem efeito.
+func (z *Zone) Leave(ctx context.Context, id uint32, peer Peer) {
+	z.post(ctx, leaveEvent{id: id, peer: peer})
 }
 
 // Move registra o pedido do jogador de andar até (x, z). A zona valida.
 func (z *Zone) Move(ctx context.Context, id uint32, x, z2 float64) {
 	z.post(ctx, moveEvent{id: id, x: x, z: z2})
+}
+
+// Chat envia uma mensagem: geral se to == "", sussurro caso contrário.
+func (z *Zone) Chat(ctx context.Context, id uint32, text, to string) {
+	z.post(ctx, chatEvent{id: id, text: text, to: to})
 }
 
 func (z *Zone) post(ctx context.Context, e event) {
@@ -109,20 +144,29 @@ func (z *Zone) post(ctx context.Context, e event) {
 	}
 }
 
-// Run executa o loop da zona até ctx ser cancelado.
+// Run executa o loop da zona até ctx ser cancelado. Ao terminar, salva todas as
+// posições e fecha o canal de persistência.
 func (z *Zone) Run(ctx context.Context) {
 	dt := time.Second / time.Duration(z.cfg.TickRate)
 	ticker := time.NewTicker(dt)
 	defer ticker.Stop()
+	saveTicker := time.NewTicker(z.cfg.SaveEvery)
+	defer saveTicker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
+			z.saveAll(true)
+			if z.saves != nil {
+				close(z.saves)
+			}
 			return
 		case e := <-z.events:
 			z.handle(e)
 		case <-ticker.C:
 			z.update(dt.Seconds())
+		case <-saveTicker.C:
+			z.saveAll(false)
 		}
 	}
 }
@@ -130,25 +174,37 @@ func (z *Zone) Run(ctx context.Context) {
 func (z *Zone) handle(e event) {
 	switch e := e.(type) {
 	case joinEvent:
-		z.onJoin(e)
+		z.onJoin(e.info)
 	case leaveEvent:
-		z.removePlayer(e.id)
+		if p, ok := z.players[e.id]; ok && p.peer == e.peer {
+			z.removePlayer(e.id)
+		}
 	case moveEvent:
 		z.onMove(e)
+	case chatEvent:
+		z.onChat(e)
 	}
 }
 
-func (z *Zone) onJoin(e joinEvent) {
-	angle := rand.Float64() * 2 * math.Pi
-	r := rand.Float64() * z.cfg.SpawnRadius
-	pos := Vec2{X: r * math.Cos(angle), Z: r * math.Sin(angle)}
+func (z *Zone) onJoin(info JoinInfo) {
+	// Mesmo personagem conectado em outro lugar: derruba a sessão antiga.
+	if old, ok := z.players[info.ID]; ok {
+		z.sendTo(old, &pb.ServerMessage{Msg: &pb.ServerMessage_Kicked{Kicked: &pb.Kicked{
+			Reason: "Este personagem entrou em outro lugar.",
+		}}})
+		old.peer.Close("relogin")
+		z.removePlayer(info.ID)
+	}
 
+	pos := clampToZone(Vec2{X: info.X, Z: info.Z}, z.cfg.Size/2)
 	p := &player{
-		id: e.id, name: e.name, peer: e.peer,
+		id: info.ID, name: info.Name, class: info.Class, peer: info.Peer,
 		pos: pos, target: pos,
 		moveTokens: z.cfg.MaxMovesPerSec,
+		chatTokens: z.cfg.ChatBurst,
 	}
 	z.players[p.id] = p
+	z.byName[strings.ToLower(p.name)] = p.id
 
 	// Avisa os outros que alguém chegou.
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entity(p)}}}, p.id)
@@ -181,12 +237,60 @@ func (z *Zone) onMove(e moveEvent) {
 	p.changed = true
 }
 
+func (z *Zone) onChat(e chatEvent) {
+	p, ok := z.players[e.id]
+	if !ok {
+		return
+	}
+	text := SanitizeChat(e.text)
+	if text == "" {
+		return
+	}
+	if p.chatTokens < 1 {
+		z.system(p, "Calma! Você está enviando mensagens rápido demais.")
+		return
+	}
+	p.chatTokens--
+
+	to := strings.TrimSpace(e.to)
+	if to == "" {
+		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
+			Channel: pb.ChatChannel_CHAT_CHANNEL_GENERAL, FromId: p.id, FromName: p.name, Text: text,
+		}}}, 0)
+		return
+	}
+
+	targetID, ok := z.byName[strings.ToLower(to)]
+	if !ok {
+		z.system(p, to+" não está online.")
+		return
+	}
+	target := z.players[targetID]
+	msg := &pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
+		Channel: pb.ChatChannel_CHAT_CHANNEL_WHISPER, FromId: p.id, FromName: p.name, ToName: target.name, Text: text,
+	}}}
+	z.sendTo(target, msg)
+	if target.id != p.id {
+		z.sendTo(p, msg) // eco para quem enviou
+	}
+}
+
+func (z *Zone) system(p *player, text string) {
+	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
+		Channel: pb.ChatChannel_CHAT_CHANNEL_SYSTEM, Text: text,
+	}}})
+}
+
 func (z *Zone) removePlayer(id uint32) {
 	p, ok := z.players[id]
 	if !ok {
 		return
 	}
 	delete(z.players, id)
+	if z.byName[strings.ToLower(p.name)] == id {
+		delete(z.byName, strings.ToLower(p.name))
+	}
+	z.save([]SavedPosition{{ID: p.id, X: p.pos.X, Z: p.pos.Z}}, false)
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: id}}}, 0)
 	z.log.Info("player left", "id", id, "name", p.name, "online", len(z.players))
 }
@@ -198,6 +302,7 @@ func (z *Zone) update(dt float64) {
 
 	for _, p := range z.players {
 		p.moveTokens = min(z.cfg.MaxMovesPerSec, p.moveTokens+z.cfg.MaxMovesPerSec*dt)
+		p.chatTokens = min(z.cfg.ChatBurst, p.chatTokens+z.cfg.ChatPerSec*dt)
 
 		newPos, moved := step(p.pos, p.target, z.cfg.Speed*dt)
 		if moved || p.changed {
@@ -219,9 +324,37 @@ func (z *Zone) update(dt float64) {
 	}}}, 0)
 }
 
+func (z *Zone) saveAll(blocking bool) {
+	if len(z.players) == 0 {
+		return
+	}
+	batch := make([]SavedPosition, 0, len(z.players))
+	for _, p := range z.players {
+		batch = append(batch, SavedPosition{ID: p.id, X: p.pos.X, Z: p.pos.Z})
+	}
+	z.save(batch, blocking)
+}
+
+// save entrega posições à goroutine de persistência. Fora do desligamento nunca
+// bloqueia: se o canal estiver cheio, o próximo salvamento periódico cobre.
+func (z *Zone) save(batch []SavedPosition, blocking bool) {
+	if z.saves == nil {
+		return
+	}
+	if blocking {
+		z.saves <- batch
+		return
+	}
+	select {
+	case z.saves <- batch:
+	default:
+		z.log.Warn("save queue full, dropping batch", "size", len(batch))
+	}
+}
+
 func (z *Zone) entity(p *player) *pb.Entity {
 	return &pb.Entity{
-		Id: p.id, Name: p.name,
+		Id: p.id, Name: p.name, Class: p.class,
 		X: float32(p.pos.X), Z: float32(p.pos.Z),
 		TargetX: float32(p.target.X), TargetZ: float32(p.target.Z),
 		Speed: float32(z.cfg.Speed),

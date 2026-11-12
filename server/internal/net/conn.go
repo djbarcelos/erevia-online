@@ -9,7 +9,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -27,20 +26,43 @@ const (
 	writeTimeout    = 5 * time.Second
 )
 
+// Character é o que o backend devolve ao carregar um personagem para entrar no jogo.
+type Character struct {
+	ID    uint32
+	Name  string
+	Class string
+	X, Z  float64
+}
+
+// ErrCharacterNotFound indica personagem inexistente ou de outra conta.
+var ErrCharacterNotFound = errors.New("character not found")
+
+// Backend autentica a conexão e carrega personagens (implementado com o store).
+type Backend interface {
+	Authenticate(r *http.Request) (accountID int64, err error)
+	LoadCharacter(ctx context.Context, accountID int64, characterID uint32) (Character, error)
+}
+
 type Server struct {
 	zone           *zone.Zone
+	backend        Backend
 	log            *slog.Logger
 	originPatterns []string
-	nextID         atomic.Uint32
 }
 
 // NewServer cria o handler de WebSocket. originPatterns segue o formato do
-// coder/websocket (ex.: "localhost:*").
-func NewServer(z *zone.Zone, log *slog.Logger, originPatterns []string) *Server {
-	return &Server{zone: z, log: log, originPatterns: originPatterns}
+// coder/websocket (ex.: "localhost:*"); requisições da mesma origem sempre passam.
+func NewServer(z *zone.Zone, backend Backend, log *slog.Logger, originPatterns []string) *Server {
+	return &Server{zone: z, backend: backend, log: log, originPatterns: originPatterns}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	accountID, err := s.backend.Authenticate(r)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: s.originPatterns})
 	if err != nil {
 		s.log.Warn("ws accept", "err", err, "remote", r.RemoteAddr)
@@ -51,62 +73,74 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	sess := &session{conn: c, send: make(chan []byte, sendQueueSize), cancel: cancel}
-
-	name, err := readJoin(ctx, c)
+	characterID, err := readJoin(ctx, c)
 	if err != nil {
-		s.log.Info("join rejected", "err", err, "remote", r.RemoteAddr)
+		s.log.Info("join rejected", "err", err, "account", accountID)
 		c.Close(websocket.StatusPolicyViolation, err.Error())
 		return
 	}
+	char, err := s.backend.LoadCharacter(ctx, accountID, characterID)
+	if err != nil {
+		reason := "erro ao carregar personagem"
+		if errors.Is(err, ErrCharacterNotFound) {
+			reason = "personagem inválido"
+		} else {
+			s.log.Error("load character", "err", err)
+		}
+		c.Close(websocket.StatusPolicyViolation, reason)
+		return
+	}
 
-	id := s.nextID.Add(1)
+	sess := &session{
+		conn: c, send: make(chan []byte, sendQueueSize),
+		closing: make(chan string, 1), cancel: cancel,
+	}
 	go sess.writePump(ctx)
-	s.zone.Join(ctx, id, name, sess)
+	s.zone.Join(ctx, zone.JoinInfo{
+		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z, Peer: sess,
+	})
 
-	s.readPump(ctx, sess, id)
+	s.readPump(ctx, sess, char.ID)
 
 	// Usa um contexto novo: ctx pode já estar cancelado, e a zona precisa saber da saída.
 	leaveCtx, leaveCancel := context.WithTimeout(context.Background(), time.Second)
-	s.zone.Leave(leaveCtx, id)
+	s.zone.Leave(leaveCtx, char.ID, sess)
 	leaveCancel()
 
+	cancel()
 	c.Close(websocket.StatusNormalClosure, "")
 }
 
-func readJoin(ctx context.Context, c *websocket.Conn) (string, error) {
+func readJoin(ctx context.Context, c *websocket.Conn) (uint32, error) {
 	rctx, cancel := context.WithTimeout(ctx, joinTimeout)
 	defer cancel()
 
 	typ, data, err := c.Read(rctx)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 	if typ != websocket.MessageBinary {
-		return "", errors.New("expected binary message")
+		return 0, errors.New("expected binary message")
 	}
 	var msg pb.ClientMessage
 	if err := proto.Unmarshal(data, &msg); err != nil {
-		return "", errors.New("invalid message")
+		return 0, errors.New("invalid message")
 	}
 	join := msg.GetJoin()
-	if join == nil {
-		return "", errors.New("first message must be Join")
+	if join == nil || join.CharacterId == 0 {
+		return 0, errors.New("first message must be Join")
 	}
-	if !zone.ValidName(join.Name) {
-		return "", errors.New("invalid name")
-	}
-	return join.Name, nil
+	return join.CharacterId, nil
 }
 
-func (s *Server) readPump(ctx context.Context, sess *session, id uint32) error {
+func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 	var msg pb.ClientMessage
 	for {
 		rctx, cancel := context.WithTimeout(ctx, idleTimeout)
 		typ, data, err := sess.conn.Read(rctx)
 		cancel()
 		if err != nil {
-			return err
+			return
 		}
 		if typ != websocket.MessageBinary {
 			continue
@@ -119,6 +153,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) error {
 		switch m := msg.Msg.(type) {
 		case *pb.ClientMessage_MoveTo:
 			s.zone.Move(ctx, id, float64(m.MoveTo.X), float64(m.MoveTo.Z))
+		case *pb.ClientMessage_ChatSend:
+			s.zone.Chat(ctx, id, m.ChatSend.Text, m.ChatSend.To)
 		case *pb.ClientMessage_Ping:
 			// Respondido aqui mesmo, sem passar pela zona, para medir só a rede.
 			pong, _ := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Pong{
@@ -131,9 +167,10 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) error {
 
 // session implementa zone.Peer.
 type session struct {
-	conn   *websocket.Conn
-	send   chan []byte
-	cancel context.CancelFunc
+	conn    *websocket.Conn
+	send    chan []byte
+	closing chan string
+	cancel  context.CancelFunc
 }
 
 func (s *session) Send(msg []byte) bool {
@@ -145,14 +182,24 @@ func (s *session) Send(msg []byte) bool {
 	}
 }
 
+// Close pede ao writePump que envie o que está na fila (ex.: Kicked) e feche o
+// socket com o motivo. Fechar o socket faz o readPump terminar.
 func (s *session) Close(reason string) {
-	s.cancel() // readPump e writePump terminam; o handler fecha o socket
+	select {
+	case s.closing <- reason:
+	default: // já está fechando
+	}
 }
 
 func (s *session) writePump(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case reason := <-s.closing:
+			s.flush(500 * time.Millisecond)
+			s.conn.Close(websocket.StatusPolicyViolation, reason)
+			s.cancel()
 			return
 		case msg := <-s.send:
 			wctx, cancel := context.WithTimeout(ctx, writeTimeout)
@@ -162,6 +209,22 @@ func (s *session) writePump(ctx context.Context) {
 				s.cancel()
 				return
 			}
+		}
+	}
+}
+
+// flush envia o que sobrou na fila, com prazo total curto.
+func (s *session) flush(limit time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), limit)
+	defer cancel()
+	for {
+		select {
+		case msg := <-s.send:
+			if s.conn.Write(ctx, websocket.MessageBinary, msg) != nil {
+				return
+			}
+		default:
+			return
 		}
 	}
 }

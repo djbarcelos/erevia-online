@@ -21,6 +21,58 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ChatChannel int32
+
+const (
+	ChatChannel_CHAT_CHANNEL_UNSPECIFIED ChatChannel = 0
+	ChatChannel_CHAT_CHANNEL_GENERAL     ChatChannel = 1
+	ChatChannel_CHAT_CHANNEL_WHISPER     ChatChannel = 2
+	ChatChannel_CHAT_CHANNEL_SYSTEM      ChatChannel = 3
+)
+
+// Enum value maps for ChatChannel.
+var (
+	ChatChannel_name = map[int32]string{
+		0: "CHAT_CHANNEL_UNSPECIFIED",
+		1: "CHAT_CHANNEL_GENERAL",
+		2: "CHAT_CHANNEL_WHISPER",
+		3: "CHAT_CHANNEL_SYSTEM",
+	}
+	ChatChannel_value = map[string]int32{
+		"CHAT_CHANNEL_UNSPECIFIED": 0,
+		"CHAT_CHANNEL_GENERAL":     1,
+		"CHAT_CHANNEL_WHISPER":     2,
+		"CHAT_CHANNEL_SYSTEM":      3,
+	}
+)
+
+func (x ChatChannel) Enum() *ChatChannel {
+	p := new(ChatChannel)
+	*p = x
+	return p
+}
+
+func (x ChatChannel) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ChatChannel) Descriptor() protoreflect.EnumDescriptor {
+	return file_erevia_v1_game_proto_enumTypes[0].Descriptor()
+}
+
+func (ChatChannel) Type() protoreflect.EnumType {
+	return &file_erevia_v1_game_proto_enumTypes[0]
+}
+
+func (x ChatChannel) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ChatChannel.Descriptor instead.
+func (ChatChannel) EnumDescriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{0}
+}
+
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Msg:
@@ -28,6 +80,7 @@ type ClientMessage struct {
 	//	*ClientMessage_Join
 	//	*ClientMessage_MoveTo
 	//	*ClientMessage_Ping
+	//	*ClientMessage_ChatSend
 	Msg           isClientMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -97,6 +150,15 @@ func (x *ClientMessage) GetPing() *Ping {
 	return nil
 }
 
+func (x *ClientMessage) GetChatSend() *ChatSend {
+	if x != nil {
+		if x, ok := x.Msg.(*ClientMessage_ChatSend); ok {
+			return x.ChatSend
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Msg interface {
 	isClientMessage_Msg()
 }
@@ -113,16 +175,23 @@ type ClientMessage_Ping struct {
 	Ping *Ping `protobuf:"bytes,3,opt,name=ping,proto3,oneof"`
 }
 
+type ClientMessage_ChatSend struct {
+	ChatSend *ChatSend `protobuf:"bytes,4,opt,name=chat_send,json=chatSend,proto3,oneof"`
+}
+
 func (*ClientMessage_Join) isClientMessage_Msg() {}
 
 func (*ClientMessage_MoveTo) isClientMessage_Msg() {}
 
 func (*ClientMessage_Ping) isClientMessage_Msg() {}
 
-// Primeira mensagem após conectar.
+func (*ClientMessage_ChatSend) isClientMessage_Msg() {}
+
+// Primeira mensagem após conectar. A conta vem do cookie de sessão;
+// o servidor confere se o personagem pertence a ela.
 type Join struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	CharacterId   uint32                 `protobuf:"varint,1,opt,name=character_id,json=characterId,proto3" json:"character_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -157,11 +226,11 @@ func (*Join) Descriptor() ([]byte, []int) {
 	return file_erevia_v1_game_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *Join) GetName() string {
+func (x *Join) GetCharacterId() uint32 {
 	if x != nil {
-		return x.Name
+		return x.CharacterId
 	}
-	return ""
+	return 0
 }
 
 // Pedido para andar até um ponto do chão. O servidor valida.
@@ -261,6 +330,59 @@ func (x *Ping) GetClientTime() float64 {
 	return 0
 }
 
+// Mensagem de chat. "to" vazio = canal geral; preenchido = sussurro para esse nome.
+type ChatSend struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	To            string                 `protobuf:"bytes,2,opt,name=to,proto3" json:"to,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChatSend) Reset() {
+	*x = ChatSend{}
+	mi := &file_erevia_v1_game_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChatSend) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatSend) ProtoMessage() {}
+
+func (x *ChatSend) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatSend.ProtoReflect.Descriptor instead.
+func (*ChatSend) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ChatSend) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *ChatSend) GetTo() string {
+	if x != nil {
+		return x.To
+	}
+	return ""
+}
+
 type ServerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Msg:
@@ -270,6 +392,8 @@ type ServerMessage struct {
 	//	*ServerMessage_Despawn
 	//	*ServerMessage_Snapshot
 	//	*ServerMessage_Pong
+	//	*ServerMessage_Chat
+	//	*ServerMessage_Kicked
 	Msg           isServerMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -277,7 +401,7 @@ type ServerMessage struct {
 
 func (x *ServerMessage) Reset() {
 	*x = ServerMessage{}
-	mi := &file_erevia_v1_game_proto_msgTypes[4]
+	mi := &file_erevia_v1_game_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -289,7 +413,7 @@ func (x *ServerMessage) String() string {
 func (*ServerMessage) ProtoMessage() {}
 
 func (x *ServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[4]
+	mi := &file_erevia_v1_game_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -302,7 +426,7 @@ func (x *ServerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerMessage.ProtoReflect.Descriptor instead.
 func (*ServerMessage) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{4}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ServerMessage) GetMsg() isServerMessage_Msg {
@@ -357,6 +481,24 @@ func (x *ServerMessage) GetPong() *Pong {
 	return nil
 }
 
+func (x *ServerMessage) GetChat() *ChatMessage {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerMessage_Chat); ok {
+			return x.Chat
+		}
+	}
+	return nil
+}
+
+func (x *ServerMessage) GetKicked() *Kicked {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerMessage_Kicked); ok {
+			return x.Kicked
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Msg interface {
 	isServerMessage_Msg()
 }
@@ -381,6 +523,14 @@ type ServerMessage_Pong struct {
 	Pong *Pong `protobuf:"bytes,5,opt,name=pong,proto3,oneof"`
 }
 
+type ServerMessage_Chat struct {
+	Chat *ChatMessage `protobuf:"bytes,6,opt,name=chat,proto3,oneof"`
+}
+
+type ServerMessage_Kicked struct {
+	Kicked *Kicked `protobuf:"bytes,7,opt,name=kicked,proto3,oneof"`
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Msg() {}
 
 func (*ServerMessage_Spawn) isServerMessage_Msg() {}
@@ -390,6 +540,10 @@ func (*ServerMessage_Despawn) isServerMessage_Msg() {}
 func (*ServerMessage_Snapshot) isServerMessage_Msg() {}
 
 func (*ServerMessage_Pong) isServerMessage_Msg() {}
+
+func (*ServerMessage_Chat) isServerMessage_Msg() {}
+
+func (*ServerMessage_Kicked) isServerMessage_Msg() {}
 
 // Resposta ao Join: quem você é e quem já está na zona.
 type Welcome struct {
@@ -404,7 +558,7 @@ type Welcome struct {
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_erevia_v1_game_proto_msgTypes[5]
+	mi := &file_erevia_v1_game_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -416,7 +570,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[5]
+	mi := &file_erevia_v1_game_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -429,7 +583,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{5}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Welcome) GetYourId() uint32 {
@@ -469,7 +623,7 @@ type Spawn struct {
 
 func (x *Spawn) Reset() {
 	*x = Spawn{}
-	mi := &file_erevia_v1_game_proto_msgTypes[6]
+	mi := &file_erevia_v1_game_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -481,7 +635,7 @@ func (x *Spawn) String() string {
 func (*Spawn) ProtoMessage() {}
 
 func (x *Spawn) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[6]
+	mi := &file_erevia_v1_game_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -494,7 +648,7 @@ func (x *Spawn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Spawn.ProtoReflect.Descriptor instead.
 func (*Spawn) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{6}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Spawn) GetEntity() *Entity {
@@ -513,7 +667,7 @@ type Despawn struct {
 
 func (x *Despawn) Reset() {
 	*x = Despawn{}
-	mi := &file_erevia_v1_game_proto_msgTypes[7]
+	mi := &file_erevia_v1_game_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -525,7 +679,7 @@ func (x *Despawn) String() string {
 func (*Despawn) ProtoMessage() {}
 
 func (x *Despawn) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[7]
+	mi := &file_erevia_v1_game_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -538,7 +692,7 @@ func (x *Despawn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Despawn.ProtoReflect.Descriptor instead.
 func (*Despawn) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{7}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Despawn) GetId() uint32 {
@@ -559,7 +713,7 @@ type Snapshot struct {
 
 func (x *Snapshot) Reset() {
 	*x = Snapshot{}
-	mi := &file_erevia_v1_game_proto_msgTypes[8]
+	mi := &file_erevia_v1_game_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +725,7 @@ func (x *Snapshot) String() string {
 func (*Snapshot) ProtoMessage() {}
 
 func (x *Snapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[8]
+	mi := &file_erevia_v1_game_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +738,7 @@ func (x *Snapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Snapshot.ProtoReflect.Descriptor instead.
 func (*Snapshot) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{8}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Snapshot) GetTick() uint32 {
@@ -610,7 +764,7 @@ type Pong struct {
 
 func (x *Pong) Reset() {
 	*x = Pong{}
-	mi := &file_erevia_v1_game_proto_msgTypes[9]
+	mi := &file_erevia_v1_game_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -622,7 +776,7 @@ func (x *Pong) String() string {
 func (*Pong) ProtoMessage() {}
 
 func (x *Pong) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[9]
+	mi := &file_erevia_v1_game_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -635,7 +789,7 @@ func (x *Pong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pong.ProtoReflect.Descriptor instead.
 func (*Pong) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{9}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Pong) GetClientTime() float64 {
@@ -643,6 +797,127 @@ func (x *Pong) GetClientTime() float64 {
 		return x.ClientTime
 	}
 	return 0
+}
+
+type ChatMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Channel       ChatChannel            `protobuf:"varint,1,opt,name=channel,proto3,enum=erevia.v1.ChatChannel" json:"channel,omitempty"`
+	FromId        uint32                 `protobuf:"varint,2,opt,name=from_id,json=fromId,proto3" json:"from_id,omitempty"`
+	FromName      string                 `protobuf:"bytes,3,opt,name=from_name,json=fromName,proto3" json:"from_name,omitempty"`
+	ToName        string                 `protobuf:"bytes,4,opt,name=to_name,json=toName,proto3" json:"to_name,omitempty"` // só em sussurros
+	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChatMessage) Reset() {
+	*x = ChatMessage{}
+	mi := &file_erevia_v1_game_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChatMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatMessage) ProtoMessage() {}
+
+func (x *ChatMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatMessage.ProtoReflect.Descriptor instead.
+func (*ChatMessage) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ChatMessage) GetChannel() ChatChannel {
+	if x != nil {
+		return x.Channel
+	}
+	return ChatChannel_CHAT_CHANNEL_UNSPECIFIED
+}
+
+func (x *ChatMessage) GetFromId() uint32 {
+	if x != nil {
+		return x.FromId
+	}
+	return 0
+}
+
+func (x *ChatMessage) GetFromName() string {
+	if x != nil {
+		return x.FromName
+	}
+	return ""
+}
+
+func (x *ChatMessage) GetToName() string {
+	if x != nil {
+		return x.ToName
+	}
+	return ""
+}
+
+func (x *ChatMessage) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+// O servidor vai encerrar a conexão (ex.: o mesmo personagem entrou em outro lugar).
+type Kicked struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Kicked) Reset() {
+	*x = Kicked{}
+	mi := &file_erevia_v1_game_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Kicked) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Kicked) ProtoMessage() {}
+
+func (x *Kicked) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Kicked.ProtoReflect.Descriptor instead.
+func (*Kicked) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *Kicked) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
 }
 
 type Entity struct {
@@ -654,13 +929,14 @@ type Entity struct {
 	TargetX       float32                `protobuf:"fixed32,5,opt,name=target_x,json=targetX,proto3" json:"target_x,omitempty"`
 	TargetZ       float32                `protobuf:"fixed32,6,opt,name=target_z,json=targetZ,proto3" json:"target_z,omitempty"`
 	Speed         float32                `protobuf:"fixed32,7,opt,name=speed,proto3" json:"speed,omitempty"`
+	Class         string                 `protobuf:"bytes,8,opt,name=class,proto3" json:"class,omitempty"` // knight, barbarian, mage, rogue
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Entity) Reset() {
 	*x = Entity{}
-	mi := &file_erevia_v1_game_proto_msgTypes[10]
+	mi := &file_erevia_v1_game_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -672,7 +948,7 @@ func (x *Entity) String() string {
 func (*Entity) ProtoMessage() {}
 
 func (x *Entity) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[10]
+	mi := &file_erevia_v1_game_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -685,7 +961,7 @@ func (x *Entity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Entity.ProtoReflect.Descriptor instead.
 func (*Entity) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{10}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *Entity) GetId() uint32 {
@@ -737,6 +1013,13 @@ func (x *Entity) GetSpeed() float32 {
 	return 0
 }
 
+func (x *Entity) GetClass() string {
+	if x != nil {
+		return x.Class
+	}
+	return ""
+}
+
 type EntityState struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -750,7 +1033,7 @@ type EntityState struct {
 
 func (x *EntityState) Reset() {
 	*x = EntityState{}
-	mi := &file_erevia_v1_game_proto_msgTypes[11]
+	mi := &file_erevia_v1_game_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -762,7 +1045,7 @@ func (x *EntityState) String() string {
 func (*EntityState) ProtoMessage() {}
 
 func (x *EntityState) ProtoReflect() protoreflect.Message {
-	mi := &file_erevia_v1_game_proto_msgTypes[11]
+	mi := &file_erevia_v1_game_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -775,7 +1058,7 @@ func (x *EntityState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EntityState.ProtoReflect.Descriptor instead.
 func (*EntityState) Descriptor() ([]byte, []int) {
-	return file_erevia_v1_game_proto_rawDescGZIP(), []int{11}
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *EntityState) GetId() uint32 {
@@ -817,26 +1100,32 @@ var File_erevia_v1_game_proto protoreflect.FileDescriptor
 
 const file_erevia_v1_game_proto_rawDesc = "" +
 	"\n" +
-	"\x14erevia/v1/game.proto\x12\terevia.v1\"\x92\x01\n" +
+	"\x14erevia/v1/game.proto\x12\terevia.v1\"\xc6\x01\n" +
 	"\rClientMessage\x12%\n" +
 	"\x04join\x18\x01 \x01(\v2\x0f.erevia.v1.JoinH\x00R\x04join\x12,\n" +
 	"\amove_to\x18\x02 \x01(\v2\x11.erevia.v1.MoveToH\x00R\x06moveTo\x12%\n" +
-	"\x04ping\x18\x03 \x01(\v2\x0f.erevia.v1.PingH\x00R\x04pingB\x05\n" +
-	"\x03msg\"\x1a\n" +
-	"\x04Join\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"$\n" +
+	"\x04ping\x18\x03 \x01(\v2\x0f.erevia.v1.PingH\x00R\x04ping\x122\n" +
+	"\tchat_send\x18\x04 \x01(\v2\x13.erevia.v1.ChatSendH\x00R\bchatSendB\x05\n" +
+	"\x03msg\")\n" +
+	"\x04Join\x12!\n" +
+	"\fcharacter_id\x18\x01 \x01(\rR\vcharacterId\"$\n" +
 	"\x06MoveTo\x12\f\n" +
 	"\x01x\x18\x01 \x01(\x02R\x01x\x12\f\n" +
 	"\x01z\x18\x02 \x01(\x02R\x01z\"'\n" +
 	"\x04Ping\x12\x1f\n" +
 	"\vclient_time\x18\x01 \x01(\x01R\n" +
-	"clientTime\"\xfa\x01\n" +
+	"clientTime\".\n" +
+	"\bChatSend\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x0e\n" +
+	"\x02to\x18\x02 \x01(\tR\x02to\"\xd5\x02\n" +
 	"\rServerMessage\x12.\n" +
 	"\awelcome\x18\x01 \x01(\v2\x12.erevia.v1.WelcomeH\x00R\awelcome\x12(\n" +
 	"\x05spawn\x18\x02 \x01(\v2\x10.erevia.v1.SpawnH\x00R\x05spawn\x12.\n" +
 	"\adespawn\x18\x03 \x01(\v2\x12.erevia.v1.DespawnH\x00R\adespawn\x121\n" +
 	"\bsnapshot\x18\x04 \x01(\v2\x13.erevia.v1.SnapshotH\x00R\bsnapshot\x12%\n" +
-	"\x04pong\x18\x05 \x01(\v2\x0f.erevia.v1.PongH\x00R\x04pongB\x05\n" +
+	"\x04pong\x18\x05 \x01(\v2\x0f.erevia.v1.PongH\x00R\x04pong\x12,\n" +
+	"\x04chat\x18\x06 \x01(\v2\x16.erevia.v1.ChatMessageH\x00R\x04chat\x12+\n" +
+	"\x06kicked\x18\a \x01(\v2\x11.erevia.v1.KickedH\x00R\x06kickedB\x05\n" +
 	"\x03msg\"\x8b\x01\n" +
 	"\aWelcome\x12\x17\n" +
 	"\ayour_id\x18\x01 \x01(\rR\x06yourId\x12\x1b\n" +
@@ -852,7 +1141,15 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x06states\x18\x02 \x03(\v2\x16.erevia.v1.EntityStateR\x06states\"'\n" +
 	"\x04Pong\x12\x1f\n" +
 	"\vclient_time\x18\x01 \x01(\x01R\n" +
-	"clientTime\"\x94\x01\n" +
+	"clientTime\"\xa2\x01\n" +
+	"\vChatMessage\x120\n" +
+	"\achannel\x18\x01 \x01(\x0e2\x16.erevia.v1.ChatChannelR\achannel\x12\x17\n" +
+	"\afrom_id\x18\x02 \x01(\rR\x06fromId\x12\x1b\n" +
+	"\tfrom_name\x18\x03 \x01(\tR\bfromName\x12\x17\n" +
+	"\ato_name\x18\x04 \x01(\tR\x06toName\x12\x12\n" +
+	"\x04text\x18\x05 \x01(\tR\x04text\" \n" +
+	"\x06Kicked\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xaa\x01\n" +
 	"\x06Entity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\f\n" +
@@ -860,13 +1157,19 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x01z\x18\x04 \x01(\x02R\x01z\x12\x19\n" +
 	"\btarget_x\x18\x05 \x01(\x02R\atargetX\x12\x19\n" +
 	"\btarget_z\x18\x06 \x01(\x02R\atargetZ\x12\x14\n" +
-	"\x05speed\x18\a \x01(\x02R\x05speed\"o\n" +
+	"\x05speed\x18\a \x01(\x02R\x05speed\x12\x14\n" +
+	"\x05class\x18\b \x01(\tR\x05class\"o\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
 	"\x01z\x18\x03 \x01(\x02R\x01z\x12\x19\n" +
 	"\btarget_x\x18\x04 \x01(\x02R\atargetX\x12\x19\n" +
-	"\btarget_z\x18\x05 \x01(\x02R\atargetZB\x1eZ\x1cerevia/server/internal/pb;pbb\x06proto3"
+	"\btarget_z\x18\x05 \x01(\x02R\atargetZ*x\n" +
+	"\vChatChannel\x12\x1c\n" +
+	"\x18CHAT_CHANNEL_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14CHAT_CHANNEL_GENERAL\x10\x01\x12\x18\n" +
+	"\x14CHAT_CHANNEL_WHISPER\x10\x02\x12\x17\n" +
+	"\x13CHAT_CHANNEL_SYSTEM\x10\x03B\x1eZ\x1cerevia/server/internal/pb;pbb\x06proto3"
 
 var (
 	file_erevia_v1_game_proto_rawDescOnce sync.Once
@@ -880,38 +1183,47 @@ func file_erevia_v1_game_proto_rawDescGZIP() []byte {
 	return file_erevia_v1_game_proto_rawDescData
 }
 
-var file_erevia_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_erevia_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_erevia_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_erevia_v1_game_proto_goTypes = []any{
-	(*ClientMessage)(nil), // 0: erevia.v1.ClientMessage
-	(*Join)(nil),          // 1: erevia.v1.Join
-	(*MoveTo)(nil),        // 2: erevia.v1.MoveTo
-	(*Ping)(nil),          // 3: erevia.v1.Ping
-	(*ServerMessage)(nil), // 4: erevia.v1.ServerMessage
-	(*Welcome)(nil),       // 5: erevia.v1.Welcome
-	(*Spawn)(nil),         // 6: erevia.v1.Spawn
-	(*Despawn)(nil),       // 7: erevia.v1.Despawn
-	(*Snapshot)(nil),      // 8: erevia.v1.Snapshot
-	(*Pong)(nil),          // 9: erevia.v1.Pong
-	(*Entity)(nil),        // 10: erevia.v1.Entity
-	(*EntityState)(nil),   // 11: erevia.v1.EntityState
+	(ChatChannel)(0),      // 0: erevia.v1.ChatChannel
+	(*ClientMessage)(nil), // 1: erevia.v1.ClientMessage
+	(*Join)(nil),          // 2: erevia.v1.Join
+	(*MoveTo)(nil),        // 3: erevia.v1.MoveTo
+	(*Ping)(nil),          // 4: erevia.v1.Ping
+	(*ChatSend)(nil),      // 5: erevia.v1.ChatSend
+	(*ServerMessage)(nil), // 6: erevia.v1.ServerMessage
+	(*Welcome)(nil),       // 7: erevia.v1.Welcome
+	(*Spawn)(nil),         // 8: erevia.v1.Spawn
+	(*Despawn)(nil),       // 9: erevia.v1.Despawn
+	(*Snapshot)(nil),      // 10: erevia.v1.Snapshot
+	(*Pong)(nil),          // 11: erevia.v1.Pong
+	(*ChatMessage)(nil),   // 12: erevia.v1.ChatMessage
+	(*Kicked)(nil),        // 13: erevia.v1.Kicked
+	(*Entity)(nil),        // 14: erevia.v1.Entity
+	(*EntityState)(nil),   // 15: erevia.v1.EntityState
 }
 var file_erevia_v1_game_proto_depIdxs = []int32{
-	1,  // 0: erevia.v1.ClientMessage.join:type_name -> erevia.v1.Join
-	2,  // 1: erevia.v1.ClientMessage.move_to:type_name -> erevia.v1.MoveTo
-	3,  // 2: erevia.v1.ClientMessage.ping:type_name -> erevia.v1.Ping
-	5,  // 3: erevia.v1.ServerMessage.welcome:type_name -> erevia.v1.Welcome
-	6,  // 4: erevia.v1.ServerMessage.spawn:type_name -> erevia.v1.Spawn
-	7,  // 5: erevia.v1.ServerMessage.despawn:type_name -> erevia.v1.Despawn
-	8,  // 6: erevia.v1.ServerMessage.snapshot:type_name -> erevia.v1.Snapshot
-	9,  // 7: erevia.v1.ServerMessage.pong:type_name -> erevia.v1.Pong
-	10, // 8: erevia.v1.Welcome.entities:type_name -> erevia.v1.Entity
-	10, // 9: erevia.v1.Spawn.entity:type_name -> erevia.v1.Entity
-	11, // 10: erevia.v1.Snapshot.states:type_name -> erevia.v1.EntityState
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	2,  // 0: erevia.v1.ClientMessage.join:type_name -> erevia.v1.Join
+	3,  // 1: erevia.v1.ClientMessage.move_to:type_name -> erevia.v1.MoveTo
+	4,  // 2: erevia.v1.ClientMessage.ping:type_name -> erevia.v1.Ping
+	5,  // 3: erevia.v1.ClientMessage.chat_send:type_name -> erevia.v1.ChatSend
+	7,  // 4: erevia.v1.ServerMessage.welcome:type_name -> erevia.v1.Welcome
+	8,  // 5: erevia.v1.ServerMessage.spawn:type_name -> erevia.v1.Spawn
+	9,  // 6: erevia.v1.ServerMessage.despawn:type_name -> erevia.v1.Despawn
+	10, // 7: erevia.v1.ServerMessage.snapshot:type_name -> erevia.v1.Snapshot
+	11, // 8: erevia.v1.ServerMessage.pong:type_name -> erevia.v1.Pong
+	12, // 9: erevia.v1.ServerMessage.chat:type_name -> erevia.v1.ChatMessage
+	13, // 10: erevia.v1.ServerMessage.kicked:type_name -> erevia.v1.Kicked
+	14, // 11: erevia.v1.Welcome.entities:type_name -> erevia.v1.Entity
+	14, // 12: erevia.v1.Spawn.entity:type_name -> erevia.v1.Entity
+	15, // 13: erevia.v1.Snapshot.states:type_name -> erevia.v1.EntityState
+	0,  // 14: erevia.v1.ChatMessage.channel:type_name -> erevia.v1.ChatChannel
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_erevia_v1_game_proto_init() }
@@ -923,26 +1235,30 @@ func file_erevia_v1_game_proto_init() {
 		(*ClientMessage_Join)(nil),
 		(*ClientMessage_MoveTo)(nil),
 		(*ClientMessage_Ping)(nil),
+		(*ClientMessage_ChatSend)(nil),
 	}
-	file_erevia_v1_game_proto_msgTypes[4].OneofWrappers = []any{
+	file_erevia_v1_game_proto_msgTypes[5].OneofWrappers = []any{
 		(*ServerMessage_Welcome)(nil),
 		(*ServerMessage_Spawn)(nil),
 		(*ServerMessage_Despawn)(nil),
 		(*ServerMessage_Snapshot)(nil),
 		(*ServerMessage_Pong)(nil),
+		(*ServerMessage_Chat)(nil),
+		(*ServerMessage_Kicked)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_erevia_v1_game_proto_rawDesc), len(file_erevia_v1_game_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   12,
+			NumEnums:      1,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_erevia_v1_game_proto_goTypes,
 		DependencyIndexes: file_erevia_v1_game_proto_depIdxs,
+		EnumInfos:         file_erevia_v1_game_proto_enumTypes,
 		MessageInfos:      file_erevia_v1_game_proto_msgTypes,
 	}.Build()
 	File_erevia_v1_game_proto = out.File

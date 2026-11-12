@@ -1,5 +1,6 @@
 import { Color3, Mesh, MeshBuilder, Scene, StandardMaterial, TransformNode, Vector3 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Rectangle, TextBlock } from "@babylonjs/gui";
+import { classInfo } from "../classes";
 import type { Entity, EntityState } from "../gen/erevia/v1/game_pb";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
@@ -23,8 +24,8 @@ interface Player {
 export class EntityManager {
   private players = new Map<number, Player>();
   private localPending: { x: number; z: number; at: number } | null = null;
-  private localMat: StandardMaterial;
-  private otherMat: StandardMaterial;
+  private classMats = new Map<string, StandardMaterial>();
+  private ringMat: StandardMaterial;
 
   constructor(
     private scene: Scene,
@@ -32,10 +33,20 @@ export class EntityManager {
     readonly localId: number,
     private zoneHalf: number,
   ) {
-    this.localMat = new StandardMaterial("localMat", scene);
-    this.localMat.diffuseColor = new Color3(0.85, 0.68, 0.32);
-    this.otherMat = new StandardMaterial("otherMat", scene);
-    this.otherMat.diffuseColor = new Color3(0.36, 0.5, 0.78);
+    this.ringMat = new StandardMaterial("localRing", scene);
+    this.ringMat.emissiveColor = new Color3(0.95, 0.8, 0.4);
+    this.ringMat.disableLighting = true;
+    this.ringMat.alpha = 0.8;
+  }
+
+  private classMaterial(cls: string): StandardMaterial {
+    let mat = this.classMats.get(cls);
+    if (!mat) {
+      mat = new StandardMaterial(`cls-${cls}`, this.scene);
+      mat.diffuseColor = Color3.FromHexString(classInfo(cls).color);
+      this.classMats.set(cls, mat);
+    }
+    return mat;
   }
 
   get count(): number {
@@ -56,8 +67,17 @@ export class EntityManager {
     const body = MeshBuilder.CreateCapsule(`body${e.id}`, { height: 1.8, radius: 0.35 }, this.scene);
     body.parent = root;
     body.position.y = 0.9;
-    body.material = isLocal ? this.localMat : this.otherMat;
+    body.material = this.classMaterial(e.class);
     body.isPickable = false;
+
+    // Anel dourado no chão marca o seu personagem.
+    if (isLocal) {
+      const ring = MeshBuilder.CreateTorus(`ring${e.id}`, { diameter: 1.1, thickness: 0.06, tessellation: 32 }, this.scene);
+      ring.parent = root;
+      ring.position.y = 0.03;
+      ring.material = this.ringMat;
+      ring.isPickable = false;
+    }
 
     // "Nariz" para mostrar para onde o personagem está virado.
     const nose = MeshBuilder.CreateBox(`nose${e.id}`, { width: 0.2, height: 0.12, depth: 0.3 }, this.scene);
