@@ -4,6 +4,7 @@ import {
   AssetContainer,
   LoadAssetContainerAsync,
   Node,
+  Quaternion,
   Scene,
   TransformNode,
   Vector3,
@@ -70,6 +71,12 @@ const MONSTER_WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
 export interface CharacterInstance {
   root: TransformNode;
   anims: Map<AnimRole, AnimationGroup>;
+  /**
+   * Devolve os ossos à pose de descanso. As animações de ação (algumas feitas para os
+   * heróis) movem canais que a pose parada dos esqueletos não anima — como a posição do
+   * quadril —, e sem isso o corpo ficava enterrado no chão depois de um golpe.
+   */
+  resetPose(): void;
   dispose(): void;
 }
 
@@ -174,9 +181,28 @@ export class CharacterModels {
       anims.set(role, g);
     }
 
+    // Pose de descanso de tudo que alguma animação mexe (antes de qualquer animação tocar).
+    const rest: { node: TransformNode; pos: Vector3; rot: Quaternion | null; scale: Vector3 }[] = [];
+    const seen = new Set<TransformNode>();
+    for (const g of cloned.values()) {
+      for (const ta of g.targetedAnimations) {
+        const node = ta.target as TransformNode;
+        if (!(node instanceof TransformNode) || seen.has(node)) continue;
+        seen.add(node);
+        rest.push({ node, pos: node.position.clone(), rot: node.rotationQuaternion?.clone() ?? null, scale: node.scaling.clone() });
+      }
+    }
+
     return {
       root,
       anims,
+      resetPose: () => {
+        for (const r of rest) {
+          r.node.position.copyFrom(r.pos);
+          if (r.rot && r.node.rotationQuaternion) r.node.rotationQuaternion.copyFrom(r.rot);
+          r.node.scaling.copyFrom(r.scale);
+        }
+      },
       dispose: () => {
         for (const a of cloned.values()) a.dispose();
         for (const s of entries.skeletons) s.dispose();

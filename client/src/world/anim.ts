@@ -16,8 +16,14 @@ export class AnimController {
   private action: AnimationGroup | null = null;
   private actionDone = true;
   private holding = false;
+  /** A morte terminou e está congelada no último quadro. */
+  private frozen = false;
 
-  constructor(private anims: Map<AnimRole, AnimationGroup>) {
+  /** resetPose: devolve os ossos à pose de descanso quando uma ação termina. */
+  constructor(
+    private anims: Map<AnimRole, AnimationGroup>,
+    private resetPose: () => void = () => {},
+  ) {
     const idle = anims.get("idle");
     const run = anims.get("run");
     if (idle) {
@@ -42,27 +48,30 @@ export class AnimController {
     g.stop(); // start() não faz nada num grupo já iniciado (mesmo pausado)
     this.action = g;
     this.actionDone = false;
+    this.frozen = false;
     this.holding = !!opts.hold;
     g.speedRatio = opts.speed ?? 1;
-    // Toca em loop para o grupo não ser removido ao terminar (senão o corpo "pisca" para a
-    // pose de repouso durante a transição). Na primeira volta, congela no último quadro:
-    // a morte fica assim; as outras ações saem aos poucos pelo peso em update().
+    // Toca em loop para o grupo não ser removido ao terminar; na primeira volta, congela no
+    // último quadro. A morte fica assim; as outras ações devolvem o corpo à locomoção.
     g.start(true, g.speedRatio);
     g.onAnimationGroupLoopObservable.addOnce(() => {
       if (this.action !== g) return;
       g.goToFrame(g.to);
       g.pause();
-      if (!this.holding) this.actionDone = true;
+      if (this.holding) this.frozen = true;
+      else this.actionDone = true;
     });
   }
 
   /** Volta ao normal (ao reviver). */
   reset(): void {
     this.holding = false;
+    this.frozen = false;
     this.actionDone = true;
     this.action?.stop();
     this.action = null;
     this.actionWeight = 0;
+    this.resetPose();
   }
 
   /**
@@ -76,14 +85,20 @@ export class AnimController {
     }
     const k = 1 - Math.exp(-BLEND_RATE * dt);
     this.runWeight += ((moving && !this.holding ? 1 : 0) - this.runWeight) * k;
-    const actionActive = this.action !== null && (!this.actionDone || this.holding);
-    this.actionWeight += ((actionActive ? 1 : 0) - this.actionWeight) * k * 1.5;
-    if (!actionActive && this.actionWeight < 0.01 && this.action) {
+    // Uma animação pausada não entra na mistura do Babylon. Se ela ainda "ocupasse" peso, a
+    // soma dos pesos ativos ficaria < 1 e o Babylon completaria com o valor original dos ossos
+    // — nos esqueletos isso enterra o corpo no chão (o monstro "sumia" após cada golpe).
+    // Por isso a ação que terminou sai na hora e a locomoção assume o peso inteiro.
+    if (this.action && this.actionDone) {
       this.action.stop();
       this.action = null;
+      this.actionWeight = 0;
+      this.resetPose();
     }
+    if (this.action) this.actionWeight += (1 - this.actionWeight) * k * 1.5;
 
-    const loco = 1 - this.actionWeight;
+    // Morte congelada: só ela segura a pose (locomoção com peso 0 não é calculada).
+    const loco = this.frozen ? 0 : 1 - this.actionWeight;
     const idle = this.anims.get("idle");
     const run = this.anims.get("run");
     // Peso exatamente 0 faz o Babylon pular a animação (não calcula os ossos). As misturas

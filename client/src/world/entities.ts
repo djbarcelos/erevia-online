@@ -528,7 +528,7 @@ export class EntityManager {
     this.setShadow(v, false);
     v.meshes = meshes;
     v.model3d = inst;
-    v.anim = new AnimController(inst.anims);
+    v.anim = new AnimController(inst.anims, inst.resetPose);
     v.capsule?.dispose();
     v.capsule = null;
     if (v.dead) this.showDead(v, true);
