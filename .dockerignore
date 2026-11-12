@@ -1,0 +1,8 @@
+.git
+.env
+**/node_modules
+client/dist
+server/bin
+*.log
+.DS_Store
+RELATORIO.md
