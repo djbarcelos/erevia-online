@@ -17,6 +17,7 @@ import {
   WebGPUEngine,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture } from "@babylonjs/gui";
+import { addGroundDetail } from "./ground";
 import type { WorldData } from "./world-data";
 
 /** Cor do horizonte ao entardecer (neblina e fundo). */
@@ -107,6 +108,7 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   groundMat.specularColor = new Color3(0.03, 0.03, 0.03);
   ground.material = groundMat;
   ground.receiveShadows = true;
+  addGroundDetail(scene, world, groundMat);
   // Fora do mapa: um chão grande e simples até as montanhas.
   const outer = MeshBuilder.CreateGround("outer", { width: 900, height: 900 }, scene);
   outer.position.y = -0.05;
