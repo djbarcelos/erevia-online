@@ -15,6 +15,7 @@ import (
 func newCombatZone(spawns ...game.Spawn) *Zone {
 	cfg := DefaultConfig()
 	cfg.Spawns = spawns
+	cfg.SafeRadius = 20 // os testes de combate lutam a 20–40 m da origem
 	return New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
 }
 

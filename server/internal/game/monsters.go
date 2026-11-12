@@ -74,12 +74,12 @@ type SpawnPoint struct {
 // DefaultSpawns: 3 anéis de caça + chefe.
 func DefaultSpawns() []Spawn {
 	return []Spawn{
-		{Monster: "skeleton_minion", Count: 24, RMin: 26, RMax: 50, LevelMin: 1, LevelMax: 5, Respawn: 20},
-		{Monster: "skeleton_warrior", Count: 10, RMin: 55, RMax: 78, LevelMin: 6, LevelMax: 12, Respawn: 30},
-		{Monster: "skeleton_rogue", Count: 10, RMin: 55, RMax: 78, LevelMin: 6, LevelMax: 12, Respawn: 30},
-		{Monster: "skeleton_mage", Count: 8, RMin: 80, RMax: 96, LevelMin: 13, LevelMax: 20, Respawn: 40},
-		{Monster: "skeleton_warrior", Count: 8, RMin: 80, RMax: 96, LevelMin: 13, LevelMax: 20, Respawn: 40},
-		{Monster: "bone_lord", Count: 1, Fixed: true, X: 0, Z: -88, LevelMin: 22, Respawn: 300},
+		{Monster: "skeleton_minion", Count: 30, RMin: 46, RMax: 74, LevelMin: 1, LevelMax: 5, Respawn: 20},
+		{Monster: "skeleton_warrior", Count: 12, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
+		{Monster: "skeleton_rogue", Count: 12, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
+		{Monster: "skeleton_mage", Count: 10, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
+		{Monster: "skeleton_warrior", Count: 10, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
+		{Monster: "bone_lord", Count: 1, Fixed: true, X: 0, Z: -132, LevelMin: 22, Respawn: 300},
 	}
 }
 

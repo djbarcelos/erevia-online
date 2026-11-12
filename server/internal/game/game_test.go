@@ -121,7 +121,7 @@ func TestExpandSpawnsDeterministicAndInRing(t *testing.T) {
 			t.Fatal("same seed must give same spawns")
 		}
 		r := math.Hypot(a[i].X, a[i].Z)
-		if r < 15 || r > 100 {
+		if r < 44 || r > 145 { // fora da cidade (raio 40) e dentro do mapa (±150)
 			t.Errorf("spawn outside hunting area: r=%.1f", r)
 		}
 		if a[i].Level < 1 || a[i].Level > 22 {

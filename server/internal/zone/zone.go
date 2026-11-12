@@ -45,9 +45,9 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		Size: 200, TickRate: 20, MaxMovesPerSec: 10,
+		Size: 300, TickRate: 20, MaxMovesPerSec: 10,
 		ChatPerSec: 1, ChatBurst: 3, SaveEvery: 30 * time.Second,
-		SafeRadius: 20, Spawns: game.DefaultSpawns(), Seed: 20261112,
+		SafeRadius: 40, Spawns: game.DefaultSpawns(), Seed: 20261112,
 	}
 }
 

@@ -111,14 +111,14 @@ func TestRealWorldIntegration(t *testing.T) {
 	}
 	// Do centro até a estrada norte, lá fora.
 	p, _ := joinAt(z, 1, "rogue", 2, 2, 0)
-	z.handle(moveEvent{id: p.id, x: 0, z: 40})
+	z.handle(moveEvent{id: p.id, x: 0, z: 55})
 	for i := 0; i < 300; i++ {
 		z.update(0.05)
 		if !z.walkable(p.pos) {
 			t.Fatalf("player inside obstacle at %v", p.pos)
 		}
 	}
-	if d := dist(p.pos, Vec2{0, 40}); d > 0.5 {
+	if d := dist(p.pos, Vec2{0, 55}); d > 0.5 {
 		t.Fatalf("player should leave town through the gate, still %.1f m away at %v", d, p.pos)
 	}
 }

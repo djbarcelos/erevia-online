@@ -169,7 +169,7 @@ async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractEngine> 
  * cidade, estradas de terra e a praça de pedra dentro da muralha.
  */
 function paintGround(scene: Scene, world: WorldData): DynamicTexture {
-  const PX = 2048;
+  const PX = world.size > 200 ? 3072 : 2048; // ~10 px por metro
   const tex = new DynamicTexture("groundTex", { width: PX, height: PX }, scene, true);
   const ctx = tex.getContext() as CanvasRenderingContext2D;
   const k = PX / world.size; // pixels por metro
@@ -179,7 +179,7 @@ function paintGround(scene: Scene, world: WorldData): DynamicTexture {
   const rand = mulberry32(7);
 
   // Base: grama, escurecendo e secando com a distância.
-  const grad = ctx.createRadialGradient(cx(0), cy(0), 20 * k, cx(0), cy(0), 120 * k);
+  const grad = ctx.createRadialGradient(cx(0), cy(0), world.safeRadius * k, cx(0), cy(0), world.size * 0.6 * k);
   grad.addColorStop(0, "#5f7d3a");
   grad.addColorStop(0.45, "#4f6d33");
   grad.addColorStop(0.7, "#4a5a35");
@@ -189,7 +189,8 @@ function paintGround(scene: Scene, world: WorldData): DynamicTexture {
 
   // Manchas de variação (rápido: círculos translúcidos).
   const tones = ["#6d8a42", "#557233", "#47622c", "#7a8c48", "#5a5a3c", "#3f5528"];
-  for (let i = 0; i < 9000; i++) {
+  const area = (world.size / 200) ** 2; // quantidades calibradas para um mapa de 200 m
+  for (let i = 0; i < 9000 * area; i++) {
     ctx.globalAlpha = 0.05 + rand() * 0.1;
     ctx.fillStyle = tones[Math.floor(rand() * tones.length)];
     const r = (0.6 + rand() * 4) * k;
@@ -248,7 +249,7 @@ function paintGround(scene: Scene, world: WorldData): DynamicTexture {
       ctx.stroke();
     }
   }
-  for (let i = 0; i < 2500; i++) {
+  for (let i = 0; i < 10 * plazaR * plazaR; i++) {
     const a = rand() * Math.PI * 2;
     const r = Math.sqrt(rand()) * plazaR;
     ctx.fillStyle = rand() < 0.5 ? "rgba(70,65,58,0.18)" : "rgba(170,160,145,0.18)";

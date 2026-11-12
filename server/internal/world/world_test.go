@@ -90,22 +90,22 @@ func TestEmbeddedWorld(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Size != 200 || w.SafeRadius < 15 || len(w.colliders) < 100 {
+	if w.Size != 300 || w.SafeRadius < 35 || len(w.colliders) < 100 {
 		t.Fatalf("unexpected world: size=%v safe=%v colliders=%d", w.Size, w.SafeRadius, len(w.colliders))
 	}
-	// Muralha a 30° bloqueia; portões (0°, 90°…) ficam abertos.
+	// Muralha (raio 38) a 30° bloqueia; portões (0°, 90°…) ficam abertos.
 	a := math.Pi / 6
-	if !w.Blocked(19*math.Cos(a), 19*math.Sin(a)) {
+	if !w.Blocked(38*math.Cos(a), 38*math.Sin(a)) {
 		t.Error("wall at 30° should block")
 	}
-	for _, g := range []Point{{19, 0}, {0, 19}, {-19, 0}, {0, -19}} {
+	for _, g := range []Point{{38, 0}, {0, 38}, {-38, 0}, {0, -38}} {
 		if w.Blocked(g.X, g.Z) {
 			t.Errorf("gate at %v should be open", g)
 		}
 	}
 	// Sair do centro da cidade para a floresta diagonal: o caminho passa por um portão.
 	from := w.NearestFree(Point{3, 3})
-	to := w.NearestFree(Point{35, 35})
+	to := w.NearestFree(Point{60, 60})
 	path := w.FindPath(from, to)
 	if len(path) < 2 {
 		t.Fatalf("expected path through a gate, got %v", path)
@@ -114,7 +114,7 @@ func TestEmbeddedWorld(t *testing.T) {
 	throughGate := false
 	for _, p := range path {
 		r := math.Hypot(p.X, p.Z)
-		if r > 16 && r < 22 && (math.Abs(p.X) < 3 || math.Abs(p.Z) < 3) {
+		if r > 34 && r < 42 && (math.Abs(p.X) < 3.5 || math.Abs(p.Z) < 3.5) {
 			throughGate = true
 		}
 	}
