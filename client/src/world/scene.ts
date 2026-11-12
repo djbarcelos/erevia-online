@@ -70,7 +70,12 @@ export async function createWorldScene(canvas: HTMLCanvasElement, zoneSize: numb
   camera.upperBetaLimit = 1.4;
   camera.wheelDeltaPercentage = 0.02;
   camera.panningSensibility = 0; // sem pan: a câmera segue o jogador
-  camera.inputs.attached.pointers && ((camera.inputs.attached.pointers as unknown as { buttons: number[] }).buttons = [2]);
+  // Babylon 9 usa um mapa de entrada: por padrão o botão direito faz "pan" (que está
+  // desligado acima), então nada acontecia. Aqui o direito passa a girar a câmera.
+  camera.movement.input.setInteraction("pointer", { button: 2 }, "rotate");
+  // Só o botão direito mexe na câmera; o esquerdo fica livre para andar/atacar.
+  const pointers = camera.inputs.attached.pointers as unknown as { buttons: number[] } | undefined;
+  if (pointers) pointers.buttons = [2];
   camera.inputs.remove(camera.inputs.attached.keyboard);
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 

@@ -184,6 +184,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   if (import.meta.env.DEV) {
     (window as unknown as Record<string, unknown>).__erevia = {
       entities,
+      camera: () => ({ alpha: world.camera.alpha, beta: world.camera.beta, radius: world.camera.radius }),
       targetId: () => targetId,
       screenPos: (id: number) => entities.screenPos(id, world.scene),
       nearestMonster: () => entities.nearestMonster(),
