@@ -18,6 +18,7 @@ const ZOOM_KEY = "erevia.minimap.radius";
 const REDRAW_MS = 66; // ~15 Hz
 
 export const MARKER_COLORS = {
+  npc: "#ffd36b",
   monster: "#e0483c",
   player: "#5fa8ff",
   boss: "#c03be0",
@@ -155,6 +156,8 @@ export class Minimap {
       ["Botão direito", "girar a câmera"],
       ["Roda", "zoom"],
       ["1, 2", "skills"],
+      ["3–6", "poções / itens"],
+      ["I", "inventário"],
       ["M", "mapa"],
       ["Enter", "chat"],
       ["Esc", "limpar alvo"],
@@ -284,6 +287,13 @@ export class Minimap {
         const p = toCanvas(m);
         if (Math.hypot(p.x - R, p.y - R) > R + 4) continue;
         drawDot(ctx, p.x, p.y, 2.6 * unit, MARKER_COLORS.monster);
+      }
+    }
+    for (const m of others) {
+      if (m.kind === EntityKind.NPC) {
+        const p = toCanvas(m);
+        if (Math.hypot(p.x - R, p.y - R) > R + 4) continue;
+        drawDot(ctx, p.x, p.y, 2.8 * unit, MARKER_COLORS.npc);
       }
     }
     for (const m of others) {

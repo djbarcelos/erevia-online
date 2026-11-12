@@ -64,6 +64,30 @@ export class Connection {
     this.send({ case: "respawn", value: {} });
   }
 
+  pickUp(id: number): void {
+    this.send({ case: "pickUp", value: { id } });
+  }
+
+  moveItem(fromPlace: number, fromSlot: number, toPlace: number, toSlot: number): void {
+    this.send({ case: "moveItem", value: { fromPlace, fromSlot, toPlace, toSlot } });
+  }
+
+  useItem(place: number, slot: number): void {
+    this.send({ case: "useItem", value: { place, slot } });
+  }
+
+  destroyItem(slot: number, count: number): void {
+    this.send({ case: "destroyItem", value: { slot, count } });
+  }
+
+  buy(npcId: number, itemId: string, count: number): void {
+    this.send({ case: "buy", value: { npcId, itemId, count } });
+  }
+
+  sell(npcId: number, slot: number, count: number): void {
+    this.send({ case: "sell", value: { npcId, slot, count } });
+  }
+
   close(): void {
     this.ws.close();
   }

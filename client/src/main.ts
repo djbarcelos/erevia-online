@@ -1,13 +1,18 @@
 import { api, ApiError, type CharacterInfo } from "./api";
-import { SkillTarget, type ServerMessage, type SkillInfo, type Welcome } from "./gen/erevia/v1/game_pb";
+import { Color3 } from "@babylonjs/core";
+import { ItemKind, SkillTarget, type ServerMessage, type SkillInfo, type Welcome } from "./gen/erevia/v1/game_pb";
 import { Connection } from "./net/connection";
 import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
-import { Hud } from "./ui/hud";
+import { Hud, ITEM_KEYS } from "./ui/hud";
 import { Minimap } from "./ui/minimap";
 import { WorldMap } from "./ui/worldmap";
 import { setupPerfPanel } from "./ui/perf";
+import { InventoryWindow } from "./ui/inventory";
+import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG } from "./ui/items";
+import { ShopWindow } from "./ui/shop";
+import { GroundLoot } from "./world/loot";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
 import { CharacterModels } from "./world/models";
@@ -131,6 +136,50 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const keyText = keys.length > 1 ? `teclas ${keys.slice(0, -1).join(", ")} e ${keys[keys.length - 1]}` : `tecla ${keys[0] ?? 1}`;
   chat.system(`Bem-vindo a Erevia, ${character.name}! Clique num monstro para atacar; ${keyText} usam suas skills.`);
 
+  // ---------- Itens ----------
+  const store = new ItemStore(welcome.itemCatalog);
+  store.setInventory(welcome.inventory);
+  let myLevel = 1;
+  const me = () => ({ myClass: character.class, myLevel });
+  const itemTip = new ItemTip(document.body);
+  const npcStock = new Map(welcome.npcs.map((n) => [n.id, n.stock]));
+  const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId);
+  loot.add(welcome.groundItems);
+
+  // Barra de poções (teclas 3–6): o que vai em cada espaço fica salvo neste navegador.
+  const hotbarKey = `erevia.hotbar.${character.id}`;
+  let hotbar: (string | null)[] = ["potion_hp_s", "potion_mp_s", "potion_hp_l", "potion_mp_l"];
+  try {
+    const saved = JSON.parse(localStorage.getItem(hotbarKey) ?? "null");
+    if (Array.isArray(saved) && saved.length === 4) hotbar = saved;
+  } catch {
+    /* sem storage: usa o padrão */
+  }
+  const saveHotbar = () => {
+    try {
+      localStorage.setItem(hotbarKey, JSON.stringify(hotbar));
+    } catch {
+      /* ignora */
+    }
+  };
+  const refreshHotbar = () =>
+    hud.setItemSlots(
+      hotbar.map((id) => (id ? (store.get(id) ?? null) : null)),
+      hotbar.map((id) => (id ? store.countOf(id) : 0)),
+    );
+  const useHotbar = (i: number) => {
+    const id = hotbar[i];
+    const info = id ? store.get(id) : undefined;
+    if (!info || entities.localDead) return;
+    const slot = store.slotOf(info.id);
+    if (slot < 0) {
+      chat.system(`Você não tem ${info.name}.`);
+      return;
+    }
+    if (info.cooldownGroup && !hud.itemReady(info.cooldownGroup)) return;
+    conn.useItem(PLACE_BAG, slot);
+  };
+
   // ---------- Alvo e skills ----------
   let targetId = 0;
   const selectTarget = (id: number) => {
@@ -159,7 +208,65 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     onSkill: useSkill,
     onRespawn: () => conn.respawn(),
     targetDistance: () => (entities.isEnemy(targetId) ? entities.distanceTo(targetId) : null),
+    onItemSlot: useHotbar,
+    onClearItemSlot: (i) => {
+      hotbar[i] = null;
+      saveHotbar();
+      refreshHotbar();
+    },
+    itemTip,
+    me,
   });
+  refreshHotbar();
+  store.onChange(refreshHotbar);
+
+  const inventory = new InventoryWindow(store, itemTip, {
+    move: (fp, fs, tp, ts) => conn.moveItem(fp, fs, tp, ts),
+    use: (place, slot) => conn.useItem(place, slot),
+    destroy: (slot, count) => conn.destroyItem(slot, count),
+    assignHotbar: (i, id) => {
+      hotbar = hotbar.map((h) => (h === id ? null : h)); // um item em um espaço só
+      hotbar[i] = id;
+      saveHotbar();
+      refreshHotbar();
+    },
+    sell: (slot) => {
+      const s = store.bag[slot];
+      if (shop.isOpen && s) conn.sell(shop.npcId, slot, s.count);
+    },
+    me,
+  }, hud.element);
+  const shop = new ShopWindow(store, itemTip, {
+    buy: (npc, id, n) => conn.buy(npc, id, n),
+    sell: (npc, slot, n) => conn.sell(npc, slot, n),
+    me,
+    onOpen: () => inventory.open(),
+  }, hud.element);
+
+  // Loja: clicar num NPC anda até ele e abre a loja ao chegar.
+  const SHOP_OPEN_DIST = 4.5;
+  const SHOP_KEEP_DIST = 7;
+  let pendingShop = 0;
+  const openShop = (id: number) => {
+    const info = entities.info(id);
+    const d = entities.distanceTo(id);
+    const root = entities.rootOf(id);
+    if (!info || d === null || !root) return;
+    if (d <= SHOP_OPEN_DIST) {
+      pendingShop = 0;
+      shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? []);
+      return;
+    }
+    // Para a ~2 m do NPC, do lado de quem chega.
+    const mePos = entities.localPosition();
+    if (!mePos) return;
+    const dir = mePos.subtract(root.position);
+    dir.y = 0;
+    dir.normalize().scaleInPlace(2);
+    const dest = entities.predictLocalMove(root.position.x + dir.x, root.position.z + dir.z);
+    if (dest) conn.moveTo(dest.x, dest.z);
+    pendingShop = id;
+  };
 
   // ---------- Mapa ----------
   const mapSource = {
@@ -179,9 +286,23 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       worldMap.toggle();
       return;
     }
+    if (ev.key === "i" || ev.key === "I") {
+      ev.preventDefault();
+      inventory.toggle();
+      return;
+    }
     if (ev.key === "Escape") {
-      if (worldMap.isOpen) worldMap.close(); // Esc fecha o mapa antes de limpar o alvo
+      // Esc fecha as janelas antes de limpar o alvo.
+      if (shop.isOpen) shop.close();
+      else if (inventory.isOpen) inventory.close();
+      else if (worldMap.isOpen) worldMap.close();
       else selectTarget(0);
+      return;
+    }
+    const itemIdx = ITEM_KEYS.indexOf(Number(ev.key));
+    if (itemIdx >= 0) {
+      ev.preventDefault();
+      useHotbar(itemIdx);
       return;
     }
     const s = welcome.skills.find((k) => String(k.key) === ev.key);
@@ -195,6 +316,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   setupInput(world.scene, world.ground, {
     onGround: (x, z) => {
       hud.setQueued(0); // andar cancela a skill na fila
+      pendingShop = 0;
       const dest = entities.predictLocalMove(x, z);
       if (dest) conn.moveTo(dest.x, dest.z);
       return dest;
@@ -202,7 +324,18 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     onEntity: (id) => {
       if (id === welcome.yourId) return;
       selectTarget(id);
+      if (entities.isNpc(id)) {
+        if (!entities.localDead) openShop(id);
+        return;
+      }
+      pendingShop = 0;
       if (entities.isEnemy(id) && !entities.localDead) conn.attack(id);
+    },
+    onLoot: (id) => {
+      if (entities.localDead) return;
+      hud.setQueued(0);
+      pendingShop = 0;
+      conn.pickUp(id);
     },
     isEnemy: (id) => entities.isEnemy(id),
   });
@@ -221,6 +354,15 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     dayNight.update(clock.phase(), pos);
     // Árvores que tapam o jogador ou o alvo ficam translúcidas.
     env?.fader.update(dt, world.camera.position, entities.focusPoints());
+    loot.update(pos);
+    if (pendingShop) {
+      const d = entities.distanceTo(pendingShop);
+      if (d !== null && d <= SHOP_OPEN_DIST) openShop(pendingShop);
+    }
+    if (shop.isOpen) {
+      const d = entities.distanceTo(shop.npcId);
+      if (d === null || d > SHOP_KEEP_DIST) shop.close();
+    }
   });
 
   // Painel de diagnóstico + quadro do alvo
@@ -260,6 +402,19 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       setTime: (p: number | null) => clock.setFixed(p),
       phase: () => clock.phase(),
       fx,
+      store,
+      loot,
+      inventory,
+      shop,
+      pickUp: (id: number) => conn.pickUp(id),
+      nearestLoot: () => {
+        const p = entities.localPosition();
+        return p ? loot.nearest(p) : null;
+      },
+      openShop: (id: number) => openShop(id),
+      npcs: () => welcome.npcs.map((n) => n.id),
+      useItem: (place: number, slot: number) => conn.useItem(place, slot),
+      buy: (npc: number, id: string, n: number) => conn.buy(npc, id, n),
       moveTo: (x: number, z: number) => {
         entities.predictLocalMove(x, z);
         conn.moveTo(x, z);
@@ -277,6 +432,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       window.clearInterval(effectsTimer);
       window.clearInterval(statsTimer);
       hud.dispose();
+      inventory.dispose();
+      shop.dispose();
+      itemTip.root.remove();
       minimap.dispose();
       worldMap.dispose();
     },
@@ -305,6 +463,42 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         }
         case "selfStats":
           hud.setStats(msg.msg.value);
+          inventory.setStats(msg.msg.value);
+          myLevel = msg.msg.value.level;
+          break;
+        case "inventory":
+          store.setInventory(msg.msg.value);
+          break;
+        case "groundAdded":
+          loot.add(msg.msg.value.items);
+          break;
+        case "groundRemoved": {
+          const { ids, pickedBy } = msg.msg.value;
+          if (pickedBy === welcome.yourId) {
+            for (const id of ids) {
+              const at = loot.position(id);
+              const g = loot.info(id);
+              const info = g && store.get(g.itemId);
+              const head = entities.headOf(welcome.yourId);
+              if (!at || !info) continue;
+              const color = Color3.FromHexString(info.kind === ItemKind.GOLD ? "#f3d488" : (GRADE_COLOR[info.grade] ?? "#e8e1d4"));
+              fx.pickup(at, color);
+              if (head) fx.damageNumber(head, `+${itemLabel(info, g.count)}`, color.toHexString(), false);
+            }
+          }
+          loot.remove(ids);
+          break;
+        }
+        case "itemCooldown": {
+          const c = msg.msg.value;
+          hud.itemCooldown(c.group, c.readyInMs, c.totalMs);
+          // Recarga cheia = acabou de beber: efeito no personagem.
+          const root = entities.rootOf(welcome.yourId);
+          if (root && c.readyInMs >= c.totalMs - 250) fx.potion(root, c.group === 2 ? new Color3(0.35, 0.6, 1) : new Color3(1, 0.35, 0.3));
+          break;
+        }
+        case "appearance":
+          entities.setAppearance(msg.msg.value);
           break;
         case "skillCooldown":
           hud.cooldown(msg.msg.value.skillId, msg.msg.value.readyInMs);

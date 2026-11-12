@@ -27,7 +27,11 @@ const MONSTERS = {
 };
 const MONSTER_WEAPONS = ['Skeleton_Blade', 'Skeleton_Axe', 'Skeleton_Shield_Large_A', 'Skeleton_Staff'];
 
-const CHARACTERS = { knight: 'Knight', barbarian: 'Barbarian', mage: 'Mage', rogue: 'Rogue' };
+const CHARACTERS = {
+  knight: 'Knight', barbarian: 'Barbarian', mage: 'Mage', rogue: 'Rogue',
+  // NPCs da cidade (mesmo esqueleto dos heróis)
+  npc_merchant: 'Rogue_Hooded', npc_smith: 'Ranger',
+};
 
 // arquivo de origem → animações mantidas
 const ANIMS = {
@@ -38,7 +42,14 @@ const ANIMS = {
   'Rig_Medium_Special.glb': ['Skeletons_Idle', 'Skeletons_Walking', 'Skeletons_Death', 'Skeletons_Awaken_Floor'],
 };
 
-const WEAPONS = ['sword_1handed', 'shield_badge_color', 'axe_1handed', 'shield_round_barbarian', 'staff', 'dagger'];
+const WEAPONS = [
+  'sword_1handed', 'shield_badge_color', 'axe_1handed', 'shield_round_barbarian', 'staff', 'dagger',
+  // Fase 3: armas e escudos das outras raridades
+  'sword_2handed', 'sword_2handed_color', 'axe_2handed', 'wand', 'shield_square', 'shield_spikes', 'shield_spikes_color',
+];
+// Adereços avulsos (Medieval Hexagon): saquinho dos itens no chão.
+const PROPS = { loot_sack: 'decoration/props/sack' };
+const hexagon = join(src, 'KayKit_Medieval_Hexagon_Pack_1.0_FREE/Assets/gltf');
 
 const io = new NodeIO();
 mkdirSync(join(out, 'weapons'), { recursive: true });
@@ -129,6 +140,14 @@ for (const w of WEAPONS) {
   const dst = join(out, 'weapons', `${w}.glb`);
   await io.write(dst, doc);
   report.push(`weapons/${w}.glb ${size(dst)}`);
+}
+
+mkdirSync(join(out, 'props'), { recursive: true });
+for (const [id, file] of Object.entries(PROPS)) {
+  const doc = await io.read(join(hexagon, `${file}.gltf`));
+  const dst = join(out, 'props', `${id}.glb`);
+  await io.write(dst, doc);
+  report.push(`props/${id}.glb ${size(dst)}`);
 }
 
 console.log(report.join('\n'));

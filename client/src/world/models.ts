@@ -1,9 +1,14 @@
 import "@babylonjs/loaders/glTF";
 import {
+  AbstractMesh,
   AnimationGroup,
   AssetContainer,
+  Color3,
   LoadAssetContainerAsync,
+  Material,
   Node,
+  PBRMaterial,
+  StandardMaterial,
   Quaternion,
   Scene,
   TransformNode,
@@ -49,15 +54,27 @@ const ANIM_SETS: Record<string, AnimSet> = {
   skeleton_warrior: { ...SKELETON_BASE, attack: "Melee_1H_Attack_Chop", skill: "Melee_2H_Attack_Chop" },
   skeleton_rogue: { ...SKELETON_BASE, attack: "Melee_Dualwield_Attack_Stab", skill: "Melee_1H_Attack_Stab" },
   skeleton_mage: { ...SKELETON_BASE, attack: "Ranged_Magic_Shoot", skill: "Ranged_Magic_Spellcasting" },
+  npc_merchant: { ...HERO_BASE, attack: "Melee_1H_Attack_Chop", skill: "Ranged_Magic_Raise" },
+  npc_smith: { ...HERO_BASE, attack: "Melee_1H_Attack_Chop", skill: "Melee_1H_Attack_Chop" },
 };
 
-type Slot = "handslot.r" | "handslot.l";
+export type Slot = "handslot.r" | "handslot.l";
+/** Armas padrão de cada modelo. Os heróis usam o que o servidor manda (equipamento). */
 const WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
-  knight: { "handslot.r": "sword_1handed", "handslot.l": "shield_badge_color" },
-  barbarian: { "handslot.r": "axe_1handed", "handslot.l": "shield_round_barbarian" },
-  mage: { "handslot.r": "staff" },
-  rogue: { "handslot.r": "dagger", "handslot.l": "dagger" },
+  knight: {},
+  barbarian: {},
+  mage: {},
+  rogue: {},
+  npc_merchant: {},
+  npc_smith: { "handslot.r": "axe_1handed" },
 };
+/** Todas as armas que os itens podem mostrar na mão. */
+const ITEM_WEAPONS = [
+  "sword_1handed", "sword_2handed", "sword_2handed_color", "axe_1handed", "axe_2handed", "staff", "wand", "dagger",
+  "shield_badge_color", "shield_round_barbarian", "shield_square", "shield_spikes", "shield_spikes_color",
+];
+/** Brilho das armas raras (3) e épicas (4). */
+const GRADE_GLOW: Record<number, Color3> = { 3: new Color3(0.15, 0.35, 0.9), 4: new Color3(0.6, 0.2, 0.95) };
 
 /** Modelos de monstro (arquivos opcionais: se faltarem, o jogo usa cápsulas). */
 const MONSTER_MODELS = ["skeleton_minion", "skeleton_warrior", "skeleton_rogue", "skeleton_mage"];
@@ -77,6 +94,10 @@ export interface CharacterInstance {
    * quadril —, e sem isso o corpo ficava enterrado no chão depois de um golpe.
    */
   resetPose(): void;
+  /** Troca o que está nas mãos (null/"" = mão vazia). grade 3–4 faz a arma brilhar. */
+  setWeapons(right: string | null, left: string | null, grade?: number): void;
+  /** Malhas atuais (corpo + armas), para sombra e visibilidade. */
+  meshes(): AbstractMesh[];
   dispose(): void;
 }
 
@@ -90,7 +111,11 @@ export class CharacterModels {
   private constructor(
     private models: Map<string, ModelAssets>,
     private animTemplates: Map<string, AnimationGroup>,
+    private weaponFiles: Map<string, AssetContainer | null>,
   ) {}
+
+  /** Materiais com brilho, por material original + raridade (compartilhados, nunca descartados). */
+  private glowMats = new Map<string, Material>();
 
   /** Baixa modelos, armas e animações em paralelo. Arquivos que faltarem são ignorados. */
   static async load(scene: Scene): Promise<CharacterModels> {
@@ -98,7 +123,7 @@ export class CharacterModels {
     const tryLoad = (file: string) => load(file).catch(() => null);
 
     const allWeapons = { ...WEAPONS, ...MONSTER_WEAPONS };
-    const weaponFiles = [...new Set(Object.values(allWeapons).flatMap((w) => Object.values(w)))];
+    const weaponFiles = [...new Set([...Object.values(allWeapons).flatMap((w) => Object.values(w)), ...ITEM_WEAPONS])];
     const modelIds = [...Object.keys(WEAPONS), ...MONSTER_MODELS];
 
     const [animContainers, weaponList, bodies] = await Promise.all([
@@ -127,18 +152,49 @@ export class CharacterModels {
         templates.set(g.name, g);
       }
     }
-    return new CharacterModels(models, templates);
+    return new CharacterModels(models, templates, weaponByFile);
+  }
+
+  /** Cópia do material com brilho na cor da raridade (uma por material + raridade). */
+  private glowMaterial(base: Material, grade: number): Material {
+    const key = `${base.uniqueId}:${grade}`;
+    let mat = this.glowMats.get(key);
+    if (!mat) {
+      mat = base.clone(`${base.name}-g${grade}`) ?? base;
+      const c = GRADE_GLOW[grade];
+      if (mat instanceof PBRMaterial) mat.emissiveColor = c;
+      else if (mat instanceof StandardMaterial) mat.emissiveColor = c;
+      this.glowMats.set(key, mat);
+    }
+    return mat;
   }
 
   has(model: string): boolean {
     return this.models.has(model);
   }
 
-  /** Cria uma cópia animável do modelo (ou null se ele não existir). */
-  instantiate(model: string, id: string): CharacterInstance | null {
+  /** Arquivos de arma carregados (podem ser usados em `weapons` do instantiate). */
+  weaponNames(): string[] {
+    return [...this.weaponFiles].filter(([, c]) => c).map(([w]) => w);
+  }
+
+  /**
+   * Cria uma cópia animável do modelo (ou null se ele não existir).
+   * `weapons` troca o que vai em cada mão (null = mão vazia); sem ele, usa as armas padrão.
+   */
+  instantiate(model: string, id: string, weapons?: Partial<Record<Slot, string | null>>): CharacterInstance | null {
     const assets = this.models.get(model);
     const set = ANIM_SETS[model];
     if (!assets || !set) return null;
+    let handItems = assets.weapons;
+    if (weapons) {
+      handItems = { ...assets.weapons };
+      for (const [slot, file] of Object.entries(weapons) as [Slot, string | null][]) {
+        const c = file ? this.weaponFiles.get(file) : null;
+        if (c) handItems[slot] = c;
+        else delete handItems[slot];
+      }
+    }
 
     // Malhas com esqueleto precisam ser clonadas (não instanciadas).
     const entries = assets.body.instantiateModelsToScene((n) => `${n}#${id}`, false, { doNotInstantiate: true });
@@ -151,20 +207,31 @@ export class CharacterModels {
     const byName = new Map<string, Node>();
     for (const n of gltfRoot.getDescendants(false)) byName.set(n.name.split("#")[0], n);
 
-    // Armas presas nos encaixes das mãos.
-    for (const [slot, container] of Object.entries(assets.weapons) as [Slot, AssetContainer][]) {
+    // Armas presas nos encaixes das mãos (trocadas quando o equipamento muda).
+    const held = new Map<Slot, TransformNode[]>();
+    const attach = (slot: Slot, container: AssetContainer | null | undefined, grade: number) => {
+      for (const n of held.get(slot) ?? []) n.dispose(false, false);
+      held.delete(slot);
       const hand = byName.get(slot);
-      if (!hand) continue;
+      if (!hand || !container) return;
       const w = container.instantiateModelsToScene((n) => `${n}#${id}`, false);
       const wRoot = w.rootNodes[0] as TransformNode;
       // O __root__ do glTF converte o sistema de coordenadas; dentro do esqueleto isso já foi
       // feito, então prendemos o filho direto e descartamos o __root__ da arma.
+      const nodes: TransformNode[] = [];
       for (const child of wRoot.getChildren() as TransformNode[]) {
         child.parent = hand as TransformNode;
         child.position = Vector3.Zero();
+        nodes.push(child);
+        if (GRADE_GLOW[grade]) {
+          for (const m of child.getChildMeshes(false)) if (m.material) m.material = this.glowMaterial(m.material, grade);
+          if (child instanceof AbstractMesh && child.material) child.material = this.glowMaterial(child.material, grade);
+        }
       }
       wRoot.dispose();
-    }
+      held.set(slot, nodes);
+    };
+    for (const [slot, container] of Object.entries(handItems) as [Slot, AssetContainer][]) attach(slot, container, 0);
 
     // Animações (só as do conjunto do modelo), reaplicadas pelo nome dos ossos.
     const anims = new Map<AnimRole, AnimationGroup>();
@@ -203,6 +270,11 @@ export class CharacterModels {
           r.node.scaling.copyFrom(r.scale);
         }
       },
+      setWeapons: (right, left, grade = 0) => {
+        attach("handslot.r", right ? this.weaponFiles.get(right) : null, grade);
+        attach("handslot.l", left ? this.weaponFiles.get(left) : null, grade);
+      },
+      meshes: () => root.getChildMeshes(false),
       dispose: () => {
         for (const a of cloned.values()) a.dispose();
         for (const s of entries.skeletons) s.dispose();

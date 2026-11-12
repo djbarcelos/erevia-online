@@ -22,8 +22,10 @@ const SWORD_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(SWORD_SVG)}")
 export interface InputHandlers {
   /** Clique no chão. Devolve o destino aceito (ou null se não puder andar). */
   onGround(x: number, z: number): { x: number; z: number } | null;
-  /** Clique numa entidade (monstro/jogador). */
+  /** Clique numa entidade (monstro/jogador/NPC). */
   onEntity(id: number): void;
+  /** Clique num item no chão. */
+  onLoot(id: number): void;
   /** Se o cursor deve indicar "atacar" ao passar sobre a entidade. */
   isEnemy(id: number): boolean;
 }
@@ -54,18 +56,25 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
     const now = performance.now();
     if (now - lastHover < HOVER_CHECK_MS) return;
     lastHover = now;
-    const id = pickEntity();
-    if (id !== null && h.isEnemy(id)) {
+    const hit = pickThing();
+    if (hit?.entity !== undefined && h.isEnemy(hit.entity)) {
       lastEnemyAt = now;
       setCursor(SWORD_CURSOR);
     } else if (now - lastEnemyAt > HOVER_GRACE_MS) {
-      setCursor(id !== null ? "pointer" : "");
+      setCursor(hit ? "pointer" : "");
     }
   };
 
-  const pickEntity = (): number | null => {
-    const pick = scene.pick(scene.pointerX, scene.pointerY, (m) => m.isPickable && m.metadata?.entityId !== undefined);
-    return pick?.hit && pick.pickedMesh ? (pick.pickedMesh.metadata.entityId as number) : null;
+  /** Entidade ou item no chão sob o cursor. */
+  const pickThing = (): { entity?: number; loot?: number } | null => {
+    const pick = scene.pick(
+      scene.pointerX,
+      scene.pointerY,
+      (m) => m.isPickable && (m.metadata?.entityId !== undefined || m.metadata?.lootId !== undefined),
+    );
+    if (!pick?.hit || !pick.pickedMesh) return null;
+    const md = pick.pickedMesh.metadata;
+    return md.entityId !== undefined ? { entity: md.entityId as number } : { loot: md.lootId as number };
   };
 
   const moveToCursor = (force: boolean) => {
@@ -87,9 +96,13 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
     switch (info.type) {
       case PointerEventTypes.POINTERDOWN: {
         if (ev.button !== 0) return;
-        const id = pickEntity();
-        if (id !== null) {
-          h.onEntity(id);
+        const hit = pickThing();
+        if (hit?.entity !== undefined) {
+          h.onEntity(hit.entity);
+          return;
+        }
+        if (hit?.loot !== undefined) {
+          h.onLoot(hit.loot);
           return;
         }
         holdingGround = true;

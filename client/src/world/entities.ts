@@ -19,6 +19,7 @@ import {
   type CombatEvent,
   type EffectEnd,
   type EffectEvent,
+  type Appearance,
   type Entity,
   type EntityState,
   type HpUpdate,
@@ -45,6 +46,7 @@ const ANIM_DISTANCE = 50;
 /** Só personagens até esta distância do jogador projetam sombra. */
 const SHADOW_DISTANCE = 35;
 const BONE_COLOR = "#d9d2c0";
+const NPC_COLOR = "#e0c27a";
 
 /** Velocidade dos projéteis (m/s): o dano só aparece quando o projétil chega. */
 const PROJECTILE_SPEED = 26;
@@ -70,6 +72,8 @@ export interface EntityInfo {
   hp: number;
   maxHp: number;
   dead: boolean;
+  /** NPC: função ("Mercadora"). */
+  title: string;
 }
 
 /** O que o mapa precisa saber de cada entidade. */
@@ -87,6 +91,10 @@ export interface MapMarker {
 
 interface View extends EntityInfo {
   model: string;
+  /** Armas na mão (jogadores): modelo da principal, da outra mão e raridade. */
+  weapon: string;
+  offhand: string;
+  grade: number;
   boss: boolean;
   scale: number;
   speed: number;
@@ -162,6 +170,34 @@ export class EntityManager {
     return this.views.get(id);
   }
 
+  isNpc(id: number): boolean {
+    return this.views.get(id)?.kind === EntityKind.NPC;
+  }
+
+  /** Nó raiz (posição no chão) de uma entidade. */
+  rootOf(id: number): TransformNode | undefined {
+    return this.views.get(id)?.root;
+  }
+
+  /** Ponto acima da cabeça (para textos flutuantes). */
+  headOf(id: number): TransformNode | undefined {
+    return this.views.get(id)?.head;
+  }
+
+  /** A arma de alguém mudou. */
+  setAppearance(a: Appearance): void {
+    const v = this.views.get(a.id);
+    if (!v) return;
+    v.weapon = a.weapon;
+    v.offhand = a.offhand;
+    v.grade = a.weaponGrade;
+    if (!v.model3d) return;
+    this.setShadow(v, false); // as malhas mudam; a sombra volta no próximo quadro
+    v.model3d.setWeapons(v.weapon, v.offhand, v.grade);
+    v.meshes = v.model3d.meshes();
+    this.notPickable(v.meshes);
+  }
+
   isEnemy(id: number): boolean {
     const v = this.views.get(id);
     return !!v && v.kind === EntityKind.MONSTER && !v.dead;
@@ -231,7 +267,7 @@ export class EntityManager {
     nameText.resizeToFit = true;
     nameText.fontSize = 13;
     nameText.paddingLeft = nameText.paddingRight = "6px";
-    nameText.color = isLocal ? "#f0d79a" : e.kind === EntityKind.MONSTER ? "#ffb4a8" : "#e6ecff";
+    nameText.color = isLocal ? "#f0d79a" : e.kind === EntityKind.MONSTER ? "#ffb4a8" : e.kind === EntityKind.NPC ? "#a8e6a0" : "#e6ecff";
     // Contorno em vez de shadowBlur: o desfoque do canvas 2D é caro e a GUI redesenha muito.
     nameText.outlineWidth = 3;
     nameText.outlineColor = "rgba(0,0,0,0.85)";
@@ -255,14 +291,16 @@ export class EntityManager {
     label.linkOffsetY = -6;
 
     const v: View = {
-      id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead,
-      model: e.model, boss: e.boss, scale, speed: e.speed,
+      id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
+      model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
     };
     this.views.set(e.id, v);
+    // NPCs ficam parados, virados para o centro da praça.
+    if (e.kind === EntityKind.NPC) visual.rotation.y = Math.atan2(-e.x, -e.z);
     this.refreshLabel(v);
     this.refreshHpBar(v);
 
@@ -636,23 +674,25 @@ export class EntityManager {
   }
 
   private refreshLabel(v: View): void {
-    v.nameText.text = v.kind === EntityKind.MONSTER ? `${v.name}  Nv ${v.level}` : v.name;
+    v.nameText.text =
+      v.kind === EntityKind.MONSTER ? `${v.name}  Nv ${v.level}` : v.kind === EntityKind.NPC ? `${v.title} ${v.name}` : v.name;
   }
 
   private refreshHpBar(v: View): void {
     const frac = v.maxHp > 0 ? Math.max(0, Math.min(1, v.hp / v.maxHp)) : 0;
     v.hpFill.width = frac;
     const isLocal = v.id === this.localId;
-    v.hpBar.isVisible = !isLocal && !v.dead && (v.id === this.targetId || frac < 1);
+    v.hpBar.isVisible = !isLocal && !v.dead && v.kind !== EntityKind.NPC && (v.id === this.targetId || frac < 1);
   }
 
   private attachModel(v: View): void {
     if (v.model3d || !this.models) return;
     const inst = this.models.instantiate(v.model, String(v.id));
     if (!inst) return;
+    if (v.kind === EntityKind.PLAYER) inst.setWeapons(v.weapon, v.offhand, v.grade);
     inst.root.parent = v.visual;
     inst.root.scaling.scaleInPlace(v.scale);
-    const meshes = inst.root.getChildMeshes(false);
+    const meshes = inst.meshes();
     this.notPickable(meshes);
     this.setShadow(v, false);
     v.meshes = meshes;
@@ -667,7 +707,9 @@ export class EntityManager {
     const body = MeshBuilder.CreateCapsule(`body${v.id}`, { height: 1.8 * v.scale, radius: 0.35 * v.scale }, this.scene);
     body.parent = v.visual;
     body.position.y = 0.9 * v.scale;
-    body.material = this.material(v.kind === EntityKind.MONSTER ? BONE_COLOR : classInfo(v.model).color);
+    body.material = this.material(
+      v.kind === EntityKind.MONSTER ? BONE_COLOR : v.kind === EntityKind.NPC ? NPC_COLOR : classInfo(v.model).color,
+    );
     this.notPickable([body]);
     this.setShadow(v, false);
     v.meshes = [body];

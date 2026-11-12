@@ -5,7 +5,7 @@ import { Effect } from "../gen/erevia/v1/game_pb";
  * fundo com degradê radial na cor do tema + um glifo claro com sombra.
  */
 
-interface Theme {
+export interface Theme {
   /** Centro e borda do fundo. */
   bg: [string, string];
   /** Cor do glifo. */
@@ -13,7 +13,7 @@ interface Theme {
   glyph: string;
 }
 
-const STROKE = `stroke-linecap="round" stroke-linejoin="round"`;
+export const STROKE = `stroke-linecap="round" stroke-linejoin="round"`;
 
 const SKILL_ICONS: Record<string, Theme> = {
   // Escudo com marcas de impacto.
@@ -148,7 +148,7 @@ const EFFECT_ICONS: Record<number, Theme> = {
   },
 };
 
-function render(t: Theme, id: string): string {
+export function render(t: Theme, id: string): string {
   return `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="color:${t.ink}">
     <defs>
       <radialGradient id="g-${id}" cx="40%" cy="35%" r="75%">

@@ -25,7 +25,7 @@ type npcDef struct {
 
 // townNPCs: comerciantes da praça, ao lado das tendas e do suporte de armas.
 var townNPCs = []npcDef{
-	{name: "Lívia", title: "Mercadora", model: "npc_merchant", x: 6.2, z: -5.6, stock: game.MerchantStock},
+	{name: "Lívia", title: "Mercadora", model: "npc_merchant", x: 4.6, z: -4.4, stock: game.MerchantStock},
 	{name: "Bruno", title: "Ferreiro", model: "npc_smith", x: -7.4, z: -4.4, stock: game.SmithStock},
 }
 

@@ -456,6 +456,36 @@ export class Fx {
     });
   }
 
+  /** Item pego do chão: brilho e faíscas subindo. */
+  pickup(at: Vector3, color: Color3): void {
+    const p = at.add(new Vector3(0, 0.3, 0));
+    this.flash(p, 0.9, color, 0.25);
+    this.burst(p, 14, {
+      tex: this.tex.flare,
+      life: [0.35, 0.6],
+      size: [0.05, 0.12],
+      speed: [0.8, 2],
+      colors: [c4(color.r, color.g, color.b), c4(1, 1, 1, 0.8), c4(color.r, color.g, color.b, 0)],
+      emitter: new SphereParticleEmitter(0.2),
+      gravity: -2,
+    });
+  }
+
+  /** Poção bebida: anel no chão e bolhas subindo na cor da poção. */
+  potion(root: TransformNode, color: Color3): void {
+    const at = root.position.clone();
+    this.decal(at, this.tex.ring, color, { size: [0.4, 2], dur: 0.6 });
+    this.stream(() => (root.isDisposed() ? null : root.position), 40, {
+      tex: this.tex.flare,
+      life: [0.5, 0.9],
+      size: [0.06, 0.14],
+      speed: [1.2, 2.4],
+      colors: [c4(color.r, color.g, color.b), c4(1, 1, 1, 0.7), c4(color.r, color.g, color.b, 0)],
+      emitter: rising(0.45, 0.1, 0.1),
+      gravity: 0.5,
+    }, 0.6);
+  }
+
   // ------------------------------------------------------------------------------------
   // Skills
   // ------------------------------------------------------------------------------------

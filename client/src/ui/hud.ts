@@ -1,6 +1,8 @@
 import { Effect, EntityKind, SkillTarget, type SelfStats, type SkillInfo } from "../gen/erevia/v1/game_pb";
 import type { ActiveEffect, EntityInfo } from "../world/entities";
 import { effectIcon, effectName, effectText, formatSeconds, isDebuff, skillIcon } from "./icons";
+import type { ItemInfo } from "../gen/erevia/v1/game_pb";
+import { itemIcon, type ItemTip } from "./items";
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -39,12 +41,34 @@ interface Slot {
   span: number;
 }
 
+/** Espaço de item na barra (poções), teclas 3–6. */
+interface ItemSlot {
+  key: number;
+  root: HTMLButtonElement;
+  icon: HTMLDivElement;
+  sweep: HTMLDivElement;
+  timer: HTMLSpanElement;
+  count: HTMLSpanElement;
+  info: ItemInfo | null;
+  cooling: boolean;
+}
+
+/** Teclas dos espaços de item na barra. */
+export const ITEM_KEYS = [3, 4, 5, 6];
+
 /** Quanto tempo uma skill de alvo pode ficar "na fila" sem resposta do servidor. */
 const QUEUE_TIMEOUT_MS = 8000;
 
 export interface HudCallbacks {
   onSkill(s: SkillInfo): void;
   onRespawn(): void;
+  /** Clique num espaço de item da barra (índice 0–3). */
+  onItemSlot(index: number): void;
+  /** Botão direito: esvazia o espaço. */
+  onClearItemSlot(index: number): void;
+  /** Dica do item (inventário/loja usam a mesma). */
+  itemTip: ItemTip;
+  me(): { myClass: string; myLevel: number };
   /** Distância do jogador até o alvo atual (null = sem alvo inimigo). */
   targetDistance(): number | null;
 }
@@ -101,6 +125,9 @@ export class Hud {
   private targetName = el("div", "target-name");
   private targetHp = bar("hp");
   private slots: Slot[] = [];
+  private itemSlots: ItemSlot[] = [];
+  /** Recarga por grupo de consumível (1 = vida, 2 = mana). */
+  private groupReady = new Map<number, { readyAt: number; span: number }>();
   private death = el("div", "death-screen");
   private tip = el("div", "skill-tip");
   private myEffects = new EffectRow("mine");
@@ -141,6 +168,38 @@ export class Hud {
       skillbar.append(btn);
       this.slots.push({ info: s, root: btn, sweep, timer, readyAt: 0, span: 1 });
     }
+    // Itens (poções): teclas 3–6. Arraste do inventário para cá.
+    skillbar.append(el("div", "skillbar-sep"));
+    ITEM_KEYS.forEach((key, i) => {
+      const btn = el("button", "skill item-slot empty");
+      btn.type = "button";
+      btn.dataset.drop = "hotbar";
+      btn.dataset.slot = String(i);
+      const icon = el("div", "skill-icon");
+      const sweep = el("div", "skill-sweep");
+      const timer = el("span", "skill-timer");
+      const count = el("span", "skill-cost item-count");
+      btn.append(icon, sweep, el("span", "skill-key", String(key)), count, timer);
+      const slot: ItemSlot = { key, root: btn, icon, sweep, timer, count, info: null, cooling: false };
+      btn.onclick = () => this.cb.onItemSlot(i);
+      btn.oncontextmenu = (ev) => {
+        ev.preventDefault();
+        this.cb.onClearItemSlot(i);
+      };
+      btn.onmouseenter = () => {
+        if (slot.info) this.cb.itemTip.show(slot.info, btn, { ...this.cb.me(), hint: `Tecla ${key} · botão direito tira da barra` });
+        else {
+          this.tip.replaceChildren(el("p", "tip-desc", "Arraste uma poção do inventário (I) para este espaço."), el("p", "tip-key", `Tecla ${key}`));
+          this.placeTip(btn);
+        }
+      };
+      btn.onmouseleave = () => {
+        this.cb.itemTip.hide();
+        this.tip.hidden = true;
+      };
+      skillbar.append(btn);
+      this.itemSlots.push(slot);
+    });
     me.append(skillbar);
     this.tip.hidden = true;
 
@@ -168,6 +227,11 @@ export class Hud {
     this.raf = requestAnimationFrame(loop);
   }
 
+  /** Raiz do HUD (janelas do jogo entram aqui e somem junto ao desconectar). */
+  get element(): HTMLElement {
+    return this.root;
+  }
+
   dispose(): void {
     cancelAnimationFrame(this.raf);
     this.root.remove();
@@ -187,6 +251,32 @@ export class Hud {
     }
     this.death.hidden = !s.dead;
     for (const slot of this.slots) slot.root.classList.toggle("no-mana", s.mp < slot.info.mpCost);
+  }
+
+  /** O que está em cada espaço de item e quantas unidades há na bolsa. */
+  setItemSlots(items: (ItemInfo | null)[], counts: number[]): void {
+    this.itemSlots.forEach((s, i) => {
+      const info = items[i] ?? null;
+      if (s.info?.id !== info?.id || s.info?.grade !== info?.grade) {
+        s.info = info;
+        s.icon.innerHTML = info ? itemIcon(info) : "";
+        s.root.setAttribute("aria-label", info ? `${info.name} (tecla ${s.key})` : `Espaço vazio (tecla ${s.key})`);
+      }
+      const n = counts[i] ?? 0;
+      s.count.textContent = info ? String(n) : "";
+      s.root.classList.toggle("empty", !info);
+      s.root.classList.toggle("none-left", !!info && n === 0);
+    });
+  }
+
+  /** Recarga de um grupo de consumíveis. */
+  itemCooldown(group: number, readyInMs: number, totalMs: number): void {
+    this.groupReady.set(group, { readyAt: performance.now() + readyInMs, span: Math.max(readyInMs, totalMs) });
+  }
+
+  /** O consumível está pronto (grupo sem recarga)? */
+  itemReady(group: number): boolean {
+    return performance.now() >= (this.groupReady.get(group)?.readyAt ?? 0);
   }
 
   /** Recarga vinda do servidor. 0 ms com a skill na fila = a skill foi cancelada. */
@@ -230,7 +320,9 @@ export class Hud {
     }
     this.targetFrame.hidden = false;
     this.targetFrame.classList.toggle("enemy", info.kind === EntityKind.MONSTER);
-    this.targetName.textContent = `${info.name}  ·  Nível ${info.level}${info.dead ? "  ·  morto" : ""}`;
+    const npc = info.kind === EntityKind.NPC;
+    this.targetName.textContent = npc ? `${info.name}  ·  ${info.title}` : `${info.name}  ·  Nível ${info.level}${info.dead ? "  ·  morto" : ""}`;
+    this.targetHp.root.hidden = npc;
     setBar(this.targetHp, info.hp, info.maxHp, `${info.hp} / ${info.maxHp}`);
   }
 
@@ -261,6 +353,32 @@ export class Hud {
       const far = s.info.target === SkillTarget.ENEMY && dist !== null && dist > s.info.range;
       s.root.classList.toggle("far", far);
     }
+    for (const s of this.itemSlots) {
+      const g = s.info?.cooldownGroup ? this.groupReady.get(s.info.cooldownGroup) : undefined;
+      const left = g ? g.readyAt - now : 0;
+      if (left > 0) {
+        const frac = Math.min(1, left / Math.max(1, g!.span));
+        s.sweep.style.setProperty("--done", `${((1 - frac) * 360).toFixed(1)}deg`);
+        s.timer.textContent = left > 1000 ? String(Math.ceil(left / 1000)) : (left / 1000).toFixed(1);
+        s.root.classList.add("cooling");
+        s.cooling = true;
+      } else if (s.cooling) {
+        s.cooling = false;
+        s.timer.textContent = "";
+        s.root.classList.remove("cooling", "ready-flash");
+        void s.root.offsetWidth;
+        s.root.classList.add("ready-flash");
+      }
+    }
+  }
+
+  private placeTip(anchor: HTMLElement): void {
+    const t = this.tip;
+    t.hidden = false;
+    const r = anchor.getBoundingClientRect();
+    const w = t.offsetWidth;
+    t.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+    t.style.bottom = `${window.innerHeight - r.top + 8}px`;
   }
 
   private showTip(s: SkillInfo, anchor: HTMLElement): void {

@@ -181,6 +181,7 @@ export class WorldMap {
       }
       if (m.boss) return; // já marcado pela zona fixa
       if (m.kind === EntityKind.MONSTER) drawDot(ctx, cx(m.x), cy(m.z), 2 * u, MARKER_COLORS.monster);
+      else if (m.kind === EntityKind.NPC) drawDot(ctx, cx(m.x), cy(m.z), 2.6 * u, MARKER_COLORS.npc);
       else drawDot(ctx, cx(m.x), cy(m.z), 3 * u, MARKER_COLORS.player);
       if (m.target) {
         ctx.beginPath();

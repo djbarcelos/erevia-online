@@ -6,7 +6,16 @@ MMORPG 3D no navegador. Cliente em **TypeScript + Babylon.js**, servidor em **Go
 
 Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
-## Estado atual: Fase 2 + cenário
+## Estado atual: Fase 3 (itens e economia)
+- **Itens e moedas:** cerca de 40 itens em 4 raridades (comum, bom, raro e épico): armas de cada classe, escudos, armaduras, elmos, poções e materiais. A arma e o escudo aparecem na mão do personagem; armas raras e épicas brilham.
+- **Drops:** monstros deixam moedas e itens no chão (saquinho com o nome; feixe de luz nos itens bons). Por 15 s, só quem causou mais dano pode pegar; depois fica livre, e some em 60 s. Clicar no item faz o personagem andar até ele e pegar.
+- **Inventário (tecla I):** 40 espaços e 4 encaixes (arma, mão secundária, armadura, elmo), com os atributos ao lado. Arrastar e soltar move, troca, equipa e destrói; duplo clique usa ou equipa.
+- **Poções nas teclas 3–6:** arraste uma poção do inventário para a barra. Vida e mana têm recargas separadas (10 s).
+- **Loja:** a Mercadora Lívia (poções) e o Ferreiro Bruno (armas e armaduras comuns e boas) ficam na praça. Clicar num deles abre a loja; vender paga 40% do preço.
+- **Kit inicial:** arma (e escudo) equipados, 5 poções e 50 moedas.
+- **Persistência segura:** moedas e itens são salvos junto com o personagem numa única transação. Um salvamento atrasado nunca sobrescreve um mais novo, e relogar rápido usa o estado da memória (não perde nem duplica itens). O servidor é o único que cria ou destrói itens.
+
+### Fases anteriores
 - **Cenário:** mapa de 300 × 300 m. Cidade murada (raio 38 m, 4 portões) com taverna, mercado, ferreiro, igreja, 16 casas e torres, em escala de personagem (casas de ~7 m, taverna de ~12 m). Estradas de terra e floresta que fica mais seca e sombria longe da cidade. Montanhas na borda, céu de entardecer e sombras. Tudo desenhado com *thin instances* (cerca de 1.800 objetos, 60 FPS). Árvores altas (cerca de 9–14 m; as secas mais distantes chegam a 19 m) e vegetação espaçada.
 - **Colisão e caminho:** não dá para atravessar casas, muralhas, árvores e pedras grandes. O servidor calcula o caminho (A* numa grade de 1 m), então clicar do outro lado de uma casa faz o personagem contorná-la.
 - **Combate PvE:** a cidade (zona segura) fica no centro, cercada por 3 anéis de esqueletos (níveis 1 a 20) e pelo chefe *Senhor dos Ossos* (nível 22).
@@ -17,7 +26,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - Login com **Google** ou **Discord** (OAuth + PKCE). A sessão fica num cookie HttpOnly.
 - Até **3 personagens** por conta, cada um com nome único e uma classe: cavaleiro, bárbaro, mago ou ladino.
 - **Chat:** canal geral, `/w Nome texto` para sussurrar e `/r texto` para responder. Clicar num nome no chat prepara o sussurro.
-- A posição é salva no banco ao sair, a cada 30 s e quando o servidor desliga.
+- O personagem é salvo no banco ao sair, a cada 30 s, logo depois de comprar, vender ou pegar itens, e quando o servidor desliga.
 - Se o mesmo personagem entrar em outro lugar, a sessão antiga cai com um aviso.
 - O servidor decide tudo: movimento, limites do mapa, limite anti-spam e anti-flood. Clientes lentos são desconectados.
 - **Painel de desempenho:** tecla **F3** (ou `?debug=1` na URL) mostra tempo de frame, draw calls, malhas ativas e o tempo gasto em animação e na interface.
@@ -50,9 +59,9 @@ server/
   cmd/zone/                  executável: HTTP + WebSocket + zona + arquivos do cliente
   internal/api/              login (OAuth, dev), sessão, personagens
   internal/store/            Postgres (pgx) + migrações SQL (goose)
-  internal/game/             dados e fórmulas: classes, skills, monstros, dano, XP
+  internal/game/             dados e fórmulas: classes, skills, monstros, itens, drops, dano, XP
   internal/world/            mapa embutido (world.json): colisão e caminhos (A*)
-  internal/zone/             simulação da zona: combate, IA, chat (uma goroutine, tick 20 Hz)
+  internal/zone/             simulação da zona: combate, IA, chat, inventário, drops, loja (uma goroutine, tick 20 Hz)
   internal/net/              conexões WebSocket (read/write pumps)
   internal/pb/               código Go gerado (não editar)
 client/

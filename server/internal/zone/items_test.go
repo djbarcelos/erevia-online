@@ -153,7 +153,7 @@ func TestLootReservedForTopDamageThenFree(t *testing.T) {
 	b, peerB := joinKit(z, 2, "rogue", 42, 0, 0)
 	m.mon.hate[b.id] = 500
 	m.mon.hate[a.id] = 10
-	z.kill(m, a) // A deu o último golpe, mas B causou mais dano
+	z.kill(m, a)          // A deu o último golpe, mas B causou mais dano
 	m.mon.respawnAt = 1e9 // o chefe não volta durante o teste
 
 	if len(z.ground) == 0 {
