@@ -174,21 +174,21 @@ const RING1 = [SAFE_RADIUS + 3, 52];
 const RING2 = [52, 80];
 const RING3 = [80, 142]; // inclui os cantos do quadrado
 
-// Árvores: altas (~7–11 m, bem acima do personagem de 1,8 m) e mais espaçadas.
+// Árvores: altas (~9–14 m, bem acima do personagem de 1,8 m) e mais espaçadas.
 // O tronco engrossa menos que a copa, então o colisor cresce mais devagar que a escala.
 scatter(50, ...RING1, (x, z) => {
-  const s = between(1.7, 2.2);
+  const s = between(2.1, 2.7);
   place(pick(LUSH), x, z, rand() * 6.28, s);
   collide(x, z, 0.3 * s);
 }, { spacing: 7 });
 scatter(45, ...RING2, (x, z) => {
   const bare = rand() < 0.35;
-  const s = between(1.7, 2.3) * (bare ? 1.25 : 1);
+  const s = between(2.1, 2.8) * (bare ? 1.25 : 1);
   place(bare ? pick(BARE) : pick(LUSH), x, z, rand() * 6.28, s);
   collide(x, z, 0.28 * s);
 }, { spacing: 7.5 });
 scatter(40, ...RING3, (x, z) => {
-  const s = between(2.1, 2.8);
+  const s = between(2.6, 3.4);
   place(pick(BARE), x, z, rand() * 6.28, s);
   collide(x, z, 0.22 * s);
 }, { spacing: 7.5 });
