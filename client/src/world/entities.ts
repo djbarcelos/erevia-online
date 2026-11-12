@@ -449,6 +449,16 @@ export class EntityManager {
     return this.local?.root.position;
   }
 
+  /** Pontos que a câmera precisa enxergar (meio do corpo do jogador e do alvo). */
+  focusPoints(): Vector3[] {
+    const out: Vector3[] = [];
+    for (const id of [this.localId, this.targetId]) {
+      const v = id ? this.views.get(id) : undefined;
+      if (v) out.push(new Vector3(v.root.position.x, 1.1 * v.scale, v.root.position.z));
+    }
+    return out;
+  }
+
   /** Posição na tela (pixels CSS) do meio do corpo. Usado pelos testes no navegador. */
   screenPos(id: number, scene: Scene): { x: number; y: number } | null {
     const v = this.views.get(id);

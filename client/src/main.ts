@@ -9,7 +9,7 @@ import { setupPerfPanel } from "./ui/perf";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
 import { CharacterModels } from "./world/models";
-import { loadEnvironment } from "./world/environment";
+import { loadEnvironment, type Environment } from "./world/environment";
 import { createWorldScene } from "./world/scene";
 import { Collision, loadWorldData } from "./world/world-data";
 
@@ -105,8 +105,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   for (const e of welcome.entities) entities.add(e);
 
   // Cenário (árvores, cidade, montanhas) em segundo plano.
+  let env: Environment | null = null;
   loadEnvironment(world.scene, worldData, world.shadows)
-    .then((n) => console.info(`cenário: ${n} objetos`))
+    .then((e) => {
+      env = e;
+      console.info(`cenário: ${e.drawn} objetos`);
+    })
     .catch((err) => console.warn("cenário indisponível", err));
 
   // Modelos 3D carregam em segundo plano; até lá, cápsulas coloridas.
@@ -174,6 +178,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       world.camera.target.z = pos.z;
       world.followShadows(pos.x, pos.z);
     }
+    // Árvores que tapam o jogador ou o alvo ficam translúcidas.
+    env?.fader.update(dt, world.camera.position, entities.focusPoints());
   });
 
   // Painel de diagnóstico + quadro do alvo
@@ -201,6 +207,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       screenPos: (id: number) => entities.screenPos(id, world.scene),
       nearestMonster: () => entities.nearestMonster(),
       scene: world.scene,
+      env: () => env,
     };
   }
 
