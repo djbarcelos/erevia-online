@@ -182,7 +182,14 @@ func TestPositionsSavedOnLeaveAndShutdown(t *testing.T) {
 
 	z.handle(leaveEvent{id: 7, peer: a})
 	got := <-saves
-	if len(got) != 1 || got[0] != (SavedState{ID: 7, X: 3, Z: 4, Level: 1, HP: -1, MP: -1}) {
+	if len(got) != 1 || got[0].Seq == 0 {
+		t.Fatalf("save on leave = %v", got)
+	}
+	got[0].Seq = 0
+	if got[0].Items != nil || got[0].Gold != 0 {
+		t.Fatalf("save on leave = %v", got)
+	}
+	if g := got[0]; g.ID != 7 || g.X != 3 || g.Z != 4 || g.Level != 1 || g.HP != -1 || g.MP != -1 {
 		t.Fatalf("save on leave = %v", got)
 	}
 

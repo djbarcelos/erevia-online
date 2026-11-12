@@ -13,6 +13,7 @@ const (
 	actNone actionKind = iota
 	actAttack
 	actSkill
+	actPickup // target = id do item no chão
 )
 
 // action é o que a entidade está fazendo: atacar um alvo ou usar uma skill nele.
@@ -54,6 +55,7 @@ type entity struct {
 
 	pl  *playerState  // só jogadores
 	mon *monsterState // só monstros
+	npc *npcState     // só NPCs
 }
 
 type playerState struct {
@@ -65,6 +67,8 @@ type playerState struct {
 	chatTokens float64
 	statsDirty bool
 	sentMP     int
+	inv        inventory
+	saveAt     float64 // salvar em breve (0 = só no periódico)
 }
 
 func (e *entity) alive() bool { return !e.dead }

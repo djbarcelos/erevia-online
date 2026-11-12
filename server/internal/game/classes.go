@@ -29,25 +29,25 @@ type ClassDef struct {
 var Classes = map[string]*ClassDef{
 	"knight": {
 		ID: "knight", Name: "Cavaleiro",
-		Base:     Stats{MaxHP: 160, MaxMP: 40, PAtk: 14, MAtk: 4, PDef: 30, MDef: 15, Range: 2.2, AtkInterval: 1.2, Crit: 0.05, Speed: 5},
+		Base:     Stats{MaxHP: 160, MaxMP: 40, PAtk: 8, MAtk: 4, PDef: 24, MDef: 15, Range: 2.2, AtkInterval: 1.2, Crit: 0.05, Speed: 5},
 		PerLevel: Stats{MaxHP: 22, MaxMP: 4, PAtk: 2.2, MAtk: 0.5, PDef: 3.5, MDef: 2},
 		Skills:   [2]uint32{SkillShieldBash, SkillFortress},
 	},
 	"barbarian": {
 		ID: "barbarian", Name: "Bárbaro",
-		Base:     Stats{MaxHP: 150, MaxMP: 35, PAtk: 18, MAtk: 3, PDef: 20, MDef: 12, Range: 2.2, AtkInterval: 1.4, Crit: 0.10, Speed: 5},
+		Base:     Stats{MaxHP: 150, MaxMP: 35, PAtk: 10, MAtk: 3, PDef: 16, MDef: 12, Range: 2.2, AtkInterval: 1.4, Crit: 0.10, Speed: 5},
 		PerLevel: Stats{MaxHP: 20, MaxMP: 3, PAtk: 3.0, MAtk: 0.4, PDef: 2.5, MDef: 1.5},
 		Skills:   [2]uint32{SkillBrutalStrike, SkillFury},
 	},
 	"mage": {
 		ID: "mage", Name: "Mago",
-		Base:     Stats{MaxHP: 95, MaxMP: 120, PAtk: 6, MAtk: 20, PDef: 12, MDef: 25, Range: 12, AtkInterval: 1.6, Crit: 0.05, Speed: 5, Magic: true},
+		Base:     Stats{MaxHP: 95, MaxMP: 120, PAtk: 6, MAtk: 12, PDef: 12, MDef: 25, Range: 12, AtkInterval: 1.6, Crit: 0.05, Speed: 5, Magic: true},
 		PerLevel: Stats{MaxHP: 11, MaxMP: 14, PAtk: 0.6, MAtk: 3.2, PDef: 1.5, MDef: 3},
 		Skills:   [2]uint32{SkillFireball, SkillIceNova},
 	},
 	"rogue": {
 		ID: "rogue", Name: "Ladino",
-		Base:     Stats{MaxHP: 120, MaxMP: 60, PAtk: 12, MAtk: 4, PDef: 16, MDef: 12, Range: 2.2, AtkInterval: 0.8, Crit: 0.25, Speed: 5.5},
+		Base:     Stats{MaxHP: 120, MaxMP: 60, PAtk: 7, MAtk: 4, PDef: 16, MDef: 12, Range: 2.2, AtkInterval: 0.8, Crit: 0.25, Speed: 5.5},
 		PerLevel: Stats{MaxHP: 15, MaxMP: 6, PAtk: 2.0, MAtk: 0.5, PDef: 2, MDef: 1.5},
 		Skills:   [2]uint32{SkillBackstab, SkillShadowStep},
 	},
@@ -67,6 +67,18 @@ func ClassStats(class string, level int) Stats {
 	s.MAtk += c.PerLevel.MAtk * l
 	s.PDef += c.PerLevel.PDef * l
 	s.MDef += c.PerLevel.MDef * l
+	return s
+}
+
+// AddBonus soma os bônus de equipamento aos atributos (só os campos numéricos de status).
+func (s Stats) AddBonus(b Stats) Stats {
+	s.MaxHP += b.MaxHP
+	s.MaxMP += b.MaxMP
+	s.PAtk += b.PAtk
+	s.MAtk += b.MAtk
+	s.PDef += b.PDef
+	s.MDef += b.MDef
+	s.Crit += b.Crit
 	return s
 }
 

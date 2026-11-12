@@ -15,6 +15,12 @@ message ClientMessage {
     Attack attack = 5;
     UseSkill use_skill = 6;
     Respawn respawn = 7;
+    PickUp pick_up = 8;
+    MoveItem move_item = 9;
+    UseItem use_item = 10;
+    DestroyItem destroy_item = 11;
+    Buy buy = 12;
+    Sell sell = 13;
   }
 }
 
@@ -54,6 +60,46 @@ message UseSkill {
 // Morto: voltar à cidade.
 message Respawn {}
 
+// Pegar um item do chão (anda até ele se precisar).
+message PickUp {
+  uint32 id = 1;
+}
+
+// Lugares de um item: 0 = bolsa, 1 = equipado (slot = encaixe).
+// Mover entre espaços da bolsa (troca ou junta pilhas), equipar ou desequipar.
+message MoveItem {
+  uint32 from_place = 1;
+  uint32 from_slot = 2;
+  uint32 to_place = 3;
+  uint32 to_slot = 4;
+}
+
+// Usar: poção bebe; equipamento na bolsa equipa; equipado volta para a bolsa.
+message UseItem {
+  uint32 place = 1;
+  uint32 slot = 2;
+}
+
+// Destruir itens de um espaço da bolsa.
+message DestroyItem {
+  uint32 slot = 1;
+  uint32 count = 2;
+}
+
+// Comprar de um NPC (precisa estar perto dele).
+message Buy {
+  uint32 npc_id = 1;
+  string item_id = 2;
+  uint32 count = 3;
+}
+
+// Vender a um NPC itens de um espaço da bolsa.
+message Sell {
+  uint32 npc_id = 1;
+  uint32 slot = 2;
+  uint32 count = 3;
+}
+
 // ---------- Servidor -> Cliente ----------
 
 message ServerMessage {
@@ -67,6 +113,11 @@ message ServerMessage {
     Kicked kicked = 7;
     SelfStats self_stats = 8;
     SkillCooldown skill_cooldown = 9;
+    Inventory inventory = 10;
+    GroundItemsAdded ground_added = 11;
+    GroundItemsRemoved ground_removed = 12;
+    ItemCooldown item_cooldown = 13;
+    Appearance appearance = 14;
   }
 }
 
@@ -82,6 +133,10 @@ message Welcome {
   int64 server_time_ms = 8; // relógio do servidor (Unix, ms) para o ciclo dia/noite
   uint32 day_cycle_ms = 9; // duração do ciclo dia/noite
   repeated SkillInfo skill_catalog = 10; // todas as skills do jogo (visual das skills dos outros)
+  repeated ItemInfo item_catalog = 11; // todos os itens do jogo
+  Inventory inventory = 12;
+  repeated GroundItem ground_items = 13; // itens no chão agora
+  repeated NpcInfo npcs = 14; // lojas dos NPCs
 }
 
 // Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
@@ -158,6 +213,8 @@ message SelfStats {
   uint32 p_def = 11;
   float speed = 12;
   bool dead = 13;
+  uint32 m_def = 14;
+  float crit = 15; // chance de crítico (0–1)
 }
 
 // Recarga de skill (só para o dono).
@@ -166,12 +223,111 @@ message SkillCooldown {
   uint32 ready_in_ms = 2;
 }
 
+// Bolsa e equipamento completos (só para o dono), enviados a cada mudança.
+message Inventory {
+  uint64 gold = 1;
+  repeated ItemStack items = 2;
+  uint32 bag_size = 3;
+}
+
+// Itens que apareceram no chão (drop de monstro).
+message GroundItemsAdded {
+  repeated GroundItem items = 1;
+}
+
+// Itens que saíram do chão (alguém pegou ou venceu o tempo).
+message GroundItemsRemoved {
+  repeated uint32 ids = 1;
+  uint32 picked_by = 2; // 0 = sumiu sozinho
+}
+
+// Recarga de um grupo de consumíveis (só para o dono). 1 = vida, 2 = mana.
+message ItemCooldown {
+  uint32 group = 1;
+  uint32 ready_in_ms = 2;
+  uint32 total_ms = 3;
+}
+
+// A arma de alguém mudou (todos veem).
+message Appearance {
+  uint32 id = 1;
+  string weapon = 2;
+  string offhand = 3;
+  uint32 weapon_grade = 4;
+}
+
 // ---------- Tipos ----------
+
+message ItemStack {
+  uint32 place = 1; // 0 = bolsa, 1 = equipado
+  uint32 slot = 2;
+  string item_id = 3;
+  uint32 count = 4;
+}
+
+message GroundItem {
+  uint32 id = 1;
+  string item_id = 2;
+  uint32 count = 3;
+  float x = 4;
+  float z = 5;
+  uint32 owner_id = 6; // reservado para este jogador…
+  uint32 reserved_ms = 7; // …por mais este tempo (0 = livre)
+}
+
+message NpcInfo {
+  uint32 id = 1;
+  repeated string stock = 2; // ids dos itens à venda
+}
+
+enum ItemKind {
+  ITEM_KIND_UNSPECIFIED = 0;
+  ITEM_KIND_WEAPON = 1;
+  ITEM_KIND_SHIELD = 2;
+  ITEM_KIND_ARMOR = 3;
+  ITEM_KIND_HELMET = 4;
+  ITEM_KIND_POTION = 5;
+  ITEM_KIND_MATERIAL = 6;
+  ITEM_KIND_GOLD = 7;
+}
+
+message ItemBonus {
+  int32 max_hp = 1;
+  int32 max_mp = 2;
+  int32 p_atk = 3;
+  int32 m_atk = 4;
+  int32 p_def = 5;
+  int32 m_def = 6;
+  float crit = 7;
+}
+
+message ItemInfo {
+  string id = 1;
+  string name = 2;
+  ItemKind kind = 3;
+  uint32 grade = 4; // 1 comum, 2 bom, 3 raro, 4 épico
+  int32 slot = 5; // encaixe de equipamento (-1 = não se equipa)
+  repeated string classes = 6; // vazio = todas
+  uint32 req_level = 7;
+  ItemBonus bonus = 8;
+  uint32 stack = 9;
+  uint32 price = 10;
+  uint32 sell_price = 11;
+  string icon = 12;
+  string description = 13;
+  uint32 cooldown_group = 14;
+  uint32 cooldown_ms = 15;
+  uint32 heal_hp = 16;
+  uint32 heal_mp = 17;
+  string model = 18;
+  string off_model = 19;
+}
 
 enum EntityKind {
   ENTITY_KIND_UNSPECIFIED = 0;
   ENTITY_KIND_PLAYER = 1;
   ENTITY_KIND_MONSTER = 2;
+  ENTITY_KIND_NPC = 3;
 }
 
 message Entity {
@@ -190,6 +346,10 @@ message Entity {
   bool dead = 13;
   float scale = 14; // tamanho visual (0 = 1)
   bool boss = 15; // chefe
+  string weapon = 16; // modelo da arma (jogadores)
+  string offhand = 17; // modelo da outra mão
+  uint32 weapon_grade = 18;
+  string title = 19; // NPC: função (ex.: "Mercadora")
 }
 
 message EntityState {

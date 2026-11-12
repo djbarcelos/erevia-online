@@ -14,6 +14,7 @@ import (
 	"github.com/coder/websocket"
 	"google.golang.org/protobuf/proto"
 
+	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
 	"erevia/server/internal/zone"
 )
@@ -34,6 +35,8 @@ type Character struct {
 	X, Z   float64
 	XP     int64
 	HP, MP int // <= 0 = cheio
+	Gold   int64
+	Items  []game.ItemRecord
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -100,7 +103,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	go sess.writePump(ctx)
 	s.zone.Join(ctx, zone.JoinInfo{
 		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z,
-		XP: char.XP, HP: char.HP, MP: char.MP, Peer: sess,
+		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)
@@ -164,6 +167,18 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.UseSkill(ctx, id, m.UseSkill.SkillId, m.UseSkill.TargetId)
 		case *pb.ClientMessage_Respawn:
 			s.zone.Respawn(ctx, id)
+		case *pb.ClientMessage_PickUp:
+			s.zone.ItemAction(ctx, id, m.PickUp)
+		case *pb.ClientMessage_MoveItem:
+			s.zone.ItemAction(ctx, id, m.MoveItem)
+		case *pb.ClientMessage_UseItem:
+			s.zone.ItemAction(ctx, id, m.UseItem)
+		case *pb.ClientMessage_DestroyItem:
+			s.zone.ItemAction(ctx, id, m.DestroyItem)
+		case *pb.ClientMessage_Buy:
+			s.zone.ItemAction(ctx, id, m.Buy)
+		case *pb.ClientMessage_Sell:
+			s.zone.ItemAction(ctx, id, m.Sell)
 		case *pb.ClientMessage_Ping:
 			// Respondido aqui mesmo, sem passar pela zona, para medir só a rede.
 			pong, _ := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Pong{

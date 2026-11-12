@@ -21,6 +21,10 @@ func (z *Zone) runAction(e *entity) {
 		e.stopMoving()
 		return
 	}
+	if e.act.kind == actPickup {
+		z.runPickup(e)
+		return
+	}
 	t := z.get(e.act.target)
 	if t == nil || t.dead || t == e || (t.mon != nil && t.mon.hidden) {
 		z.cancelQueuedSkill(e)

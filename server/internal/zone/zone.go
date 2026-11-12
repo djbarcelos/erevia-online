@@ -65,6 +65,8 @@ type JoinInfo struct {
 	X, Z   float64
 	XP     int64
 	HP, MP int // <= 0 = cheio
+	Gold   int64
+	Items  []game.ItemRecord
 	Peer   Peer
 }
 
@@ -75,7 +77,21 @@ type SavedState struct {
 	Level  int
 	XP     int64
 	HP, MP int // -1 = cheio
+	Gold   int64
+	Items  []game.ItemRecord
+	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
+	Seq int64
 }
+
+// recentState é o último estado de quem saiu. Ao voltar, vale mais que o banco (o
+// salvamento pode ainda não ter terminado): relogar rápido não perde nem duplica itens.
+type recentState struct {
+	state SavedState
+	at    time.Time
+}
+
+// recentKeep: por quanto tempo a zona lembra o estado de quem saiu.
+const recentKeep = 10 * time.Minute
 
 type event interface{ isEvent() }
 
@@ -131,6 +147,12 @@ type Zone struct {
 	// Recargas de quem saiu (personagem → skill → quando fica pronta, no relógio de
 	// parede): sair e entrar de novo não zera as recargas.
 	savedCooldowns map[uint32]map[uint32]time.Time
+	npcs           map[uint32]*entity
+	ground         map[uint32]*groundItem
+	groundSeq      uint32
+	recent         map[uint32]recentState
+	pending        map[uint32]SavedState // salvamentos que não couberam na fila
+	lastSeq        int64
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -143,6 +165,10 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		monsters:       make(map[uint32]*entity),
 		byName:         make(map[string]uint32),
 		savedCooldowns: map[uint32]map[uint32]time.Time{},
+		npcs:           map[uint32]*entity{},
+		ground:         map[uint32]*groundItem{},
+		recent:         map[uint32]recentState{},
+		pending:        map[uint32]SavedState{},
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
 	}
@@ -151,6 +177,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 	}
 	z.night = game.IsNight(game.DayPhase(z.cfg.Clock()))
 	z.spawnMonsters()
+	z.spawnNPCs()
 	return z
 }
 
@@ -173,6 +200,12 @@ func (z *Zone) UseSkill(ctx context.Context, id, skill, target uint32) {
 	z.post(ctx, skillEvent{id: id, skill: skill, target: target})
 }
 func (z *Zone) Respawn(ctx context.Context, id uint32) { z.post(ctx, respawnEvent{id: id}) }
+
+// ItemAction repassa um pedido de item (*pb.PickUp, *pb.MoveItem, *pb.UseItem,
+// *pb.DestroyItem, *pb.Buy, *pb.Sell).
+func (z *Zone) ItemAction(ctx context.Context, id uint32, msg any) {
+	z.post(ctx, itemEvent{id: id, msg: msg})
+}
 
 func (z *Zone) post(ctx context.Context, e event) {
 	select {
@@ -236,6 +269,8 @@ func (z *Zone) handle(e event) {
 		if p := z.players[e.id]; p != nil {
 			z.respawnPlayer(p)
 		}
+	case itemEvent:
+		z.onItem(e)
 	}
 }
 
@@ -265,25 +300,37 @@ func (z *Zone) onJoin(info JoinInfo) {
 		z.removePlayer(info.ID)
 	}
 
+	// O estado de quem acabou de sair (ainda salvando) vale mais que o do banco.
+	if r, ok := z.recent[info.ID]; ok {
+		st := r.state
+		info.X, info.Z, info.XP, info.HP, info.MP, info.Gold, info.Items = st.X, st.Z, st.XP, st.HP, st.MP, st.Gold, st.Items
+		delete(z.recent, info.ID)
+	}
+
 	level := game.LevelForXP(info.XP)
-	stats := game.ClassStats(info.Class, level)
 	pos := z.freeSpot(clampToZone(Vec2{X: info.X, Z: info.Z}, z.cfg.Size/2))
+	inv, skipped := loadInventory(info.Gold, info.Items)
+	if skipped > 0 {
+		z.log.Warn("items skipped on load", "id", info.ID, "count", skipped)
+	}
 	p := &entity{
 		id: info.ID, kind: pb.EntityKind_ENTITY_KIND_PLAYER,
 		name: info.Name, model: info.Class, level: level, scale: 1,
-		pos: pos, dest: pos, stats: stats,
-		hp: stats.MaxHP, mp: stats.MaxMP,
+		pos: pos, dest: pos,
 		lastCombat: -math.MaxFloat64 / 2,
 		pl: &playerState{
 			peer: info.Peer, class: info.Class, xp: info.XP,
 			cooldowns:  map[uint32]float64{},
 			moveTokens: z.cfg.MaxMovesPerSec, chatTokens: z.cfg.ChatBurst,
+			inv: inv,
 		},
 	}
-	if info.HP > 0 && float64(info.HP) < stats.MaxHP {
+	p.hp, p.mp = math.MaxFloat64, math.MaxFloat64
+	z.refreshStats(p) // classe + equipamento; limita a vida/mana ao máximo
+	if info.HP > 0 && float64(info.HP) < p.stats.MaxHP {
 		p.hp = float64(info.HP)
 	}
-	if info.MP > 0 && float64(info.MP) < stats.MaxMP {
+	if info.MP > 0 && float64(info.MP) < p.stats.MaxMP {
 		p.mp = float64(info.MP)
 	}
 	p.sentHP, p.sentMaxHP = p.hpInt(), p.maxHPInt()
@@ -295,9 +342,12 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(p)}}}, p.id)
 
 	// Diz ao novo jogador quem ele é, quem já está aqui (inclui ele mesmo) e suas skills.
-	entities := make([]*pb.Entity, 0, len(z.players)+len(z.monsters))
+	entities := make([]*pb.Entity, 0, len(z.players)+len(z.monsters)+len(z.npcs))
 	for _, other := range z.players {
 		entities = append(entities, z.entityPB(other))
+	}
+	for _, n := range z.npcs {
+		entities = append(entities, z.entityPB(n))
 	}
 	for _, m := range z.monsters {
 		if !m.mon.hidden {
@@ -319,11 +369,15 @@ func (z *Zone) onJoin(info JoinInfo) {
 		ServerTimeMs: z.cfg.Clock().UnixMilli(),
 		DayCycleMs:   uint32(game.DayCycle.Milliseconds()),
 		SkillCatalog: skillCatalog(),
+		ItemCatalog:  itemCatalog,
+		Inventory:    inventoryPB(&p.pl.inv),
+		GroundItems:  z.groundList(),
+		Npcs:         z.npcList(),
 	}}})
 	z.sendSelfStats(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
-			z.sendCooldown(p, id, ready-z.now)
+			z.sendAnyCooldown(p, id, ready-z.now)
 		}
 	}
 
@@ -405,7 +459,9 @@ func (z *Zone) removePlayer(id uint32) {
 			m.clearAction()
 		}
 	}
-	z.save([]SavedState{z.savedState(p)}, false)
+	st := z.savedState(p)
+	z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
+	z.save([]SavedState{st}, false)
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: id}}}, 0)
 	z.log.Info("player left", "id", id, "name", p.name, "online", len(z.players))
 }
@@ -429,6 +485,14 @@ func (z *Zone) update(dt float64) {
 		z.think(m)
 		z.step(m, dt)
 	}
+
+	if z.tick%uint32(z.cfg.TickRate) == 0 { // 1×/s
+		z.expireGround()
+		if len(z.pending) > 0 {
+			z.save(nil, false)
+		}
+	}
+	z.saveDue()
 
 	z.flushSnapshot()
 	for _, p := range z.players {
@@ -508,7 +572,10 @@ func (z *Zone) sendSelfStats(p *entity) {
 }
 
 func (z *Zone) savedState(p *entity) SavedState {
-	s := SavedState{ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: int(math.Floor(p.mp))}
+	s := SavedState{
+		ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: int(math.Floor(p.mp)),
+		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),
+	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
 	}
@@ -521,21 +588,63 @@ func (z *Zone) savedState(p *entity) SavedState {
 	return s
 }
 
+// nextSeq: relógio em nanossegundos, sempre crescente (vale entre reinícios do servidor).
+func (z *Zone) nextSeq() int64 {
+	z.lastSeq = max(z.lastSeq+1, time.Now().UnixNano())
+	return z.lastSeq
+}
+
 func (z *Zone) saveAll(blocking bool) {
-	if len(z.players) == 0 {
-		return
+	wall := z.cfg.Clock()
+	for id, r := range z.recent {
+		if wall.Sub(r.at) > recentKeep {
+			delete(z.recent, id)
+		}
 	}
 	batch := make([]SavedState, 0, len(z.players))
 	for _, p := range z.players {
+		p.pl.saveAt = 0
 		batch = append(batch, z.savedState(p))
 	}
 	z.save(batch, blocking)
 }
 
+// saveDue salva logo quem trocou itens ou moedas (compra, venda, coleta).
+func (z *Zone) saveDue() {
+	var batch []SavedState
+	for _, p := range z.players {
+		if p.pl.saveAt > 0 && z.now >= p.pl.saveAt {
+			p.pl.saveAt = 0
+			batch = append(batch, z.savedState(p))
+		}
+	}
+	if len(batch) > 0 {
+		z.save(batch, false)
+	}
+}
+
 // save entrega estados à goroutine de persistência. Fora do desligamento nunca
-// bloqueia: se o canal estiver cheio, o próximo salvamento periódico cobre.
+// bloqueia: se a fila estiver cheia, os estados ficam pendentes e são reenviados
+// (o mais novo de cada personagem) na próxima tentativa.
 func (z *Zone) save(batch []SavedState, blocking bool) {
 	if z.saves == nil {
+		return
+	}
+	if len(z.pending) > 0 {
+		merged := make([]SavedState, 0, len(z.pending)+len(batch))
+		newer := map[uint32]bool{}
+		for _, s := range batch {
+			newer[s.ID] = true
+		}
+		for id, s := range z.pending {
+			if !newer[id] {
+				merged = append(merged, s)
+			}
+		}
+		batch = append(merged, batch...)
+		clear(z.pending)
+	}
+	if len(batch) == 0 {
 		return
 	}
 	if blocking {
@@ -545,12 +654,15 @@ func (z *Zone) save(batch []SavedState, blocking bool) {
 	select {
 	case z.saves <- batch:
 	default:
-		z.log.Warn("save queue full, dropping batch", "size", len(batch))
+		z.log.Warn("save queue full, retrying later", "size", len(batch))
+		for _, s := range batch {
+			z.pending[s.ID] = s
+		}
 	}
 }
 
 func (z *Zone) entityPB(e *entity) *pb.Entity {
-	return &pb.Entity{
+	out := &pb.Entity{
 		Id: e.id, Name: e.name, Model: e.model, Kind: e.kind,
 		X: float32(e.pos.X), Z: float32(e.pos.Z),
 		TargetX: float32(e.dest.X), TargetZ: float32(e.dest.Z),
@@ -559,6 +671,14 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		Dead: e.dead, Scale: float32(e.scale),
 		Boss: e.mon != nil && e.mon.def.Boss,
 	}
+	if e.pl != nil {
+		w, o, g := e.pl.inv.look()
+		out.Weapon, out.Offhand, out.WeaponGrade = w, o, uint32(g)
+	}
+	if e.npc != nil {
+		out.Title = e.npc.title
+	}
+	return out
 }
 
 // broadcast serializa a mensagem UMA vez e envia os mesmos bytes a todos (exceto skip).

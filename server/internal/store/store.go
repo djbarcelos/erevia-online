@@ -18,6 +18,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+
+	"erevia/server/internal/game"
 )
 
 //go:embed migrations/*.sql
@@ -29,6 +31,7 @@ const (
 	spawnRadius          = 8.0
 	pgUniqueViolation    = "23505"
 	charactersNameIdxKey = "characters_name_lower_idx"
+	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given"
 )
 
 var (
@@ -50,16 +53,19 @@ func ValidClass(c string) bool {
 }
 
 type Character struct {
-	ID        int64   `json:"id"`
-	AccountID int64   `json:"-"`
-	Name      string  `json:"name"`
-	Class     string  `json:"class"`
-	Level     int     `json:"level"`
-	XP        int64   `json:"-"`
-	X         float64 `json:"-"`
-	Z         float64 `json:"-"`
-	HP        int     `json:"-"` // -1 = cheio
-	MP        int     `json:"-"` // -1 = cheio
+	ID        int64             `json:"id"`
+	AccountID int64             `json:"-"`
+	Name      string            `json:"name"`
+	Class     string            `json:"class"`
+	Level     int               `json:"level"`
+	XP        int64             `json:"-"`
+	X         float64           `json:"-"`
+	Z         float64           `json:"-"`
+	HP        int               `json:"-"` // -1 = cheio
+	MP        int               `json:"-"` // -1 = cheio
+	Gold      int64             `json:"-"`
+	Items     []game.ItemRecord `json:"-"`
+	kitGiven  bool
 }
 
 // CharacterState é o que a zona salva periodicamente.
@@ -69,6 +75,9 @@ type CharacterState struct {
 	Level       int
 	XP          int64
 	HP, MP      int // -1 = cheio
+	Gold        int64
+	Items       []game.ItemRecord
+	Seq         int64 // salvamento mais velho que o gravado é ignorado
 }
 
 type Store struct {
@@ -193,7 +202,7 @@ func hashToken(token string) []byte {
 
 func (s *Store) ListCharacters(ctx context.Context, accountID int64) ([]Character, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1) FROM characters WHERE account_id = $1 ORDER BY id`, accountID)
+		`SELECT `+characterCols+` FROM characters WHERE account_id = $1 ORDER BY id`, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +231,7 @@ func (s *Store) CreateCharacter(ctx context.Context, accountID int64, name, clas
 		}
 		rows, err := tx.Query(ctx, `
 			INSERT INTO characters (account_id, name, class, x, z) VALUES ($1, $2, $3, $4, $5)
-			RETURNING id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1)`, accountID, name, class, x, z)
+			RETURNING `+characterCols, accountID, name, class, x, z)
 		if err != nil {
 			return err
 		}
@@ -236,32 +245,125 @@ func (s *Store) CreateCharacter(ctx context.Context, accountID int64, name, clas
 	return c, err
 }
 
-// CharacterForAccount carrega o personagem só se ele pertencer à conta.
+// CharacterForAccount carrega o personagem (com moedas e itens) só se ele pertencer à
+// conta. No primeiro carregamento entrega o kit inicial, na mesma transação.
 func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID int64) (Character, error) {
-	rows, err := s.pool.Query(ctx,
-		`SELECT id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1) FROM characters WHERE id = $1 AND account_id = $2`,
-		characterID, accountID)
-	if err != nil {
-		return Character{}, err
-	}
-	c, err := pgx.CollectExactlyOneRow(rows, scanCharacter)
+	var c Character
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx,
+			`SELECT `+characterCols+` FROM characters WHERE id = $1 AND account_id = $2 FOR UPDATE`,
+			characterID, accountID)
+		if err != nil {
+			return err
+		}
+		if c, err = pgx.CollectExactlyOneRow(rows, scanCharacter); err != nil {
+			return err
+		}
+		if !c.kitGiven {
+			if err := giveStarterKit(ctx, tx, &c); err != nil {
+				return err
+			}
+		}
+		c.Items, err = loadItems(ctx, tx, c.ID)
+		return err
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Character{}, ErrNotFound
 	}
 	return c, err
 }
 
-// SaveStates grava posição e progressão de vários personagens numa única ida ao banco.
+func giveStarterKit(ctx context.Context, tx pgx.Tx, c *Character) error {
+	for _, it := range game.StarterKit(c.Class) {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO character_items (character_id, place, slot, item_id, count) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT DO NOTHING`, c.ID, placeOf(it), it.Slot, it.ItemID, it.Count); err != nil {
+			return err
+		}
+	}
+	err := tx.QueryRow(ctx, `UPDATE characters SET gold = gold + $2, kit_given = true WHERE id = $1 RETURNING gold`,
+		c.ID, game.StarterGold).Scan(&c.Gold)
+	c.kitGiven = true
+	return err
+}
+
+func loadItems(ctx context.Context, tx pgx.Tx, characterID int64) ([]game.ItemRecord, error) {
+	rows, err := tx.Query(ctx,
+		`SELECT place, slot, item_id, count FROM character_items WHERE character_id = $1 ORDER BY place DESC, slot`, characterID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (game.ItemRecord, error) {
+		var r game.ItemRecord
+		var place, slot int16
+		err := row.Scan(&place, &slot, &r.ItemID, &r.Count)
+		r.Equipped, r.Slot = place == 1, int(slot)
+		return r, err
+	})
+}
+
+func placeOf(r game.ItemRecord) int16 {
+	if r.Equipped {
+		return 1
+	}
+	return 0
+}
+
+// SaveStates grava posição, progressão, moedas e itens de vários personagens numa
+// única transação. Um estado mais velho (Seq menor) que o já gravado é ignorado, e os
+// itens de um personagem só são trocados junto com a linha dele: nunca fica meio salvo.
 func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
-	if len(states) == 0 {
+	// Se o mesmo personagem vier duas vezes, vale o mais novo.
+	latest := map[int64]CharacterState{}
+	for _, c := range states {
+		if old, ok := latest[c.CharacterID]; !ok || c.Seq >= old.Seq {
+			latest[c.CharacterID] = c
+		}
+	}
+	if len(latest) == 0 {
 		return nil
 	}
-	batch := &pgx.Batch{}
-	for _, c := range states {
-		batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, last_seen_at = now()
-			WHERE id = $1`, c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP))
-	}
-	return s.pool.SendBatch(ctx, batch).Close()
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		batch := &pgx.Batch{}
+		order := make([]CharacterState, 0, len(latest))
+		for _, c := range latest {
+			order = append(order, c)
+			batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, gold = $8,
+				save_seq = GREATEST(save_seq, $9), last_seen_at = now()
+				WHERE id = $1 AND ($9 = 0 OR save_seq < $9) RETURNING id`,
+				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq)
+		}
+		br := tx.SendBatch(ctx, batch)
+		var ids []int64
+		var rows [][]any
+		for _, c := range order {
+			var id int64
+			err := br.QueryRow().Scan(&id)
+			if errors.Is(err, pgx.ErrNoRows) {
+				continue // já há um salvamento mais novo
+			}
+			if err != nil {
+				br.Close()
+				return err
+			}
+			ids = append(ids, id)
+			for _, it := range c.Items {
+				rows = append(rows, []any{id, placeOf(it), int16(it.Slot), it.ItemID, int32(it.Count)})
+			}
+		}
+		if err := br.Close(); err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM character_items WHERE character_id = ANY($1)`, ids); err != nil {
+			return err
+		}
+		_, err := tx.CopyFrom(ctx, pgx.Identifier{"character_items"},
+			[]string{"character_id", "place", "slot", "item_id", "count"}, pgx.CopyFromRows(rows))
+		return err
+	})
 }
 
 func nullIfFull(v int) *int {
@@ -274,7 +376,7 @@ func nullIfFull(v int) *int {
 func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var c Character
 	var x, z float32
-	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP)
+	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven)
 	c.X, c.Z = float64(x), float64(z)
 	return c, err
 }

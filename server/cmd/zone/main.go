@@ -72,7 +72,10 @@ func run(log *slog.Logger) error {
 		for batch := range saves {
 			states := make([]store.CharacterState, len(batch))
 			for i, p := range batch {
-				states[i] = store.CharacterState{CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP}
+				states[i] = store.CharacterState{
+					CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP,
+					Gold: p.Gold, Items: p.Items, Seq: p.Seq,
+				}
 			}
 			sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			if err := st.SaveStates(sctx, states); err != nil {
@@ -159,7 +162,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 	}
 	return gamenet.Character{
 		ID: uint32(c.ID), Name: c.Name, Class: c.Class, X: c.X, Z: c.Z,
-		XP: c.XP, HP: c.HP, MP: c.MP,
+		XP: c.XP, HP: c.HP, MP: c.MP, Gold: c.Gold, Items: c.Items,
 	}, nil
 }
 

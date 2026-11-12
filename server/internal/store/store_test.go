@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"erevia/server/internal/game"
 	"erevia/server/internal/store"
 	"erevia/server/internal/store/storetest"
 )
@@ -93,5 +94,49 @@ func TestCharacters(t *testing.T) {
 	got, err := s.CharacterForAccount(ctx, acc, c.ID)
 	if err != nil || got.X != 12.5 || got.Z != -7.25 || got.Level != 4 || got.XP != 1234 || got.HP != 50 || got.MP != -1 {
 		t.Fatalf("saved state = %+v, %v", got, err)
+	}
+}
+
+func TestStarterKitItemsAndSaveOrder(t *testing.T) {
+	s := storetest.New(t)
+	ctx := context.Background()
+	acc, _ := s.LoginIdentity(ctx, "dev", "k", "k")
+	c, err := s.CreateCharacter(ctx, acc, "Kit", "knight")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Primeiro carregamento: kit inicial e moedas, uma vez só.
+	got, err := s.CharacterForAccount(ctx, acc, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Gold != game.StarterGold || len(got.Items) != len(game.StarterKit("knight")) {
+		t.Fatalf("kit: gold %d items %+v", got.Gold, got.Items)
+	}
+	again, _ := s.CharacterForAccount(ctx, acc, c.ID)
+	if again.Gold != game.StarterGold || len(again.Items) != len(got.Items) {
+		t.Fatalf("kit given twice: %+v", again)
+	}
+
+	items := []game.ItemRecord{
+		{Equipped: true, Slot: game.SlotWeapon, ItemID: "sword_good", Count: 1},
+		{Slot: 3, ItemID: "bone_old", Count: 42},
+	}
+	newer := store.CharacterState{CharacterID: c.ID, Level: 2, XP: 200, HP: -1, MP: -1, Gold: 777, Items: items, Seq: 200}
+	older := store.CharacterState{CharacterID: c.ID, Level: 1, XP: 100, HP: -1, MP: -1, Gold: 1, Seq: 100}
+	if err := s.SaveStates(ctx, []store.CharacterState{newer}); err != nil {
+		t.Fatal(err)
+	}
+	// Um salvamento atrasado (Seq menor) não pode desfazer o mais novo.
+	if err := s.SaveStates(ctx, []store.CharacterState{older}); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.CharacterForAccount(ctx, acc, c.ID)
+	if got.Gold != 777 || got.XP != 200 || len(got.Items) != 2 {
+		t.Fatalf("after saves: %+v", got)
+	}
+	if got.Items[0] != items[0] || got.Items[1] != items[1] {
+		t.Fatalf("items = %+v", got.Items)
 	}
 }

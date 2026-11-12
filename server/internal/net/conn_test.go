@@ -55,7 +55,7 @@ func startServer(t *testing.T) (url string, ctx context.Context) {
 
 	backend := &fakeBackend{chars: map[int64][]Character{
 		1: {{ID: 10, Name: "Alice", Class: "mage", X: 1, Z: 2}},
-		2: {{ID: 20, Name: "Bob", Class: "knight"}},
+		2: {{ID: 20, Name: "Bob", Class: "knight", Items: game.StarterKit("knight")}},
 	}}
 	srv := httptest.NewServer(NewServer(z, backend, log, []string{"*"}))
 	t.Cleanup(srv.Close)

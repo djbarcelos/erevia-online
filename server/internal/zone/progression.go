@@ -24,6 +24,8 @@ func (z *Zone) kill(dead, killer *entity) {
 
 	if dead.mon != nil {
 		ms := dead.mon
+		// O drop fica reservado para quem causou mais dano (lido antes de zerar o ódio).
+		z.dropLoot(dead, topHate(ms.hate))
 		ms.hate = map[uint32]float64{}
 		ms.corpseEnd = z.now + corpseSeconds
 		ms.respawnAt = z.now + ms.spawn.Respawn*(1+z.rng.Float64())
@@ -71,7 +73,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	if !leveled {
 		return
 	}
-	p.stats = game.ClassStats(p.pl.class, p.level)
+	z.refreshStats(p)
 	p.hp, p.mp = p.stats.MaxHP, p.stats.MaxMP
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
 	z.system(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
@@ -111,6 +113,8 @@ func (z *Zone) selfStats(p *entity) *pb.SelfStats {
 		PAtk:  uint32(math.Round(p.atk(false, z.now))),
 		MAtk:  uint32(math.Round(p.atk(true, z.now))),
 		PDef:  uint32(math.Round(p.def(false, z.now))),
+		MDef:  uint32(math.Round(p.def(true, z.now))),
+		Crit:  float32(p.stats.Crit),
 		Speed: float32(p.speed(z.now)),
 		Dead:  p.dead,
 	}
