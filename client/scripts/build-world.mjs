@@ -174,23 +174,24 @@ const RING1 = [SAFE_RADIUS + 3, 52];
 const RING2 = [52, 80];
 const RING3 = [80, 142]; // inclui os cantos do quadrado
 
-// Árvores
-scatter(75, ...RING1, (x, z) => {
-  const s = between(0.9, 1.35);
+// Árvores: altas (~7–11 m, bem acima do personagem de 1,8 m) e mais espaçadas.
+// O tronco engrossa menos que a copa, então o colisor cresce mais devagar que a escala.
+scatter(50, ...RING1, (x, z) => {
+  const s = between(1.7, 2.2);
   place(pick(LUSH), x, z, rand() * 6.28, s);
-  collide(x, z, 0.45 * s);
-}, { spacing: 4.5 });
-scatter(65, ...RING2, (x, z) => {
-  const bare = rand() < 0.35;
-  const s = between(0.9, 1.4) * (bare ? 1.5 : 1);
-  place(bare ? pick(BARE) : pick(LUSH), x, z, rand() * 6.28, s);
-  collide(x, z, 0.4 * s);
-}, { spacing: 5 });
-scatter(55, ...RING3, (x, z) => {
-  const s = between(1.4, 2.1);
-  place(pick(BARE), x, z, rand() * 6.28, s);
   collide(x, z, 0.3 * s);
-}, { spacing: 5.5 });
+}, { spacing: 7 });
+scatter(45, ...RING2, (x, z) => {
+  const bare = rand() < 0.35;
+  const s = between(1.7, 2.3) * (bare ? 1.25 : 1);
+  place(bare ? pick(BARE) : pick(LUSH), x, z, rand() * 6.28, s);
+  collide(x, z, 0.28 * s);
+}, { spacing: 7.5 });
+scatter(40, ...RING3, (x, z) => {
+  const s = between(2.1, 2.8);
+  place(pick(BARE), x, z, rand() * 6.28, s);
+  collide(x, z, 0.22 * s);
+}, { spacing: 7.5 });
 
 // Pedras grandes (bloqueiam) e pequenas (decoração)
 scatter(12, ...RING1, (x, z) => {
@@ -211,14 +212,14 @@ scatter(35, ...RING3, (x, z) => {
   place(k, x, z, rand() * 6.28, s);
   collideItem(k, x, z, s, 0.4);
 }, { spacing: 4 });
-scatter(90, SAFE_RADIUS + 2, 142, (x, z) => place(pick(ROCK_SMALL), x, z, rand() * 6.28, between(0.6, 1.3)), { avoidRoads: false });
+scatter(50, SAFE_RADIUS + 2, 142, (x, z) => place(pick(ROCK_SMALL), x, z, rand() * 6.28, between(0.6, 1.3)), { avoidRoads: false });
 
 // Arbustos e grama (sem colisão; muitos, desenhados com thin instances)
-scatter(110, ...RING1, (x, z) => place(pick(BUSH), x, z, rand() * 6.28, between(3, 5)));
-scatter(60, ...RING2, (x, z) => place(pick(BUSH), x, z, rand() * 6.28, between(3, 5)));
-scatter(900, ...RING1, (x, z) => place(pick(GRASS), x, z, rand() * 6.28, between(0.9, 1.6)), { avoidRoads: false });
-scatter(500, ...RING2, (x, z) => place(pick(GRASS), x, z, rand() * 6.28, between(0.8, 1.4)), { avoidRoads: false });
-scatter(150, ...RING3, (x, z) => place(pick(GRASS), x, z, rand() * 6.28, between(0.6, 1.1)), { avoidRoads: false });
+scatter(45, ...RING1, (x, z) => place(pick(BUSH), x, z, rand() * 6.28, between(2.2, 3.4)));
+scatter(25, ...RING2, (x, z) => place(pick(BUSH), x, z, rand() * 6.28, between(2.2, 3.4)));
+scatter(350, ...RING1, (x, z) => place(pick(GRASS), x, z, rand() * 6.28, between(0.9, 1.6)), { avoidRoads: false });
+scatter(200, ...RING2, (x, z) => place(pick(GRASS), x, z, rand() * 6.28, between(0.8, 1.4)), { avoidRoads: false });
+scatter(70, ...RING3, (x, z) => place(pick(GRASS), x, z, rand() * 6.28, between(0.6, 1.1)), { avoidRoads: false });
 
 // ---------- Borda: montanhas do lado de fora do quadrado ----------
 const MOUNTAINS = ['mountain_a_grass_trees', 'mountain_b_grass', 'mountain_c_grass_trees', 'hills_a_trees', 'hills_b_trees'];
