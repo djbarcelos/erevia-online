@@ -198,6 +198,15 @@ export class EntityManager {
     const visual = new TransformNode(`visual${e.id}`, this.scene);
     visual.parent = root;
 
+    // Área de clique estável (invisível): o modelo animado não serve, porque o picking de
+    // malha com esqueleto usa a pose parada e braços/pernas entram e saem do cursor.
+    const hit = MeshBuilder.CreateCylinder(`hit${e.id}`, { height: 2.1 * scale, diameter: 1.2 * scale, tessellation: 10 }, this.scene);
+    hit.parent = root;
+    hit.position.y = 1.05 * scale;
+    hit.isVisible = false;
+    hit.isPickable = true;
+    hit.metadata = { entityId: e.id };
+
     if (isLocal) {
       const ring = MeshBuilder.CreateTorus(`ring${e.id}`, { diameter: 1.1, thickness: 0.06, tessellation: 32 }, this.scene);
       ring.parent = root;
@@ -644,7 +653,7 @@ export class EntityManager {
     inst.root.parent = v.visual;
     inst.root.scaling.scaleInPlace(v.scale);
     const meshes = inst.root.getChildMeshes(false);
-    this.makePickable(meshes, v.id);
+    this.notPickable(meshes);
     this.setShadow(v, false);
     v.meshes = meshes;
     v.model3d = inst;
@@ -659,17 +668,15 @@ export class EntityManager {
     body.parent = v.visual;
     body.position.y = 0.9 * v.scale;
     body.material = this.material(v.kind === EntityKind.MONSTER ? BONE_COLOR : classInfo(v.model).color);
-    this.makePickable([body], v.id);
+    this.notPickable([body]);
     this.setShadow(v, false);
     v.meshes = [body];
     return body;
   }
 
-  private makePickable(meshes: AbstractMesh[], id: number): void {
-    for (const m of meshes) {
-      m.isPickable = true;
-      m.metadata = { ...(m.metadata ?? {}), entityId: id };
-    }
+  /** O clique usa a área invisível do add(); as malhas visíveis ficam de fora. */
+  private notPickable(meshes: AbstractMesh[]): void {
+    for (const m of meshes) m.isPickable = false;
   }
 
   private material(hex: string): StandardMaterial {

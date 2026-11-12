@@ -3,6 +3,21 @@ import { Color3, Mesh, MeshBuilder, PointerEventTypes, Scene, StandardMaterial }
 /** Segurando o botão, reenvia o destino no máximo a cada X ms (servidor aceita ~10/s). */
 const HOLD_RESEND_MS = 150;
 const HOVER_CHECK_MS = 80;
+/** Ao sair de cima do inimigo, espera um pouco antes de voltar o cursor (sem piscar na borda). */
+const HOVER_GRACE_MS = 150;
+
+/** Cursor de ataque: espadinha na diagonal, com a ponta (ponto do clique) no canto superior esquerdo. */
+const SWORD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+<g stroke-linecap="round" stroke-linejoin="round">
+<path d="M3 3 L7 4 L21 18 L18 21 L4 7 Z" fill="#eef2f8" stroke="#1a1410" stroke-width="1.6"/>
+<path d="M5 5 L19.5 19.5" stroke="#9aa6b8" stroke-width="1"/>
+<path d="M15 24 L24 15" stroke="#1a1410" stroke-width="5"/>
+<path d="M15 24 L24 15" stroke="#d6b46e" stroke-width="2.6"/>
+<path d="M20.5 20.5 L26 26" stroke="#1a1410" stroke-width="4.6"/>
+<path d="M20.5 20.5 L26 26" stroke="#7a4a2a" stroke-width="2.4"/>
+<circle cx="27" cy="27" r="2.6" fill="#d6b46e" stroke="#1a1410" stroke-width="1.4"/>
+</g></svg>`;
+const SWORD_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(SWORD_SVG)}") 3 3, crosshair`;
 
 export interface InputHandlers {
   /** Clique no chão. Devolve o destino aceito (ou null se não puder andar). */
@@ -23,6 +38,30 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
   let holdingGround = false;
   let lastSent = 0;
   let lastHover = 0;
+  let lastEnemyAt = 0;
+  let cursor = "";
+  // O cursor é só nosso: o Babylon voltava ao padrão a cada movimento do mouse (a mira piscava).
+  scene.doNotHandleCursors = true;
+
+  const setCursor = (c: string) => {
+    if (c === cursor) return;
+    cursor = c;
+    canvas.style.cursor = c;
+  };
+
+  /** Atualiza o cursor conforme o que está sob o mouse (também com o mouse parado). */
+  const updateHover = () => {
+    const now = performance.now();
+    if (now - lastHover < HOVER_CHECK_MS) return;
+    lastHover = now;
+    const id = pickEntity();
+    if (id !== null && h.isEnemy(id)) {
+      lastEnemyAt = now;
+      setCursor(SWORD_CURSOR);
+    } else if (now - lastEnemyAt > HOVER_GRACE_MS) {
+      setCursor(id !== null ? "pointer" : "");
+    }
+  };
 
   const pickEntity = (): number | null => {
     const pick = scene.pick(scene.pointerX, scene.pointerY, (m) => m.isPickable && m.metadata?.entityId !== undefined);
@@ -59,12 +98,7 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
       }
       case PointerEventTypes.POINTERMOVE: {
         if (holdingGround) moveToCursor(false);
-        const now = performance.now();
-        if (now - lastHover > HOVER_CHECK_MS) {
-          lastHover = now;
-          const id = pickEntity();
-          canvas.style.cursor = id !== null && h.isEnemy(id) ? "crosshair" : id !== null ? "pointer" : "";
-        }
+        updateHover();
         break;
       }
       case PointerEventTypes.POINTERUP:
@@ -73,8 +107,9 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
     }
   });
 
-  // Marcador encolhe e some.
+  // Marcador encolhe e some; o cursor acompanha monstros andando sob o mouse parado.
   scene.onBeforeRenderObservable.add(() => {
+    updateHover();
     if (!marker.isEnabled()) return;
     const dt = scene.getEngine().getDeltaTime() / 1000;
     marker.visibility -= dt * 1.2;
