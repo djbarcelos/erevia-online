@@ -1,0 +1,86 @@
+/* Protótipo visual do Erevia: tokens de cor, tipografia e espaçamento. */
+@import "@fontsource/cinzel/latin-500.css";
+@import "@fontsource/cinzel/latin-700.css";
+
+:root {
+  /* Fundos (do mais escuro ao painel) */
+  --bg-0: #0a0810;
+  --bg-1: #13101b;
+  --bg-2: #1c1827;
+  --bg-3: #262134;
+  --panel: rgba(22, 18, 31, 0.94);
+  --panel-soft: rgba(22, 18, 31, 0.72);
+  --glass: rgba(12, 10, 18, 0.55);
+
+  /* Ouro: molduras, títulos, destaques */
+  --gold: #d6b46e;
+  --gold-hi: #f3d995;
+  --gold-lo: #8a6a32;
+  --line: rgba(214, 180, 110, 0.26);
+  --line-strong: rgba(214, 180, 110, 0.6);
+
+  /* Texto */
+  --text: #ece6da;
+  --muted: #a39cb0;
+  --dim: #6f6880;
+
+  /* Recursos */
+  --hp-a: #e2483a;
+  --hp-b: #8e1d17;
+  --mp-a: #4c9cff;
+  --mp-b: #1c3f8e;
+  --xp-a: #f0d080;
+  --xp-b: #9c7630;
+
+  /* Estados */
+  --ok: #6fd38a;
+  --bad: #ff6b5b;
+  --warn: #f0c66b;
+  --whisper: #e59ae8;
+  --party: #7fd0ff;
+
+  /* Raridade dos itens */
+  --r-common: #b9b4c2;
+  --r-uncommon: #5fd17a;
+  --r-rare: #4f9dff;
+  --r-epic: #b46cff;
+  --r-legend: #ff9a3c;
+
+  --font-title: "Cinzel", Georgia, "Times New Roman", serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --radius: 6px;
+  --radius-lg: 10px;
+  --shadow: 0 14px 44px rgba(0, 0, 0, 0.65);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Escala da interface (Configurações → Gráficos) e tamanho mínimo de toque */
+  --ui-scale: 1;
+  --touch: 40px;
+
+  /* Safe areas (notch) */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
+  color-scheme: dark;
+}
+
+/* Telas de toque: alvos maiores. */
+:root.is-touch {
+  --touch: 46px;
+}
+
+/* Corner ornaments: 8 traços dourados formando "L" nos quatro cantos. */
+:root {
+  --corners:
+    linear-gradient(var(--gold), var(--gold)) top left / 14px 2px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) top left / 2px 14px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) top right / 14px 2px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) top right / 2px 14px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) bottom left / 14px 2px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) bottom left / 2px 14px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) bottom right / 14px 2px no-repeat,
+    linear-gradient(var(--gold), var(--gold)) bottom right / 2px 14px no-repeat;
+}
