@@ -5,6 +5,7 @@ import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
 import { setupClickToMove } from "./world/input";
+import { CharacterModels } from "./world/models";
 import { createWorldScene } from "./world/scene";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -111,6 +112,11 @@ async function startGame(
   const world = await createWorldScene(canvas, welcome.zoneSize);
   const entities = new EntityManager(world.scene, world.gui, welcome.yourId, welcome.zoneSize / 2);
   for (const e of welcome.entities) entities.add(e);
+
+  // Modelos 3D carregam em segundo plano; até lá, cápsulas na cor da classe.
+  CharacterModels.load(world.scene)
+    .then((models) => entities.setModels(models))
+    .catch((err) => console.warn("modelos 3D indisponíveis, usando cápsulas", err));
 
   const chat = new Chat($("chat"), character.name, (text, to) => conn.chat(text, to));
   chat.system(`Bem-vindo a Erevia, ${character.name}! Enter para conversar, /w Nome para sussurrar.`);

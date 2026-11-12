@@ -2,30 +2,41 @@ import { Color3, Mesh, MeshBuilder, Scene, StandardMaterial, TransformNode, Vect
 import { AdvancedDynamicTexture, Rectangle, TextBlock } from "@babylonjs/gui";
 import { classInfo } from "../classes";
 import type { Entity, EntityState } from "../gen/erevia/v1/game_pb";
+import type { CharacterInstance, CharacterModels } from "./models";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
 /** Tempo máximo esperando o servidor confirmar um destino previsto. */
 const PENDING_TIMEOUT_MS = 1000;
+/** Velocidade da transição parado ↔ correndo (1/s). */
+const ANIM_BLEND_RATE = 8;
+/** Velocidade de referência da animação de corrida (m/s); acima disso ela acelera. */
+const RUN_ANIM_SPEED = 5;
 
 interface Player {
   id: number;
   name: string;
+  cls: string;
   speed: number;
   /** Posição do servidor, extrapolada localmente em direção ao destino. */
   server: { x: number; z: number };
   target: { x: number; z: number };
   root: TransformNode;
-  body: Mesh;
+  /** Nó que gira para a direção do movimento; contém a cápsula ou o modelo. */
+  visual: TransformNode;
+  capsule: Mesh | null;
+  model: CharacterInstance | null;
+  runWeight: number;
   label: Rectangle;
 }
 
-/** Jogadores na tela: cria/remove malhas e suaviza o movimento entre snapshots. */
+/** Jogadores na tela: cria/remove personagens e suaviza o movimento entre snapshots. */
 export class EntityManager {
   private players = new Map<number, Player>();
   private localPending: { x: number; z: number; at: number } | null = null;
   private classMats = new Map<string, StandardMaterial>();
   private ringMat: StandardMaterial;
+  private models: CharacterModels | null = null;
 
   constructor(
     private scene: Scene,
@@ -39,16 +50,6 @@ export class EntityManager {
     this.ringMat.alpha = 0.8;
   }
 
-  private classMaterial(cls: string): StandardMaterial {
-    let mat = this.classMats.get(cls);
-    if (!mat) {
-      mat = new StandardMaterial(`cls-${cls}`, this.scene);
-      mat.diffuseColor = Color3.FromHexString(classInfo(cls).color);
-      this.classMats.set(cls, mat);
-    }
-    return mat;
-  }
-
   get count(): number {
     return this.players.size;
   }
@@ -57,18 +58,20 @@ export class EntityManager {
     return this.players.get(this.localId);
   }
 
+  /** Chamado quando os modelos 3D terminam de carregar: troca as cápsulas pelos personagens. */
+  setModels(models: CharacterModels): void {
+    this.models = models;
+    for (const p of this.players.values()) this.attachModel(p);
+  }
+
   add(e: Entity): void {
     if (this.players.has(e.id)) return;
     const isLocal = e.id === this.localId;
 
     const root = new TransformNode(`p${e.id}`, this.scene);
     root.position.set(e.x, 0, e.z);
-
-    const body = MeshBuilder.CreateCapsule(`body${e.id}`, { height: 1.8, radius: 0.35 }, this.scene);
-    body.parent = root;
-    body.position.y = 0.9;
-    body.material = this.classMaterial(e.class);
-    body.isPickable = false;
+    const visual = new TransformNode(`visual${e.id}`, this.scene);
+    visual.parent = root;
 
     // Anel dourado no chão marca o seu personagem.
     if (isLocal) {
@@ -78,13 +81,6 @@ export class EntityManager {
       ring.material = this.ringMat;
       ring.isPickable = false;
     }
-
-    // "Nariz" para mostrar para onde o personagem está virado.
-    const nose = MeshBuilder.CreateBox(`nose${e.id}`, { width: 0.2, height: 0.12, depth: 0.3 }, this.scene);
-    nose.parent = body;
-    nose.position.set(0, 0.45, 0.35);
-    nose.material = body.material;
-    nose.isPickable = false;
 
     const head = new TransformNode(`head${e.id}`, this.scene);
     head.parent = root;
@@ -104,22 +100,31 @@ export class EntityManager {
     this.gui.addControl(label);
     label.linkWithMesh(head);
 
-    this.players.set(e.id, {
+    const p: Player = {
       id: e.id,
       name: e.name,
+      cls: e.class,
       speed: e.speed,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root,
-      body,
+      visual,
+      capsule: null,
+      model: null,
+      runWeight: 0,
       label,
-    });
+    };
+    this.players.set(e.id, p);
+
+    if (this.models) this.attachModel(p);
+    if (!p.model) p.capsule = this.createCapsule(p);
   }
 
   remove(id: number): void {
     const p = this.players.get(id);
     if (!p) return;
     p.label.dispose();
+    p.model?.dispose();
     p.root.dispose(false, true);
     this.players.delete(id);
   }
@@ -159,6 +164,7 @@ export class EntityManager {
   /** Chamado a cada frame. */
   update(dt: number): void {
     const blend = 1 - Math.exp(-CORRECTION_RATE * dt);
+    const animBlend = 1 - Math.exp(-ANIM_BLEND_RATE * dt);
     for (const p of this.players.values()) {
       // Extrapola a posição do servidor (mesma regra de movimento do Go).
       const dx = p.target.x - p.server.x;
@@ -180,15 +186,63 @@ export class EntityManager {
       pos.x += (p.server.x - pos.x) * blend;
       pos.z += (p.server.z - pos.z) * blend;
 
-      if (dist > 0.05) {
+      const moving = dist > 0.05;
+      if (moving) {
         const want = Math.atan2(dx, dz);
-        p.body.rotation.y = lerpAngle(p.body.rotation.y, want, blend);
+        p.visual.rotation.y = lerpAngle(p.visual.rotation.y, want, blend);
+      }
+
+      // Parado ↔ correndo com transição suave entre as duas animações.
+      p.runWeight += ((moving ? 1 : 0) - p.runWeight) * animBlend;
+      if (p.model) {
+        const idle = p.model.anims.get("Idle_A");
+        const run = p.model.anims.get("Running_A");
+        if (idle) idle.weight = 1 - p.runWeight;
+        if (run) {
+          run.weight = p.runWeight;
+          run.speedRatio = Math.max(0.6, p.speed / RUN_ANIM_SPEED);
+        }
       }
     }
   }
 
   localPosition(): Vector3 | undefined {
     return this.local?.root.position;
+  }
+
+  private attachModel(p: Player): void {
+    if (p.model || !this.models) return;
+    const model = this.models.instantiate(p.cls, String(p.id));
+    if (!model) return;
+    model.root.parent = p.visual;
+    for (const name of ["Idle_A", "Running_A"] as const) {
+      const g = model.anims.get(name);
+      if (!g) continue;
+      g.weight = name === "Idle_A" ? 1 : 0;
+      g.start(true);
+    }
+    p.model = model;
+    p.capsule?.dispose();
+    p.capsule = null;
+  }
+
+  private createCapsule(p: Player): Mesh {
+    const body = MeshBuilder.CreateCapsule(`body${p.id}`, { height: 1.8, radius: 0.35 }, this.scene);
+    body.parent = p.visual;
+    body.position.y = 0.9;
+    body.material = this.classMaterial(p.cls);
+    body.isPickable = false;
+    return body;
+  }
+
+  private classMaterial(cls: string): StandardMaterial {
+    let mat = this.classMats.get(cls);
+    if (!mat) {
+      mat = new StandardMaterial(`cls-${cls}`, this.scene);
+      mat.diffuseColor = Color3.FromHexString(classInfo(cls).color);
+      this.classMats.set(cls, mat);
+    }
+    return mat;
   }
 }
 
