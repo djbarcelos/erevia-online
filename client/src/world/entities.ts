@@ -347,13 +347,13 @@ export class EntityManager {
 
     // Projétil: Bola de Fogo, ou ataque básico de quem usa magia (magos e esqueletos magos).
     const ranged = !!src && src !== dst && (sk?.fx === "fireball" || (!ev.skillId && isCaster(src.model)));
-    const land = () => this.landHit(ev, dst, sk);
+    const land = () => this.landHit(ev, src, dst, sk);
     if (ranged && src) {
       const from = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
       const to = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
       const travel = Vector3.Distance(from, to) / PROJECTILE_SPEED;
-      if (sk) this.fx.projectile(from, to, new Color3(1, 0.5, 0.15), 0.4, travel);
-      else this.fx.projectile(from, to, new Color3(0.6, 0.5, 1), 0.25, travel);
+      if (sk) this.fx.fireball(from, to, travel);
+      else this.fx.arcaneBolt(from, to, travel);
       window.setTimeout(land, travel * 1000);
     } else {
       land();
@@ -361,13 +361,34 @@ export class EntityManager {
   }
 
   /** Número de dano e reação de quem levou o golpe. */
-  private landHit(ev: CombatEvent, dst: View, sk: SkillInfo | undefined): void {
+  private landHit(ev: CombatEvent, src: View | undefined, dst: View, sk: SkillInfo | undefined): void {
     if (!this.views.has(dst.id)) return;
     const mine = ev.sourceId === this.localId;
     const onMe = ev.targetId === this.localId;
     if (ev.miss) {
       this.fx.damageNumber(dst.head, "Errou", "#b9b4c2", false);
       return;
+    }
+    // Impacto (a Bola de Fogo e a magia básica já explodiram ao chegar).
+    const at = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
+    const from = src ? src.root.position.add(new Vector3(0, 1 * src.scale, 0)) : at;
+    switch (sk?.fx) {
+      case "shield_bash":
+        this.fx.shieldBash(at, mine);
+        break;
+      case "brutal_strike":
+        this.fx.brutalStrike(from, at, mine);
+        break;
+      case "backstab":
+        this.fx.backstab(from, at, ev.crit);
+        break;
+      case "ice_nova":
+        this.fx.frostHit(at);
+        break;
+      case "fireball":
+        break;
+      default:
+        if (!src || !isCaster(src.model)) this.fx.meleeHit(at, ev.crit);
     }
     let color = onMe ? "#ff6b5a" : ev.crit ? "#ffd34d" : mine ? "#ffffff" : "#e8e1d4";
     if (sk && !onMe && !ev.crit) color = SKILL_NUMBER_COLOR[sk.fx] ?? color;
@@ -381,11 +402,20 @@ export class EntityManager {
     const sk = this.catalog.get(ev.skillId);
     if (!src || !sk) return;
     this.fx.skillName(src.head, sk.name);
-    if (sk.target === SkillTarget.AREA) {
-      src.anim?.play("skill");
-      this.fx.nova(src.root.position, sk.range, new Color3(0.55, 0.85, 1));
-    } else {
-      src.anim?.play("buff");
+    src.anim?.play(sk.target === SkillTarget.AREA ? "skill" : "buff");
+    switch (sk.fx) {
+      case "ice_nova":
+        this.fx.iceNova(src.root.position, sk.range);
+        break;
+      case "fortress":
+        this.fx.fortress(src);
+        break;
+      case "fury":
+        this.fx.fury(src);
+        break;
+      case "shadow_step":
+        this.fx.shadowStep(src);
+        break;
     }
   }
 
@@ -394,24 +424,7 @@ export class EntityManager {
     if (!v || v.dead) return;
     const ms = ev.durationMs;
     v.effects.get(ev.effect)?.visual?.stop(); // renovado: troca o visual
-    let visual: FxHandle | null = null;
-    switch (ev.effect) {
-      case Effect.STUN:
-        visual = this.fx.stun(v.head, ms);
-        break;
-      case Effect.SLOW:
-        visual = this.fx.aura(v.root, new Color3(0.5, 0.8, 1), ms, v.scale);
-        break;
-      case Effect.BUFF_DEF:
-        visual = this.fx.aura(v.root, new Color3(0.45, 0.65, 1), ms, v.scale);
-        break;
-      case Effect.BUFF_ATK:
-        visual = this.fx.aura(v.root, new Color3(1, 0.35, 0.25), ms, v.scale);
-        break;
-      case Effect.BUFF_SPEED:
-        visual = this.fx.aura(v.root, new Color3(0.4, 1, 0.55), ms, v.scale);
-        break;
-    }
+    const visual = this.fx.effect(ev.effect, v, ms);
     v.effects.set(ev.effect, { effect: ev.effect, until: performance.now() + ms, durationMs: ms, value: ev.value, visual });
   }
 

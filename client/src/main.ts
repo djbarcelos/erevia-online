@@ -104,9 +104,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   const worldData = await loadWorldData();
   const world = await createWorldScene(canvas, worldData);
-  const fx = new Fx(world.scene, world.gui);
   const clock = new WorldClock(Number(welcome.serverTimeMs), welcome.dayCycleMs);
   const dayNight = new DayNight(world, worldData);
+  const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
   const collision = new Collision(worldData);
   const entities = new EntityManager(world.scene, world.gui, welcome.yourId, welcome.zoneSize / 2, fx, world.shadows, collision);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
@@ -259,6 +259,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       /** Fixa a hora do dia (0–1) ou volta ao relógio do servidor (null). */
       setTime: (p: number | null) => clock.setFixed(p),
       phase: () => clock.phase(),
+      fx,
       moveTo: (x: number, z: number) => {
         entities.predictLocalMove(x, z);
         conn.moveTo(x, z);

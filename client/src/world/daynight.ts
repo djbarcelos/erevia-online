@@ -254,6 +254,7 @@ function additive(scene: Scene, name: string, tex: DynamicTexture): StandardMate
   m.alphaMode = Constants.ALPHA_ADD;
   // Sempre no passe transparente (soma à cor do céu), mesmo com visibilidade 1.
   m.transparencyMode = Material.MATERIAL_ALPHABLEND;
+  m.disableDepthWrite = true;
   m.backFaceCulling = false;
   return m;
 }
