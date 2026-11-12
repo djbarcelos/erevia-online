@@ -52,6 +52,18 @@ export class Connection {
     this.send({ case: "chatSend", value: { text, to } });
   }
 
+  attack(targetId: number): void {
+    this.send({ case: "attack", value: { targetId } });
+  }
+
+  useSkill(skillId: number, targetId: number): void {
+    this.send({ case: "useSkill", value: { skillId, targetId } });
+  }
+
+  respawn(): void {
+    this.send({ case: "respawn", value: {} });
+  }
+
   close(): void {
     this.ws.close();
   }

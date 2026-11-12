@@ -182,7 +182,8 @@ input:focus-visible, .btn:focus-visible, .class-card:focus-within {
   position: fixed;
   left: 10px;
   bottom: 10px;
-  width: min(420px, calc(100vw - 20px));
+  /* Cabe à esquerda do painel de barras (380 px no centro). */
+  width: min(420px, calc(50vw - 210px));
   display: grid;
   gap: 6px;
 }
@@ -209,4 +210,139 @@ input:focus-visible, .btn:focus-visible, .class-card:focus-within {
 
 @media (max-width: 640px) {
   #help { display: none; }
+}
+
+/* ---------- HUD de combate ---------- */
+
+.game-hud { position: fixed; inset: 0; pointer-events: none; }
+.game-hud button { pointer-events: auto; }
+
+.bar {
+  position: relative;
+  height: 14px;
+  border-radius: 4px;
+  background: rgba(10, 8, 14, 0.75);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.bar .fill { position: absolute; inset: 0 auto 0 0; width: 0; transition: width 0.15s linear; }
+.bar.hp .fill { background: linear-gradient(#e0574a, #a8322a); }
+.bar.mp .fill { background: linear-gradient(#5b8de6, #2f5bb0); }
+.bar.xp { height: 8px; }
+.bar.xp .fill { background: linear-gradient(#f0d07a, #c49a3a); }
+.bar-text {
+  position: relative;
+  display: block;
+  text-align: center;
+  font: 600 10px/14px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+}
+.bar.xp .bar-text { font-size: 9px; line-height: 8px; }
+
+.me-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  width: min(380px, calc(100vw - 20px));
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.me-top { display: flex; gap: 8px; align-items: center; }
+.me-bars { flex: 1; display: grid; gap: 4px; }
+.level-badge {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  color: var(--gold);
+  font: 700 15px Georgia, serif;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.skillbar { display: flex; gap: 6px; justify-content: center; margin-top: 2px; }
+.skill {
+  position: relative;
+  width: 86px;
+  height: 52px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(30, 24, 40, 0.9);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  display: grid;
+  align-content: center;
+  text-align: center;
+}
+.skill:hover { border-color: var(--gold); }
+.skill-key {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font: 700 11px ui-monospace, Menlo, monospace;
+  color: var(--gold);
+}
+.skill-name { font-size: 11px; font-weight: 600; line-height: 1.15; }
+.skill-cost { font-size: 9px; color: #8fb2ff; }
+.skill.no-mana .skill-cost { color: var(--error); }
+.skill-shade { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.7); }
+.skill-timer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 700 18px ui-monospace, Menlo, monospace;
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
+}
+
+.target-frame {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(300px, calc(100vw - 20px));
+  padding: 6px 10px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+}
+.target-frame.enemy { border-color: rgba(210, 73, 60, 0.6); }
+.target-name { font-size: 13px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+
+.death-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(40, 0, 0, 0.45);
+  pointer-events: auto;
+}
+.death-box {
+  padding: 24px 28px;
+  background: var(--panel);
+  border: 1px solid rgba(210, 73, 60, 0.6);
+  border-radius: 10px;
+  text-align: center;
+  display: grid;
+  gap: 10px;
+}
+.death-box h2 { margin: 0; font-family: Georgia, serif; color: #ff8a7a; font-weight: normal; }
+.death-box p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+/* Em telas estreitas o chat sobe para cima do painel de barras. */
+@media (max-width: 960px) {
+  #chat { bottom: 150px; width: min(420px, calc(100vw - 20px)); }
 }

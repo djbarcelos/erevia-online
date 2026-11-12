@@ -1,10 +1,12 @@
 import { api, ApiError, type CharacterInfo } from "./api";
-import type { ServerMessage, Welcome } from "./gen/erevia/v1/game_pb";
+import { SkillTarget, type ServerMessage, type SkillInfo, type Welcome } from "./gen/erevia/v1/game_pb";
 import { Connection } from "./net/connection";
 import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
-import { setupClickToMove } from "./world/input";
+import { Hud } from "./ui/hud";
+import { Fx } from "./world/fx";
+import { setupInput } from "./world/input";
 import { CharacterModels } from "./world/models";
 import { createWorldScene } from "./world/scene";
 
@@ -52,34 +54,16 @@ function play(character: CharacterInfo): void {
   const conn = new Connection(Connection.defaultUrl(), character.id);
   let started = false;
   let kickedReason = "";
-  let game: { entities: EntityManager; chat: Chat } | undefined;
+  let game: Game | undefined;
   // Mensagens que chegam enquanto a cena 3D ainda está sendo criada.
   const backlog: ServerMessage[] = [];
-
-  const apply = (msg: ServerMessage) => {
-    if (!game) return;
-    switch (msg.msg.case) {
-      case "spawn":
-        if (msg.msg.value.entity) game.entities.add(msg.msg.value.entity);
-        break;
-      case "despawn":
-        game.entities.remove(msg.msg.value.id);
-        break;
-      case "snapshot":
-        for (const s of msg.msg.value.states) game.entities.applyState(s);
-        break;
-      case "chat":
-        game.chat.receive(msg.msg.value);
-        break;
-    }
-  };
 
   conn.onMessage = (msg) => {
     if (msg.msg.case === "welcome") {
       started = true;
       void startGame(conn, character, msg.msg.value).then((g) => {
         game = g;
-        for (const m of backlog.splice(0)) apply(m);
+        for (const m of backlog.splice(0)) g.apply(m);
       });
       return;
     }
@@ -87,7 +71,7 @@ function play(character: CharacterInfo): void {
       kickedReason = msg.msg.value.reason;
       return;
     }
-    if (game) apply(msg);
+    if (game) game.apply(msg);
     else backlog.push(msg);
   };
 
@@ -95,36 +79,78 @@ function play(character: CharacterInfo): void {
     $("chat").hidden = true;
     $("hud").hidden = true;
     $("help").hidden = true;
+    document.querySelector(".game-hud")?.remove();
     const text = kickedReason || (started ? `A conexão caiu (${reason}).` : `Não foi possível entrar (${reason}).`);
     showMessage(started ? "Desconectado" : "Erro ao entrar", text, "Voltar", () => location.reload());
   };
 }
 
-async function startGame(
-  conn: Connection,
-  character: CharacterInfo,
-  welcome: Welcome,
-): Promise<{ entities: EntityManager; chat: Chat }> {
+interface Game {
+  apply(msg: ServerMessage): void;
+}
+
+async function startGame(conn: Connection, character: CharacterInfo, welcome: Welcome): Promise<Game> {
   showScreen(null);
   $("hud").hidden = false;
   $("help").hidden = false;
 
-  const world = await createWorldScene(canvas, welcome.zoneSize);
-  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, welcome.zoneSize / 2);
+  const world = await createWorldScene(canvas, welcome.zoneSize, welcome.safeRadius);
+  const fx = new Fx(world.scene, world.gui);
+  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, welcome.zoneSize / 2, fx);
   for (const e of welcome.entities) entities.add(e);
 
-  // Modelos 3D carregam em segundo plano; até lá, cápsulas na cor da classe.
+  // Modelos 3D carregam em segundo plano; até lá, cápsulas coloridas.
   CharacterModels.load(world.scene)
     .then((models) => entities.setModels(models))
     .catch((err) => console.warn("modelos 3D indisponíveis, usando cápsulas", err));
 
   const chat = new Chat($("chat"), character.name, (text, to) => conn.chat(text, to));
-  chat.system(`Bem-vindo a Erevia, ${character.name}! Enter para conversar, /w Nome para sussurrar.`);
+  chat.system(`Bem-vindo a Erevia, ${character.name}! Clique num monstro para atacar; teclas 1 e 2 usam suas skills.`);
 
-  setupClickToMove(world.scene, world.ground, (x, z) => {
-    const dest = entities.predictLocalMove(x, z);
-    conn.moveTo(dest.x, dest.z);
-    return dest;
+  // ---------- Alvo e skills ----------
+  let targetId = 0;
+  const selectTarget = (id: number) => {
+    targetId = id;
+    entities.setTarget(id);
+    hud.setTarget(entities.info(id));
+  };
+  const useSkill = (s: SkillInfo) => {
+    if (entities.localDead) return;
+    if (!hud.isReady(s.id)) return;
+    if (!hud.hasMana(s)) {
+      chat.system("Mana insuficiente.");
+      return;
+    }
+    if (s.target === SkillTarget.ENEMY && !entities.isEnemy(targetId)) {
+      chat.system("Selecione um monstro como alvo.");
+      return;
+    }
+    conn.useSkill(s.id, targetId);
+  };
+  const hud = new Hud(welcome.skills, useSkill, () => conn.respawn());
+
+  window.addEventListener("keydown", (ev) => {
+    if (document.activeElement instanceof HTMLInputElement) return; // digitando no chat
+    if (ev.key === "Escape") selectTarget(0);
+    const s = welcome.skills.find((k) => String(k.key) === ev.key);
+    if (s) {
+      ev.preventDefault();
+      useSkill(s);
+    }
+  });
+
+  setupInput(world.scene, world.ground, {
+    onGround: (x, z) => {
+      const dest = entities.predictLocalMove(x, z);
+      if (dest) conn.moveTo(dest.x, dest.z);
+      return dest;
+    },
+    onEntity: (id) => {
+      if (id === welcome.yourId) return;
+      selectTarget(id);
+      if (entities.isEnemy(id) && !entities.localDead) conn.attack(id);
+    },
+    isEnemy: (id) => entities.isEnemy(id),
   });
 
   // A câmera segue o jogador local.
@@ -139,7 +165,7 @@ async function startGame(
     }
   });
 
-  // HUD
+  // Painel de diagnóstico + quadro do alvo
   const fpsEl = $("hud-fps");
   const pingEl = $("hud-ping");
   const onlineEl = $("hud-online");
@@ -153,5 +179,49 @@ async function startGame(
   }, 500);
 
   canvas.focus();
-  return { entities, chat };
+
+  // Só em desenvolvimento: ganchos para testes automatizados no navegador.
+  if (import.meta.env.DEV) {
+    (window as unknown as Record<string, unknown>).__erevia = {
+      entities,
+      targetId: () => targetId,
+      screenPos: (id: number) => entities.screenPos(id, world.scene),
+      nearestMonster: () => entities.nearestMonster(),
+    };
+  }
+
+  return {
+    apply(msg: ServerMessage) {
+      switch (msg.msg.case) {
+        case "spawn":
+          if (msg.msg.value.entity) entities.add(msg.msg.value.entity);
+          break;
+        case "despawn":
+          if (msg.msg.value.id === targetId) selectTarget(0);
+          entities.remove(msg.msg.value.id);
+          break;
+        case "snapshot": {
+          const snap = msg.msg.value;
+          for (const s of snap.states) entities.applyState(s);
+          for (const u of snap.hp) entities.applyHp(u);
+          for (const ev of snap.combat) entities.onCombat(ev);
+          for (const ev of snap.effects) entities.onEffect(ev);
+          for (const id of snap.deaths) entities.onDeath(id);
+          for (const r of snap.revives) entities.onRevive(r);
+          for (const l of snap.levelUps) entities.onLevelUp(l);
+          if (targetId) hud.setTarget(entities.info(targetId));
+          break;
+        }
+        case "selfStats":
+          hud.setStats(msg.msg.value);
+          break;
+        case "skillCooldown":
+          hud.cooldown(msg.msg.value.skillId, msg.msg.value.readyInMs);
+          break;
+        case "chat":
+          chat.receive(msg.msg.value);
+          break;
+      }
+    },
+  };
 }

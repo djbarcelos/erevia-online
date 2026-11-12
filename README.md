@@ -6,7 +6,12 @@ MMORPG 3D no navegador. Cliente em **TypeScript + Babylon.js**, servidor em **Go
 
 Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
-## Estado atual: Fase 1
+## Estado atual: Fase 2
+- **Combate PvE:** a cidade (zona segura) fica no centro, cercada por 3 anéis de esqueletos (níveis 1 a 20) e pelo chefe *Senhor dos Ossos* (nível 22).
+- Clicar num monstro seleciona o alvo e ataca sozinho. As **teclas 1 e 2** usam as 2 skills da classe, com recarga e mana. Os efeitos incluem atordoar, lentidão e buffs.
+- **XP e nível** até 20. Os atributos crescem com o nível. Morrer custa cerca de 4% da XP do nível e o personagem volta à cidade.
+- Monstros vagam, atacam quem chega perto (os agressivos), perseguem até um limite e reaparecem depois de mortos.
+- Barras de vida, mana e XP, quadro do alvo, números de dano e efeitos de skill.
 - Login com **Google** ou **Discord** (OAuth + PKCE). A sessão fica num cookie HttpOnly.
 - Até **3 personagens** por conta, cada um com nome único e uma classe: cavaleiro, bárbaro, mago ou ladino.
 - **Chat:** canal geral, `/w Nome texto` para sussurrar e `/r texto` para responder. Clicar num nome no chat prepara o sussurro.
@@ -42,12 +47,14 @@ server/
   cmd/zone/                  executável: HTTP + WebSocket + zona + arquivos do cliente
   internal/api/              login (OAuth, dev), sessão, personagens
   internal/store/            Postgres (pgx) + migrações SQL (goose)
-  internal/zone/             simulação da zona e chat (uma goroutine, tick 20 Hz)
+  internal/game/             dados e fórmulas: classes, skills, monstros, dano, XP
+  internal/zone/             simulação da zona: combate, IA, chat (uma goroutine, tick 20 Hz)
   internal/net/              conexões WebSocket (read/write pumps)
   internal/pb/               código Go gerado (não editar)
 client/
   src/ui/                    telas (login, personagens) e chat
-  src/world/                 cena, jogadores, clique para andar
+  src/world/                 cena, entidades, animações, efeitos, entrada
+  scripts/build-models.mjs   gera public/models/ a partir dos zips KayKit
   src/net/                   conexão com o servidor
   src/gen/                   código TS gerado (não editar)
 infra/docker-compose.yml     Postgres local

@@ -6,8 +6,9 @@
 // - Personagens: copiados como estão (.glb, textura embutida).
 // - Animações: só as que o jogo usa, sem as malhas do manequim.
 // - Armas: .gltf + .bin + .png viram um .glb cada.
+// - Monstros: KayKit Skeletons (mesmo esqueleto Rig_Medium dos heróis).
 import { NodeIO } from '@gltf-transform/core';
-import { dedup, prune } from '@gltf-transform/functions';
+import { dedup, prune, resample } from '@gltf-transform/functions';
 import { copyFileSync, mkdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -15,6 +16,15 @@ const src = resolve(process.argv[2] ?? '../assets-src/kaykit/x');
 const out = resolve(import.meta.dirname, '../public/models');
 const adventurers = join(src, 'KayKit_Adventurers_2.0_FREE');
 const animations = join(src, 'KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium');
+const skeletons = join(src, 'KayKit_Skeletons_1.1_FREE');
+
+const MONSTERS = {
+  skeleton_minion: 'Skeleton_Minion',
+  skeleton_warrior: 'Skeleton_Warrior',
+  skeleton_rogue: 'Skeleton_Rogue',
+  skeleton_mage: 'Skeleton_Mage',
+};
+const MONSTER_WEAPONS = ['Skeleton_Blade', 'Skeleton_Axe', 'Skeleton_Shield_Large_A', 'Skeleton_Staff'];
 
 const CHARACTERS = { knight: 'Knight', barbarian: 'Barbarian', mage: 'Mage', rogue: 'Rogue' };
 
@@ -22,6 +32,9 @@ const CHARACTERS = { knight: 'Knight', barbarian: 'Barbarian', mage: 'Mage', rog
 const ANIMS = {
   'Rig_Medium_General.glb': ['Idle_A', 'Hit_A', 'Death_A'],
   'Rig_Medium_MovementBasic.glb': ['Running_A', 'Walking_A'],
+  'Rig_Medium_CombatMelee.glb': ['Melee_1H_Attack_Chop', 'Melee_2H_Attack_Chop', 'Melee_Dualwield_Attack_Stab', 'Melee_1H_Attack_Stab'],
+  'Rig_Medium_CombatRanged.glb': ['Ranged_Magic_Shoot', 'Ranged_Magic_Spellcasting', 'Ranged_Magic_Raise'],
+  'Rig_Medium_Special.glb': ['Skeletons_Idle', 'Skeletons_Walking', 'Skeletons_Death', 'Skeletons_Awaken_Floor'],
 };
 
 const WEAPONS = ['sword_1handed', 'shield_badge_color', 'axe_1handed', 'shield_round_barbarian', 'staff', 'dagger'];
@@ -37,6 +50,19 @@ for (const [id, name] of Object.entries(CHARACTERS)) {
   report.push(`${id}.glb ${size(dst)}`);
 }
 
+for (const [id, name] of Object.entries(MONSTERS)) {
+  const dst = join(out, `${id}.glb`);
+  copyFileSync(join(skeletons, 'characters/gltf', `${name}.glb`), dst);
+  report.push(`${id}.glb ${size(dst)}`);
+}
+
+for (const w of MONSTER_WEAPONS) {
+  const doc = await io.read(join(skeletons, 'assets/gltf', `${w}.gltf`));
+  const dst = join(out, 'weapons', `${w.toLowerCase()}.glb`);
+  await io.write(dst, doc);
+  report.push(`weapons/${w.toLowerCase()}.glb ${size(dst)}`);
+}
+
 for (const [file, keep] of Object.entries(ANIMS)) {
   const doc = await io.read(join(animations, file));
   const root = doc.getRoot();
@@ -49,7 +75,7 @@ for (const [file, keep] of Object.entries(ANIMS)) {
   for (const s of root.listSkins()) s.dispose();
   for (const t of root.listTextures()) t.dispose();
   for (const m of root.listMaterials()) m.dispose();
-  await doc.transform(dedup(), prune({ keepLeaves: true }));
+  await doc.transform(resample(), dedup(), prune({ keepLeaves: true }));
   const found = root.listAnimations().map((a) => a.getName());
   const missing = keep.filter((k) => !found.includes(k));
   if (missing.length) throw new Error(`${file}: animações não encontradas: ${missing}`);

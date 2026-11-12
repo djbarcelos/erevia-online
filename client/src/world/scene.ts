@@ -30,7 +30,7 @@ export interface WorldScene {
  * Cria engine, cena, luz, chão e câmera.
  * WebGL2 por padrão; WebGPU pode ser testado com ?webgpu=1 na URL.
  */
-export async function createWorldScene(canvas: HTMLCanvasElement, zoneSize: number): Promise<WorldScene> {
+export async function createWorldScene(canvas: HTMLCanvasElement, zoneSize: number, safeRadius = 15): Promise<WorldScene> {
   const engine = await createEngine(canvas);
   const scene = new Scene(engine);
   scene.clearColor = new Color4(SKY.r, SKY.g, SKY.b, 1);
@@ -58,7 +58,8 @@ export async function createWorldScene(canvas: HTMLCanvasElement, zoneSize: numb
   grid.opacity = 0.99;
   ground.material = grid;
 
-  addScenery(scene, zoneSize);
+  addTown(scene, safeRadius);
+  addScenery(scene, zoneSize, safeRadius);
 
   // Câmera estilo L2: orbita o personagem, botão direito gira, roda dá zoom.
   const camera = new ArcRotateCamera("cam", -Math.PI / 2, 1.0, 18, Vector3.Zero(), scene);
@@ -91,8 +92,45 @@ async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractEngine> 
   return new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
 }
 
+/** Praça de pedra marcando a cidade (zona segura, sem combate). */
+function addTown(scene: Scene, radius: number): void {
+  const plaza = MeshBuilder.CreateDisc("town", { radius, tessellation: 64 }, scene);
+  plaza.rotation.x = Math.PI / 2;
+  plaza.position.y = 0.01;
+  const mat = new StandardMaterial("townMat", scene);
+  mat.diffuseColor = new Color3(0.42, 0.39, 0.36);
+  mat.specularColor = new Color3(0.05, 0.05, 0.05);
+  plaza.material = mat;
+  plaza.isPickable = false; // o clique passa para o chão
+
+  const border = MeshBuilder.CreateTorus("townBorder", { diameter: radius * 2, thickness: 0.35, tessellation: 96 }, scene);
+  border.position.y = 0.05;
+  const bmat = new StandardMaterial("townBorderMat", scene);
+  bmat.diffuseColor = new Color3(0.3, 0.27, 0.24);
+  border.material = bmat;
+  border.isPickable = false;
+
+  // Postes com luz nas quatro direções.
+  const postMat = new StandardMaterial("postMat", scene);
+  postMat.diffuseColor = new Color3(0.25, 0.2, 0.16);
+  const lampMat = new StandardMaterial("lampMat", scene);
+  lampMat.emissiveColor = new Color3(1, 0.78, 0.4);
+  lampMat.disableLighting = true;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const post = MeshBuilder.CreateCylinder(`post${i}`, { height: 2.6, diameter: 0.18, tessellation: 8 }, scene);
+    post.position.set(Math.cos(a) * radius, 1.3, Math.sin(a) * radius);
+    post.material = postMat;
+    post.isPickable = false;
+    const lamp = MeshBuilder.CreateSphere(`lamp${i}`, { diameter: 0.35, segments: 8 }, scene);
+    lamp.position.set(post.position.x, 2.7, post.position.z);
+    lamp.material = lampMat;
+    lamp.isPickable = false;
+  }
+}
+
 /** Árvores e pedras em posições fixas (mesma semente = mesmo mapa para todos). */
-function addScenery(scene: Scene, zoneSize: number): void {
+function addScenery(scene: Scene, zoneSize: number, safeRadius: number): void {
   const rand = mulberry32(20261112);
   const half = zoneSize / 2 - 4;
 
@@ -118,7 +156,7 @@ function addScenery(scene: Scene, zoneSize: number): void {
   for (let i = 0; i < 160; i++) {
     const x = (rand() * 2 - 1) * half;
     const z = (rand() * 2 - 1) * half;
-    if (Math.hypot(x, z) < 14) continue; // deixa a área de nascimento livre
+    if (Math.hypot(x, z) < safeRadius + 3) continue; // deixa a cidade livre
     const s = 0.8 + rand() * 0.8;
 
     if (rand() < 0.75) {
