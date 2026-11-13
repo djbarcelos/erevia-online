@@ -74,16 +74,18 @@ type Character struct {
 	Hotbar    []string          `json:"-"`
 	Emblem    string            `json:"emblem"` // sempre preenchido (padrão da classe se vazio no banco)
 	// Look: o que o personagem tem nas mãos agora (para a tela de seleção).
-	Look       CharacterLook `json:"look"`
+	Look CharacterLook `json:"look"`
 	// Appearance: visual do corpo (pele, cabelo, roupa, rosto e chapéu).
 	Appearance game.Appearance `json:"appearance"`
-	Karma      int           `json:"-"`
-	PKs        int           `json:"-"`
-	PvPKills   int           `json:"-"`
-	ClanLeftAt *time.Time    `json:"-"`
-	// Armazém da conta (só em CharacterForAccount).
-	Storage  StorageState `json:"-"`
-	kitGiven bool
+	Karma      int             `json:"-"`
+	PKs        int             `json:"-"`
+	PvPKills   int             `json:"-"`
+	ClanLeftAt *time.Time      `json:"-"`
+	// Armazém da conta e moderação (só em CharacterForAccount).
+	Storage    StorageState `json:"-"`
+	GM         bool         `json:"-"`
+	MutedUntil *time.Time   `json:"-"`
+	kitGiven   bool
 }
 
 // StorageState é o armazém de uma conta: moedas e itens (Equipped é sempre false).
@@ -371,6 +373,10 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 			return err
 		}
 		c.Look = lookOf(c.Items)
+		if err := tx.QueryRow(ctx, `SELECT gm, muted_until FROM accounts WHERE id = $1`, accountID).
+			Scan(&c.GM, &c.MutedUntil); err != nil {
+			return err
+		}
 		c.Storage, err = loadStorage(ctx, tx, accountID)
 		return err
 	})

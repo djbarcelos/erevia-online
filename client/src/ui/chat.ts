@@ -138,7 +138,8 @@ export class Chat {
           return this.onPartyInvite(rest[0]);
         }
         default:
-          return this.system(`Comando desconhecido: ${cmd}`);
+          // /bug e os comandos de GM: quem decide é o servidor (responde no canal de sistema).
+          return this.onSend(raw, "");
       }
     }
     this.onSend(raw, "");

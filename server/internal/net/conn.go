@@ -49,6 +49,9 @@ type Character struct {
 	PvPKills   int
 	ClanLeftAt time.Time
 	Storage    *zone.StorageData
+	// Moderação
+	GM         bool
+	MutedUntil time.Time
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -118,7 +121,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
 		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem, Look: char.Look,
 		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills,
-		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage, Peer: sess,
+		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage,
+		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)
