@@ -256,6 +256,11 @@
   text-transform: uppercase;
 }
 
+/* Reabre a janela "O que há de novo" (ui/windows/whatsnew.ts). */
+.login-news > .news-all {
+  justify-self: start;
+}
+
 .news-item {
   display: grid;
   gap: 4px;

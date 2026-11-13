@@ -18,6 +18,7 @@ const (
 	AchQuest                      // concluir a missão Target
 	AchPvPWin                     // vencer jogadores em combate (vitórias PvP)
 	AchRaid                       // participar (com dano) da morte do raid boss Target
+	AchDefense                    // defender a cidade numa invasão vencida (zone/invasion.go)
 )
 
 // AchievementDef é uma conquista do catálogo.
@@ -71,6 +72,7 @@ var AchievementList = []*AchievementDef{
 	{ID: "level_30", Name: "Lenda Viva", Text: "Chegar ao nível 30.", Title: "Lenda Viva", Goal: AchLevel, Count: 30},
 	{ID: "bone_lord", Name: "O Senhor Caiu", Text: "Derrotar o Senhor dos Ossos.", Title: "Algoz do Senhor dos Ossos", Goal: AchKill, Target: "bone_lord", Count: 1},
 	{ID: "raid_ozrhal", Name: "Regicida", Text: "Participar da morte de Ozrhal, o Rei Ossário.", Title: "Regicida", Goal: AchRaid, Target: "ozrhal", Count: 1},
+	{ID: "invasion", Name: "A Cidade Resiste", Text: "Ajudar a cidade a resistir a uma invasão de esqueletos.", Title: "Defensor de Vel'Aran", Goal: AchDefense, Count: 1},
 	{ID: "enchant_7", Name: "Mão Firme", Text: "Encantar um item a +7.", Title: "Encantador", Goal: AchEnchant, Count: 7},
 	{ID: "first_trade", Name: "Negócio Fechado", Text: "Concluir uma troca com outro jogador.", Title: "Mercador", Goal: AchTrade, Count: 1},
 	{ID: "craft_legend", Name: "Forja Lendária", Text: "Criar um item lendário no Ferreiro.", Title: "Mestre Ferreiro", Goal: AchCraft, Count: int(GradeLegendary)},

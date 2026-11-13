@@ -15,6 +15,7 @@ import { art, button, el, isCompact, tabs, toast } from "./kit";
 import { CLASS_BAR_NAMES, CLASS_EXTRA, DEFAULT_LOOK } from "./looks";
 import { createPreview, type Appearance, type Preview } from "./preview3d";
 import { bodyEditor } from "./body-editor";
+import { openWhatsNewAlone } from "./windows/whatsnew";
 import { normalLook, ORIGINAL_LOOK, setBodyPalettes, toBodyLook, type BodyLook } from "../world/body-look";
 
 const overlay = document.getElementById("overlay")!;
@@ -145,6 +146,7 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
       el("article", "news-item", el("div", "news-meta", el("span", `news-tag t-${n.tag.toLowerCase()}`, n.tag)), el("h3", null, n.title), el("p", null, n.text)),
     );
   }
+  news.append(button("O que há de novo", "btn btn-sm btn-ghost news-all", openWhatsNewAlone));
 
   const logo = el(
     "header",
@@ -161,6 +163,7 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
     el(
       "footer",
       "login-foot",
+      newsLink(),
       legalLink("privacidade"),
       legalLink("termos"),
       el("span", null, "Modelos 3D: KayKit (CC0)"),
@@ -183,6 +186,15 @@ const LEGAL = {
 function legalLink(kind: keyof typeof LEGAL, text: string = LEGAL[kind].label): HTMLAnchorElement {
   const a = el("a", "legal-link", text);
   a.href = LEGAL[kind].href;
+  a.target = "_blank";
+  a.rel = "noopener";
+  return a;
+}
+
+/** Link para a página pública de novidades (client/novidades.html). */
+function newsLink(): HTMLAnchorElement {
+  const a = el("a", "legal-link", "Novidades");
+  a.href = "/novidades";
   a.target = "_blank";
   a.rel = "noopener";
   return a;
