@@ -46,6 +46,8 @@ type API struct {
 	secure    bool
 	// onAccountDeleted avisa a zona que uma conta sumiu (derruba quem estiver online).
 	onAccountDeleted func(store.DeletedAccount)
+	// errLimit: lotes de erros do cliente por IP e por conta (POST /api/client-errors).
+	errLimit *rateLimiter
 	// admin: portal de administração (admin.go).
 	admin *adminState
 }
@@ -54,7 +56,8 @@ type API struct {
 func (a *API) OnAccountDeleted(fn func(store.DeletedAccount)) { a.onAccountDeleted = fn }
 
 func New(st *store.Store, cfg Config, log *slog.Logger) *API {
-	a := &API{store: st, cfg: cfg, log: log, providers: map[string]*provider{}}
+	a := &API{store: st, cfg: cfg, log: log, providers: map[string]*provider{},
+		errLimit: newRateLimiter(ClientErrorsPerMinute, clientErrorRateWindow)}
 	for _, p := range []*provider{cfg.Google, cfg.Discord} {
 		if p != nil {
 			a.providers[p.name] = p
@@ -75,6 +78,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/characters", a.handleListCharacters)
 	mux.HandleFunc("POST /api/characters", a.handleCreateCharacter)
 	mux.HandleFunc("GET /api/creation", a.handleCreation)
+	mux.HandleFunc("POST /api/client-errors", a.handleClientErrors)
 	a.registerAdmin(mux)
 }
 

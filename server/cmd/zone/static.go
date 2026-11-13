@@ -26,6 +26,8 @@ func isAdminPath(clean string) bool {
 //   - Arquivos com hash em /assets/ ganham cache longo.
 //   - Um caminho sem extensão que tenha página própria serve a página (/novidades →
 //     novidades.html, como /privacidade e /termos).
+//   - Os sourcemaps (*.map) nunca são servidos: eles entregariam o código-fonte. A imagem
+//     Docker já os tira da pasta, e isto vale também para quem servir um client/dist local.
 //   - O portal (/admin e /assets/admin/) passa pelo adminOnly: só GM vê; para os outros é
 //     o mesmo 404 de um caminho que não existe.
 func staticHandler(dir string, adminOnly func(http.Handler) http.Handler) http.Handler {
@@ -41,6 +43,10 @@ func staticHandler(dir string, adminOnly func(http.Handler) http.Handler) http.H
 	}))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		clean := path.Clean("/" + r.URL.Path)
+		if strings.EqualFold(path.Ext(clean), ".map") {
+			http.NotFound(w, r)
+			return
+		}
 		if isAdminPath(clean) {
 			admin.ServeHTTP(w, r)
 			return

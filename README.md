@@ -212,6 +212,39 @@ UPDATE bug_reports SET resolved = true WHERE id = 1;
 SELECT at, gm_name, command, target, detail FROM gm_log ORDER BY at DESC LIMIT 50;
 ```
 
+## Erros do cliente
+Todo erro de JavaScript no navegador de um jogador chega à tabela `client_errors` (`client/src/net/errors.ts` → `POST /api/client-errors`): `window.onerror`, promessas rejeitadas sem tratamento, perda do contexto WebGL, mensagens do servidor que não decodificam e modelos 3D que não carregam. Erros iguais (mensagem + primeira linha da stack) viram **uma linha por versão** do cliente, com a contagem, a primeira e a última vez, e o contexto da última ocorrência (navegador, conta, personagem, região, posição, FPS e ping). O cliente manda em lote a cada 10 s ou ao esconder/fechar a aba, no máximo 20 erros distintos por sessão; o servidor aceita até 30 lotes por minuto por IP e por conta. Apagar a conta tira a conta e o personagem das linhas dela.
+
+```sql
+-- Os erros que mais aconteceram nos últimos 7 dias
+SELECT id, kind, count, last_seen, left(version, 7) AS versao, region, message
+FROM client_errors WHERE last_seen > now() - interval '7 days' ORDER BY count DESC LIMIT 30;
+
+-- Tudo de um erro (stack, navegador, onde estava)
+SELECT * FROM client_errors WHERE id = 42;
+
+-- Erros novos da versão em produção
+SELECT id, kind, count, message FROM client_errors WHERE version = '<commit>' ORDER BY first_seen DESC;
+```
+
+**Traduzir a stack** (os `.js` são minificados): o build gera sourcemaps escondidos (`build.sourcemap: "hidden"`, sem o comentário no `.js`). Eles nunca são servidos: a imagem Docker os tira de `/app/public` (ficam só no estágio `client`, em `/app/sourcemaps`) e o servidor responde 404 a qualquer `*.map`. O script `client/scripts/resolve-stack.mjs` traduz para `arquivo:linha:coluna` do código-fonte:
+
+```bash
+cd client
+# Os .map da versão do erro (coluna version): o mesmo build do Dockerfile, no mesmo commit
+git checkout <version>
+docker build --build-arg RAILWAY_GIT_COMMIT_SHA=<version> --target client -t erevia-maps ..
+docker create --name erevia-maps erevia-maps && docker cp erevia-maps:/app/sourcemaps ./maps && docker rm erevia-maps
+
+node scripts/resolve-stack.mjs --maps maps --id 42          # pela linha da tabela (precisa de psql)
+PSQL="docker exec -i erevia-postgres-1 psql -U erevia -d erevia" node scripts/resolve-stack.mjs --maps maps --hash 1a2b3c…
+node scripts/resolve-stack.mjs --maps maps < stack.txt      # stack colada
+node scripts/resolve-stack.mjs < stack.txt                  # com os .map de um `npm run build` local (client/dist)
+```
+Os nomes dos `.js` levam o hash do conteúdo: se o arquivo da stack não estiver na pasta dos maps, o build é outro, e o script avisa (e tenta o de mesmo nome base).
+
+Para o código do jogo relatar algo: `reportClientError(kind, mensagem, extra?, erro?)` (vai ao servidor), `reportClientWarning(kind, mensagem, extra?)` (só em memória) e `recentClientErrors()` (os últimos 20 erros e avisos da sessão, para anexar ao /bug).
+
 ## Portal de administração
 `/admin` é o portal dos GMs, no mesmo servidor e no visual do jogo. Hoje tem a página inicial (online agora, versão no ar, uptime, contas, personagens e relatos de /bug nas últimas 24 h, e as últimas ações de GM) e o menu com Jogadores, Relatos, Métricas, Economia e Operação, ainda "em breve".
 
