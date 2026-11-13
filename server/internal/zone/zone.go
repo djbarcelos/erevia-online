@@ -241,7 +241,7 @@ type Zone struct {
 	rankingBackend RankingBackend
 	ranking        *rankingCache // último cálculo do ranking (nil = ainda não chegou)
 
-	gone           map[uint32]bool // personagens de contas apagadas (ver account.go)
+	gone map[uint32]bool // personagens de contas apagadas (ver account.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).

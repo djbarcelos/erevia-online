@@ -131,7 +131,6 @@ func run(log *slog.Logger) error {
 	z.SetEventSink(eventStore{st})
 	z.SetRankingBackend(rankingStore{st})
 
-
 	// Conta apagada: o banco já apagou tudo; a zona derruba quem estiver online e acerta os
 	// clãs em memória do jeito que o banco deixou.
 	httpAPI.OnAccountDeleted(func(d store.DeletedAccount) {
