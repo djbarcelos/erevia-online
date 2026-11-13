@@ -47,6 +47,7 @@ type Character struct {
 	PKs        int
 	PvPKills   int
 	ClanLeftAt time.Time
+	Storage    *zone.StorageData
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -116,7 +117,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
 		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem,
 		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills,
-		ClanLeftAt: char.ClanLeftAt, Peer: sess,
+		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)
@@ -202,6 +203,10 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.ItemAction(ctx, id, m.Teleport)
 		case *pb.ClientMessage_CancelChannel:
 			s.zone.ItemAction(ctx, id, m.CancelChannel)
+		case *pb.ClientMessage_StorageMove:
+			s.zone.ItemAction(ctx, id, m.StorageMove)
+		case *pb.ClientMessage_StorageGold:
+			s.zone.ItemAction(ctx, id, m.StorageGold)
 		case *pb.ClientMessage_Enchant:
 			s.zone.ItemAction(ctx, id, m.Enchant)
 		case *pb.ClientMessage_PartyCmd:

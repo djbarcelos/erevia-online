@@ -48,6 +48,21 @@ func (z *Zone) spawnNPCs() {
 		z.npcs[n.id] = n
 	}
 	z.spawnStones(npcIDBase + uint32(len(townNPCs)))
+	z.spawnKeeper(npcIDBase + uint32(len(townNPCs)+len(teleportStones)))
+}
+
+// storageKeeper: o Guarda do Armazém, na praça, do lado oeste do poço.
+var storageKeeper = npcDef{name: "Otto", title: "Guarda do Armazém", model: "knight", x: -8, z: 6}
+
+func (z *Zone) spawnKeeper(id uint32) {
+	d := storageKeeper
+	pos := z.freeSpot(Vec2{X: d.x, Z: d.z})
+	z.npcs[id] = &entity{
+		id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
+		name: d.name, model: d.model, level: 1, scale: 1,
+		pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
+		npc: &npcState{title: d.title, role: pb.NpcRole_NPC_ROLE_STORAGE},
+	}
 }
 
 func (z *Zone) npcList() []*pb.NpcInfo {

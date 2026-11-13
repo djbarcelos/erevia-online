@@ -32,6 +32,7 @@ import { setupPerfPanel } from "./ui/perf";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { TeleportWindow } from "./ui/teleport";
+import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
 import { buildRegions } from "./ui/regions";
@@ -533,6 +534,23 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   };
 
   // ---------- Loja ----------
+  const storageWin = new StorageWindow(
+    store,
+    {
+      move: (npc, fp, fs, tp, ts, n) => conn.storageMove(npc, fp, fs, tp, ts, n),
+      gold: (npc, amount) => conn.storageGold(npc, amount),
+      me,
+      onOpen: () => {
+        if (isCompact()) return void wm.show("inventory");
+        const w = storageWin.root.offsetWidth || 360;
+        const invW = wm.widthOf("inventory");
+        const left = Math.max(12, (innerWidth - w - 12 - invW) / 2);
+        storageWin.root.style.left = `${left}px`;
+        void wm.show("inventory", { left: left + w + 12, top: storageWin.root.offsetTop });
+      },
+    },
+    hud.element,
+  );
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma }, hud.element);
   // Enquanto canaliza, um brilho azul sobe do personagem.
   const channelFx = window.setInterval(() => {
@@ -569,13 +587,14 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (d <= SHOP_OPEN_DIST) {
       pendingShop = 0;
       const npc = npcInfo.get(id);
-      if (npc?.role === NpcRole.TELEPORT) {
-        shop.close();
-        teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests);
-      } else {
-        teleportWin.close();
-        shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? []);
-      }
+      shop.close();
+      teleportWin.close();
+      storageWin.close();
+      if (npc?.role === NpcRole.TELEPORT) teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests);
+      else if (npc?.role === NpcRole.STORAGE) {
+        storageWin.open(id, `${info.title} · ${info.name}`);
+        conn.storageGold(id, 0); // pede o conteúdo
+      } else shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? []);
       return;
     }
     // Para a ~2 m do NPC, do lado de quem chega.
@@ -616,6 +635,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           return true;
         },
         enchant: (scroll, place, slot) => conn.enchant(scroll, place, slot),
+        storageOpen: () => storageWin.isOpen,
+        deposit: (bagSlot, toSlot) => conn.storageMove(storageWin.npcId, PLACE_BAG, bagSlot, PLACE_STORAGE, toSlot, 0),
         shopOpen: () => shop.isOpen,
       }),
     onClose: () => shop.isOpen && shop.close(),
@@ -757,6 +778,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (invites.open) invites.answer(false);
       else if (hud.channeling) conn.cancelChannel();
       else if (teleportWin.isOpen) teleportWin.close();
+      else if (storageWin.isOpen) storageWin.close();
       else if (shop.isOpen) shop.close();
       else if (wm.closeTop()) return;
       else if (targetId) selectTarget(0);
@@ -851,6 +873,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       const d = entities.distanceTo(teleportWin.npcId);
       if (d === null || d > SHOP_KEEP_DIST) teleportWin.close();
     }
+    if (storageWin.isOpen) {
+      const d = entities.distanceTo(storageWin.npcId);
+      if (d === null || d > SHOP_KEEP_DIST) storageWin.close();
+    }
   });
 
   // Efeitos (buffs) e status da auto-caça
@@ -930,6 +956,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       invites.dispose();
       shop.dispose();
       teleportWin.dispose();
+      storageWin.dispose();
       window.clearInterval(channelFx);
       itemTip.root.remove();
     },
@@ -1028,6 +1055,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           break;
         case "invite":
           invites.push(msg.msg.value);
+          break;
+        case "storage":
+          storageWin.set(msg.msg.value);
           break;
         case "enchantResult": {
           const r = msg.msg.value;

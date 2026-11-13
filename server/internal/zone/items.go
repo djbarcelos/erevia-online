@@ -48,6 +48,10 @@ func (z *Zone) onItem(e itemEvent) {
 		}
 	case *pb.CancelChannel:
 		z.cancelChannel(p, "Viagem cancelada.")
+	case *pb.StorageMove:
+		z.storageMove(p, m)
+	case *pb.StorageGold:
+		z.storageGold(p, m.NpcId, m.Amount)
 	case *pb.Enchant:
 		z.enchant(p, int(m.ScrollSlot), int(m.Place), int(m.Slot))
 	}

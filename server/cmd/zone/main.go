@@ -78,6 +78,9 @@ func run(log *slog.Logger) error {
 					Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
 					Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills,
 				}
+				if s := p.Storage; s != nil {
+					states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
+				}
 			}
 			// Tenta de novo se o banco falhar (o save_seq impede que uma tentativa atrasada
 			// desfaça um salvamento mais novo).
@@ -183,6 +186,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		Attrs: c.Attrs, Ranks: c.Ranks, Hotbar: c.Hotbar, Emblem: c.Emblem,
 		AccountID: c.AccountID, Karma: c.Karma, PKs: c.PKs, PvPKills: c.PvPKills,
 		ClanLeftAt: derefTime(c.ClanLeftAt),
+		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
 	}, nil
 }
 

@@ -83,7 +83,9 @@ type JoinInfo struct {
 	PvPKills  int
 	// ClanLeftAt: quando saiu do último clã (zero = nunca).
 	ClanLeftAt time.Time
-	Peer       Peer
+	// Storage: o armazém da conta como está no banco (nil = vazio).
+	Storage *StorageData
+	Peer    Peer
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -101,6 +103,8 @@ type SavedState struct {
 	Karma    int
 	PKs      int
 	PvPKills int
+	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
+	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
 	Seq int64
 }
@@ -196,6 +200,7 @@ type Zone struct {
 	clanJobs       chan clanJob
 	clanBackend    ClanBackend
 	localClanSeq   int64
+	storages       map[int64]*storage // conta → armazém
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -220,6 +225,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		clanLeft:       map[int64]time.Time{},
 		clanCreating:   map[uint32]*clanCreate{},
 		clanJobs:       make(chan clanJob, clanJobQueue),
+		storages:       map[int64]*storage{},
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
 	}
@@ -409,6 +415,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.players[p.id] = p
 	z.byName[strings.ToLower(p.name)] = p.id
 	z.clanOnJoin(p, info.ClanLeftAt)
+	z.storageOnJoin(p, info.Storage)
 
 	// Avisa os outros que alguém chegou.
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(p)}}}, p.id)
@@ -692,6 +699,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),
 		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills,
+		Storage: z.storageSave(p),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
@@ -713,6 +721,7 @@ func (z *Zone) nextSeq() int64 {
 
 func (z *Zone) saveAll(blocking bool) {
 	wall := z.cfg.Clock()
+	z.pruneStorages()
 	for id, r := range z.recent {
 		if wall.Sub(r.at) > recentKeep {
 			delete(z.recent, id)

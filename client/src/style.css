@@ -409,3 +409,57 @@
 .tip-stats li.ench b {
   color: #ffd36b;
 }
+
+/* ---------- Fase 4: armazém ---------- */
+
+.storage-panel {
+  width: min(360px, 96vw);
+}
+
+.st-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 10px 12px;
+  max-height: 46vh;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.st-slot {
+  aspect-ratio: 1;
+  width: 100%;
+  position: relative;
+}
+
+.st-grid .ench {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: #ffe6a8;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+
+.st-grid .ench.hi {
+  color: #ffb84a;
+}
+
+.st-gold {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  flex-wrap: wrap;
+}
+
+.st-gold-input {
+  flex: 1;
+  min-width: 80px;
+}
+
+.st-hint {
+  margin: 8px 12px 12px;
+}

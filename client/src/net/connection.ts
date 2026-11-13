@@ -73,6 +73,16 @@ export class Connection {
     this.send({ case: "enchant", value: { scrollSlot, place, slot } });
   }
 
+  /** Armazém: mover entre bolsa (0) e armazém (2); count 0 = a pilha toda. */
+  storageMove(npcId: number, fromPlace: number, fromSlot: number, toPlace: number, toSlot: number, count: number): void {
+    this.send({ case: "storageMove", value: { npcId, fromPlace, fromSlot, toPlace, toSlot, count } });
+  }
+
+  /** Moedas no armazém: > 0 guarda, < 0 retira, 0 só abre. */
+  storageGold(npcId: number, amount: number): void {
+    this.send({ case: "storageGold", value: { npcId, amount: BigInt(amount) } });
+  }
+
   cancelChannel(): void {
     this.send({ case: "cancelChannel", value: {} });
   }
