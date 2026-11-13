@@ -235,19 +235,13 @@ func (z *Zone) command(p *entity, text string) {
 	}
 }
 
+// bugReport: /bug pelo chat (sem o contexto do cliente; o cliente novo manda por
+// POST /api/bug-reports, ver bugreport.go).
 func (z *Zone) bugReport(p *entity, text string) {
-	if len([]rune(text)) < bugMinRunes {
-		z.system(p, "Uso: /bug o que aconteceu (conte com algumas palavras).")
+	r, err := z.takeBug(p, text)
+	if err != nil {
+		z.system(p, BugErrorText(err))
 		return
-	}
-	if z.now < p.pl.nextBug {
-		z.system(p, fmt.Sprintf("Espere %d s para relatar outro bug.", int(math.Ceil(p.pl.nextBug-z.now))))
-		return
-	}
-	p.pl.nextBug = z.now + bugCooldown
-	r := BugReport{
-		AccountID: p.pl.accountID, CharacterID: p.id, Name: p.name, Level: p.level,
-		X: p.pos.X, Z: p.pos.Z, Version: z.cfg.Version, UserAgent: p.pl.userAgent, Text: text,
 	}
 	if !z.queueMod(modJob{
 		run:   func(ctx context.Context, b ModBackend) error { return b.SaveBug(ctx, r) },
