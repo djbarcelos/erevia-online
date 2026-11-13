@@ -8,7 +8,14 @@ RUN npm ci --no-audit --no-fund
 COPY client/ ./
 # O build gera public/novidades.json a partir do changelog da raiz.
 COPY CHANGELOG.md /app/CHANGELOG.md
-RUN npm run build
+# Commit do deploy, gravado no cliente para os relatórios de erro (a Railway passa as
+# variáveis do serviço como build args; o contexto não leva o .git).
+ARG RAILWAY_GIT_COMMIT_SHA
+# Os sourcemaps saem da pasta servida e ficam só neste estágio, em /app/sourcemaps (para
+# traduzir stacks: ver README, "Erros do cliente"). A imagem final não leva nenhum .map.
+RUN npm run build \
+ && find dist -name '*.map' -exec sh -c 'for f; do d="/app/sourcemaps/${f#dist/}"; mkdir -p "${d%/*}"; mv "$f" "$d"; done' sh {} + \
+ && test -z "$(find dist -name '*.map')"
 
 # 2) Servidor Go: binário estático
 FROM golang:1.26 AS server

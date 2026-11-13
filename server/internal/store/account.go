@@ -82,6 +82,11 @@ func (s *Store) deleteAccount(ctx context.Context, accountID int64) (DeletedAcco
 			}
 		}
 
+		// Erros do cliente (client_errors, sem chave estrangeira): ficam, mas sem dono.
+		if err := anonymizeClientErrors(ctx, tx, accountID); err != nil {
+			return err
+		}
+
 		tag, err := tx.Exec(ctx, `DELETE FROM accounts WHERE id = $1`, accountID)
 		if err != nil {
 			return err

@@ -1,3 +1,5 @@
+// Primeiro import: o relatório de erros se instala antes de qualquer outro módulo rodar.
+import { reportClientError, setErrorContext, watchEngine } from "./net/errors";
 import { api, ApiError, type CharacterInfo } from "./api";
 import { gameAudio } from "./audio";
 import { Color3, Matrix, Vector3 } from "@babylonjs/core";
@@ -194,6 +196,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   const worldData = await loadWorldData();
   const world = await createWorldScene(canvas, worldData);
+  const unwatchEngine = watchEngine(world.engine, "jogo");
   const clock = new WorldClock(Number(welcome.serverTimeMs), welcome.dayCycleMs);
   const dayNight = new DayNight(world, worldData);
   const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
@@ -210,7 +213,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       env = e;
       console.info(`cenário: ${e.drawn} objetos`);
     })
-    .catch((err) => console.warn("cenário indisponível", err));
+    .catch((err) => {
+      console.warn("cenário indisponível", err);
+      reportClientError("model", "cenário não carregou", { error: String((err as Error)?.message ?? err) }, err);
+    });
 
   // Modelos 3D carregam em segundo plano; até lá, cápsulas coloridas.
   CharacterModels.load(world.scene)
@@ -498,6 +504,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // ---------- Mapa e regiões ----------
   const { regions, bosses } = buildRegions(welcome.zones, welcome.safeRadius);
+  // Contexto dos relatórios de erro enquanto o jogo roda.
+  setErrorContext(() => {
+    const p = entities.localPosition();
+    return { characterId: character.id, region: p ? regionAt(regions, p.x, p.z).name : undefined, x: p?.x, z: p?.z, fps: world.engine.getFps(), ping: conn.ping };
+  });
   dayNight.setRegions(regions);
   const mapSource = {
     world: worldData,
@@ -1325,6 +1336,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   let lastXp: bigint | null = null;
   return {
     dispose() {
+      setErrorContext(null);
+      unwatchEngine();
       auto.stop();
       questGo.stop();
       for (const t of REAL_INPUT) removeEventListener(t, onRealInput, { capture: true });

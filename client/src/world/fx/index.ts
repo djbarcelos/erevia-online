@@ -10,6 +10,7 @@ import {
   MeshBuilder,
   ParticleSystem,
   PointLight,
+  SphereDirectedParticleEmitter,
   SphereParticleEmitter,
   StandardMaterial,
   TransformNode,
@@ -24,7 +25,16 @@ import {
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { Effect } from "../../gen/erevia/v1/game_pb";
+import { settings } from "../../ui/kit";
+import { SKILL_FX, skillFxColors } from "../../ui/skill-themes";
+import { ATLAS_CELL, CELL, createFxAtlas } from "./atlas";
+import { ParticleBudget, SHORT_LIFE, type FxOwner } from "./budget";
+import { HitFlash } from "./hit-flash";
+import { DamageNumbers, type NumberKind } from "./numbers";
 import { createFxTextures, type FxTextures } from "./textures";
+import { WeaponTrails } from "./trail";
+
+export type { NumberKind } from "./numbers";
 
 interface Running {
   /** Devolve false quando terminou. t = segundos desde o início. */
@@ -72,9 +82,30 @@ const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 const rising = (radius: number, height: number, spread = 0.25, up = 1) =>
   new CylinderDirectedParticleEmitter(radius, height, 1, new Vector3(-spread, up, -spread), new Vector3(spread, up * 1.3, spread));
 
+/** Distância de câmera em que o tremor foi calibrado (m): mais longe, o deslocamento cresce junto. */
+const SHAKE_REF_RADIUS = 18;
+/** Tremor máximo (m de deslocamento na distância de referência): "leve" mesmo somando golpes. */
+const SHAKE_MAX = 0.22;
+/** Faíscas de impacto: sistemas fixos reaproveitados (um impacto por sistema por quadro). */
+const SPARK_POOL = 4;
+/** Cartões (clarões) e marcas no chão guardados para reaproveitar. */
+const QUAD_POOL = 64;
+
+/** Sistema fixo de faíscas e o último quadro em que recebeu uma rajada. */
+interface SparkSys {
+  ps: ParticleSystem;
+  dir: SphereDirectedParticleEmitter;
+  frame: number;
+}
+
 /**
  * Efeitos visuais: partículas, brilhos, anéis e marcas no chão, com texturas pintadas
  * em código. Uma receita por skill, mais os efeitos que duram (buffs e debuffs).
+ *
+ * Por cima das receitas (tunnel#101): orçamento global de partículas (budget.ts), números
+ * de dano num pool (numbers.ts), flash no alvo (hit-flash.ts), rastro da arma (trail.ts),
+ * faíscas de impacto e poeira dos passos em sistemas fixos, e marcas e clarões em malhas
+ * reaproveitadas.
  */
 export class Fx {
   private running: Running[] = [];
@@ -83,7 +114,23 @@ export class Fx {
   private light: PointLight;
   private lightUntil = 0;
   private shakeLeft = 0;
+  private shakeDur = 0.22;
   private shakePower = 0;
+  private shakeT = 0;
+  private shakeSeed = 0;
+  private shakeOffset = new Vector2();
+  /** Orçamento de partículas e de quem é o efeito que está sendo criado agora. */
+  readonly budget = new ParticleBudget();
+  private owner: FxOwner = "mine";
+  private numbers: DamageNumbers;
+  private hitFlashes = new HitFlash();
+  private trails: WeaponTrails;
+  private atlas: Texture;
+  private sparks: SparkSys[] = [];
+  private dust: ParticleSystem | null = null;
+  private frame = 0;
+  private freeGround: Mesh[] = [];
+  private freeCards: Mesh[] = [];
 
   constructor(
     private scene: Scene,
@@ -92,6 +139,13 @@ export class Fx {
     private camera: ArcRotateCamera | null = null,
   ) {
     this.tex = createFxTextures(scene);
+    this.atlas = createFxAtlas(scene);
+    this.numbers = new DamageNumbers(gui);
+    this.trails = new WeaponTrails(scene);
+    this.shakeSeed = Math.random() * 100;
+    // Os sistemas fixos nascem já ligados (sem partículas): o shader compila na carga, não
+    // no primeiro golpe.
+    for (let i = 0; i < SPARK_POOL; i++) this.sparks.push(this.createSparkSystem());
     // Uma luz para clarões (explosões). Sol + céu + 3 tochas + esta = 6 luzes por material.
     this.light = new PointLight("fxLight", new Vector3(0, -100, 0), scene);
     this.light.intensity = 0;
@@ -102,6 +156,9 @@ export class Fx {
       const now = performance.now() / 1000;
       const dt = Math.min(0.1, now - last);
       last = now;
+      this.frame++;
+      // Mede as partículas vivas antes de qualquer efeito novo pedir espaço.
+      this.budget.tick(dt, now * 1000);
       // Efeitos criados durante um tick (ex.: a explosão quando a bola de fogo chega)
       // entram em this.running enquanto a lista atual é percorrida: junta os dois.
       const current = this.running;
@@ -112,9 +169,41 @@ export class Fx {
         return false;
       });
       this.running = kept.concat(this.running);
+      this.numbers.update(dt);
+      this.hitFlashes.update(now * 1000);
       this.updateShake(dt);
       if (now > this.lightUntil && this.light.intensity > 0) this.light.intensity = 0;
     });
+    if (new URLSearchParams(location.search).has("fxstress")) this.startStress();
+  }
+
+  // ------------------------------------------------------------------------------------
+  // Dono do efeito (orçamento)
+  // ------------------------------------------------------------------------------------
+
+  /**
+   * Cria os efeitos de fn como do jogador local (mine) ou de outra pessoa/monstro. Os dos
+   * outros encolhem ou somem quando a tela passa do orçamento; os seus sempre aparecem.
+   * Fora daqui (cenário, raid, itens) conta como seu.
+   */
+  as(mine: boolean, fn: () => void): void {
+    const prev = this.owner;
+    this.owner = mine ? "mine" : "other";
+    try {
+      fn();
+    } finally {
+      this.owner = prev;
+    }
+  }
+
+  /** Embrulha um callback para criar os efeitos com o dono de agora (projéteis, atrasos). */
+  private keep<A extends unknown[]>(fn: (...a: A) => void): (...a: A) => void {
+    const owner = this.owner;
+    return (...a: A) => this.as(owner === "mine", () => fn(...a));
+  }
+
+  private get mine(): boolean {
+    return this.owner === "mine";
   }
 
   // ------------------------------------------------------------------------------------
@@ -189,19 +278,31 @@ export class Fx {
       ps.addSizeGradient(1, o.size[0] * o.grow, o.size[1] * o.grow);
     }
     if (o.drag) ps.addDragGradient(0, o.drag);
+    this.budget.track(ps);
     return ps;
   }
 
-  /** Rajada única de partículas. */
+  private disposeParticles(ps: ParticleSystem): void {
+    this.budget.untrack(ps);
+    ps.dispose(false);
+  }
+
+  /**
+   * Rajada única de partículas. Pede espaço ao orçamento: a dos outros pode sair menor (e
+   * mais curta) ou nem sair quando a tela está cheia.
+   */
   private burst(at: Vector3, count: number, o: ParticleOpts): void {
-    const ps = this.particles("fx-burst", count, o);
+    const g = this.budget.grant(count, this.owner);
+    if (g.count <= 0) return;
+    const opts = g.short ? { ...o, life: [o.life[0] * SHORT_LIFE, o.life[1] * SHORT_LIFE] as Range } : o;
+    const ps = this.particles("fx-burst", g.count, opts);
     ps.emitter = at.clone();
-    ps.manualEmitCount = count;
+    ps.manualEmitCount = g.count;
     ps.start();
-    const life = o.life[1] + 0.1;
+    const life = opts.life[1] + 0.1;
     this.run(
       (t) => t < life,
-      () => ps.dispose(false),
+      () => this.disposeParticles(ps),
     );
   }
 
@@ -210,7 +311,8 @@ export class Fx {
     const ps = this.particles("fx-stream", Math.ceil(rate * o.life[1] * 1.3) + 4, o);
     const pos = follow()?.clone() ?? Vector3.Zero();
     ps.emitter = pos;
-    ps.emitRate = rate;
+    // A taxa segue o orçamento a cada quadro (a dos outros cai quando a tela está cheia).
+    this.budget.stream(ps, rate, this.owner);
     ps.start();
     let stopAt = -1;
     let stopped = false;
@@ -224,18 +326,52 @@ export class Fx {
         }
         return stopAt < 0 || t - stopAt < o.life[1] + 0.1;
       },
-      () => ps.dispose(false),
+      () => this.disposeParticles(ps),
     );
     return { stop: () => (stopped = true) };
   }
 
+  /**
+   * Cartão (plano virado para a câmera) ou quadrado no chão, do pool: os clarões e as marcas
+   * não criam nem descartam malha a cada golpe.
+   */
+  private quad(kind: "card" | "ground"): Mesh {
+    const free = kind === "card" ? this.freeCards : this.freeGround;
+    const m = free.pop();
+    if (m && !m.isDisposed()) {
+      m.setEnabled(true);
+      return m;
+    }
+    const q =
+      kind === "card"
+        ? MeshBuilder.CreatePlane("fx-card", { size: 1 }, this.scene)
+        : MeshBuilder.CreateGround("fx-decal", { width: 1, height: 1 }, this.scene);
+    q.isPickable = false;
+    if (kind === "card") q.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    return q;
+  }
+
+  private releaseQuad(m: Mesh, kind: "card" | "ground"): void {
+    if (m.isDisposed()) return;
+    const free = kind === "card" ? this.freeCards : this.freeGround;
+    if (free.length >= QUAD_POOL) {
+      m.dispose();
+      return;
+    }
+    m.setEnabled(false);
+    m.parent = null;
+    m.visibility = 1;
+    m.rotation.setAll(0);
+    m.scaling.setAll(1);
+    free.push(m);
+  }
+
   /** Clarão (cartão virado para a câmera) que cresce e some. */
-  private flash(at: Vector3, size: number, color: Color3, dur: number): void {
-    const m = MeshBuilder.CreatePlane("fx-flash", { size: 1 }, this.scene);
-    m.material = this.mat(color, this.tex.flare);
-    m.billboardMode = Mesh.BILLBOARDMODE_ALL;
-    m.isPickable = false;
+  private flash(at: Vector3, size: number, color: Color3, dur: number, tex: Texture = this.tex.flare): void {
+    const m = this.quad("card");
+    m.material = this.mat(color, tex);
     m.position.copyFrom(at);
+    m.scaling.setAll(size * 0.4);
     this.run(
       (t) => {
         const k = t / dur;
@@ -243,7 +379,7 @@ export class Fx {
         m.visibility = 1 - k * k;
         return k < 1;
       },
-      () => m.dispose(),
+      () => this.releaseQuad(m, "card"),
     );
   }
 
@@ -252,14 +388,15 @@ export class Fx {
     at: Vector3,
     tex: Texture,
     color: Color3,
-    o: { size: Range; dur: number; fadeIn?: number; additive?: boolean; spin?: number; y?: number; parent?: TransformNode },
+    o: { size: Range; dur: number; fadeIn?: number; additive?: boolean; spin?: number; y?: number; parent?: TransformNode; alpha?: number },
   ): Mesh {
-    const m = MeshBuilder.CreateGround("fx-decal", { width: 1, height: 1 }, this.scene);
-    m.material = this.mat(color, tex, o.additive ?? true);
-    m.isPickable = false;
+    const m = this.quad("ground");
+    m.material = this.mat(color, tex, o.additive ?? true, o.alpha ?? 1);
     if (o.parent) m.parent = o.parent;
     m.position.set(at.x, o.y ?? 0.06, at.z);
     m.rotation.y = Math.random() * Math.PI * 2;
+    m.scaling.set(o.size[0], 1, o.size[0]);
+    m.visibility = 0;
     const fadeIn = o.fadeIn ?? 0.08;
     this.run(
       (t, dt) => {
@@ -270,7 +407,7 @@ export class Fx {
         if (o.spin) m.rotation.y += o.spin * dt;
         return k < 1;
       },
-      () => m.dispose(),
+      () => this.releaseQuad(m, "ground"),
     );
     return m;
   }
@@ -290,25 +427,42 @@ export class Fx {
     );
   }
 
-  /** Tremor rápido da câmera (só nos golpes do próprio jogador). */
+  /**
+   * Tremor leve da câmera (seus golpes fortes e críticos, golpes do chefe em você). power é
+   * o deslocamento máximo em metros com a câmera a 18 m (SHAKE_MAX no máximo); mais perto ou
+   * mais longe, o tremor na tela fica igual. Respeita Configurações → Jogo → Tremor de câmera.
+   */
   shake(power: number, seconds = 0.22): void {
-    if (!this.camera) return;
-    this.shakePower = Math.max(this.shakePower, power);
-    this.shakeLeft = Math.max(this.shakeLeft, seconds);
+    if (!this.camera || !settings.get().cameraShake) return;
+    const p = Math.min(SHAKE_MAX, Math.max(0, power));
+    // Um golpe mais forte no meio de um tremor reinicia; um mais fraco só soma tempo.
+    if (p >= this.shakePower * (this.shakeLeft / this.shakeDur)) {
+      this.shakePower = p;
+      this.shakeDur = this.shakeLeft = Math.max(seconds, 0.05);
+    }
   }
 
   private updateShake(dt: number): void {
-    if (!this.camera) return;
+    const cam = this.camera;
+    if (!cam) return;
     if (this.shakeLeft <= 0) {
       if (this.shakePower) {
         this.shakePower = 0;
-        this.camera.targetScreenOffset = Vector2.Zero();
+        this.shakeOffset.set(0, 0);
+        cam.targetScreenOffset.set(0, 0);
       }
       return;
     }
-    this.shakeLeft -= dt;
-    const p = this.shakePower * Math.max(0, this.shakeLeft / 0.22);
-    this.camera.targetScreenOffset = new Vector2((Math.random() - 0.5) * p, (Math.random() - 0.5) * p);
+    if (!settings.get().cameraShake) this.shakeLeft = 0;
+    this.shakeLeft = Math.max(0, this.shakeLeft - dt);
+    this.shakeT += dt;
+    // Duas senoides fora de fase (não um ruído por quadro, que vira zumbido a 120 Hz),
+    // caindo em curva até zero.
+    const k = this.shakeLeft / this.shakeDur;
+    const p = this.shakePower * k * k * (cam.radius / SHAKE_REF_RADIUS);
+    const t = this.shakeT + this.shakeSeed;
+    this.shakeOffset.set(p * Math.sin(t * 53) * 0.6 + p * Math.sin(t * 31) * 0.4, p * Math.sin(t * 47 + 1.3) * 0.6 + p * Math.sin(t * 29 + 0.7) * 0.4);
+    cam.targetScreenOffset.copyFrom(this.shakeOffset);
   }
 
   // ------------------------------------------------------------------------------------
@@ -414,33 +568,17 @@ export class Fx {
   // Texto
   // ------------------------------------------------------------------------------------
 
-  /** Número subindo acima da cabeça. */
+  /** Número subindo acima da cabeça (textos do jogo: item pego, "+XP"…). */
   damageNumber(anchor: TransformNode, text: string, color: string, big: boolean): void {
-    const tb = new TextBlock();
-    tb.text = text;
-    tb.color = color;
-    tb.fontSize = big ? 22 : 16;
-    tb.fontWeight = big ? "bold" : "600";
-    tb.outlineWidth = 3;
-    tb.outlineColor = "black";
-    tb.resizeToFit = true;
-    this.gui.addControl(tb);
-    tb.linkWithMesh(anchor);
-    const drift = (Math.random() - 0.5) * 30;
-    const dur = 0.9;
-    this.run(
-      (t) => {
-        const k = t / dur;
-        // Salta um pouco no começo (mais nos golpes fortes) e sobe.
-        const pop = big ? 1 + 0.5 * Math.max(0, 1 - k * 6) : 1;
-        tb.scaleX = tb.scaleY = pop;
-        tb.linkOffsetY = -18 - k * 45;
-        tb.linkOffsetX = drift * k;
-        tb.alpha = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4;
-        return k < 1;
-      },
-      () => tb.dispose(),
-    );
+    this.numbers.show(anchor, "info", text, color, big ? 22 : 16);
+  }
+
+  /**
+   * Número de combate no estilo do tipo (numbers.ts: normal, crítico, cura, errou,
+   * bloqueio…). color troca a cor do estilo (skills com tema, dano por segundo).
+   */
+  number(anchor: TransformNode, kind: NumberKind, text: string, color?: string): void {
+    this.numbers.show(anchor, kind, text, color);
   }
 
   /** Nome da skill subindo devagar sobre quem a usou. */
@@ -472,35 +610,215 @@ export class Fx {
   // Golpes básicos
   // ------------------------------------------------------------------------------------
 
-  /** Faíscas de um golpe corpo a corpo (maior e dourado no crítico). */
-  meleeHit(at: Vector3, crit: boolean): void {
-    this.burst(at, crit ? 26 : 12, {
-      tex: this.tex.spark,
-      life: [0.18, 0.35],
-      size: crit ? [0.12, 0.26] : [0.08, 0.18],
-      speed: crit ? [5, 9] : [3.5, 6],
-      colors: crit ? [c4(1, 0.95, 0.6), c4(1, 0.75, 0.25), c4(1, 0.4, 0.05, 0)] : [c4(1, 1, 0.9), c4(1, 0.85, 0.55), c4(1, 0.5, 0.2, 0)],
-      emitter: new SphereParticleEmitter(0.15, 1, 0.2),
-      gravity: -9,
-      stretched: true,
-    });
+  /**
+   * Faíscas de um golpe corpo a corpo (maior e dourado no crítico). Com `from`, as faíscas
+   * espirram para longe de quem bateu. Usa os sistemas fixos de faíscas (nada é criado).
+   */
+  meleeHit(at: Vector3, crit: boolean, from?: Vector3): void {
+    this.impactSparks(at, from ?? null, crit ? new Color3(1, 0.78, 0.3) : new Color3(1, 0.88, 0.62), crit);
     this.flash(at, crit ? 1.5 : 0.8, crit ? new Color3(1, 0.82, 0.35) : new Color3(1, 0.95, 0.85), crit ? 0.22 : 0.14);
-    if (crit) {
-      const star = MeshBuilder.CreatePlane("fx-crit", { size: 1 }, this.scene);
-      star.material = this.mat(new Color3(1, 0.85, 0.35), this.tex.star);
-      star.billboardMode = Mesh.BILLBOARDMODE_ALL;
-      star.isPickable = false;
-      star.position.copyFrom(at);
-      this.run(
-        (t) => {
-          const k = t / 0.35;
-          star.scaling.setAll(0.6 + 1.6 * k);
-          star.visibility = 1 - k;
-          return k < 1;
-        },
-        () => star.dispose(),
-      );
+    if (crit) this.flash(at, 1.8, new Color3(1, 0.85, 0.35), 0.35, this.tex.star);
+  }
+
+  // ------------------------------------------------------------------------------------
+  // Biblioteca: faíscas de impacto, poeira, rastro da arma, marcas de área e flash no alvo
+  // ------------------------------------------------------------------------------------
+
+  /** Sistema fixo de faíscas (célula de risco do atlas), reaproveitado por todos os impactos. */
+  private createSparkSystem(): SparkSys {
+    const ps = new ParticleSystem("fx-sparks", 64, this.scene, null, true);
+    ps.particleTexture = this.atlas;
+    ps.spriteCellWidth = ps.spriteCellHeight = ATLAS_CELL;
+    ps.startSpriteCellID = ps.endSpriteCellID = CELL.spark;
+    ps.spriteCellChangeSpeed = 0;
+    ps.updateSpeed = 1 / 60;
+    ps.minLifeTime = 0.16;
+    ps.maxLifeTime = 0.34;
+    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
+    ps.billboardMode = ParticleSystem.BILLBOARDMODE_STRETCHED;
+    ps.gravity = new Vector3(0, -9, 0);
+    const dir = new SphereDirectedParticleEmitter(0.15, new Vector3(-1, 0.2, -1), new Vector3(1, 1, 1));
+    ps.particleEmitterType = dir;
+    ps.emitter = new Vector3(0, -100, 0);
+    ps.emitRate = 0;
+    ps.manualEmitCount = 0;
+    this.budget.track(ps);
+    ps.start();
+    return { ps, dir, frame: -1 };
+  }
+
+  /**
+   * Faíscas de impacto: espirram para longe de `from` (ou em volta, sem direção), na cor
+   * dada. Cada sistema fixo aceita um impacto por quadro; se os quatro já foram usados neste
+   * quadro, a sua faísca vira uma rajada comum e a dos outros fica de fora.
+   */
+  impactSparks(at: Vector3, from: Vector3 | null, color: Color3, crit = false): void {
+    const want = crit ? 24 : 12;
+    const sys = this.sparks.find((x) => x.frame !== this.frame);
+    if (!sys) {
+      if (this.mine) {
+        this.burst(at, want, {
+          tex: this.tex.spark,
+          life: [0.16, 0.34],
+          size: crit ? [0.12, 0.26] : [0.08, 0.18],
+          speed: crit ? [5, 9] : [3.5, 6],
+          colors: [c4(color.r, color.g, color.b), c4(1, 1, 0.9), c4(color.r, color.g * 0.6, color.b * 0.3, 0)],
+          emitter: new SphereParticleEmitter(0.15, 1, 0.2),
+          gravity: -9,
+          stretched: true,
+        });
+      }
+      return;
     }
+    const g = this.budget.grant(want, this.owner);
+    if (g.count <= 0) return;
+    sys.frame = this.frame;
+    const ps = sys.ps;
+    (ps.emitter as Vector3).copyFrom(at);
+    // Para longe de quem bateu e um pouco para cima, bem espalhado.
+    const d = from ? at.subtract(from) : new Vector3();
+    d.y = 0;
+    if (d.lengthSquared() > 1e-4) d.normalize();
+    d.y = 0.45;
+    const spread = from ? 0.75 : 1;
+    sys.dir.direction1.set(d.x - spread, d.y - 0.25, d.z - spread);
+    sys.dir.direction2.set(d.x + spread, d.y + 0.65, d.z + spread);
+    ps.minSize = crit ? 0.12 : 0.08;
+    ps.maxSize = crit ? 0.26 : 0.18;
+    ps.minEmitPower = crit ? 5 : 3.5;
+    ps.maxEmitPower = crit ? 9 : 6.5;
+    const life = g.short ? SHORT_LIFE : 1;
+    ps.minLifeTime = 0.16 * life;
+    ps.maxLifeTime = (crit ? 0.4 : 0.32) * life;
+    ps.color1.set(color.r * 1.3, color.g * 1.3, color.b * 1.3, 1);
+    ps.color2.set(1.3, 1.3, 1.15, 1);
+    ps.colorDead.set(color.r, color.g * 0.45, color.b * 0.2, 0);
+    ps.manualEmitCount = g.count;
+  }
+
+  /**
+   * Poeira nos passos do próprio jogador correndo (só no médio e no alto). Um sistema fixo,
+   * criado no primeiro passo; `side` (±1) é o pé que pisou.
+   */
+  footDust(at: Vector3, yaw: number, side: number): void {
+    if (!this.budget.preset.dust) return;
+    let ps = this.dust;
+    if (!ps) {
+      ps = new ParticleSystem("fx-dust", 48, this.scene, null, true);
+      ps.particleTexture = this.atlas;
+      ps.spriteCellWidth = ps.spriteCellHeight = ATLAS_CELL;
+      ps.startSpriteCellID = ps.endSpriteCellID = CELL.puff;
+      ps.spriteCellChangeSpeed = 0;
+      ps.updateSpeed = 1 / 60;
+      ps.minLifeTime = 0.45;
+      ps.maxLifeTime = 0.75;
+      ps.addSizeGradient(0, 0.22, 0.32);
+      ps.addSizeGradient(1, 0.5, 0.75);
+      ps.minEmitPower = 0.25;
+      ps.maxEmitPower = 0.6;
+      // Terra seca e clara (grama seca e pedra quente do guia, 3.3), translúcida.
+      ps.color1 = new Color4(0.64, 0.6, 0.45, 0.32);
+      ps.color2 = new Color4(0.79, 0.72, 0.61, 0.26);
+      ps.colorDead = new Color4(0.64, 0.6, 0.5, 0);
+      ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
+      ps.gravity = new Vector3(0, 0.4, 0);
+      ps.minInitialRotation = 0;
+      ps.maxInitialRotation = Math.PI * 2;
+      ps.particleEmitterType = new HemisphericParticleEmitter(0.12, 0);
+      ps.addDragGradient(0, 0.6);
+      ps.emitter = new Vector3(0, -100, 0);
+      ps.emitRate = 0;
+      ps.manualEmitCount = 0;
+      this.budget.track(ps);
+      ps.start();
+      this.dust = ps;
+    }
+    // Um pouco atrás e ao lado do pé que pisou.
+    const ox = Math.cos(yaw) * 0.14 * side - Math.sin(yaw) * 0.2;
+    const oz = -Math.sin(yaw) * 0.14 * side - Math.cos(yaw) * 0.2;
+    (ps.emitter as Vector3).set(at.x + ox, 0.05, at.z + oz);
+    ps.manualEmitCount = this.budget.grant(3, "mine").count;
+  }
+
+  /**
+   * Rastro curto da arma no golpe, de `from` a `until` (performance.now()). Os seus no médio
+   * e no alto; os dos outros só no alto e com folga no orçamento. false = não saiu (sem
+   * lâmina na mão, pool cheio ou preset).
+   */
+  weaponTrail(hand: TransformNode, from: number, until: number, color: Color3): boolean {
+    const p = this.budget.preset;
+    if (this.mine ? !p.trailMine : !p.trailOthers || !this.budget.relaxed) return false;
+    let tr: ReturnType<WeaponTrails["start"]> = null;
+    try {
+      tr = this.trails.start(hand, from, until, this.mat(color, this.atlas, true));
+    } catch {
+      tr = null; // arma com malha estranha: segue sem rastro
+    }
+    if (!tr) return false;
+    const { tick, release } = tr;
+    this.run(() => tick(performance.now()), release);
+    return true;
+  }
+
+  /**
+   * Marca no chão do tamanho da área de uma skill (anel, runas ou rachadura, nas cores do
+   * tema: ui/skill-themes.ts, SKILL_FX). As suas sempre; as dos outros a partir do médio e
+   * com folga no orçamento.
+   */
+  areaMark(at: Vector3, radius: number, fx: string): void {
+    const kind = SKILL_FX[fx]?.mark ?? "ring";
+    if (kind === "none" || radius <= 0) return;
+    if (!this.mine && (!this.budget.preset.marksOthers || !this.budget.relaxed)) return;
+    const colors = skillFxColors(fx);
+    const color = colors ? Color3.FromHexString(colors.mark) : new Color3(1, 0.85, 0.5);
+    const ground = new Vector3(at.x, 0, at.z);
+    const d = radius * 2;
+    // Borda no raio real (o anel da textura fica a ~93% do quadrado).
+    this.decal(ground, this.tex.ring, color, { size: [d * 0.9, d * 1.07], dur: 0.9, fadeIn: 0.05, y: 0.055 });
+    if (kind === "runes") this.decal(ground, this.tex.runes, color, { size: [d * 0.75, d * 0.95], dur: 1.2, spin: 0.9, y: 0.065, alpha: 0.7 });
+    else if (kind === "crack") this.decal(ground, this.tex.crack, color.scale(0.25), { size: [d * 0.7, d * 0.85], dur: 1.8, additive: false, y: 0.05 });
+  }
+
+  /**
+   * Flash rápido no alvo atingido: as malhas trocam por um instante para uma cópia do
+   * material com emissivo claro (hit-flash.ts). Sem partícula nem malha nova.
+   */
+  hitFlash(meshes: AbstractMesh[], crit: boolean): void {
+    if (!meshes.length) return;
+    try {
+      this.hitFlashes.flash(meshes, crit ? 110 : 80, crit);
+    } catch {
+      // material sem suporte: o alvo só não pisca
+    }
+  }
+
+  /**
+   * ?fxstress=1: a cada 120 ms dispara uma receita pesada perto da câmera, como se fosse de
+   * outros jogadores (o raid com o grupo cheio, sem precisar de seis pessoas). Serve para
+   * ver no F3 que o pico de partículas fica no teto do preset; com ?fxbudget=off, o de antes.
+   */
+  private startStress(): void {
+    const cam = this.camera;
+    if (!cam) return;
+    const up = (p: Vector3, y = 1) => p.add(new Vector3(0, y, 0));
+    const recipes: ((p: Vector3) => void)[] = [
+      (p) => this.fireExplosion(up(p)),
+      (p) => this.iceNova(p, 5),
+      (p) => this.slam(p, 4, new Color3(1, 0.7, 0.35), false),
+      (p) => this.brutalStrike(up(p).add(new Vector3(1, 0, 0)), up(p), false),
+      (p) => this.shieldBash(up(p), false),
+      (p) => this.poisonSplash(up(p, 0.5), 3, new Color3(0.45, 0.9, 0.3)),
+      (p) => this.meleeHit(up(p), Math.random() < 0.3, up(p).add(new Vector3(1, 0, 0))),
+      (p) => this.fireball(up(p, 2).add(new Vector3(-6, 0, 0)), up(p), 0.3),
+    ];
+    console.info("fx: ?fxstress=1 (efeitos de outros jogadores em volta da câmera)");
+    window.setInterval(() => {
+      if (this.scene.isDisposed) return;
+      const a = Math.random() * Math.PI * 2;
+      const r = 2 + Math.random() * 7;
+      const p = new Vector3(cam.target.x + Math.cos(a) * r, 0, cam.target.z + Math.sin(a) * r);
+      this.as(false, () => recipes[Math.floor(Math.random() * recipes.length)](p));
+    }, 120);
   }
 
   /** Orbe arcano (magia básica). */
@@ -752,7 +1070,7 @@ export class Fx {
       grow: 1.8,
       drag: 0.8,
     });
-    if (mine) this.shake(0.05);
+    if (mine) this.shake(0.06);
   }
 
   /** Golpe Brutal: corte vermelho em arco, faíscas laranja e chão rachado. */
@@ -782,7 +1100,7 @@ export class Fx {
       grow: 1.8,
       gravity: 0.6,
     });
-    if (mine) this.shake(0.07);
+    if (mine) this.shake(0.08);
   }
 
   /** Golpe Furtivo: corte em X roxo-escuro e nuvem de sombra. */
@@ -967,9 +1285,8 @@ export class Fx {
   /** Grito (Provocar, Grito de Guerra, Rugido): ondas que saem do corpo. */
   shout(body: FxBody, color: Color3, radius: number): void {
     const at = body.root.position.clone();
-    for (let i = 0; i < 3; i++) {
-      window.setTimeout(() => this.decal(at, this.tex.ring, color, { size: [0.6, radius * 2], dur: 0.55 }), i * 110);
-    }
+    const wave = this.keep(() => this.decal(at, this.tex.ring, color, { size: [0.6, radius * 2], dur: 0.55 }));
+    for (let i = 0; i < 3; i++) window.setTimeout(wave, i * 110);
     this.burst(body.head.getAbsolutePosition(), 18, {
       tex: this.tex.spark,
       life: [0.3, 0.55],
@@ -998,7 +1315,7 @@ export class Fx {
       drag: 2,
     });
     this.flash(ground.add(new Vector3(0, 0.3, 0)), radius * 0.8, color, 0.22);
-    if (mine) this.shake(10, 0.3);
+    if (mine) this.shake(0.1, 0.3);
   }
 
   /** Corte em volta (Corte Giratório). */
@@ -1036,21 +1353,20 @@ export class Fx {
         this.slam(p, radius + 1, new Color3(1, 0.45, 0.1), mine);
         this.decal(new Vector3(p.x, 0, p.z), this.tex.scorch, new Color3(0.15, 0.1, 0.08), { size: [radius * 2, radius * 2.4], dur: 4, additive: false });
         this.lightFlash(p.add(new Vector3(0, 2, 0)), new Color3(1, 0.5, 0.2), 4, 0.6);
-        if (mine) this.shake(16, 0.45);
+        if (mine) this.shake(0.16, 0.45);
       },
     });
   }
 
   /** Chuva de Brasas: várias bolas de fogo pequenas caindo em volta do alvo. */
   emberRain(at: Vector3, radius: number): void {
-    for (let i = 0; i < 8; i++) {
-      window.setTimeout(() => {
-        const a = Math.random() * Math.PI * 2;
-        const r = Math.sqrt(Math.random()) * radius;
-        const to = at.add(new Vector3(Math.cos(a) * r, 0.2, Math.sin(a) * r));
-        this.fireball(to.add(new Vector3(-2, 12, -1.5)), to, 0.45);
-      }, i * 90);
-    }
+    const drop = this.keep(() => {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * radius;
+      const to = at.add(new Vector3(Math.cos(a) * r, 0.2, Math.sin(a) * r));
+      this.fireball(to.add(new Vector3(-2, 12, -1.5)), to, 0.45);
+    });
+    for (let i = 0; i < 8; i++) window.setTimeout(drop, i * 90);
   }
 
   /** Teleporte (Piscar, Investida): clarão onde saiu e onde chegou. */
@@ -1578,9 +1894,11 @@ export class Fx {
     core.position.copyFrom(from);
     const pos = core.position;
 
+    // A explosão na chegada é do mesmo dono do projétil.
+    const arrive = this.keep(o.onArrive);
     const trail = this.particles("fx-trail", Math.ceil(o.rate * o.trail.life[1]) + 8, o.trail);
     trail.emitter = pos;
-    trail.emitRate = o.rate;
+    this.budget.stream(trail, o.rate, this.owner);
     trail.particleEmitterType = new SphereParticleEmitter(o.size * 0.4);
     trail.start();
     let smoke: ParticleSystem | null = null;
@@ -1597,7 +1915,7 @@ export class Fx {
         spin: 1,
       });
       smoke.emitter = pos;
-      smoke.emitRate = 45;
+      this.budget.stream(smoke, 45, this.owner);
       smoke.start();
     }
 
@@ -1616,7 +1934,7 @@ export class Fx {
             core.setEnabled(false);
             trail.stop();
             smoke?.stop();
-            o.onArrive(to.clone());
+            arrive(to.clone());
           }
           return true;
         }
@@ -1625,8 +1943,8 @@ export class Fx {
       },
       () => {
         this.removeGlow(core);
-        trail.dispose(false);
-        smoke?.dispose(false);
+        this.disposeParticles(trail);
+        if (smoke) this.disposeParticles(smoke);
         core.dispose();
       },
     );

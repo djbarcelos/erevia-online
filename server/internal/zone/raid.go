@@ -708,6 +708,7 @@ func (z *Zone) runBossWorker(ctx context.Context) {
 					break
 				}
 				z.log.Error("save boss", "err", err, "boss", b.ID, "attempt", attempt)
+				z.ReportDBError("boss_save", err)
 				select {
 				case <-ctx.Done():
 					return

@@ -52,6 +52,10 @@ export class AnimController {
   private deferReset = false;
   /** A ação atual repete (emote de dançar ou sentar). */
   private looping = false;
+  /** Pausa de impacto: segundos que ainda faltam com a pose congelada (só este personagem). */
+  private stopLeft = 0;
+  /** Velocidade da corrida no último quadro (para devolver depois da pausa). */
+  private runRatio = 1;
 
   /**
    * resetPose: devolve os ossos à pose de descanso quando uma ação sai.
@@ -151,6 +155,8 @@ export class AnimController {
     // Toca em loop para o grupo não ser removido ao terminar; na primeira volta, para no
     // último quadro. A morte fica assim; as outras ações devolvem o corpo à locomoção.
     g.start(true, speed, g.from + start * fps(g), g.to);
+    // Dentro de uma pausa de impacto, a ação nova espera a pausa acabar (o "apanhar" do alvo).
+    if (this.stopLeft > 0) g.speedRatio = 0;
     g.onAnimationGroupLoopObservable.addOnce(() => {
       if (this.action !== g || this.looping) return;
       if (this.holding) {
@@ -180,8 +186,31 @@ export class AnimController {
     this.actionWeight = 0;
   }
 
+  /**
+   * Pausa de impacto (hit stop): congela as animações deste personagem por `seconds` (40–80
+   * ms). Só a pose para: o personagem continua andando, o jogo e a rede seguem normais.
+   */
+  hitStop(seconds: number): void {
+    if (this.holding || seconds <= 0) return;
+    this.stopLeft = Math.max(this.stopLeft, seconds);
+    for (const g of this.anims.values()) g.speedRatio = 0;
+  }
+
+  /** Fim da pausa: cada clipe volta à velocidade que tinha. */
+  private resume(): void {
+    this.stopLeft = 0;
+    const idle = this.anims.get("idle");
+    const run = this.anims.get("run");
+    if (idle) idle.speedRatio = 1;
+    if (run) run.speedRatio = this.runRatio;
+    // Ação parada no fim (ou saindo de cena) fica parada; a que ainda toca volta a andar.
+    // (A morte que começou durante a pausa também volta; a já congelada no fim, não.)
+    if (this.action && !this.actionDone && !this.frozen) this.action.speedRatio = this.actionSpeed;
+  }
+
   /** Volta ao normal (ao reviver). */
   reset(): void {
+    if (this.stopLeft > 0) this.resume();
     this.holding = false;
     this.looping = false;
     this.frozen = false;
@@ -213,6 +242,13 @@ export class AnimController {
    * calcular as animações; o esqueleto fica congelado na última pose até voltar.
    */
   update(dt: number, moving: boolean, runSpeedRatio: number, active = true): void {
+    this.runRatio = runSpeedRatio;
+    if (this.stopLeft > 0) {
+      // Pausa de impacto: pose e pesos ficam como estão até ela acabar.
+      this.stopLeft -= dt;
+      if (this.stopLeft > 0) return;
+      this.resume();
+    }
     if (!active) {
       for (const g of this.anims.values()) g.weight = 0;
       return;
