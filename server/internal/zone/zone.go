@@ -296,6 +296,11 @@ func (z *Zone) UseSkill(ctx context.Context, id, skill, target uint32, force boo
 }
 func (z *Zone) Respawn(ctx context.Context, id uint32) { z.post(ctx, respawnEvent{id: id}) }
 
+// Trade repassa um comando de troca entre jogadores.
+func (z *Zone) Trade(ctx context.Context, id uint32, msg *pb.TradeCmd) {
+	z.post(ctx, tradeEvent{id: id, msg: msg})
+}
+
 // ItemAction repassa um pedido de item (*pb.PickUp, *pb.MoveItem, *pb.UseItem,
 // *pb.DestroyItem, *pb.Buy, *pb.Sell).
 func (z *Zone) ItemAction(ctx context.Context, id uint32, msg any) {
@@ -375,6 +380,8 @@ func (z *Zone) handle(e event) {
 		z.onClanCreated(e)
 	case modResultEvent:
 		z.onModResult(e)
+	case tradeEvent:
+		z.onTrade(e)
 	}
 }
 
@@ -623,6 +630,9 @@ func (z *Zone) removePlayer(id uint32) {
 		delete(z.byName, strings.ToLower(p.name))
 	}
 	z.forgetTarget(id)
+	if p.pl.trade != nil {
+		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
+	}
 	z.partyLeave(p, "")
 	z.dropInvites(id)
 	z.clanOnLeave(p)
@@ -664,6 +674,7 @@ func (z *Zone) update(dt float64) {
 		z.expireInvites()
 		z.syncParties()
 		z.checkLeaveTown()
+		z.checkTrades()
 		if len(z.pending) > 0 {
 			z.save(nil, false)
 		}

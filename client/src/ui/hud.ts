@@ -44,7 +44,7 @@ export type HotbarEntry = string | null;
 export type WindowId = "character" | "inventory" | "skills" | "party" | "clan" | "map" | "settings";
 
 /** Ações sobre um jogador selecionado (quadro do alvo). */
-export type TargetAction = "attack" | "party" | "clan" | "whisper";
+export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade";
 
 /** O que o quadro do alvo precisa saber de um jogador além do EntityInfo. */
 export interface TargetExtras {
@@ -245,6 +245,7 @@ export class Hud {
       ["party", "Grupo +", "Convidar para o seu grupo"],
       ["clan", "Clã +", "Convidar para o seu clã"],
       ["whisper", "Sussurrar", "Mandar uma mensagem particular"],
+      ["trade", "Trocar", "Propor uma troca de itens e moedas (chegue perto)"],
     ] as const) {
       const b = button(label, "btn btn-sm t-act", () => cb.onTargetAction(action));
       b.title = title;

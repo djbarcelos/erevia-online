@@ -7,6 +7,7 @@ import {
   ChannelKind,
   ClanCmdKind,
   NpcRole,
+  TradeCmdKind,
   ClanRank,
   ClanStateSchema,
   PartyCmdKind,
@@ -36,6 +37,7 @@ import { TeleportWindow } from "./ui/teleport";
 import { BarberWindow } from "./ui/barber";
 import { toBodyLook } from "./world/body-look";
 import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
+import { TradeWindow } from "./ui/trade";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
 import { buildRegions } from "./ui/regions";
@@ -519,6 +521,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (action === "whisper") chat.whisperTo(info.name);
       else if (action === "party") inviteParty(info.name);
       else if (action === "clan") inviteClan(info.name);
+      else if (action === "trade") conn.tradeCmd(TradeCmdKind.TRADE_CMD_REQUEST, { targetId });
     },
     onPartyMember: (id) => selectTarget(id),
     onCancelChannel: () => conn.cancelChannel(),
@@ -586,6 +589,26 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         const left = Math.max(12, (innerWidth - w - 12 - invW) / 2);
         storageWin.root.style.left = `${left}px`;
         void wm.show("inventory", { left: left + w + 12, top: storageWin.root.offsetTop });
+      },
+    },
+    hud.element,
+  );
+  const tradeWin = new TradeWindow(
+    store,
+    {
+      remove: (slot) => conn.tradeCmd(TradeCmdKind.TRADE_CMD_REMOVE_ITEM, { slot }),
+      gold: (amount) => conn.tradeCmd(TradeCmdKind.TRADE_CMD_SET_GOLD, { gold: amount }),
+      lock: () => conn.tradeCmd(TradeCmdKind.TRADE_CMD_LOCK),
+      confirm: () => conn.tradeCmd(TradeCmdKind.TRADE_CMD_CONFIRM),
+      cancel: () => conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL),
+      me,
+      onOpen: () => {
+        if (isCompact()) return void wm.show("inventory");
+        const w = tradeWin.root.offsetWidth || 420;
+        const invW = wm.widthOf("inventory");
+        const left = Math.max(12, (innerWidth - w - 12 - invW) / 2);
+        tradeWin.root.style.left = `${left}px`;
+        void wm.show("inventory", { left: left + w + 12, top: tradeWin.root.offsetTop });
       },
     },
     hud.element,
@@ -690,6 +713,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         },
         enchant: (scroll, place, slot) => conn.enchant(scroll, place, slot),
         storageOpen: () => storageWin.isOpen,
+        tradeOpen: () => tradeWin.isOpen,
+        offer: (bagSlot) => conn.tradeCmd(TradeCmdKind.TRADE_CMD_ADD_ITEM, { slot: bagSlot }),
         deposit: (bagSlot, toSlot) => conn.storageMove(storageWin.npcId, PLACE_BAG, bagSlot, PLACE_STORAGE, toSlot, 0),
         shopOpen: () => shop.isOpen,
       }),
@@ -838,6 +863,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (hud.channeling) conn.cancelChannel();
       else if (teleportWin.isOpen) teleportWin.close();
       else if (storageWin.isOpen) storageWin.close();
+      else if (tradeWin.isOpen) conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL);
       else if (barberWin.isOpen) barberWin.close();
       else if (shop.isOpen) shop.close();
       else if (wm.closeTop()) return;
@@ -1025,6 +1051,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       shop.dispose();
       teleportWin.dispose();
       storageWin.dispose();
+      tradeWin.dispose();
       barberWin.dispose();
       window.clearInterval(channelFx);
       raid.dispose();
@@ -1143,6 +1170,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           break;
         case "storage":
           storageWin.set(msg.msg.value);
+          break;
+        case "trade":
+          tradeWin.set(msg.msg.value);
           break;
         case "questLog": {
           const log = msg.msg.value;

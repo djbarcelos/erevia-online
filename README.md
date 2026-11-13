@@ -15,6 +15,10 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Armazém:** Otto, o Guarda do Armazém, na praça: 60 espaços e moedas, compartilhados pelos personagens da conta. Arrastar da bolsa guarda; duplo clique retira.
 - **Visual do personagem:** na criação, além da arma e do emblema, escolha o rosto e o cabelo (5 cabeças: Nobre, Selvagem, Sábio, Astuto e Andarilho, que qualquer classe pode usar), o tom de pele, a cor do cabelo e a cor da roupa (8 de cada, ou a original da classe) e se o elmo/gorro/chapéu aparece. Depois, Teodoro, o **Barbeiro** (ao norte do poço), muda o visual por 300 moedas, com prévia 3D. Todos veem o visual novo na hora.
 
+### Troca entre jogadores
+- Selecione um jogador perto (até 8 m) e clique em **Trocar** no quadro do alvo; ele recebe o convite. Na janela de troca, arraste itens da bolsa (ou use "Oferecer na troca" no menu do item), ponha moedas, **trave** a oferta e, com as duas travadas, **confirme**. Qualquer mudança (inclusive usar um item oferecido) destrava as duas ofertas.
+- Nada sai da bolsa até a confirmação dos dois. Na hora, o servidor confere tudo de novo, monta as bolsas novas e aplica de uma vez, salvando os dois personagens na mesma transação. Se alguém sair, morrer, se afastar ou não tiver espaço, a troca é cancelada sem mexer em nada.
+
 ### Missões
 - **Tutorial dos primeiros 15 minutos** (8 missões em sequência): sair da cidade, derrotar Esqueletos Lacaios, usar skills, tomar uma poção, comprar na praça, chegar ao nível 4, viajar com uma Pedra de Teleporte e enfrentar os Campos dos Ossos. Cada uma dá XP, moedas e/ou itens; se a bolsa estiver cheia, a recompensa fica no chão, reservada para você.
 - O painel **Missões** fica à esquerda, abaixo do grupo, e mostra o progresso (passe o mouse para ver a história e a recompensa). Só personagens novos (abaixo do nível 5 e sem histórico) recebem o tutorial.

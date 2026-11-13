@@ -1,5 +1,5 @@
 import { create, fromBinary, toBinary, type MessageInitShape } from "@bufbuild/protobuf";
-import { ChatChannel, ClanCmdKind, ClanRank, ClientMessageSchema, PartyCmdKind, ServerMessageSchema, type ServerMessage } from "../gen/erevia/v1/game_pb";
+import { ChatChannel, ClanCmdKind, ClanRank, ClientMessageSchema, PartyCmdKind, ServerMessageSchema, type ServerMessage, type TradeCmdKind } from "../gen/erevia/v1/game_pb";
 
 const PING_INTERVAL_MS = 2000;
 
@@ -91,6 +91,11 @@ export class Connection {
   /** Moedas no armazém: > 0 guarda, < 0 retira, 0 só abre. */
   storageGold(npcId: number, amount: number): void {
     this.send({ case: "storageGold", value: { npcId, amount: BigInt(amount) } });
+  }
+
+  /** Troca entre jogadores: pedir, oferecer/tirar item da bolsa, moedas, travar, confirmar, cancelar. */
+  tradeCmd(kind: TradeCmdKind, opts: { targetId?: number; slot?: number; count?: number; gold?: number } = {}): void {
+    this.send({ case: "tradeCmd", value: { kind, targetId: opts.targetId ?? 0, slot: opts.slot ?? 0, count: opts.count ?? 0, gold: BigInt(opts.gold ?? 0) } });
   }
 
   cancelChannel(): void {

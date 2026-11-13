@@ -108,6 +108,7 @@ type playerState struct {
 	nextBug    float64 // próximo /bug aceito (tempo de simulação)
 
 	quests questLog
+	trade  *trade // troca aberta (nil = nenhuma)
 }
 
 // rank da skill (0 = não aprendida).
