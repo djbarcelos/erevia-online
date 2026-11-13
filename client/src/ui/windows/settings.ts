@@ -225,6 +225,11 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
           "Tela",
           row("Nomes sobre os monstros", toggle(s.showNames, set("showNames"), "Nomes")),
           row("Números de dano", toggle(s.showDamage, set("showDamage"), "Números de dano")),
+          row(
+            "Tremor de câmera",
+            toggle(s.cameraShake, set("cameraShake"), "Tremor de câmera"),
+            "Nos seus críticos e nos golpes do chefe em você. Desligue se incomodar.",
+          ),
           row("Mostrar elmo", toggle(s.showHelm, set("showHelm"), "Mostrar elmo")),
           row(
             "Idioma",
