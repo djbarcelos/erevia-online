@@ -76,6 +76,7 @@ type playerState struct {
 	chatTokens float64
 	statsDirty bool
 	sentMP     int
+	sentSelfHP int // vida no último SelfStats (o sentHP é do snapshot e muda antes)
 	inv        inventory
 	saveAt     float64 // salvar em breve (0 = só no periódico)
 

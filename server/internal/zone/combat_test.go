@@ -410,3 +410,23 @@ func TestBigMonsterIsHitFromTheEdgeOfItsBody(t *testing.T) {
 		t.Fatal("deveria acertar da borda do corpo")
 	}
 }
+
+// A vida do próprio jogador precisa chegar na HUD (SelfStats) mesmo quando só ela
+// muda: o snapshot atualiza sentHP antes, então o SelfStats tem o seu próprio controle.
+func TestSelfStatsFollowsHPOnly(t *testing.T) {
+	z := newTestZone(nil)
+	peer := join(z, 1, "Ana")
+	p := z.players[1]
+	z.update(0.05)
+
+	p.hp = p.stats.MaxHP / 2 // dano sem mexer na mana nem marcar statsDirty
+	peer.mu.Lock()
+	peer.msgs = nil
+	peer.mu.Unlock()
+	z.update(0.05)
+
+	want := uint32(p.hpInt())
+	if !peer.has(func(m *pb.ServerMessage) bool { s := m.GetSelfStats(); return s != nil && s.Hp == want }) {
+		t.Fatalf("expected SelfStats with hp=%d", want)
+	}
+}

@@ -610,7 +610,7 @@ func (z *Zone) update(dt float64) {
 
 	z.flushSnapshot()
 	for _, p := range z.players {
-		if p.pl.statsDirty || p.hpInt() != p.sentHP || int(math.Floor(p.mp)) != p.pl.sentMP {
+		if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || int(math.Floor(p.mp)) != p.pl.sentMP {
 			z.sendSelfStats(p)
 		}
 	}
@@ -693,6 +693,7 @@ func (z *Zone) flushSnapshot() {
 
 func (z *Zone) sendSelfStats(p *entity) {
 	p.pl.statsDirty = false
+	p.pl.sentSelfHP = p.hpInt()
 	p.pl.sentMP = int(math.Floor(p.mp))
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_SelfStats{SelfStats: z.selfStats(p)}})
 }
