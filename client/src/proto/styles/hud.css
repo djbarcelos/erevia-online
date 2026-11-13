@@ -378,15 +378,44 @@
 .mm-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
+/* Coordenadas: pílula escura com borda dourada, números fixos (não "pulam") */
 .mm-coords {
-  font-size: 0.68rem;
-  color: var(--muted);
-  min-width: 56px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(10, 8, 14, 0.85);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  font-size: 0.78rem;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mm-ax {
+  font-style: normal;
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+
+.mm-ax:not(:first-child) {
+  margin-left: 4px;
+}
+
+.mm-cv {
+  min-width: 3ch;
+  text-align: right;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .mm-btn {
@@ -1289,16 +1318,20 @@
 }
 
 .hud-screen.touch .mm-zone,
-.hud-screen.touch .mm-coords,
 .hud-screen.touch .mm-row .mm-btn:not(:last-child) {
   display: none;
 }
 
 .hud-screen.touch .mm-row {
+  position: static;
+  margin: 0;
+}
+
+/* Botão do mapa no canto do minimapa; o resto da linha fica relativo ao minimapa */
+.hud-screen.touch .mm-row .mm-btn:last-child {
   position: absolute;
   left: -6px;
   bottom: -2px;
-  margin: 0;
 }
 
 .hud-screen.touch .mm-row .mm-btn {
@@ -1545,6 +1578,22 @@
 /* Pouca altura no desktop: missões recolhem a lista de grupo para não cobrir o chat */
 @media (max-height: 820px) {
   .hud-screen:not(.touch) .party {
+    display: none;
+  }
+}
+
+/* Toque: coordenadas centralizadas embaixo do minimapa */
+.hud-screen.touch .mm-coords {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 14px);
+  transform: translateX(-50%);
+  height: 24px;
+  font-size: 0.72rem;
+}
+
+@media (max-width: 600px) {
+  .hud-screen.touch .mm-coords {
     display: none;
   }
 }

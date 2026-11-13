@@ -149,7 +149,12 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
   const miniCanvas = el("canvas", "mm-canvas");
   const miniCtx = miniCanvas.getContext("2d")!;
   const clock = el("span", "mm-clock");
-  const coords = el("span", "mm-coords");
+  // Coordenadas do jogador: pílula legível com X e Y separados (Y = norte/sul no mapa).
+  const coordX = el("b", "mm-cv", "0");
+  const coordY = el("b", "mm-cv", "0");
+  const coords = el("span", "mm-coords", el("i", "mm-ax", "X"), coordX, el("i", "mm-ax", "Y"), coordY);
+  coords.title = "Sua posição no mapa (X = leste/oeste, Y = norte/sul)";
+  coords.setAttribute("aria-live", "off");
   const zoneName = el("div", "mm-zone", "");
   let miniRadius = 40;
   const zoomIn = button("+", "mm-btn", () => (miniRadius = Math.max(20, miniRadius - 10)));
@@ -157,7 +162,7 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
   const mapBtn = button("", "mm-btn", () => wm.toggle("map"));
   mapBtn.innerHTML = ui("map", 14);
   mapBtn.title = "Mapa (M)";
-  mini.append(zoneName, el("div", "mm-frame", miniCanvas, el("span", "mm-n", "N"), clock), el("div", "mm-row", coords, zoomOut, zoomIn, mapBtn));
+  mini.append(zoneName, el("div", "mm-frame", miniCanvas, el("span", "mm-n", "N"), clock), el("div", "mm-row", zoomOut, coords, zoomIn, mapBtn));
   let mapCanvas: HTMLCanvasElement | null = null;
 
   // ---------- Menu (canto superior direito) ----------
@@ -798,7 +803,8 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
       pingEl.textContent = `${sim.ping} ms`;
       pingEl.className = sim.ping < 60 ? "ok" : "warn";
       clock.innerHTML = `${ui(isNight(sim.phase) ? "moon" : "sun", 12)}${hourLabel(sim.phase)}`;
-      coords.textContent = `${Math.round(sim.me.x)}, ${Math.round(sim.me.z)}`;
+      coordX.textContent = String(Math.round(sim.me.x));
+      coordY.textContent = String(Math.round(sim.me.z));
       zoneName.textContent = zoneAt(sim.me.x, sim.me.z).name;
     }
   };
