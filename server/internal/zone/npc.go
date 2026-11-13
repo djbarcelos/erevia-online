@@ -131,6 +131,8 @@ func (z *Zone) buy(p *entity, npcID uint32, itemID string, count int) {
 	}
 	inv.gold -= cost
 	inv.add(def, count)
+	z.trackGold(p, "buy", -cost)
+	z.trackItem(p, true, def.ID, count, "buy")
 	z.system(p, fmt.Sprintf("Você comprou %s por %d moedas.", itemLabel(def, count), cost))
 	z.inventoryChanged(p, false)
 	z.questEvent(p, game.GoalBuy, def.ID)
@@ -153,6 +155,8 @@ func (z *Zone) sell(p *entity, npcID uint32, slot, count int) {
 	count = min(max(count, 1), s.count)
 	inv.take(slot, count)
 	inv.gold += price * int64(count)
+	z.trackGold(p, "sell", price*int64(count))
+	z.trackItem(p, false, s.def.ID, count, "sell")
 	z.system(p, fmt.Sprintf("Você vendeu %s por %d moedas.", itemLabel(s.def, count), price*int64(count)))
 	z.inventoryChanged(p, false)
 }

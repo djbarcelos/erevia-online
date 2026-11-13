@@ -107,8 +107,9 @@ type playerState struct {
 	userAgent  string
 	nextBug    float64 // próximo /bug aceito (tempo de simulação)
 
-	quests questLog
-	trade  *trade // troca aberta (nil = nenhuma)
+	quests   questLog
+	trade    *trade    // troca aberta (nil = nenhuma)
+	joinedAt time.Time // telemetria: início da sessão
 }
 
 // rank da skill (0 = não aprendida).

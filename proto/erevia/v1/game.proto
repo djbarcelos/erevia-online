@@ -35,7 +35,16 @@ message ClientMessage {
     ChangeLook change_look = 25;
     TradeCmd trade_cmd = 26;
     Craft craft = 27;
+    ClientStats client_stats = 28;
   }
+}
+
+// Amostra de desempenho do cliente (a cada ~60 s; o FPS é medido 1×/s, nunca por quadro).
+message ClientStats {
+  float fps_avg = 1;
+  float fps_low = 2; // média dos 10% piores segundos
+  string device = 3; // "mobile"/"desktop" + sistema (curto)
+  uint32 seconds = 4; // segundos cobertos pela amostra
 }
 
 // Criar um item com uma receita do Ferreiro (materiais + moedas).
