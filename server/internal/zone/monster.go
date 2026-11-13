@@ -159,9 +159,10 @@ func (z *Zone) resetMonster(m *entity) {
 func (z *Zone) updateDeadMonster(m *entity) {
 	ms := m.mon
 	if !ms.hidden && z.now >= ms.corpseEnd {
-		ms.hidden = true
-		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: m.id}}}, 0)
+		ms.hidden = true // a AOI manda o Despawn a quem o conhecia
+		z.aoiDirty = true
 		if ms.summon {
+			m.gone = true
 			delete(z.monsters, m.id)
 			return
 		}
@@ -189,7 +190,8 @@ func (z *Zone) reviveMonster(m *entity) {
 	m.effects = nil
 	m.clearAction()
 	m.sentHP, m.sentMaxHP = m.hpInt(), m.maxHPInt()
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(m)}}}, 0)
+	m.spawnSeq++ // a AOI manda o Spawn novo a quem estiver perto, no fim do tick
+	z.aoiDirty = true
 }
 
 func (z *Zone) nearestPlayer(from Vec2, maxDist float64) *entity {

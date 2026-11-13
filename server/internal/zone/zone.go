@@ -229,6 +229,7 @@ type Zone struct {
 	localClanSeq   int64
 	storages       map[int64]*storage // conta → armazém
 	stats          tickStats
+	aoiDirty       bool // alguém entrou, saiu ou renasceu: atualizar a AOI já neste tick
 
 	modJobs       chan modJob
 	modBackend    ModBackend
@@ -525,21 +526,12 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.clanOnJoin(p, info.ClanLeftAt)
 	z.storageOnJoin(p, info.Storage)
 
-	// Avisa os outros que alguém chegou.
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(p)}}}, p.id)
-
-	// Diz ao novo jogador quem ele é, quem já está aqui (inclui ele mesmo) e suas skills.
-	entities := make([]*pb.Entity, 0, len(z.players)+len(z.monsters)+len(z.npcs))
-	for _, other := range z.players {
-		entities = append(entities, z.entityPB(other))
-	}
+	// Os outros ficam sabendo pela AOI (updateAOI, no fim do tick), só quem está perto.
+	z.aoiDirty = true
+	// O novo jogador recebe quem ele é e o que está no raio dele, mais NPCs e objetos.
+	entities := z.welcomeEntities(p)
 	for _, n := range z.npcs {
 		entities = append(entities, z.entityPB(n))
-	}
-	for _, m := range z.monsters {
-		if !m.mon.hidden {
-			entities = append(entities, z.entityPB(m))
-		}
 	}
 	for _, o := range z.objects {
 		entities = append(entities, z.entityPB(o))
@@ -704,7 +696,9 @@ func (z *Zone) removePlayer(id uint32) {
 	st := z.savedState(p)
 	z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
 	z.save([]SavedState{st}, false)
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: id}}}, 0)
+	// Quem o conhecia recebe o Despawn pela AOI no fim do tick.
+	p.gone = true
+	z.aoiDirty = true
 	z.log.Info("player left", "id", id, "name", p.name, "online", len(z.players))
 }
 
@@ -793,19 +787,25 @@ func (z *Zone) step(e *entity, dt float64) {
 func (z *Zone) flushSnapshot() {
 	snap := &pb.Snapshot{Tick: z.tick}
 	collect := func(e *entity) {
+		e.encState, e.encHP = e.encState[:0], e.encHP[:0]
 		if e.moved && !e.dead {
-			snap.States = append(snap.States, &pb.EntityState{
+			st := &pb.EntityState{
 				Id: e.id,
 				X:  float32(e.pos.X), Z: float32(e.pos.Z),
 				TargetX: float32(e.dest.X), TargetZ: float32(e.dest.Z),
 				Speed: float32(e.speed(z.now)), Teleport: e.teleport,
-			})
+			}
+			snap.States = append(snap.States, st)
+			e.encState = encField(snapFieldStates, st)
 		}
 		e.moved, e.teleport = false, false
 		if hp, max := e.hpInt(), e.maxHPInt(); hp != e.sentHP || max != e.sentMaxHP {
-			snap.Hp = append(snap.Hp, &pb.HpUpdate{Id: e.id, Hp: uint32(hp), MaxHp: uint32(max)})
+			h := &pb.HpUpdate{Id: e.id, Hp: uint32(hp), MaxHp: uint32(max)}
+			snap.Hp = append(snap.Hp, h)
+			e.encHP = encField(snapFieldHp, h)
 			e.sentHP, e.sentMaxHP = hp, max
 		}
+		e.encTick = z.tick
 	}
 	for _, p := range z.players {
 		collect(p)
@@ -825,11 +825,15 @@ func (z *Zone) flushSnapshot() {
 	snap.Telegraphs = z.frame.telegraphs
 	z.frame = frame{}
 
-	if len(snap.States)+len(snap.Hp)+len(snap.Combat)+len(snap.Effects)+len(snap.Deaths)+len(snap.Revives)+
-		len(snap.LevelUps)+len(snap.EffectEnds)+len(snap.Casts)+len(snap.Telegraphs) == 0 {
+	// Spawn/Despawn de quem entrou ou saiu do raio, e cada um recebe só o que conhece.
+	if z.tick%aoiEvery == 0 || z.aoiDirty {
+		z.aoiDirty = false
+		z.updateAOI()
+	}
+	if snapshotEmpty(snap) {
 		return
 	}
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Snapshot{Snapshot: snap}}, 0)
+	z.sendSnapshots(snap)
 }
 
 func (z *Zone) sendSelfStats(p *entity) {
