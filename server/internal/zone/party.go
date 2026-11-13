@@ -75,6 +75,10 @@ func (z *Zone) onSocial(e socialEvent) {
 		z.onFriendCmd(p, m)
 	case *pb.MailCmd:
 		z.onMailCmd(p, m)
+	case *pb.RankingRequest:
+		z.sendRanking(p)
+	case *pb.AchievementCmd:
+		z.onAchievementCmd(p, m)
 	}
 }
 
@@ -428,6 +432,7 @@ func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64
 		z.burnKarma(m, dead.level)
 		z.track(m, "kill", dead.mon.def.ID, int64(dead.level), nil)
 		z.questEvent(m, game.GoalKill, dead.mon.def.ID)
+		z.achEvent(m, game.AchKill, dead.mon.def.ID)
 	}
 }
 

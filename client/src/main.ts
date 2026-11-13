@@ -16,11 +16,13 @@ import {
   PartyStateSchema,
   SelfPvpSchema,
   SkillTarget,
+  type AchievementInfo,
   type ClanState,
   type FriendList,
   type Mail,
   type MailBox,
   type PartyState,
+  type Ranking,
   type Progress,
   type SelfPvp,
   type SelfStats,
@@ -55,6 +57,7 @@ import { buildSkills } from "./ui/windows/skills";
 import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
+import { buildGlory } from "./ui/windows/glory";
 import { InvitePrompt } from "./ui/invite";
 import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
@@ -265,6 +268,27 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     return () => socialListeners.delete(fn);
   };
   const isFriend = (id: number) => !!friends?.friends.some((f) => f.characterId === id);
+  // ---------- Ranking e conquistas (só mudam quando chega mensagem) ----------
+  let ranking: Ranking | null = null;
+  let rankingAt = 0; // performance.now() da última resposta
+  let rankingAsked = 0;
+  /** O ranking guardado vale por 2 min (o servidor recalcula a cada 5). */
+  const RANKING_CACHE_MS = 2 * 60_000;
+  const rankingListeners = new Set<() => void>();
+  const refreshRanking = () => {
+    const now = performance.now();
+    const fresh = ranking && ranking.updatedAtMs > 0n && now - rankingAt < RANKING_CACHE_MS;
+    if (fresh || now - rankingAsked < 3000) return;
+    rankingAsked = now;
+    conn.rankingRequest();
+  };
+  const achievements: AchievementInfo[] = [];
+  let titleId = "";
+  const achListeners = new Set<() => void>();
+  const listen = (set: Set<() => void>) => (fn: () => void) => {
+    set.add(fn);
+    return () => set.delete(fn);
+  };
 
   // ---------- Progressão: atributos, árvore de skills e barra (vêm do servidor) ----------
   let progress: Progress | null = welcome.progress ?? null;
@@ -845,6 +869,24 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       }),
   });
   reg({
+    id: "glory",
+    title: "Glória",
+    hotkey: keys().glory,
+    width: 640,
+    height: 640,
+    build: () =>
+      buildGlory({
+        localId: welcome.yourId,
+        ranking: () => ranking,
+        onRanking: listen(rankingListeners),
+        refreshRanking,
+        achievements: () => achievements,
+        titleId: () => titleId,
+        onAchievements: listen(achListeners),
+        setTitle: (id) => conn.setTitle(id),
+      }),
+  });
+  reg({
     id: "map",
     title: "Mapa do mundo",
     hotkey: keys().map,
@@ -932,6 +974,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       [k.party]: () => wm.toggle("party"),
       [k.clan]: () => wm.toggle("clan"),
       [k.social]: () => wm.toggle("social"),
+      [k.glory]: () => wm.toggle("glory"),
       [k.character]: () => wm.toggle("character"),
       [k.map]: () => wm.toggle("map"),
       [k.auto]: () => hud.setAuto(!hud.autoOn, true),
@@ -1272,6 +1315,24 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "emote":
           entities.emote(msg.msg.value.id, msg.msg.value.kind);
           break;
+        case "ranking":
+          ranking = msg.msg.value;
+          rankingAt = performance.now();
+          for (const fn of rankingListeners) fn();
+          break;
+        case "achievements": {
+          const a = msg.msg.value;
+          if (a.full) achievements.splice(0, achievements.length, ...a.list);
+          else
+            for (const u of a.list) {
+              const cur = achievements.find((x) => x.id === u.id);
+              if (cur) Object.assign(cur, { unlocked: u.unlocked, count: u.count, unlockedAtMs: u.unlockedAtMs });
+            }
+          titleId = a.titleId;
+          if (a.unlocked) toast(`Conquista desbloqueada: ${a.unlocked}!`);
+          for (const fn of achListeners) fn();
+          break;
+        }
         case "playerStatus":
           entities.setStatus(msg.msg.value);
           if (msg.msg.value.id === targetId || msg.msg.value.id === welcome.yourId) refreshTarget();

@@ -537,6 +537,12 @@ func (z *Zone) raidKilled(m *entity) {
 		}
 		z.shareMonsterXPScaled(m, takers, share)
 	}
+	// Conquista: todo mundo que causou dano e ainda está aqui participou.
+	for id := range r.byPlayer {
+		if p := z.players[id]; p != nil {
+			z.achEvent(p, game.AchRaid, ms.def.ID)
+		}
+	}
 
 	text := fmt.Sprintf("%s foi derrotado!", m.name)
 	if topName != "" {

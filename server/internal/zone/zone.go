@@ -94,7 +94,10 @@ type JoinInfo struct {
 	MutedUntil time.Time
 	UserAgent  string
 	Quests     game.QuestState
-	Peer       Peer
+	// Conquistas desbloqueadas/progresso e a conquista do título em uso ("" = nenhum).
+	Achievements game.AchievementState
+	Title        string
+	Peer         Peer
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -114,6 +117,9 @@ type SavedState struct {
 	PvPKills int
 	Look     game.Appearance
 	Quests   game.QuestState
+	// Conquistas e título (id da conquista), salvos junto com o personagem.
+	Achievements game.AchievementState
+	Title        string
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -235,6 +241,8 @@ type Zone struct {
 	socialJobs     chan socialJob
 	socialBackend  SocialBackend
 	mailSent       map[uint32][]time.Time // cartas enviadas na última hora, por remetente
+	rankingBackend RankingBackend
+	ranking        *rankingCache // último cálculo do ranking (nil = ainda não chegou)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -348,6 +356,7 @@ func (z *Zone) Run(ctx context.Context) {
 	go z.runTelemetryWorker(ctx)
 	go z.runBossWorker(ctx)
 	go z.runSocialWorker(ctx)
+	go z.runRankingWorker(ctx)
 
 	for {
 		select {
@@ -407,6 +416,8 @@ func (z *Zone) handle(e event) {
 		z.onModResult(e)
 	case tradeEvent:
 		z.onTrade(e)
+	case rankingEvent:
+		z.setRanking(e.data)
 	case clientStatsEvent:
 		if p := z.players[e.id]; p != nil {
 			z.onClientStats(p, e.msg)
@@ -453,6 +464,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Karma, info.PKs, info.PvPKills = st.Karma, st.PKs, st.PvPKills
 		info.Look = st.Look
 		info.Quests = st.Quests
+		info.Achievements, info.Title = st.Achievements, st.Title
 		delete(z.recent, info.ID)
 	}
 
@@ -479,6 +491,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 			karma:     max(0, info.Karma), pks: max(0, info.PKs), pvpKills: max(0, info.PvPKills),
 			gm: info.GM, mutedUntil: info.MutedUntil, userAgent: truncateRunes(info.UserAgent, maxUserAgent),
 			quests: loadQuests(info.Quests, level),
+			ach:    loadAchievements(info.Achievements, info.Title),
 		},
 	}
 	p.pl.sentPvp = z.pvpState(p)
@@ -553,6 +566,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.sendSelfStats(p)
 	z.sendQuests(p, "")
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
+	z.achOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
 			z.sendAnyCooldown(p, id, ready-z.now)
@@ -817,6 +831,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
+		Achievements: p.pl.ach.state(), Title: p.pl.ach.title,
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
@@ -923,6 +938,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		out.WeaponEnchant = uint32(e.pl.inv.weaponEnchant())
 		out.PvpState = z.pvpState(e)
 		out.ClanName = z.clanName(e)
+		out.Title = e.pl.ach.titleText()
 	}
 	if e.npc != nil {
 		out.Title = e.npc.title

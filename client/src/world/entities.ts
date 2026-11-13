@@ -105,7 +105,7 @@ export interface EntityInfo {
   hp: number;
   maxHp: number;
   dead: boolean;
-  /** NPC: função ("Mercadora"). */
+  /** NPC: função ("Mercadora"); jogador: título escolhido (conquista, "" = nenhum). */
   title: string;
   /** Chefe (marcador e quadro do alvo diferentes). */
   boss?: boolean;
@@ -132,6 +132,7 @@ export const NAME_COLORS = {
   chaotic: "#ff5a4a",
   party: "#7fd0ff",
   clan: "#e8cf8a",
+  title: "#cdb8f2",
 } as const;
 
 /** O que o mapa precisa saber de cada entidade. */
@@ -163,6 +164,11 @@ interface View extends EntityInfo {
   /** Cor do nome sem estado PvP (emblema, local, tipo). */
   baseColor: string;
   clanText: TextBlock;
+  /**
+   * Jogadores: título sob o nome (null nos outros). Texto fixo: só muda quando chega um
+   * PlayerStatus com outro título, nada por quadro.
+   */
+  titleText: TextBlock | null;
   /** Anel vermelho nos pés de quem tem karma (criado na hora). */
   pkRing: Mesh | null;
   boss: boolean;
@@ -331,6 +337,7 @@ export class EntityManager {
     if (!v) return;
     v.pvpState = s.pvpState;
     v.clanName = s.clanName;
+    v.title = s.title;
     this.refreshName(v);
     // O clã do jogador local mudou: os aliados de clã mudam de cor também.
     if (s.id === this.localId) for (const o of this.views.values()) if (o !== v) this.refreshName(o);
@@ -469,6 +476,18 @@ export class EntityManager {
     nameText.outlineWidth = 3;
     nameText.outlineColor = "rgba(0,0,0,0.85)";
     stack.addControl(nameText);
+    let titleText: TextBlock | null = null;
+    if (e.kind === EntityKind.PLAYER) {
+      titleText = new TextBlock();
+      titleText.resizeToFit = true;
+      titleText.fontSize = 11;
+      titleText.fontStyle = "italic";
+      titleText.color = NAME_COLORS.title;
+      titleText.outlineWidth = 3;
+      titleText.outlineColor = "rgba(0,0,0,0.85)";
+      titleText.isVisible = false;
+      stack.addControl(titleText);
+    }
     const clanText = new TextBlock();
     clanText.resizeToFit = true;
     clanText.fontSize = 11;
@@ -498,7 +517,7 @@ export class EntityManager {
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
       model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
-      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, baseColor, clanText, pkRing: null,
+      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, baseColor, clanText, titleText, pkRing: null,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
@@ -1509,6 +1528,11 @@ export class EntityManager {
             : v.baseColor;
     v.clanText.text = v.clanName ? `‹${v.clanName}›` : "";
     v.clanText.isVisible = !!v.clanName;
+    // Os setters do TextBlock ignoram o mesmo valor: sem redesenho se nada mudou.
+    if (v.titleText) {
+      v.titleText.text = v.title ? `«${v.title}»` : "";
+      v.titleText.isVisible = !!v.title;
+    }
     const red = v.pvpState === PvpState.CHAOTIC;
     if (red && !v.pkRing) {
       const ring = MeshBuilder.CreateTorus(`pk${v.id}`, { diameter: 1.25, thickness: 0.05, tessellation: 32 }, this.scene);

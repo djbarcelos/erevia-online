@@ -53,6 +53,7 @@ func (z *Zone) enchant(p *entity, scrollSlot, place, slot int) {
 		target.enchant = before + 1
 		res.Ok, res.Level = true, uint32(target.enchant)
 		z.system(p, fmt.Sprintf("Sucesso! %s.", game.EnchantedName(def, target.enchant)))
+		z.achValue(p, game.AchEnchant, "", target.enchant)
 	} else if sc.Blessed {
 		target.enchant = 0
 		z.system(p, fmt.Sprintf("O encantamento falhou. A bênção salvou o item, mas %s voltou a +0.", def.Name))

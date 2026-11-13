@@ -112,6 +112,9 @@ type playerState struct {
 	joinedAt time.Time // telemetria: início da sessão
 
 	social socialState // amigos, emote e leitura do correio
+	// Conquistas, título escolhido e quando pode pedir o ranking de novo.
+	ach         achievements
+	rankingNext float64
 }
 
 // rank da skill (0 = não aprendida).
