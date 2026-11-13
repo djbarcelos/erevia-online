@@ -2,7 +2,7 @@
 import { reportClientError, setErrorContext, watchEngine } from "./net/errors";
 import { api, ApiError, type CharacterInfo } from "./api";
 import { gameAudio } from "./audio";
-import { Color3, Vector3 } from "@babylonjs/core";
+import { Color3, Matrix, Vector3 } from "@babylonjs/core";
 import { create } from "@bufbuild/protobuf";
 import {
   EntityKind,
@@ -65,6 +65,8 @@ import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
 import { buildGlory } from "./ui/windows/glory";
+import { takeUnseenNews, whatsNewDef } from "./ui/windows/whatsnew";
+import { loadNews } from "./news";
 import { InvitePrompt } from "./ui/invite";
 import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
@@ -565,6 +567,28 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
   });
 
+  // Seta da missão rastreada: ponto do chão na tela (px do viewport). O HUD chama no
+  // máximo 5×/s, com vetores reaproveitados. O retângulo do canvas só é lido de novo depois
+  // de um resize (ler a cada chamada forçaria layout no meio do quadro).
+  const projIn = new Vector3();
+  const projView = new Vector3();
+  const projOut = new Vector3();
+  let canvasRect: DOMRect | null = null;
+  const onResizeRect = () => (canvasRect = null);
+  addEventListener("resize", onResizeRect);
+  const projectToScreen = (x: number, z: number) => {
+    const canvas = world.engine.getRenderingCanvas();
+    if (!canvas) return null;
+    const rect = (canvasRect ??= canvas.getBoundingClientRect());
+    const w = world.engine.getRenderWidth();
+    const h = world.engine.getRenderHeight();
+    if (!w || !h) return null;
+    projIn.set(x, (entities.rootOf(welcome.yourId)?.position.y ?? 0) + 1, z);
+    Vector3.TransformCoordinatesToRef(projIn, world.camera.getViewMatrix(), projView);
+    Vector3.ProjectToRef(projIn, Matrix.IdentityReadOnly, world.scene.getTransformMatrix(), world.camera.viewport.toGlobal(w, h), projOut);
+    return { x: rect.left + (projOut.x * rect.width) / w, y: rect.top + (projOut.y * rect.height) / h, front: projView.z > 0 };
+  };
+
   // ---------- HUD ----------
   const hud = new Hud(learnedActives(), store, {
     onSkill: useSkill,
@@ -600,6 +624,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     me,
     targetDistance: () => (isAttackable(targetId) ? entities.reachDistanceTo(targetId) : null),
     map: mapSource,
+    project: projectToScreen,
     regions,
     stats: () => ({ fps: world.engine.getFps(), ping: conn.ping }),
     clock: () => clock.phase(),
@@ -930,6 +955,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           .filter((n) => n.role === NpcRole.TELEPORT)
           .map((n) => ({ id: n.id, name: entities.info(n.id)?.name ?? "", x: entities.rootOf(n.id)?.position.x ?? 0, z: entities.rootOf(n.id)?.position.z ?? 0 })),
         nameOf: (id) => entities.info(id)?.name ?? "",
+        quests: hud.quests,
         bossStatus: (b) => {
           const st = raid.statusAt(b.x, b.z);
           return st && { alive: st.alive, windowStartMs: Number(st.windowStartMs), windowEndMs: Number(st.windowEndMs) };
@@ -958,8 +984,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           location.reload();
         },
         info: () => ({ account: "", character: character.name, level: me().myLevel, ping: conn.ping, online: entities.count }),
+        news: () => void wm.show("news"),
       }),
   });
+  reg(whatsNewDef());
   const wm = new WindowManager(defs);
   wm.onChange = () => {
     for (const id of defs.keys()) hud.setWindowOpen(id, wm.isOpen(id));
@@ -1131,6 +1159,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     }, 3000);
   }
 
+  // "O que há de novo": abre sozinha uma vez por versão do changelog (fora da medição de FPS).
+  if (!wantBench()) {
+    void loadNews().then((news) => {
+      if (news && wm.layer.isConnected && takeUnseenNews(news.latest)) void wm.show("news");
+    });
+  }
+
   canvas.focus();
   if (settings.get().touchMode !== "off" && matchMedia("(pointer: coarse)").matches) {
     toast("Joystick à esquerda · toque num monstro para atacar · AUTO caça sozinho");
@@ -1195,6 +1230,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       auto.stop();
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKeyUp);
+      removeEventListener("resize", onResizeRect);
       window.clearInterval(effectsTimer);
       window.clearInterval(stickTimer);
       stopPerf();
@@ -1428,6 +1464,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           break;
         case "bossStatus":
           raid.onStatus(msg.msg.value);
+          break;
+        case "eventStatus":
+          hud.setEvents(msg.msg.value, serverNow);
           break;
       }
     },

@@ -31,8 +31,13 @@ func (z *Zone) kill(dead, killer *entity) {
 	if dead.mon != nil {
 		ms := dead.mon
 		// O drop fica reservado para quem causou mais dano (lido antes de zerar o ódio), e a
-		// XP vai para o grupo (ou jogador) que causou mais dano no total.
-		z.dropLoot(dead, topHate(ms.hate))
+		// XP vai para o grupo (ou jogador) que causou mais dano no total. Invasores não deixam
+		// saque no chão da cidade: a recompensa da invasão sai no fim.
+		if ms.invader {
+			z.invasionKilled(dead, killer)
+		} else {
+			z.dropLoot(dead, topHate(ms.hate))
+		}
 		takers := z.creditGroup(ms.hate, dead.pos)
 		if len(takers) == 0 && killer != nil && killer.pl != nil && !killer.dead {
 			takers = []*entity{killer} // sem ódio registrado (ex.: veneno de quem saiu)
@@ -79,8 +84,8 @@ func (z *Zone) kill(dead, killer *entity) {
 		for range pkXPLossFactor {
 			dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level)
 		}
-	case !byPlayer:
-		dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level)
+	case !byPlayer && (killer == nil || killer.mon == nil || !killer.mon.invader):
+		dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level) // morrer defendendo a cidade não custa XP
 	}
 	dead.pl.statsDirty = true
 	z.forgetTarget(dead.id)
@@ -127,7 +132,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
 	z.systemAfterFlush(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
 	z.track(p, "level", "", int64(p.level), nil)
-	z.questLevel(p)
+	z.questLevelUp(p) // também reenvia o lugar dos objetivos que dependem do nível
 	z.achValue(p, game.AchLevel, "", p.level)
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
 }
@@ -137,9 +142,14 @@ func (z *Zone) respawnPlayer(p *entity) {
 	if !p.dead {
 		return
 	}
+	// Durante a invasão a praça está em luta: quem morre volta num canto seguro da cidade.
+	center, spread := Vec2{}, townSpawnRadius
+	if z.invasionOpen(center) {
+		center, spread = invShelters()[z.rng.IntN(4)], 1.5
+	}
 	a := z.rng.Float64() * 2 * math.Pi
-	r := z.rng.Float64() * townSpawnRadius
-	p.pos = z.freeSpot(Vec2{X: r * math.Cos(a), Z: r * math.Sin(a)})
+	r := z.rng.Float64() * spread
+	p.pos = z.freeSpot(Vec2{X: center.X + r*math.Cos(a), Z: center.Z + r*math.Sin(a)})
 	p.dest = p.pos
 	p.path = nil
 	p.dead = false

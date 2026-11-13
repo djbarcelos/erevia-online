@@ -6,6 +6,8 @@ WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY client/ ./
+# O build gera public/novidades.json a partir do changelog da raiz.
+COPY CHANGELOG.md /app/CHANGELOG.md
 # Commit do deploy, gravado no cliente para os relatórios de erro (a Railway passa as
 # variáveis do serviço como build args; o contexto não leva o .git).
 ARG RAILWAY_GIT_COMMIT_SHA

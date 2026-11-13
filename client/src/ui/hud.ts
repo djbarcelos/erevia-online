@@ -1,7 +1,8 @@
 /**
  * HUD do jogo (HTML sobre o canvas), no visual novo:
  * - topo esquerdo: personagem (vida, mana, nível, buffs);
- * - topo direito: minimapa (clique abre o mapa), zoom, X/Y, FPS e ping;
+ * - topo direito: minimapa (clique abre o mapa), zoom, X/Y, FPS e ping, e os eventos
+ *   (XP em dobro, invasão da cidade) num selo discreto embaixo;
  * - embaixo: barra de 10 atalhos (skills e itens), AUTO e menu das janelas; XP na borda;
  * - alvo no topo, chat embaixo à esquerda, avisos de saque e de nível, tela de morte;
  * - no toque: joystick e botões de ação (ataque, skills em arco, poção, alvo, AUTO).
@@ -14,8 +15,10 @@ import { classInfo } from "../classes";
 import {
   Effect,
   EntityKind,
+  InvasionPhase,
   PvpState,
   SkillTarget,
+  type EventStatus,
   type ItemInfo,
   type PartyState,
   type QuestLog,
@@ -29,6 +32,7 @@ import { effectIcon, effectName, effectText, formatSeconds, isDebuff, skillIcon 
 import { buildItemTip, itemIcon, type ItemStore } from "./items";
 import { art, bar, button, closeSheet, el, isTouch, keyLabel, openSheet, settings, toast, tooltip } from "./kit";
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS, type MapSource } from "./minimap";
+import { drawQuestTarget, QuestArrow, QuestTracker, type Project } from "./quest-nav";
 import { levelText, regionAt, type Region } from "./regions";
 import { createJoystick } from "./touch-controls";
 import { specInfo } from "./specs";
@@ -82,6 +86,8 @@ export interface HudCallbacks {
   /** Distância do jogador até o alvo atual (null = sem alvo inimigo). */
   targetDistance(): number | null;
   map: MapSource;
+  /** Ponto do chão na tela (seta da missão rastreada na borda). */
+  project: Project;
   regions: Region[];
   stats(): { fps: number; ping: number };
   clock(): number;
@@ -181,6 +187,13 @@ export class Hud {
   private partyList = el("div", "party-list");
   private questsEl = el("section", "quests");
   private questList = el("div", "quest-list");
+  private questBoxes = new Map<string, HTMLElement>();
+  /** Missão rastreada: guia o minimapa, o mapa do mundo e a seta da borda. */
+  readonly quests = new QuestTracker();
+  private questArrow = new QuestArrow();
+  private lastArrow = 0;
+  /** Última posição do jogador vista pelo minimapa (a seta reaproveita). */
+  private mePos: { x: number; z: number; at: number } | null = null;
   private partyRows = new Map<number, { root: HTMLElement; name: HTMLElement; hp: ReturnType<typeof bar>; mp: ReturnType<typeof bar> }>();
   private miniCanvas = el("canvas", "mm-canvas");
   private miniCtx = this.miniCanvas.getContext("2d")!;
@@ -191,6 +204,12 @@ export class Hud {
   private coordY = el("b", "mm-cv", "0");
   private fpsEl = el("span");
   private pingEl = el("span");
+  /** Eventos do servidor: só texto, atualizado com o resto do HUD lento (2×/s). */
+  private eventsEl = el("div", "hud-events");
+  private xp2El = el("span", "ev-xp2", "XP ×2");
+  private invEl = el("span", "ev-inv");
+  private events: EventStatus | null = null;
+  private serverNow: () => number = () => Date.now();
   private menuBtns = new Map<WindowId, HTMLButtonElement>();
   private autoBtn = el("button", "auto-btn");
   private autoTouch = el("button", "act-auto");
@@ -277,7 +296,11 @@ export class Hud {
     const coords = el("span", "mm-coords", el("i", "mm-ax", "X"), this.coordX, el("i", "mm-ax", "Y"), this.coordY);
     coords.title = "Sua posição (X = leste/oeste, Y = norte/sul)";
     const statsEl = el("div", "hud-stats", this.fpsEl, this.pingEl);
-    const mini = el("div", "hud-minimap", this.zoneName, frame, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl);
+    this.eventsEl.append(this.xp2El, this.invEl);
+    this.eventsEl.hidden = true;
+    tooltip(this.xp2El, () => this.xp2Tip());
+    tooltip(this.invEl, () => "<h4>Invasão da cidade</h4>Esqueletos entram pelos 4 portões. Enquanto durar, as estradas e a praça deixam de ser zona segura (o PvP continua proibido). A recompensa sai no fim, pelo dano e pelos abates.");
+    const mini = el("div", "hud-minimap", this.zoneName, frame, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl, this.eventsEl);
 
     // ---------- Menu ☰ (toque) ----------
     const burger = el("button", "menu-burger");
@@ -372,7 +395,8 @@ export class Hud {
     cluster.append(this.attackBtn, pageBtn, targetBtn, this.potionBtn, this.autoTouch);
     const touch = el("div", "touch-ui", joy.root, cluster);
 
-    this.root.append(left, mini, this.target, topRight, this.chatRoot, bottom, this.xpBar.root, this.autoPill, this.loot, touch, this.bannerEl, this.channelEl, this.death);
+    this.root.append(left, mini, this.target, topRight, this.chatRoot, bottom, this.xpBar.root, this.autoPill, this.loot, touch, this.questArrow.el, this.bannerEl, this.channelEl, this.death);
+    this.quests.onChange(() => this.markTracked());
     document.body.append(this.root);
 
     const applyEnv = () => {
@@ -402,6 +426,7 @@ export class Hud {
     cancelAnimationFrame(this.raf);
     this.joyDispose();
     this.offSettings();
+    this.quests.dispose();
     this.root.remove();
   }
 
@@ -626,22 +651,68 @@ export class Hud {
     return !this.channelEl.hidden;
   }
 
-  /** Painel de missões: redesenhado só quando o servidor manda um QuestLog (nada por quadro). */
+  /** Estado dos eventos do servidor (EventStatus). */
+  setEvents(s: EventStatus, serverNow: () => number): void {
+    this.events = s;
+    this.serverNow = serverNow;
+    this.renderEvents();
+  }
+
+  private renderEvents(): void {
+    const s = this.events!;
+    const inv = s.invasion !== InvasionPhase.NONE;
+    this.xp2El.hidden = !s.xp2;
+    this.invEl.hidden = !inv;
+    this.eventsEl.hidden = !s.xp2 && !inv;
+    if (!inv) return;
+    const left = Math.max(0, Math.ceil((Number(s.invasionAtMs) - this.serverNow()) / 1000));
+    const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    this.invEl.classList.toggle("active", s.invasion === InvasionPhase.ACTIVE);
+    this.invEl.textContent =
+      s.invasion === InvasionPhase.WARNING ? `Invasão em ${clock}` : `Invasão · onda ${s.wave}/${s.waves} · ${s.alive} ☠ · ${clock}`;
+  }
+
+  private xp2Tip(): string {
+    const until = Number(this.events?.xp2UntilMs ?? 0);
+    const when = until > 0 ? `até ${new Date(until).toLocaleString("pt-BR", { weekday: "long", hour: "2-digit", minute: "2-digit" })}` : "por tempo indeterminado";
+    return `<h4>XP em dobro</h4>Monstros dão o dobro de experiência ${when}.`;
+  }
+
+  /** Painel de missões: redesenhado só quando o servidor manda um QuestLog (nada por quadro).
+   *  Clicar numa missão a torna a rastreada. */
   setQuests(log: QuestLog): void {
     this.questsEl.hidden = log.quests.length === 0;
+    this.questBoxes.clear();
     this.questList.replaceChildren(
       ...log.quests.map((q) => {
-        const box = el("div", "quest", el("b", null, q.title));
+        const box = el("button", "quest", el("b", null, q.title));
+        box.type = "button";
+        box.onclick = () => this.quests.track(q.id);
+        this.questBoxes.set(q.id, box);
         for (const s of q.steps) {
           const row = el("div", "q-step", el("span", null, s.text), el("span", "q-count", `${s.count}/${s.need}`));
           if (s.count >= s.need) row.classList.add("done");
           box.append(row);
         }
         box.append(el("small", null, q.text));
-        tooltip(box, () => `<b>${escapeHtml(q.title)}</b><br>${escapeHtml(q.text)}<br><span class="muted">Recompensa: ${escapeHtml(q.reward)}</span>`);
+        tooltip(box, () => {
+          const hint = !settings.get().questMarkers
+            ? ""
+            : box.classList.contains("tracked")
+              ? `<br><span class="muted">Rastreada no minimapa e no mapa.</span>`
+              : `<br><span class="muted">Clique para rastrear.</span>`;
+          return `<b>${escapeHtml(q.title)}</b><br>${escapeHtml(q.text)}<br><span class="muted">Recompensa: ${escapeHtml(q.reward)}</span>${hint}`;
+        });
         return box;
       }),
     );
+    this.quests.setLog(log); // avisa o markTracked
+  }
+
+  /** Destaque da missão rastreada no painel (só com os marcadores ligados). */
+  private markTracked(): void {
+    const id = settings.get().questMarkers ? this.quests.tracked()?.id : undefined;
+    for (const [qid, box] of this.questBoxes) box.classList.toggle("tracked", qid === id);
   }
 
   /** Painel do grupo: um por colega (você não aparece), com vida, mana e o líder. */
@@ -945,6 +1016,10 @@ export class Hud {
       this.lastMini = now;
       this.drawMinimap();
     }
+    if (now - this.lastArrow > 200) {
+      this.lastArrow = now;
+      this.updateQuestArrow(now);
+    }
     if (now - this.lastSlow > 500) {
       this.lastSlow = now;
       const st = this.cb.stats();
@@ -953,7 +1028,22 @@ export class Hud {
       this.pingEl.className = st.ping < 80 ? "ok" : "warn";
       const phase = this.cb.clock();
       this.clock.innerHTML = `${ui(isNight(phase) ? "moon" : "sun", 12)}${hourLabel(phase)}`;
+      if (this.events) this.renderEvents();
     }
+  }
+
+  /** Seta na borda da tela para a missão rastreada (até 5×/s). */
+  private updateQuestArrow(now: number): void {
+    const t = this.quests.target();
+    let me: { x: number; z: number } | null = null;
+    if (t) {
+      if (this.mePos && now - this.mePos.at < 400) me = this.mePos;
+      else
+        this.cb.map.forEachMarker((m) => {
+          if (m.local) me = { x: m.x, z: m.z };
+        });
+    }
+    this.questArrow.update(t, me, this.cb.project);
   }
 
   private drawMinimap(): void {
@@ -966,6 +1056,7 @@ export class Hud {
     });
     if (!me) return;
     const pos = me as { x: number; z: number; heading: number };
+    this.mePos = { x: pos.x, z: pos.z, at: performance.now() };
     this.coordX.textContent = String(Math.round(pos.x));
     this.coordY.textContent = String(Math.round(pos.z));
     this.zoneName.textContent = regionAt(this.cb.regions, pos.x, pos.z).name;
@@ -1000,6 +1091,11 @@ export class Hud {
       else if (m.party) drawDot(c, x, y, 4.2 * dpr, MARKER_COLORS.party);
       else drawDot(c, x, y, 3.5 * dpr, MARKER_COLORS.player);
     });
+    // Missão rastreada: área, ícone (preso na borda se estiver longe) e linha tracejada.
+    const qt = this.quests.target();
+    if (qt) {
+      drawQuestTarget(c, qt, pos, (x) => W / 2 + (x - pos.x) * scale, (z) => W / 2 - (z - pos.z) * scale, scale, 6.5 * dpr, { cx: W / 2, cy: W / 2, r: W / 2 });
+    }
     // Cone da câmera e seta do jogador
     c.translate(W / 2, W / 2);
     c.save();

@@ -27,13 +27,14 @@ export default defineConfig(({ mode }) => ({
     // Docker os tira da pasta pública e o servidor recusa *.map.
     sourcemap: "hidden",
     rollupOptions: {
-      // Jogo (index.html), o protótipo visual das telas (prototipo.html), as páginas legais
-      // e o portal de administração (admin.html, só para GM).
+      // Jogo (index.html), o protótipo visual das telas (prototipo.html), as páginas legais,
+      // as novidades e o portal de administração (admin.html, só para GM).
       input: {
         main: "index.html",
         prototipo: "prototipo.html",
         privacidade: "privacidade.html",
         termos: "termos.html",
+        novidades: "novidades.html",
         admin: "admin.html",
       },
       output: {

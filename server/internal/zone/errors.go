@@ -81,13 +81,15 @@ const (
 	sysAfterSnapshot
 	sysSelfStats
 	sysSaveAll
+	sysInvasion
+	sysXP2
 	numSystems
 )
 
 var systemNames = [numSystems]string{
 	"daytime", "auras", "players", "monsters", "telegraphs", "ground", "flags", "invites",
 	"parties", "leave_town", "trades", "pending_saves", "invariants", "save_due", "snapshot", "after_snapshot",
-	"self_stats", "save_all",
+	"self_stats", "save_all", "invasion", "xp2",
 }
 
 func (s system) String() string { return systemNames[s] }

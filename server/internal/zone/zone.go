@@ -48,6 +48,11 @@ type Config struct {
 	DevCommands    bool             // comandos de teste no chat (/raid); só com DEV_LOGIN
 	Clock          func() time.Time // relógio do ciclo dia/noite (nil = time.Now)
 	Version        string           // versão do servidor (vai nos relatos de /bug)
+	// Eventos (events.go e invasion.go).
+	InvasionChance float64        // chance de invasão da cidade a cada noite (0 = só por GM)
+	XP2Days        []time.Weekday // dias de XP em dobro pelo horário (nil = só por GM)
+	EventLocation  *time.Location // fuso desses dias (nil = Brasília, UTC−3)
+	Events         []EventData    // eventos de GM salvos (carregados na partida)
 }
 
 func DefaultConfig() Config {
@@ -55,6 +60,7 @@ func DefaultConfig() Config {
 		Size: 300, TickRate: 20, MaxMovesPerSec: 10,
 		ChatPerSec: 1, ChatBurst: 3, SaveEvery: 30 * time.Second,
 		SafeRadius: 40, Spawns: game.DefaultSpawns(), Seed: 20261112,
+		InvasionChance: defaultInvasionChance, XP2Days: []time.Weekday{time.Saturday, time.Sunday},
 	}
 }
 
@@ -255,6 +261,11 @@ type Zone struct {
 	invariants invariantGuard  // checagens do estado (ver invariants.go)
 
 	errs zoneErrors // panics, tick lento e erros do banco (ver errors.go)
+
+	inv          *invasion // invasão da cidade em andamento (nil = nenhuma)
+	xp2          xp2State
+	eventBackend EventBackend
+	eventJobs    chan EventData
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -283,6 +294,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		modJobs:        make(chan modJob, modJobQueue),
 		telemetry:      make(chan GameEvent, telemetryQueue),
 		bossJobs:       make(chan BossData, 16),
+		eventJobs:      make(chan EventData, 16),
 		socialJobs:     make(chan socialJob, socialJobQueue),
 		mailSent:       map[uint32][]time.Time{},
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
@@ -295,6 +307,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 	z.spawnMonsters()
 	z.spawnNPCs()
 	z.loadClans(cfg.Clans)
+	z.loadEvents(cfg.Events)
 	return z
 }
 
@@ -370,6 +383,7 @@ func (z *Zone) Run(ctx context.Context) {
 	z.goWorker(ctx, "boss", z.runBossWorker)
 	z.goWorker(ctx, "social", z.runSocialWorker)
 	z.goWorker(ctx, "ranking", z.runRankingWorker)
+	z.goWorker(ctx, "event", z.runEventWorker)
 
 	for {
 		select {
@@ -595,6 +609,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.sendQuests(p, "")
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
 	z.achOnJoin(p)
+	z.eventsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
 			z.sendAnyCooldown(p, id, ready-z.now)
@@ -759,6 +774,7 @@ func (z *Zone) update(dt float64) {
 		}
 	})
 	z.runSystem(sysTelegraphs, z.updateTelegraphs)
+	z.runSystem(sysInvasion, z.updateInvasion)
 
 	if z.tick%uint32(z.cfg.TickRate) == 0 { // 1×/s
 		z.runSystem(sysGround, z.expireGround)
@@ -767,6 +783,7 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysParties, z.syncParties)
 		z.runSystem(sysLeaveTown, z.checkLeaveTown)
 		z.runSystem(sysTrades, z.checkTrades)
+		z.runSystem(sysXP2, z.updateXP2)
 		if len(z.pending) > 0 {
 			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}
