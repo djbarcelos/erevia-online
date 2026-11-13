@@ -26,6 +26,9 @@ type QuestStep struct {
 	Target string
 	Count  int
 	Text   string
+	// Place fixa à mão onde fica o objetivo (missões de história). nil = o servidor
+	// calcula pelo tipo (área de caça do monstro, NPC, portão, pedra...).
+	Place *QuestPlace
 }
 
 // Matches diz se um acontecimento (goal, alvo) conta para este objetivo.

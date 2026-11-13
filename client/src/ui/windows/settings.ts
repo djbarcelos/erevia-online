@@ -229,6 +229,11 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
           row("Números de dano", toggle(s.showDamage, set("showDamage"), "Números de dano")),
           row("Mostrar elmo", toggle(s.showHelm, set("showHelm"), "Mostrar elmo")),
           row(
+            "Marcadores de missão",
+            toggle(s.questMarkers, set("questMarkers"), "Marcadores de missão"),
+            "A missão rastreada (clique no painel Missões) aparece no minimapa e no mapa, com a seta na borda da tela.",
+          ),
+          row(
             "Idioma",
             select(
               [

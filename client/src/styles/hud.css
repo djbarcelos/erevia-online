@@ -637,6 +637,24 @@ section.party {
   display: grid;
   gap: 1px;
   text-align: left;
+  /* botão: clicar rastreia a missão */
+  border: 0;
+  border-left: 2px solid transparent;
+  margin: 0 0 0 -8px;
+  padding: 2px 0 2px 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.quest.tracked {
+  border-left-color: var(--gold);
+}
+
+.quest.tracked b::before {
+  content: "◎ ";
+  color: var(--gold-hi);
 }
 
 .quest b {
@@ -671,6 +689,40 @@ section.party {
 .quest small {
   color: var(--dim);
   font-size: 0.68rem;
+}
+
+/* Seta da missão rastreada na borda da tela (um elemento; quest-nav.ts mexe 5×/s). */
+.hud > .quest-arrow {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(20, 14, 6, 0.78);
+  border: 1.5px solid var(--gold);
+  color: var(--gold-hi);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.quest-arrow::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-left: 11px solid var(--gold);
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  transform-origin: 0 0;
+  transform: rotate(var(--a, 0deg)) translate(25px, -8px);
 }
 
 .member {
