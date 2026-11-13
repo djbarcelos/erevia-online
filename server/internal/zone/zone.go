@@ -228,19 +228,21 @@ type Zone struct {
 	clanBackend    ClanBackend
 	localClanSeq   int64
 	storages       map[int64]*storage // conta → armazém
-	modJobs        chan modJob
-	modBackend     ModBackend
-	telemetry      chan GameEvent
-	eventSink      EventSink
-	droppedEvents  int
-	bossBackend    BossBackend
-	bossJobs       chan BossData
-	telegraphs     []*telegraph
-	telegraphSeq   uint32
-	summonSeq      uint32
-	socialJobs     chan socialJob
-	socialBackend  SocialBackend
-	mailSent       map[uint32][]time.Time // cartas enviadas na última hora, por remetente
+	stats          tickStats
+
+	modJobs       chan modJob
+	modBackend    ModBackend
+	telemetry     chan GameEvent
+	eventSink     EventSink
+	droppedEvents int
+	bossBackend   BossBackend
+	bossJobs      chan BossData
+	telegraphs    []*telegraph
+	telegraphSeq  uint32
+	summonSeq     uint32
+	socialJobs    chan socialJob
+	socialBackend SocialBackend
+	mailSent      map[uint32][]time.Time // cartas enviadas na última hora, por remetente
 
 	rankingBackend RankingBackend
 	ranking        *rankingCache // último cálculo do ranking (nil = ainda não chegou)
@@ -370,9 +372,13 @@ func (z *Zone) Run(ctx context.Context) {
 			}
 			return
 		case e := <-z.events:
+			z.stats.events++
 			z.handle(e)
 		case <-ticker.C:
+			start := time.Now()
 			z.update(dt.Seconds())
+			z.stats.add(time.Since(start))
+			z.flushTickStats(start)
 		case <-saveTicker.C:
 			z.saveAll(false)
 		}
