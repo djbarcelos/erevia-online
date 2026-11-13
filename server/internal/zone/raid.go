@@ -140,6 +140,9 @@ func (z *Zone) setWindow(m *entity, killed, spawn time.Time) {
 
 // leashOf: distância máxima do ponto de origem antes de desistir.
 func leashOf(m *entity) float64 {
+	if m.mon.leash > 0 {
+		return m.mon.leash
+	}
 	if r := m.mon.def.LeashRadius; r > 0 {
 		return r
 	}

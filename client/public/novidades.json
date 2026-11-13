@@ -1,0 +1,107 @@
+{
+  "latest": "2026-11-13",
+  "versions": [
+    {
+      "version": "2026-11-13",
+      "date": "2026-11-13",
+      "title": "A Cripta, a Glória e a segunda classe",
+      "sections": [
+        {
+          "title": "Novidades",
+          "items": [
+            "**Ozrhal, o Rei Ossário**, desperta na Cripta Esquecida, no nordeste do mapa: um chefe de raid de nível 25, com fases, Guardas que saem do chão e ataques avisados no chão. A XP vai para quem lutou, e o saque fica reservado para o grupo ou clã que mais causou dano. Depois de cair, ele volta em 3 a 4 horas, e o mapa do mundo mostra quando.",
+            "Itens **Lendários** (em laranja), com a série do Rei Ossário.",
+            "**Segunda classe no nível 20:** fale com Ysolde, a Mestra dos Caminhos, na praça (a leste do poço), e escolha um dos dois caminhos da sua classe. São oito especializações, cada uma com bônus de atributos e três skills novas nos níveis 20, 24 e 28.",
+            "**Nível 30:** o nível máximo subiu de 20 para 30, e a metade sul do Vale das Pedras Vivas virou a caça do 25 ao 30.",
+            "**5º degrau da árvore de skills** no nível 20: uma skill nova por ramo, três por classe.",
+            "**Missões:** quem acabou de chegar ganha um tutorial de 8 missões para os primeiros 15 minutos, e o painel Missões, abaixo do grupo, mostra o que fazer a seguir.",
+            "**Troca:** agora dá para trocar itens e moedas com outros jogadores, pelo botão Trocar no quadro do alvo. A troca só fecha quando os dois travam e confirmam.",
+            "**Criação no Ferreiro:** na aba Criar, transforme ossos, crânios, Essência Sombria e Núcleos Rúnicos em equipamento raro, épico e lendário que a loja não vende.",
+            "**Janela Glória** (tecla H ou o troféu no menu): ranking de nível, de vitórias PvP e de clãs, com a sua posição.",
+            "**Conquistas e títulos:** 13 conquistas, cada uma com um título para usar embaixo do nome, que todos veem.",
+            "**Amigos:** adicione com o botão Amigo + no alvo ou com /amigo Nome. A janela Social (tecla O) mostra quem está online e em que região, e o jogo avisa quando um amigo entra.",
+            "**Correio:** mande cartas para qualquer personagem, mesmo offline, pela aba Correio da janela Social ou com /correio Nome texto.",
+            "**Emotes:** /acenar, /sentar e /dançar.",
+            "**Invasão de esqueletos:** em algumas noites, ondas de esqueletos atacam a cidade pelos quatro portões. Quem defende a praça ganha XP e moedas pelo que fez, e os três melhores ganham pergaminhos de encantar e a conquista A Cidade Resiste. Morrer para um invasor não custa XP.",
+            "**XP em dobro** nos sábados e domingos (horário de Brasília) e em eventos especiais, sempre com aviso para todos.",
+            "**Som:** golpes, skills, passos, interface, ambiente e música que muda com a região e com a noite. Ajuste os volumes em Configurações → Áudio.",
+            "**Golem de Pedra** e o **Vale das Pedras Vivas**, ao sul da floresta, com uma Pedra de Teleporte nova no fim da estrada.",
+            "**PvP com flag e karma:** Ctrl + clique ou o botão Atacar no alvo. Quem mata quem não estava lutando fica com o nome vermelho e pode deixar cair itens.",
+            "**Grupo** de até 6 pessoas, com XP e saque divididos, chat /g e painel no HUD.",
+            "**Clãs** com cargos, aviso, chat /c e o nome do clã embaixo do seu.",
+            "**Pedras de Teleporte** na praça e nos acampamentos, e o Pergaminho de Retorno para voltar à cidade.",
+            "**Encantamento** de armas e armaduras até +10, com os pergaminhos do Ferreiro. A arma +4 brilha e a +7 pulsa.",
+            "**Armazém da conta:** Otto, o Guarda do Armazém, guarda itens e moedas para todos os seus personagens.",
+            "**Visual do personagem:** rosto, chapéu, pele, cabelo e roupa na criação, e Teodoro, o Barbeiro, para mudar depois.",
+            "**13 encaixes de equipamento:** pernas, luvas, botas, capa, colar, dois brincos e dois anéis, com uns 35 itens novos.",
+            "**/bug texto** manda um relato de problema direto para a equipe, com o lugar onde você está.",
+            "**Privacidade:** a Política de Privacidade e os Termos de Uso ficam no login. Pelo botão Conta, na tela de personagens, você pode apagar a sua conta e tudo dela, para sempre.",
+            "**O que há de novo:** esta janela abre uma vez a cada versão nova. Para ver de novo, vá em Configurações → Sobre ou na tela de login. A lista completa fica em /novidades."
+          ]
+        },
+        {
+          "title": "Melhorias",
+          "items": [
+            "**Andar mais fluido:** o personagem não volta mais para trás nem desliza ao parar, no WASD, no joystick e no clique.",
+            "**Combate mais fluido:** a barra de vida, o número de dano, os efeitos e a morte aparecem quando o golpe encosta, e o saque e o +XP caem junto com o corpo.",
+            "**Reconexão automática:** se a internet cair, o jogo espera a conexão voltar e devolve você ao mesmo personagem.",
+            "**O jogo fica mais leve:** você só recebe quem está perto, o que gasta menos internet e deixa a entrada no mundo mais rápida, mesmo com a praça cheia.",
+            "**Render novo:** escolha entre as qualidades Baixa, Média e Alta em Configurações → Gráficos (na primeira vez, o jogo escolhe pelo aparelho). Cada região tem a sua cor, névoa e luz, que mudam com a hora do dia.",
+            "Personagens, monstros e cenário com um sombreado novo, com luz de borda.",
+            "Tochas e Pedras de Teleporte com um visual novo, com chama de verdade e runas que brilham.",
+            "Começou o remaster visual: o guia de arte que vai orientar os novos personagens e cenários está pronto.",
+            "A moderação ganhou ferramentas para manter o jogo justo: silenciar, expulsar e banir quem quebra as regras.",
+            "Apagar a conta também tira o seu nome dos dados de uso do jogo, e as cartas que você mandou passam a aparecer como de \"Personagem apagado\"."
+          ]
+        },
+        {
+          "title": "Correções",
+          "items": [
+            "A vida do seu personagem na tela agora atualiza na hora.",
+            "Ao soltar a tecla de andar, o personagem não vira mais para trás.",
+            "Golem: clicar nos ombros, nos braços e na cabeça também seleciona, e quem ataca para encostado nas pedras em vez de entrar nelas.",
+            "A Brasa Viva não apaga mais a queimadura mais forte do Inferno."
+          ]
+        }
+      ]
+    },
+    {
+      "version": "2026-11-12",
+      "date": "2026-11-12",
+      "title": "Erevia abre as portas",
+      "sections": [
+        {
+          "title": "Novidades",
+          "items": [
+            "Entre com Google ou Discord e crie personagens de quatro classes: Cavaleiro, Bárbaro, Mago e Ladino.",
+            "Combate contra esqueletos e o Senhor dos Ossos, com skills, XP e níveis.",
+            "Árvore de skills com três ramos por classe e atributos livres para distribuir a cada nível.",
+            "Inventário, loja, poções, armas e itens que caem dos monstros.",
+            "Ciclo de dia e noite igual para todos, com tochas acesas e uma noite mais perigosa.",
+            "Minimapa e mapa do mundo (tecla M).",
+            "Chat com a cidade, sussurros e a posição salva ao sair.",
+            "HUD novo, janelas, controles de toque no celular e auto-caça (tecla F)."
+          ]
+        },
+        {
+          "title": "Melhorias",
+          "items": [
+            "Cidade murada, floresta em anéis, céu, sombras e chão mais nítido, com piso de pedra na praça.",
+            "Árvores que tapam você ou o seu alvo ficam transparentes.",
+            "Efeitos das skills refeitos, com partículas e brilho.",
+            "Cursor de ataque em forma de espada."
+          ]
+        },
+        {
+          "title": "Correções",
+          "items": [
+            "Os monstros não afundam mais no chão depois de cada golpe.",
+            "Os modelos não aparecem mais brancos, e o jogo ficou mais rápido.",
+            "Girar a câmera com o botão direito voltou a funcionar.",
+            "O progresso do personagem volta a ser salvo sempre."
+          ]
+        }
+      ]
+    }
+  ]
+}
