@@ -7,9 +7,9 @@
 
 import type { ClassId } from "../../api";
 import { ItemKind, type ItemInfo, type SelfStats } from "../../gen/erevia/v1/game_pb";
-import { ui, uniqueIds } from "../art";
+import { uniqueIds } from "../art";
 import { beginDrag } from "../dragdrop";
-import { buildItemTip, itemIcon, PLACE_BAG, PLACE_EQUIP, type ItemStore, type Stack } from "../items";
+import { buildItemTip, EQUIP_SLOTS, equippable, fitsSlot, itemIcon, PLACE_BAG, PLACE_EQUIP, SLOT, type ItemStore, type Stack } from "../items";
 import { art, button, closeSheet, contextMenu, el, fmt, isTouch, openSheet, tabs, toast, tooltip, type MenuItem } from "../kit";
 import { createPreview } from "../preview3d";
 
@@ -28,21 +28,14 @@ export interface InventoryDeps {
   shopOpen(): boolean;
 }
 
-/** Encaixes reais (iguais aos do servidor) e os que ainda vão chegar. */
-const REAL_SLOTS = [
-  { slot: 3, name: "Elmo" },
-  { slot: 2, name: "Armadura" },
-];
-const HAND_SLOTS = [
-  { slot: 0, name: "Arma" },
-  { slot: 1, name: "Mão secundária" },
-];
-const SOON = ["Pernas", "Mãos", "Pés", "Capa"];
-const SOON_RIGHT = ["Colar", "Brinco", "Brinco", "Anel", "Anel"];
+/** Os 13 encaixes (números do servidor): corpo à esquerda, joias à direita, mãos embaixo. */
+const LEFT = [SLOT.head, SLOT.chest, SLOT.legs, SLOT.hands, SLOT.feet, SLOT.cape];
+const RIGHT = [SLOT.neck, SLOT.ear1, SLOT.ear2, SLOT.ring1, SLOT.ring2];
+const HANDS = [SLOT.weapon, SLOT.offhand];
 
 type Cat = "all" | "equip" | "potion" | "material";
 const CAT_OF = (i: ItemInfo): Cat =>
-  i.kind === ItemKind.POTION ? "potion" : i.kind === ItemKind.MATERIAL ? "material" : i.slot >= 0 ? "equip" : "all";
+  i.kind === ItemKind.POTION ? "potion" : i.kind === ItemKind.MATERIAL ? "material" : equippable(i) ? "equip" : "all";
 
 type Loc = { place: number; slot: number };
 
@@ -53,27 +46,20 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
   // ---------- Boneco ----------
   const doll = el("section", "inv-doll");
   const equipEls = new Map<number, HTMLButtonElement>();
-  const mkEquip = (slot: number, name: string) => {
+  const mkEquip = (slot: number) => {
     const b = el("button", "slot equip-slot empty-hint");
     b.type = "button";
     b.dataset.equip = String(slot);
-    b.dataset.hint = name;
+    b.dataset.hint = EQUIP_SLOTS[slot];
     equipEls.set(slot, b);
-    return b;
-  };
-  const mkSoon = (name: string) => {
-    const b = el("span", "slot equip-slot empty-hint soon");
-    b.dataset.hint = name;
-    b.append(art(ui("lock", 14), "soon-lock"));
-    tooltip(b, () => `<b>${name}</b><div class="muted">Encaixe novo chegando numa próxima atualização.</div>`);
     return b;
   };
   const dollCanvas = el("canvas", "doll-canvas");
   dollCanvas.setAttribute("aria-label", "Seu personagem — arraste para girar");
   const figure = el("div", "doll-figure", el("div", "doll-stage", dollCanvas), el("div", "doll-name"));
-  const colL = el("div", "doll-col", ...REAL_SLOTS.map((s) => mkEquip(s.slot, s.name)), ...SOON.map(mkSoon));
-  const colR = el("div", "doll-col", ...SOON_RIGHT.map(mkSoon));
-  const hands = el("div", "doll-hands", ...HAND_SLOTS.map((s) => mkEquip(s.slot, s.name)));
+  const colL = el("div", "doll-col", ...LEFT.map(mkEquip));
+  const colR = el("div", "doll-col", ...RIGHT.map(mkEquip));
+  const hands = el("div", "doll-hands", ...HANDS.map(mkEquip));
   const summary = el("div", "doll-summary");
   doll.append(el("div", "doll-grid", colL, el("div", "doll-mid", figure, hands), colR), summary);
 
@@ -148,7 +134,7 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
     const list: MenuItem[] = [];
     if (l.place === PLACE_EQUIP) list.push({ label: "Desequipar", run: () => d.use(l.place, l.slot) });
     else {
-      if (s.info.slot >= 0) list.push({ label: "Equipar", run: () => d.use(l.place, l.slot) });
+      if (equippable(s.info)) list.push({ label: "Equipar", run: () => d.use(l.place, l.slot) });
       if (s.info.kind === ItemKind.POTION) list.push({ label: "Usar", run: () => d.use(l.place, l.slot) });
       if (isPotion(s.info)) list.push({ label: "Pôr na barra de atalhos", run: () => d.toHotbar(s.info.id) });
       if (d.shopOpen() && s.info.sellPrice > 0) list.push({ label: `Vender (${fmt.format(s.info.sellPrice * s.count)} moedas)`, run: () => d.sell(l.slot) });
@@ -196,7 +182,7 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
     tooltip(b, () => {
       const s = get(l);
       if (!s) return null;
-      const hintText = l.place === PLACE_EQUIP ? "Duplo clique para desequipar" : s.info.slot >= 0 ? "Duplo clique para equipar" : s.info.kind === ItemKind.POTION ? "Duplo clique para usar" : "";
+      const hintText = l.place === PLACE_EQUIP ? "Duplo clique para desequipar" : equippable(s.info) ? "Duplo clique para equipar" : s.info.kind === ItemKind.POTION ? "Duplo clique para usar" : "";
       return buildItemTip(s.info, { ...d.me(), count: s.count, price: d.shopOpen() ? "sell" : undefined, hint: hintText });
     });
     b.addEventListener("dblclick", () => {
@@ -222,7 +208,7 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
           if (!over) return;
           let ok = true;
           if (over.dataset.hotbar !== undefined) ok = isPotion(s.info);
-          else if (over.dataset.equip !== undefined) ok = s.info.slot === Number(over.dataset.equip);
+          else if (over.dataset.equip !== undefined) ok = fitsSlot(s.info, Number(over.dataset.equip));
           else if (over.dataset.drop === "sell") ok = l.place === PLACE_BAG && s.info.sellPrice > 0;
           over.classList.add(ok ? "drop-ok" : "drop-bad");
         },
@@ -240,8 +226,14 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
           }
           const dest = locOf(t);
           if (!dest || (dest.place === l.place && dest.slot === l.slot)) return;
-          if (dest.place === PLACE_EQUIP && s.info.slot !== dest.slot) {
-            toast(`${s.info.name} não vai nesse encaixe.`, "warn");
+          if (dest.place === PLACE_EQUIP && !fitsSlot(s.info, dest.slot)) {
+            toast(`${s.info.name} não vai em ${EQUIP_SLOTS[dest.slot]}.`, "warn");
+            return;
+          }
+          // Trocar com um equipado que não cabe no lugar de origem (anel 1 ↔ brinco) não vale.
+          const there = get(dest);
+          if (l.place === PLACE_EQUIP && dest.place === PLACE_EQUIP && there && !fitsSlot(there.info, l.slot)) {
+            toast(`${there.info.name} não vai em ${EQUIP_SLOTS[l.slot]}.`, "warn");
             return;
           }
           d.move(l.place, l.slot, dest.place, dest.slot);

@@ -1,5 +1,28 @@
 import { el, formatGold, goldIcon, GRADE_COLOR, itemIcon, ItemStore, ItemTip } from "./items";
-import type { ItemInfo } from "../gen/erevia/v1/game_pb";
+import { ItemKind, type ItemInfo } from "../gen/erevia/v1/game_pb";
+
+/** Categorias do filtro da aba Comprar (só aparecem as que a loja tem). */
+type ShopCat = "all" | "weapon" | "armor" | "jewel" | "potion";
+const SHOP_CATS: { id: ShopCat; label: string }[] = [
+  { id: "all", label: "Tudo" },
+  { id: "weapon", label: "Armas" },
+  { id: "armor", label: "Defesa" },
+  { id: "jewel", label: "Joias" },
+  { id: "potion", label: "Poções" },
+];
+function shopCat(i: ItemInfo): ShopCat {
+  switch (i.kind) {
+    case ItemKind.WEAPON:
+      return "weapon";
+    case ItemKind.NECKLACE:
+    case ItemKind.EARRING:
+    case ItemKind.RING:
+      return "jewel";
+    case ItemKind.POTION:
+      return "potion";
+  }
+  return i.slot >= 0 ? "armor" : "all";
+}
 
 export interface ShopActions {
   buy(npcId: number, itemId: string, count: number): void;
@@ -18,6 +41,10 @@ export class ShopWindow {
   private tabs: HTMLButtonElement[] = [];
   private mode: "buy" | "sell" = "buy";
   private stock: ItemInfo[] = [];
+  private filters = el("div", "shop-filters");
+  private cat: ShopCat = "all";
+  /** Esconde equipamentos que a sua classe não usa. */
+  private mineOnly = true;
   private unsubscribe: () => void;
   npcId = 0;
 
@@ -54,7 +81,7 @@ export class ShopWindow {
     gold.append(gi, this.goldEl);
     foot.append(gold, el("span", "shop-hint", "Arraste itens da bolsa para cá para vender"));
 
-    this.root.append(head, tabs, this.list, foot);
+    this.root.append(head, tabs, this.filters, this.list, foot);
     parent.append(this.root);
     this.unsubscribe = store.onChange(() => this.render());
   }
@@ -67,6 +94,7 @@ export class ShopWindow {
     this.npcId = npcId;
     this.title.textContent = title;
     this.stock = stock.map((id) => this.store.get(id)).filter((i): i is ItemInfo => !!i);
+    this.cat = "all";
     this.root.hidden = false;
     this.setMode("buy");
     this.actions.onOpen();
@@ -86,7 +114,47 @@ export class ShopWindow {
   setMode(mode: "buy" | "sell"): void {
     this.mode = mode;
     this.tabs.forEach((t, i) => t.classList.toggle("active", (i === 0) === (mode === "buy")));
+    this.renderFilters();
     this.render(true);
+  }
+
+  /** Filtros da aba Comprar: categorias que a loja tem e "só da minha classe". */
+  private renderFilters(): void {
+    const cats = SHOP_CATS.filter((c) => c.id === "all" || this.stock.some((i) => shopCat(i) === c.id));
+    const hasOtherClass = this.stock.some((i) => i.classes.length > 0 && !i.classes.includes(this.actions.me().myClass));
+    this.filters.hidden = this.mode !== "buy" || (cats.length <= 2 && !hasOtherClass);
+    if (this.filters.hidden) return;
+    const chips = cats.length > 2 ? cats : [];
+    this.filters.replaceChildren(
+      ...chips.map((c) => {
+        const b = el("button", "shop-chip", c.label);
+        b.type = "button";
+        b.setAttribute("aria-pressed", String(c.id === this.cat));
+        b.onclick = () => {
+          this.cat = c.id;
+          this.renderFilters();
+          this.render(true);
+        };
+        return b;
+      }),
+    );
+    if (hasOtherClass) {
+      const label = el("label", "shop-mine");
+      const box = el("input");
+      box.type = "checkbox";
+      box.checked = this.mineOnly;
+      box.onchange = () => {
+        this.mineOnly = box.checked;
+        this.render(true);
+      };
+      label.append(box, document.createTextNode("Só da minha classe"));
+      this.filters.append(label);
+    }
+  }
+
+  private visible(i: ItemInfo): boolean {
+    if (this.cat !== "all" && shopCat(i) !== this.cat) return false;
+    return !this.mineOnly || i.classes.length === 0 || i.classes.includes(this.actions.me().myClass);
   }
 
   private render(force = false): void {
@@ -101,7 +169,9 @@ export class ShopWindow {
     }
     this.list.replaceChildren();
     if (this.mode === "buy") {
-      for (const info of this.stock) this.list.append(this.row(info, info.price, info.stack > 1 ? 999 : 1, (n) => this.actions.buy(this.npcId, info.id, n), "Comprar"));
+      for (const info of this.stock) {
+        if (this.visible(info)) this.list.append(this.row(info, info.price, info.stack > 1 ? 999 : 1, (n) => this.actions.buy(this.npcId, info.id, n), "Comprar"));
+      }
       this.render();
       return;
     }

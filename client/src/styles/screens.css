@@ -577,6 +577,12 @@
   box-shadow: 0 0 12px color-mix(in srgb, var(--cc) 40%, transparent);
 }
 
+/* Anel na cor do emblema do personagem. */
+.roster-slot:not(.empty) .roster-crest {
+  outline: 2px solid var(--emblem, transparent);
+  outline-offset: 2px;
+}
+
 .roster-info {
   display: grid;
   gap: 1px;

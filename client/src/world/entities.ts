@@ -97,6 +97,8 @@ interface View extends EntityInfo {
   weapon: string;
   offhand: string;
   grade: number;
+  /** Jogadores: cor do emblema (nome e anel no chão). */
+  emblem: string;
   boss: boolean;
   scale: number;
   speed: number;
@@ -250,11 +252,13 @@ export class EntityManager {
       hit.metadata = { entityId: e.id };
     }
 
-    if (isLocal) {
-      const ring = MeshBuilder.CreateTorus(`ring${e.id}`, { diameter: 1.1, thickness: 0.06, tessellation: 32 }, this.scene);
+    // Anel no chão: na cor do emblema para jogadores (o seu, mais forte), dourado sem emblema.
+    const emblem = e.kind === EntityKind.PLAYER && /^#[0-9a-f]{6}$/i.test(e.emblem) ? e.emblem : "";
+    if (isLocal || emblem) {
+      const ring = MeshBuilder.CreateTorus(`ring${e.id}`, { diameter: isLocal ? 1.1 : 1.0, thickness: isLocal ? 0.06 : 0.04, tessellation: 32 }, this.scene);
       ring.parent = root;
       ring.position.y = 0.03;
-      ring.material = this.ringMat;
+      ring.material = emblem ? this.ringMaterial(emblem, isLocal ? 0.85 : 0.5) : this.ringMat;
       ring.isPickable = false;
     }
 
@@ -274,9 +278,11 @@ export class EntityManager {
     nameText.resizeToFit = true;
     nameText.fontSize = 13;
     nameText.paddingLeft = nameText.paddingRight = "6px";
-    nameText.color = isLocal
-      ? "#f0d79a"
-      : e.kind === EntityKind.MONSTER
+    nameText.color = emblem
+      ? lighten(emblem, 0.45)
+      : isLocal
+        ? "#f0d79a"
+        : e.kind === EntityKind.MONSTER
         ? "#ffb4a8"
         : e.kind === EntityKind.NPC
           ? "#a8e6a0"
@@ -307,7 +313,7 @@ export class EntityManager {
 
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
-      model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade,
+      model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
@@ -916,6 +922,20 @@ export class EntityManager {
     for (const m of meshes) m.isPickable = false;
   }
 
+  /** Material do anel no chão (brilho próprio, sem luz), um por cor + transparência. */
+  private ringMaterial(hex: string, alpha: number): StandardMaterial {
+    const key = `ring:${hex}:${alpha}`;
+    let mat = this.mats.get(key);
+    if (!mat) {
+      mat = new StandardMaterial(`mat-${key}`, this.scene);
+      mat.emissiveColor = Color3.FromHexString(hex);
+      mat.disableLighting = true;
+      mat.alpha = alpha;
+      this.mats.set(key, mat);
+    }
+    return mat;
+  }
+
   private material(hex: string): StandardMaterial {
     let mat = this.mats.get(hex);
     if (!mat) {
@@ -966,4 +986,10 @@ function lerpAngle(a: number, b: number, t: number): number {
   if (d > Math.PI) d -= Math.PI * 2;
   if (d < -Math.PI) d += Math.PI * 2;
   return a + d * t;
+}
+
+/** Mistura a cor com branco (0 = igual, 1 = branco), para o nome ficar legível. */
+function lighten(hex: string, k: number): string {
+  const c = Color3.FromHexString(hex);
+  return new Color3(c.r + (1 - c.r) * k, c.g + (1 - c.g) * k, c.b + (1 - c.b) * k).toHexString();
 }

@@ -6,7 +6,22 @@ import { formatSeconds, render, STROKE, type Theme } from "./icons";
 export const PLACE_BAG = 0;
 export const PLACE_EQUIP = 1;
 
-export const EQUIP_SLOTS = ["Arma", "Mão secundária", "Armadura", "Elmo"];
+/** Encaixes de equipamento (os números são os do servidor). */
+export const SLOT = {
+  weapon: 0, offhand: 1, chest: 2, head: 3, legs: 4, hands: 5, feet: 6, cape: 7,
+  neck: 8, ear1: 9, ear2: 10, ring1: 11, ring2: 12,
+} as const;
+export const EQUIP_SLOT_COUNT = 13;
+export const EQUIP_SLOTS = ["Arma", "Mão secundária", "Peito", "Cabeça", "Pernas", "Mãos", "Pés", "Capa", "Colar", "Brinco", "Brinco", "Anel", "Anel"];
+
+/** O item cabe no encaixe? (anéis e brincos cabem em dois). */
+export function fitsSlot(info: ItemInfo, slot: number): boolean {
+  return info.slots.length ? info.slots.includes(slot) : info.slot === slot;
+}
+
+export function equippable(info: ItemInfo): boolean {
+  return info.slot >= 0;
+}
 
 export const GRADE_COLOR: Record<number, string> = { 1: "#e8e1d4", 2: "#7bd88f", 3: "#6fa8ff", 4: "#c08cff" };
 export const GRADE_NAME: Record<number, string> = { 1: "Comum", 2: "Bom", 3: "Raro", 4: "Épico" };
@@ -30,7 +45,7 @@ export interface Stack {
 export class ItemStore {
   private catalog = new Map<string, ItemInfo>();
   bag: (Stack | null)[] = [];
-  equip: (Stack | null)[] = [null, null, null, null];
+  equip: (Stack | null)[] = Array.from({ length: EQUIP_SLOT_COUNT }, () => null);
   gold = 0;
   private listeners = new Set<() => void>();
 
@@ -46,13 +61,14 @@ export class ItemStore {
     if (!inv) return;
     this.gold = Number(inv.gold);
     this.bag = Array.from({ length: inv.bagSize || 40 }, () => null);
-    this.equip = [null, null, null, null];
+    this.equip = Array.from({ length: EQUIP_SLOT_COUNT }, () => null);
     for (const it of inv.items) {
       const info = this.catalog.get(it.itemId);
       if (!info) continue;
       const s = { info, count: it.count };
-      if (it.place === PLACE_EQUIP) this.equip[it.slot] = s;
-      else this.bag[it.slot] = s;
+      if (it.place === PLACE_EQUIP) {
+        if (it.slot < EQUIP_SLOT_COUNT) this.equip[it.slot] = s;
+      } else this.bag[it.slot] = s;
     }
     for (const l of this.listeners) l();
   }
@@ -119,6 +135,22 @@ const GLYPHS: Record<string, string> = {
     <ellipse cx="38" cy="34" rx="12" ry="5" fill="#a8843a"/><ellipse cx="38" cy="31" rx="12" ry="5" fill="#e8c260"/>
     <ellipse cx="30" cy="24" rx="12" ry="5" fill="#a8843a"/><ellipse cx="30" cy="21" rx="12" ry="5" fill="#f3d488"/>`,
 };
+Object.assign(GLYPHS, {
+  legs: `<path d="M20 12 H44 L46 30 L42 54 H34 L32 32 L30 54 H22 L18 30 Z" fill="#7a6a58"/>
+    <path d="M20 12 H44 V18 H20 Z" fill="#c9a24a"/><path d="M24 38 H29 M35 38 H40" stroke="#4a3e30" stroke-width="2.5" ${STROKE}/>`,
+  gloves: `<path d="M20 54 V34 L16 24 C15 20 20 19 22 22 L25 29 V14 C25 10 30 10 30 14 V28 V12 C30 8 35 8 35 12 V28 V15 C35 11 40 11 40 15 V33 L44 28 C46 25 51 27 49 31 L42 44 V54 Z" fill="#9a7048"/>
+    <path d="M20 46 H42" stroke="#c9a24a" stroke-width="3.5"/>`,
+  boots: `<path d="M20 10 H34 V38 L50 44 C54 45 54 53 50 53 H17 L19 38 Z" fill="#8a5a32"/>
+    <path d="M19 16 H35" stroke="#c9a24a" stroke-width="3.5"/><path d="M17 49 H52" stroke="#4a2e18" stroke-width="3"/>`,
+  cape: `<path d="M24 10 H40 C42 22 48 36 52 52 C44 49 39 52 32 49 C25 52 20 49 12 52 C16 36 22 22 24 10 Z" fill="#6a3a8a"/>
+    <path d="M24 12 H40" stroke="#c9a24a" stroke-width="4" ${STROKE}/><path d="M28 22 C26 32 22 40 20 47 M36 22 C38 32 42 40 44 47" stroke="#3a1e4e" stroke-width="2" fill="none"/>`,
+  necklace: `<path d="M16 12 C16 30 24 38 32 38 C40 38 48 30 48 12" fill="none" stroke="#e2c070" stroke-width="3" stroke-dasharray="3 2"/>
+    <path d="M32 36 L41 45 L32 56 L23 45 Z" fill="#5fb8e8"/><path d="M30 42 L32 40" stroke="#fff" stroke-width="2" ${STROKE}/>`,
+  earring: `<circle cx="32" cy="14" r="6" fill="none" stroke="#e2c070" stroke-width="3"/><path d="M32 20 V28" stroke="#e2c070" stroke-width="3"/>
+    <path d="M32 28 C40 36 42 44 32 54 C22 44 24 36 32 28 Z" fill="#e89a3a"/><circle cx="29" cy="40" r="2" fill="#fff" opacity=".7"/>`,
+  ring: `<ellipse cx="32" cy="40" rx="15" ry="12" fill="none" stroke="#e2c070" stroke-width="5"/>
+    <path d="M25 24 L32 14 L39 24 L32 31 Z" fill="#d04050"/><path d="M29 22 L32 18" stroke="#fff" stroke-width="1.8" ${STROKE}/>`,
+});
 GLYPHS.potion_hp_big = GLYPHS.potion_hp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;
 GLYPHS.potion_mp_big = GLYPHS.potion_mp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;
 
@@ -170,7 +202,16 @@ const KIND_LABEL: Partial<Record<ItemKind, string>> = {
   [ItemKind.POTION]: "Poção",
   [ItemKind.MATERIAL]: "Material",
   [ItemKind.GOLD]: "Moedas",
+  [ItemKind.LEGS]: "Pernas",
+  [ItemKind.GLOVES]: "Luvas",
+  [ItemKind.BOOTS]: "Botas",
+  [ItemKind.CAPE]: "Capa",
+  [ItemKind.NECKLACE]: "Colar",
+  [ItemKind.EARRING]: "Brinco",
+  [ItemKind.RING]: "Anel",
 };
+
+const WEAPON_LABEL: Record<string, string> = { sword: "Espada", axe: "Machado", staff: "Cajado", daggers: "Adagas" };
 
 export interface TipContext {
   myClass: string;
@@ -193,8 +234,9 @@ export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
     const title = el("div", "tip-title");
     const name = el("strong", "", info.name);
     name.style.color = GRADE_COLOR[info.grade] ?? GRADE_COLOR[1];
-    const kind = [KIND_LABEL[info.kind] ?? "Item"];
+    const kind = [(info.kind === ItemKind.WEAPON && WEAPON_LABEL[info.weaponType]) || KIND_LABEL[info.kind] || "Item"];
     if (info.slot >= 0) kind.push(GRADE_NAME[info.grade] ?? "");
+    if (info.slots.length > 1) kind.push("2 encaixes");
     title.append(name, el("span", "tip-kind", kind.filter(Boolean).join(" · ")));
     head.append(icon, title);
     t.append(head);
@@ -214,6 +256,17 @@ export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
       if (b.maxHp) stat("Vida máxima", `+${b.maxHp}`);
       if (b.maxMp) stat("Mana máxima", `+${b.maxMp}`, "mana");
       if (b.crit) stat("Crítico", `+${Math.round(b.crit * 100)}%`);
+      const sign = (v: number, txt: string) => `${v > 0 ? "+" : "−"}${txt}`;
+      const pct = (v: number) => `${Math.round(Math.abs(v) * 100)}%`;
+      const num = (v: number) => (Math.abs(v) % 1 ? Math.abs(v).toFixed(1).replace(".", ",") : String(Math.abs(v)));
+      if (b.critDamage) stat("Dano crítico", sign(b.critDamage, pct(b.critDamage)));
+      if (b.accuracy) stat("Precisão", sign(b.accuracy, num(b.accuracy)), b.accuracy < 0 ? "bad" : "");
+      if (b.evasion) stat("Esquiva", sign(b.evasion, num(b.evasion)), b.evasion < 0 ? "bad" : "");
+      if (b.atkSpeed) stat("Vel. de ataque", sign(b.atkSpeed, pct(b.atkSpeed)));
+      if (b.castSpeed) stat("Vel. de conjuração", sign(b.castSpeed, pct(b.castSpeed)));
+      if (b.speed) stat("Vel. de movimento", sign(b.speed, `${num(b.speed)} m/s`));
+      if (b.hpRegen) stat("Regeneração de vida", sign(b.hpRegen, `${num(b.hpRegen)}/s`));
+      if (b.mpRegen) stat("Regeneração de mana", sign(b.mpRegen, `${num(b.mpRegen)}/s`), "mana");
     }
     if (info.healHp) stat("Cura", `${info.healHp} de vida`);
     if (info.healMp) stat("Restaura", `${info.healMp} de mana`, "mana");

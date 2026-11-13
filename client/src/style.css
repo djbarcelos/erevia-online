@@ -132,6 +132,10 @@
   color: var(--gold-hi);
 }
 
+.tip-stats .bad b {
+  color: #ff8a7a;
+}
+
 .tip-desc {
   margin: 0 0 6px;
   color: var(--muted);
@@ -215,6 +219,40 @@
 .shop-tab[aria-pressed="true"] {
   color: var(--gold-hi);
   border-bottom-color: var(--gold);
+}
+
+.shop-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-bottom: 8px;
+}
+
+.shop-chip {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.shop-chip[aria-pressed="true"] {
+  border-color: var(--gold);
+  color: var(--gold-hi);
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+}
+
+.shop-mine {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
 }
 
 .shop-list {

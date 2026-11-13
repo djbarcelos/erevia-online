@@ -6,14 +6,14 @@
 import "../styles/tokens.css";
 import "../styles/kit.css";
 import "../styles/screens.css";
-import { api, ApiError, type CharacterInfo, type ClassId, type Providers } from "../api";
+import { api, ApiError, type CharacterInfo, type ClassId, type CreationOption, type CreationOptions, type LookChoice, type Providers } from "../api";
 import { CLASSES, classInfo } from "../classes";
 import { ui, uniqueIds } from "./art";
 import { animatedBackdrop } from "./backdrop";
 import { skillIcon } from "./icons";
 import { art, button, el, isCompact, tabs, toast } from "./kit";
 import { CLASS_BAR_NAMES, CLASS_EXTRA, DEFAULT_LOOK } from "./looks";
-import { createPreview, type Preview } from "./preview3d";
+import { createPreview, type Appearance, type Preview } from "./preview3d";
 
 const overlay = document.getElementById("overlay")!;
 const content = el("div", "entry-content");
@@ -69,9 +69,9 @@ const LOGIN_ERRORS: Record<string, string> = {
 };
 
 const NEWS = [
-  { tag: "Atualização", title: "Itens e loja", text: "Monstros deixam itens no chão. A Mercadora e o Ferreiro abriram as portas na praça." },
-  { tag: "Atualização", title: "Dia e noite", text: "Tochas acendem na cidade e, à noite, os monstros batem mais forte e dão mais XP." },
-  { tag: "Novo", title: "Interface nova", text: "Nova tela de personagens, HUD, mapa do mundo e controles de toque no celular." },
+  { tag: "Novo", title: "13 encaixes de equipamento", text: "Pernas, luvas, botas, capa, colar, dois brincos e dois anéis. Joias na Mercadora, armaduras no Ferreiro." },
+  { tag: "Novo", title: "Escolha sua arma", text: "Na criação, escolha a arma inicial, o escudo e a cor do emblema que pinta seu nome." },
+  { tag: "Atualização", title: "Árvore de skills e atributos", text: "12 skills por classe e pontos livres de atributo a cada nível." },
 ];
 
 export function showLogin(providers: Providers, loginError: string | null, onLoggedIn: () => void): void {
@@ -192,8 +192,30 @@ const START_SKILLS: Record<ClassId, { fx: string; name: string; meta: string }[]
   ],
 };
 
+/** Primeira opção de cada lista e a cor padrão da classe. */
+function defaultChoice(opts: CreationOptions, cls: ClassId): LookChoice {
+  const o = opts.classes[cls];
+  return { weapon: o.weapons[0]?.id ?? "", offhand: o.offhands[0]?.id ?? "", emblem: o.emblem };
+}
+
+/** O que o palco 3D mostra para uma escolha da criação. */
+function choiceLook(opts: CreationOptions, cls: ClassId, c: LookChoice): Appearance {
+  const o = opts.classes[cls];
+  const w = o.weapons.find((x) => x.id === c.weapon);
+  const off = o.offhands.find((x) => x.id === c.offhand);
+  return { right: w?.model || null, left: off?.model || w?.offModel || null, emblem: c.emblem };
+}
+
+/** Aparência de um personagem salvo: as armas que estão nas mãos dele agora. */
+function rosterLook(c: CharacterInfo): Appearance {
+  const def = DEFAULT_LOOK[c.class];
+  const emblem = c.emblem ?? def.emblem;
+  if (!c.look) return { ...def, emblem };
+  return { right: c.look.right || null, left: c.look.left || null, emblem };
+}
+
 export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogout: () => void): Promise<void> {
-  const [me, data] = await Promise.all([api.me(), api.characters()]);
+  const [me, data, opts] = await Promise.all([api.me(), api.characters(), api.creation()]);
   let roster = data.characters;
   const max = data.max;
 
@@ -241,6 +263,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
       b.type = "button";
       b.setAttribute("aria-pressed", String(i === picked));
       b.style.setProperty("--cc", info.color);
+      b.style.setProperty("--emblem", c.emblem ?? DEFAULT_LOOK[c.class].emblem);
       b.append(el("span", "roster-crest", info.label[0]), el("span", "roster-info", el("b", null, c.name), el("span", null, `${info.label} · Nv ${c.level ?? 1}`)));
       b.onclick = () => {
         picked = i;
@@ -258,8 +281,9 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     }
     const c = roster[picked];
     if (!c) return;
-    void preview?.show(c.class, DEFAULT_LOOK[c.class]);
-    setPlate(c.name, `${classInfo(c.class).label} · Nível ${c.level ?? 1}`, DEFAULT_LOOK[c.class].emblem);
+    const look = rosterLook(c);
+    void preview?.show(c.class, look);
+    setPlate(c.name, `${classInfo(c.class).label} · Nível ${c.level ?? 1}`, look.emblem);
     const play = button("Entrar no mundo", "btn btn-gold btn-play", () => onPlay(c));
     selectFoot.replaceChildren(el("div", "foot-info", el("b", null, c.name), el("span", "muted small", `${classInfo(c.class).label} · Nível ${c.level ?? 1}`)), play);
   };
@@ -267,6 +291,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
   // ---------- Criação ----------
   let cls: ClassId = "knight";
   let name = "";
+  let choice: LookChoice = defaultChoice(opts, cls);
   const classPanel = el("aside", "char-panel left frame glass create-panel");
   const lookPanel = el("aside", "char-panel right frame glass create-panel");
   const createFoot = el("div", "char-foot create-foot");
@@ -288,7 +313,9 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
       b.title = `Dificuldade ${["", "fácil", "média", "difícil"][x.diff]}`;
       b.onclick = () => {
         cls = c.id;
+        choice = defaultChoice(opts, cls);
         renderClasses();
+        renderLook();
         refreshPreview();
       };
       grid.append(b);
@@ -306,13 +333,71 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     classPanel.append(grid, el("div", "class-detail", el("p", "class-desc", info.desc), bars, el("div", "label", "Skills iniciais"), skills));
   };
 
+  /** Linha "‹ valor ›" que percorre as opções. */
+  const optionRow = (label: string, list: CreationOption[], value: string, onPick: (id: string) => void) => {
+    let idx = Math.max(0, list.findIndex((o) => o.id === value));
+    const text = el("span", "opt-value", list[idx].name);
+    const step = (dir: number) => {
+      idx = (idx + dir + list.length) % list.length;
+      text.textContent = list[idx].name;
+      onPick(list[idx].id);
+    };
+    const prev = button("‹", "btn btn-icon btn-sm opt-step", () => step(-1));
+    const next = button("›", "btn btn-icon btn-sm opt-step", () => step(1));
+    prev.setAttribute("aria-label", `${label}: anterior`);
+    next.setAttribute("aria-label", `${label}: próximo`);
+    return el("div", "opt-row", el("span", "label", label), el("div", "opt-ctrl", prev, text, next));
+  };
+
   const renderLook = () => {
+    const o = opts.classes[cls];
+    const paired = o.weapons.some((w) => w.offModel);
+    const rows: HTMLElement[] = [
+      optionRow(paired ? "Armas" : "Arma inicial", o.weapons, choice.weapon, (id) => {
+        choice.weapon = id;
+        refreshPreview();
+      }),
+    ];
+    if (o.offhands.length > 1) {
+      rows.push(
+        optionRow("Mão secundária", o.offhands, choice.offhand, (id) => {
+          choice.offhand = id;
+          refreshPreview();
+        }),
+      );
+    }
+    const sw = el("div", "swatches");
+    sw.setAttribute("role", "radiogroup");
+    sw.setAttribute("aria-label", "Cor do emblema");
+    for (const c of opts.emblems) {
+      const b = el("button", "swatch");
+      b.type = "button";
+      b.style.setProperty("--c", c);
+      b.setAttribute("role", "radio");
+      b.setAttribute("aria-checked", String(c === choice.emblem));
+      b.setAttribute("aria-label", `Cor ${c}`);
+      b.onclick = () => {
+        choice.emblem = c;
+        sw.querySelectorAll(".swatch").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+        preview?.setEmblem(c);
+        setPlate(name || "Seu nome", classInfo(cls).label, c);
+      };
+      sw.append(b);
+    }
     const poses = el("div", "pose-row");
     for (const p of POSES) poses.append(button(p.label, "btn btn-sm", () => preview?.play(p.role)));
     lookPanel.replaceChildren(
       el("h2", "title panel-title", "Aparência"),
+      ...rows,
+      el("div", "opt-block", el("span", "label", "Cor do emblema"), sw),
       el("div", "opt-block", el("span", "label", "Ver pose"), poses),
-      el("p", "hint-box small", "Escolha de arma inicial e cor do emblema chegam na próxima atualização."),
+      el(
+        "p",
+        "hint-box small",
+        o.offhands.length > 1
+          ? "A arma escolhida é a sua arma inicial. Sem escudo na mão, ele vai para a bolsa. A cor do emblema pinta seu nome e o anel no chão."
+          : "A arma escolhida é a sua arma inicial. A cor do emblema pinta seu nome e o anel no chão.",
+      ),
     );
   };
 
@@ -337,7 +422,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     nameMsg.className = `name-msg small ${name && !ok ? "bad" : "muted"}`;
     nameInput.classList.toggle("invalid", !!name && !ok);
     createBtn.disabled = !ok || roster.length >= max;
-    setPlate(name || "Seu nome", classInfo(cls).label, DEFAULT_LOOK[cls].emblem);
+    setPlate(name || "Seu nome", classInfo(cls).label, choice.emblem);
     return ok;
   };
   nameInput.oninput = validate;
@@ -346,7 +431,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     createBtn.disabled = true;
     createBtn.classList.add("loading");
     try {
-      const c = await api.createCharacter(name, cls);
+      const c = await api.createCharacter(name, cls, { ...choice });
       roster = [...roster, { ...c, level: c.level ?? 1 }];
       picked = roster.length - 1;
       nameInput.value = "";
@@ -378,8 +463,8 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
   root.dataset.mtab = "class";
 
   function refreshPreview() {
-    void preview?.show(cls, DEFAULT_LOOK[cls]);
-    setPlate(name || "Seu nome", classInfo(cls).label, DEFAULT_LOOK[cls].emblem);
+    void preview?.show(cls, choiceLook(opts, cls, choice));
+    setPlate(name || "Seu nome", classInfo(cls).label, choice.emblem);
   }
 
   function setPlate(n: string, sub: string, color: string) {

@@ -10,7 +10,7 @@ import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
-import { applyEnvClasses, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
+import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
 import { buildRegions } from "./ui/regions";
 import { buildInventory } from "./ui/windows/inventory";
@@ -142,7 +142,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     .catch((err) => console.warn("modelos 3D indisponíveis, usando cápsulas", err));
 
   // ---------- Estado do jogador ----------
-  const emblem = DEFAULT_LOOK[character.class]?.emblem ?? "#d6b46e";
+  const emblem = character.emblem ?? DEFAULT_LOOK[character.class]?.emblem ?? "#d6b46e";
   let lastStats: SelfStats | null = null;
   const statsListeners = new Set<() => void>();
   const onStats = (fn: () => void) => {
@@ -436,7 +436,15 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       buy: (npc, id, n) => conn.buy(npc, id, n),
       sell: (npc, slot, n) => conn.sell(npc, slot, n),
       me,
-      onOpen: () => void wm.show("inventory"),
+      // Loja e inventário lado a lado, centralizados (se couberem; senão o inventário por cima).
+      onOpen: () => {
+        if (isCompact()) return void wm.show("inventory");
+        const shopW = shop.root.offsetWidth || 360;
+        const invW = wm.widthOf("inventory");
+        const left = Math.max(12, (innerWidth - shopW - 12 - invW) / 2);
+        shop.root.style.left = `${left}px`;
+        void wm.show("inventory", { left: left + shopW + 12, top: shop.root.offsetTop });
+      },
     },
     hud.element,
   );

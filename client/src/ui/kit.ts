@@ -512,7 +512,14 @@ export class WindowManager {
     else void this.show(id);
   }
 
-  async show(id: string): Promise<void> {
+  /** Largura que a janela terá nesta tela (para posicionar outras ao lado). */
+  widthOf(id: string): number {
+    const def = this.defs.get(id);
+    return def ? Math.min(def.width, innerWidth - 24) : 0;
+  }
+
+  /** Abre a janela (ou traz para a frente). `at` fixa a posição em vez de centralizar. */
+  async show(id: string, at?: { left: number; top: number }): Promise<void> {
     const existing = this.open.get(id);
     if (existing) {
       this.focus(existing.root);
@@ -541,9 +548,14 @@ export class WindowManager {
     const h = def.height ? Math.min(def.height, innerHeight - 24) : undefined;
     root.style.width = `${w}px`;
     if (h) root.style.height = `${h}px`;
-    const off = (this.cascade++ % 4) * 28;
-    root.style.left = `${Math.max(12, (innerWidth - w) / 2 + off - 42)}px`;
-    root.style.top = `${Math.max(12, (innerHeight - (h ?? 560)) / 2 + off - 42)}px`;
+    if (at) {
+      root.style.left = `${clamp(at.left, 12, Math.max(12, innerWidth - w - 12))}px`;
+      root.style.top = `${clamp(at.top, 12, Math.max(12, innerHeight - (h ?? 560) - 12))}px`;
+    } else {
+      const off = (this.cascade++ % 4) * 28;
+      root.style.left = `${Math.max(12, (innerWidth - w) / 2 + off - 42)}px`;
+      root.style.top = `${Math.max(12, (innerHeight - (h ?? 560)) / 2 + off - 42)}px`;
+    }
     root.addEventListener("pointerdown", () => this.focus(root));
     this.drag(head, root);
 

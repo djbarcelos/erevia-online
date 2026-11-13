@@ -72,6 +72,8 @@ const WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
 const ITEM_WEAPONS = [
   "sword_1handed", "sword_2handed", "sword_2handed_color", "axe_1handed", "axe_2handed", "staff", "wand", "dagger",
   "shield_badge_color", "shield_round_barbarian", "shield_square", "shield_spikes", "shield_spikes_color",
+  // Opções da criação de personagem (mesmos arquivos das armas dos esqueletos).
+  "skeleton_blade", "skeleton_axe", "skeleton_staff", "skeleton_shield_large_a",
 ];
 /** Brilho das armas raras (3) e épicas (4). */
 const GRADE_GLOW: Record<number, Color3> = { 3: new Color3(0.15, 0.35, 0.9), 4: new Color3(0.6, 0.2, 0.95) };

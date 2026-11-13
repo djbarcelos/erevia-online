@@ -6,7 +6,9 @@ MMORPG 3D no navegador. Cliente em **TypeScript + Babylon.js**, servidor em **Go
 
 Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
-## Estado atual: Fase 3 (itens e economia) + interface nova + progressão (Fase B)
+## Estado atual: Fase 3 (itens e economia) + interface nova + progressão (Fase B) + equipamento completo (Fase C)
+- **13 encaixes de equipamento:** cabeça, peito, pernas, mãos, pés, capa, arma, mão secundária, colar, 2 brincos e 2 anéis. Anéis e brincos vão no encaixe livre com duplo clique, ou no que você escolher arrastando; dá para trocar anel 1 ↔ anel 2 arrastando. Itens novos nas 4 raridades com bônus novos: precisão, esquiva, velocidade de movimento, de ataque e de conjuração, regeneração de vida e mana e dano crítico.
+- **Aparência na criação:** cada classe escolhe a arma inicial (ex.: espada ou lâmina curva para o cavaleiro; cajado, varinha ou cajado sombrio para o mago; três pares de lâminas para o ladino), o escudo (ou nada, e ele vai para a bolsa) e a cor do emblema. A arma é um item de verdade do kit. A cor pinta o nome e um anel no chão para todos verem, e a tela de seleção mostra cada personagem com o que tem nas mãos.
 - **Atributos com pontos livres (tecla C):** Força, Destreza, Constituição, Inteligência, Sabedoria e Espírito. Cada classe começa com a sua base e ganha 3 pontos por nível. A janela mostra a diferença exata antes de confirmar (vida, ataque, defesa, crítico, precisão, esquiva, velocidade de ataque e de conjuração, regeneração).
 - **Árvore de skills (tecla K):** 12 skills por classe em 3 ramos e 4 degraus (níveis 1, 5, 10 e 15), com ranks; 1 ponto por nível. Mecânicas: prender, veneno/queimadura/praga (dano por segundo), provocar, escudos, escudo de mana, invisibilidade, marca, imortal, cegueira, frenesi, enfraquecer, armadura de gelo, grito de guerra e estandarte para os aliados, aura de coragem, Piscar e Investida (teleporte), execução, golpes duplos, área em volta do alvo, roubo de vida e mais. Uma bolinha nos botões avisa quando há pontos para gastar.
 - **Barra de atalhos salva no servidor:** a mesma em qualquer computador ou celular.
@@ -16,12 +18,12 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
   - Janelas (arrastáveis no PC, tela cheia no celular): **Inventário (I)** com a miniatura 3D do equipamento, **Personagem (C)**, **Skills (K)**, **Mapa do mundo (M)** com regiões, chefes, lojas e clique para andar, e **Configurações (Esc)** com teclas configuráveis, áudio/gráficos e as opções da auto-caça.
   - **Celular:** joystick, botão de ataque com as skills em volta, poção, trocar alvo, AUTO e menu ☰; arrastar o dedo gira a câmera e a pinça dá zoom. Liga sozinho em telas de toque (ou em Configurações → Controles).
   - **Auto-caça (F ou AUTO):** escolhe o monstro mais perto no raio configurado, ataca, usa as skills da barra, toma poção abaixo do limite, pega o saque e volta à cidade sem poção. Roda no navegador e só manda os comandos normais (o servidor valida tudo).
-- **Itens e moedas:** cerca de 40 itens em 4 raridades (comum, bom, raro e épico): armas de cada classe, escudos, armaduras, elmos, poções e materiais. A arma e o escudo aparecem na mão do personagem; armas raras e épicas brilham.
+- **Itens e moedas:** cerca de 75 itens em 4 raridades (comum, bom, raro e épico): armas de cada classe, escudos, armaduras, elmos, pernas, luvas, botas, capas, joias, poções e materiais. A arma e o escudo aparecem na mão do personagem; armas raras e épicas brilham.
 - **Drops:** monstros deixam moedas e itens no chão (saquinho com o nome; feixe de luz nos itens bons). Por 15 s, só quem causou mais dano pode pegar; depois fica livre, e some em 60 s. Clicar no item faz o personagem andar até ele e pegar.
-- **Inventário (tecla I):** 40 espaços e 4 encaixes (arma, mão secundária, armadura, elmo), com os atributos ao lado. Arrastar e soltar move, troca, equipa e destrói; duplo clique usa ou equipa.
+- **Inventário (tecla I):** 40 espaços e os 13 encaixes ao redor da miniatura 3D, com os atributos embaixo. Arrastar e soltar move, troca, equipa e destrói; duplo clique usa ou equipa.
 - **Poções nas teclas 3–6:** arraste uma poção do inventário para a barra. Vida e mana têm recargas separadas (10 s).
-- **Loja:** a Mercadora Lívia (poções) e o Ferreiro Bruno (armas e armaduras comuns e boas) ficam na praça. Clicar num deles abre a loja; vender paga 40% do preço.
-- **Kit inicial:** arma (e escudo) equipados, 5 poções e 50 moedas.
+- **Loja:** a Mercadora Lívia (poções e joias) e o Ferreiro Bruno (armas, escudos e armaduras comuns e boas) ficam na praça. Clicar num deles abre a loja ao lado do inventário, com filtro por categoria e "só da minha classe"; vender paga 40% do preço.
+- **Kit inicial:** a arma (e o escudo) escolhidos na criação, equipados, 5 poções e 50 moedas.
 - **Persistência segura:** moedas e itens são salvos junto com o personagem numa única transação. Um salvamento atrasado nunca sobrescreve um mais novo, e relogar rápido usa o estado da memória (não perde nem duplica itens). O servidor é o único que cria ou destrói itens.
 
 ### Fases anteriores
