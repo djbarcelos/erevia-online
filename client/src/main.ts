@@ -284,6 +284,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   store.setInventory(welcome.inventory);
   const itemTip = new ItemTip(document.body);
   const npcStock = new Map(welcome.npcs.map((n) => [n.id, n.stock]));
+  const npcRecipes = new Map(welcome.npcs.map((n) => [n.id, n.recipes]));
   const npcInfo = new Map(welcome.npcs.map((n) => [n.id, n]));
   const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId);
   loot.add(welcome.groundItems);
@@ -642,6 +643,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     {
       buy: (npc, id, n) => conn.buy(npc, id, n),
       sell: (npc, slot, n) => conn.sell(npc, slot, n),
+      craft: (npc, recipe) => conn.craft(npc, recipe),
       me,
       // Loja e inventário lado a lado, centralizados (se couberem; senão o inventário por cima).
       onOpen: () => {
@@ -672,7 +674,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (npc?.role === NpcRole.STORAGE) {
         storageWin.open(id, `${info.title} · ${info.name}`);
         conn.storageGold(id, 0); // pede o conteúdo
-      } else shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? []);
+      } else shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? [], npcRecipes.get(id) ?? []);
       return;
     }
     // Para a ~2 m do NPC, do lado de quem chega.

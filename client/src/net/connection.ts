@@ -139,6 +139,11 @@ export class Connection {
     this.send({ case: "buy", value: { npcId, itemId, count } });
   }
 
+  /** Ferreiro: criar um item com a receita. */
+  craft(npcId: number, recipeId: string): void {
+    this.send({ case: "craft", value: { npcId, recipeId } });
+  }
+
   sell(npcId: number, slot: number, count: number): void {
     this.send({ case: "sell", value: { npcId, slot, count } });
   }

@@ -2119,3 +2119,20 @@
 .tr-hint {
   margin: 8px 0 0;
 }
+
+/* ---------- Criar (Ferreiro) ---------- */
+
+.craft-mats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 0.72rem;
+}
+
+.craft-mat {
+  color: var(--text);
+}
+
+.craft-mat.missing {
+  color: var(--bad, #e07a6a);
+}

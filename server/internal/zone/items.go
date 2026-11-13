@@ -56,6 +56,8 @@ func (z *Zone) onItem(e itemEvent) {
 		z.enchant(p, int(m.ScrollSlot), int(m.Place), int(m.Slot))
 	case *pb.ChangeLook:
 		z.changeLook(p, m.NpcId, m.Look)
+	case *pb.Craft:
+		z.craft(p, m.NpcId, m.RecipeId)
 	}
 }
 
