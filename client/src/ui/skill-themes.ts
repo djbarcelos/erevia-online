@@ -1,0 +1,49 @@
+/**
+ * Ícones das skills da árvore (as que não têm ícone desenhado em icons.ts): glifo e cores.
+ * A chave é o "fx" da skill no servidor (server/internal/game/skills.go).
+ */
+
+import type { SkillTheme } from "./art";
+
+export const SKILL_THEMES: Record<string, SkillTheme> = {
+  k_iron: { glyph: "shield", bg: ["#7d8fb0", "#1f2840"], accent: "#c9d6ff" },
+  k_taunt: { glyph: "shout", bg: ["#c0583a", "#3a120a"], accent: "#ffc08a" },
+  k_wall: { glyph: "crystal", bg: ["#5e8fe0", "#121e3e"], accent: "#bfe0ff" },
+  k_fencing: { glyph: "sword", bg: ["#b99a52", "#3a2a10"], accent: "#fff0c0" },
+  k_spin: { glyph: "swirl", bg: ["#d0a040", "#3e2a08"], accent: "#fff2c4" },
+  k_charge: { glyph: "dash", bg: ["#c48a3a", "#3a1e08"], accent: "#ffd28a" },
+  k_judg: { glyph: "burst", bg: ["#f0c050", "#5a2e08"], accent: "#fff6d0" },
+  k_cry: { glyph: "shout", bg: ["#4fae8e", "#0e2a22"], accent: "#c0ffe8" },
+  k_aura: { glyph: "heart", bg: ["#4fb0a0", "#0c2a28"], accent: "#e0fff6" },
+  k_banner: { glyph: "banner", bg: ["#3fa88a", "#0a2a20"], accent: "#ffe9a8" },
+  b_heavy: { glyph: "axe", bg: ["#c8673a", "#3a160a"], accent: "#ffd0a0" },
+  b_quake: { glyph: "crack", bg: ["#b8743a", "#2e1608"], accent: "#ffb060" },
+  b_exec: { glyph: "skull", bg: ["#d04a2a", "#300a04"], accent: "#ffcf80" },
+  b_thirst: { glyph: "drop", bg: ["#c0303a", "#300810"], accent: "#ff9aa0" },
+  b_frenzy: { glyph: "bolt", bg: ["#d84a3a", "#3a0a08"], accent: "#ffe08a" },
+  b_undying: { glyph: "hourglass", bg: ["#b02838", "#28040a"], accent: "#ffd0a0" },
+  b_hide: { glyph: "paw", bg: ["#8f9a44", "#22280a"], accent: "#f0ffa0" },
+  b_roar: { glyph: "shout", bg: ["#a0a83a", "#262a08"], accent: "#fff4a0" },
+  b_stomp: { glyph: "fist", bg: ["#9a8a3a", "#2a2008"], accent: "#ffe08a" },
+  b_bear: { glyph: "paw", bg: ["#7a8a3a", "#1a2008"], accent: "#ffd28a" },
+  m_ember: { glyph: "flame", bg: ["#e06a20", "#3a1004"], accent: "#ffb040" },
+  m_rain: { glyph: "meteor", bg: ["#e05a20", "#3a0e04"], accent: "#ffcc60" },
+  m_meteor: { glyph: "meteor", bg: ["#f07a20", "#4a1004"], accent: "#fff0a0" },
+  m_lance: { glyph: "spear", bg: ["#5ab4e8", "#0a2238"], accent: "#e0f6ff" },
+  m_armor: { glyph: "crystal", bg: ["#6ad0f0", "#0c2a3a"], accent: "#ffffff" },
+  m_prison: { glyph: "cage", bg: ["#4ab0e8", "#081e34"], accent: "#e0ffff" },
+  m_mind: { glyph: "book", bg: ["#8c6ad8", "#1e1240"], accent: "#e8d8ff" },
+  m_shield: { glyph: "shield", bg: ["#9a6ae8", "#1e0e40"], accent: "#f0e0ff" },
+  m_blink: { glyph: "blink", bg: ["#a07ae8", "#20104a"], accent: "#e8dcff" },
+  m_over: { glyph: "star", bg: ["#b88af8", "#2a1050"], accent: "#fff0a0" },
+  r_weak: { glyph: "eye", bg: ["#c09a40", "#2a1e08"], accent: "#ffe08a" },
+  r_twin: { glyph: "daggers", bg: ["#b89048", "#2a1a08"], accent: "#ffe6a0" },
+  r_mark: { glyph: "mark", bg: ["#c02a2a", "#2a0606"], accent: "#ffd28a" },
+  r_dodge: { glyph: "dash", bg: ["#7a6ad0", "#1a1240"], accent: "#e0d8ff" },
+  r_smoke: { glyph: "smoke", bg: ["#6a6a90", "#16162a"], accent: "#c0a0ff" },
+  r_vanish: { glyph: "mask", bg: ["#5a4ab0", "#100a30"], accent: "#e0d0ff" },
+  r_poison: { glyph: "drop", bg: ["#4ab04a", "#0a2a0a"], accent: "#d0ffa0" },
+  r_flask: { glyph: "flask", bg: ["#5ac05a", "#0e2a0e"], accent: "#b0ff60" },
+  r_para: { glyph: "bolt", bg: ["#6ab03a", "#14280a"], accent: "#f0ff80" },
+  r_plague: { glyph: "skull", bg: ["#3a9a3a", "#081e08"], accent: "#c0ff80" },
+};

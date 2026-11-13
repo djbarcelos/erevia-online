@@ -4550,6 +4550,7 @@ type SkillCast struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SourceId      uint32                 `protobuf:"varint,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
 	SkillId       uint32                 `protobuf:"varint,2,opt,name=skill_id,json=skillId,proto3" json:"skill_id,omitempty"`
+	TargetId      uint32                 `protobuf:"varint,3,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"` // skills de alvo sem dano direto (Frasco Tóxico, Praga): para o visual
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4594,6 +4595,13 @@ func (x *SkillCast) GetSourceId() uint32 {
 func (x *SkillCast) GetSkillId() uint32 {
 	if x != nil {
 		return x.SkillId
+	}
+	return 0
+}
+
+func (x *SkillCast) GetTargetId() uint32 {
+	if x != nil {
+		return x.TargetId
 	}
 	return 0
 }
@@ -5392,10 +5400,11 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x05value\x18\x05 \x01(\x02R\x05value\"S\n" +
 	"\tEffectEnd\x12\x1b\n" +
 	"\ttarget_id\x18\x01 \x01(\rR\btargetId\x12)\n" +
-	"\x06effect\x18\x02 \x01(\x0e2\x11.erevia.v1.EffectR\x06effect\"C\n" +
+	"\x06effect\x18\x02 \x01(\x0e2\x11.erevia.v1.EffectR\x06effect\"`\n" +
 	"\tSkillCast\x12\x1b\n" +
 	"\tsource_id\x18\x01 \x01(\rR\bsourceId\x12\x19\n" +
-	"\bskill_id\x18\x02 \x01(\rR\askillId\"[\n" +
+	"\bskill_id\x18\x02 \x01(\rR\askillId\x12\x1b\n" +
+	"\ttarget_id\x18\x03 \x01(\rR\btargetId\"[\n" +
 	"\x06Revive\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +

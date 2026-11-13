@@ -126,6 +126,8 @@ export class EntityManager {
   private localPending: { x: number; z: number; at: number } | null = null;
   private mats = new Map<string, StandardMaterial>();
   private ringMat: StandardMaterial;
+  /** Último evento de skill com área no alvo (para animar uma vez só). */
+  private lastSplash = new Map<string, number>();
   private selectRing: Mesh;
   private models: CharacterModels | null = null;
   private targetId = 0;
@@ -208,7 +210,7 @@ export class EntityManager {
   /** Quando os modelos 3D terminam de carregar: troca as cápsulas pelos modelos. */
   setModels(models: CharacterModels): void {
     this.models = models;
-    for (const v of this.views.values()) this.attachModel(v);
+    for (const v of this.views.values()) if (v.kind !== EntityKind.OBJECT) this.attachModel(v);
   }
 
   setTarget(id: number): void {
@@ -238,12 +240,15 @@ export class EntityManager {
 
     // Área de clique estável (invisível): o modelo animado não serve, porque o picking de
     // malha com esqueleto usa a pose parada e braços/pernas entram e saem do cursor.
-    const hit = MeshBuilder.CreateCylinder(`hit${e.id}`, { height: 2.1 * scale, diameter: 1.2 * scale, tessellation: 10 }, this.scene);
-    hit.parent = root;
-    hit.position.y = 1.05 * scale;
-    hit.isVisible = false;
-    hit.isPickable = true;
-    hit.metadata = { entityId: e.id };
+    const isObject = e.kind === EntityKind.OBJECT;
+    if (!isObject) {
+      const hit = MeshBuilder.CreateCylinder(`hit${e.id}`, { height: 2.1 * scale, diameter: 1.2 * scale, tessellation: 10 }, this.scene);
+      hit.parent = root;
+      hit.position.y = 1.05 * scale;
+      hit.isVisible = false;
+      hit.isPickable = true;
+      hit.metadata = { entityId: e.id };
+    }
 
     if (isLocal) {
       const ring = MeshBuilder.CreateTorus(`ring${e.id}`, { diameter: 1.1, thickness: 0.06, tessellation: 32 }, this.scene);
@@ -269,7 +274,15 @@ export class EntityManager {
     nameText.resizeToFit = true;
     nameText.fontSize = 13;
     nameText.paddingLeft = nameText.paddingRight = "6px";
-    nameText.color = isLocal ? "#f0d79a" : e.kind === EntityKind.MONSTER ? "#ffb4a8" : e.kind === EntityKind.NPC ? "#a8e6a0" : "#e6ecff";
+    nameText.color = isLocal
+      ? "#f0d79a"
+      : e.kind === EntityKind.MONSTER
+        ? "#ffb4a8"
+        : e.kind === EntityKind.NPC
+          ? "#a8e6a0"
+          : e.kind === EntityKind.OBJECT
+            ? "#bcd4ff"
+            : "#e6ecff";
     // Contorno em vez de shadowBlur: o desfoque do canvas 2D é caro e a GUI redesenha muito.
     nameText.outlineWidth = 3;
     nameText.outlineColor = "rgba(0,0,0,0.85)";
@@ -306,9 +319,56 @@ export class EntityManager {
     this.refreshLabel(v);
     this.refreshHpBar(v);
 
+    if (isObject) {
+      this.buildBanner(v);
+      return;
+    }
     if (this.models) this.attachModel(v);
     if (!v.model3d) v.capsule = this.createCapsule(v);
     if (v.dead) this.showDead(v, true);
+  }
+
+  /** Estandarte: mastro, bandeira com a cor da ordem e o círculo da área (8 m). */
+  private buildBanner(v: View): void {
+    const pole = MeshBuilder.CreateCylinder(`pole${v.id}`, { height: 3.2, diameter: 0.12, tessellation: 8 }, this.scene);
+    pole.parent = v.visual;
+    pole.position.y = 1.6;
+    pole.material = this.material("#6b4a2a");
+    const top = MeshBuilder.CreateSphere(`poletop${v.id}`, { diameter: 0.24, segments: 8 }, this.scene);
+    top.parent = v.visual;
+    top.position.y = 3.25;
+    top.material = this.material("#e2c070");
+    const flag = MeshBuilder.CreatePlane(`flag${v.id}`, { width: 1.1, height: 1.4, sideOrientation: Mesh.DOUBLESIDE }, this.scene);
+    flag.parent = v.visual;
+    flag.position.set(0.6, 2.45, 0);
+    flag.material = this.material("#3e5da8");
+    const emblem = MeshBuilder.CreateDisc(`emblem${v.id}`, { radius: 0.28, tessellation: 20, sideOrientation: Mesh.DOUBLESIDE }, this.scene);
+    emblem.parent = flag;
+    emblem.position.z = -0.01;
+    emblem.material = this.material("#e2c070");
+    const area = MeshBuilder.CreateTorus(`area${v.id}`, { diameter: 16, thickness: 0.08, tessellation: 64 }, this.scene);
+    area.parent = v.root;
+    area.position.y = 0.05;
+    const areaMat = new StandardMaterial(`areaMat${v.id}`, this.scene);
+    areaMat.emissiveColor = new Color3(0.45, 0.7, 1);
+    areaMat.disableLighting = true;
+    areaMat.alpha = 0.6;
+    area.material = areaMat;
+    const meshes = [pole, top, flag, emblem, area];
+    this.notPickable(meshes);
+    v.meshes = [pole, top, flag];
+    // A bandeira balança.
+    const t0 = performance.now();
+    const wave = this.scene.onBeforeRenderObservable.add(() => {
+      if (flag.isDisposed()) {
+        this.scene.onBeforeRenderObservable.remove(wave);
+        return;
+      }
+      const t = (performance.now() - t0) / 1000;
+      flag.rotation.y = Math.sin(t * 2.2) * 0.25;
+      areaMat.alpha = 0.45 + 0.15 * Math.sin(t * 3);
+    });
+    this.fx.bannerPlant(v.root.position.clone(), new Color3(0.45, 0.7, 1));
   }
 
   remove(id: number): void {
@@ -328,6 +388,17 @@ export class EntityManager {
   applyState(s: EntityState): void {
     const v = this.views.get(s.id);
     if (!v) return;
+    if (s.teleport) {
+      // Piscar/Investida: pula direto (sem deslizar), com clarão nos dois pontos.
+      const from = v.root.position.clone();
+      v.root.position.set(s.x, 0, s.z);
+      v.server.x = v.target.x = s.x;
+      v.server.z = v.target.z = s.z;
+      if (s.id === this.localId) this.localPending = null;
+      this.fx.blinkFlash(from, v.root.position.clone(), new Color3(0.7, 0.5, 1));
+      if (s.speed > 0) v.speed = s.speed;
+      return;
+    }
     v.server.x = s.x;
     v.server.z = s.z;
     if (s.speed > 0) v.speed = s.speed;
@@ -385,8 +456,26 @@ export class EntityManager {
     const src = this.views.get(ev.sourceId);
     const dst = this.views.get(ev.targetId);
     if (!dst) return;
+    // Veneno, queimadura e praga: só o número (sem animação de golpe).
+    if (ev.dot !== Effect.UNSPECIFIED) {
+      const color = ev.dot === Effect.BURN ? "#ffa04a" : ev.dot === Effect.PLAGUE ? "#9ccf5a" : "#7dff7a";
+      this.fx.damageNumber(dst.head, String(ev.damage), color, false);
+      if (ev.kill) dst.anim?.play("hit");
+      return;
+    }
     const sk = ev.skillId ? this.catalog.get(ev.skillId) : undefined;
     const isArea = sk?.target === SkillTarget.AREA; // a animação e o nome já vieram no SkillCast
+    // Skills com área em volta do alvo mandam um evento por inimigo: a animação sai uma vez só.
+    const key = `${ev.sourceId}:${ev.skillId}`;
+    const now = performance.now();
+    const repeat = !!sk && sk.splash > 0 && now - (this.lastSplash.get(key) ?? 0) < 250;
+    if (sk && sk.splash > 0 && !repeat) this.lastSplash.set(key, now);
+    if (ev.heal && src) this.fx.damageNumber(src.head, `+${ev.heal}`, "#7dff9a", false);
+    if (ev.absorbed && !ev.miss) this.fx.damageNumber(dst.head, `(${ev.absorbed} absorvido)`, "#9fc6ff", false);
+    if (repeat) {
+      window.setTimeout(() => this.landHit(ev, src, dst, sk, true), 650);
+      return;
+    }
 
     if (src && src !== dst && !isArea) {
       this.face(src, dst);
@@ -394,23 +483,42 @@ export class EntityManager {
       if (sk && sk.target === SkillTarget.ENEMY) this.fx.skillName(src.head, sk.name);
     }
 
-    // Projétil: Bola de Fogo, ou ataque básico de quem usa magia (magos e esqueletos magos).
-    const ranged = !!src && src !== dst && (sk?.fx === "fireball" || (!ev.skillId && isCaster(src.model)));
     const land = () => this.landHit(ev, src, dst, sk);
-    if (ranged && src) {
-      const from = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
-      const to = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
-      const travel = Vector3.Distance(from, to) / PROJECTILE_SPEED;
-      if (sk) this.fx.fireball(from, to, travel);
-      else this.fx.arcaneBolt(from, to, travel);
-      window.setTimeout(land, travel * 1000);
-    } else {
-      land();
+    if (!src || src === dst) return land();
+    const from = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
+    const to = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
+    const travel = Vector3.Distance(from, to) / PROJECTILE_SPEED;
+    const bolt = BOLT_COLOR[sk?.fx ?? ""];
+    switch (sk?.fx) {
+      case "fireball":
+        this.fx.fireball(from, to, travel);
+        window.setTimeout(land, travel * 1000);
+        return;
+      case "m_rain":
+        this.fx.emberRain(dst.root.position.clone(), sk.splash);
+        window.setTimeout(land, 650);
+        return;
+      case "m_meteor":
+        this.fx.meteor(dst.root.position.clone(), sk.splash, ev.sourceId === this.localId);
+        window.setTimeout(land, 760);
+        return;
     }
+    if (bolt) {
+      this.fx.bolt(from, to, travel, bolt);
+      window.setTimeout(land, travel * 1000);
+      return;
+    }
+    // Ataque básico de quem usa magia (magos e esqueletos magos).
+    if (!ev.skillId && isCaster(src.model)) {
+      this.fx.arcaneBolt(from, to, travel);
+      window.setTimeout(land, travel * 1000);
+      return;
+    }
+    land();
   }
 
   /** Número de dano e reação de quem levou o golpe. */
-  private landHit(ev: CombatEvent, src: View | undefined, dst: View, sk: SkillInfo | undefined): void {
+  private landHit(ev: CombatEvent, src: View | undefined, dst: View, sk: SkillInfo | undefined, quiet = false): void {
     if (!this.views.has(dst.id)) return;
     const mine = ev.sourceId === this.localId;
     const onMe = ev.targetId === this.localId;
@@ -421,7 +529,30 @@ export class EntityManager {
     // Impacto (a Bola de Fogo e a magia básica já explodiram ao chegar).
     const at = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
     const from = src ? src.root.position.add(new Vector3(0, 1 * src.scale, 0)) : at;
-    switch (sk?.fx) {
+    switch (quiet ? "quiet" : sk?.fx) {
+      case "quiet":
+      case "m_rain":
+      case "m_meteor":
+      case "m_lance":
+      case "m_prison":
+      case "r_mark":
+        break;
+      case "r_flask":
+      case "r_plague":
+        this.fx.poisonSplash(dst.root.position.clone(), sk?.splash || 1.5, sk?.fx === "r_plague" ? new Color3(0.35, 0.55, 0.2) : new Color3(0.45, 0.9, 0.3));
+        break;
+      case "k_judg":
+      case "b_exec":
+        this.fx.brutalStrike(from, at, mine);
+        this.fx.slam(dst.root.position, 1.8, new Color3(1, 0.85, 0.4), mine);
+        break;
+      case "k_charge":
+        this.fx.shieldBash(at, mine);
+        break;
+      case "r_twin":
+      case "r_para":
+        this.fx.backstab(from, at, ev.crit);
+        break;
       case "shield_bash":
         this.fx.shieldBash(at, mine);
         break;
@@ -441,6 +572,7 @@ export class EntityManager {
     }
     let color = onMe ? "#ff6b5a" : ev.crit ? "#ffd34d" : mine ? "#ffffff" : "#e8e1d4";
     if (sk && !onMe && !ev.crit) color = SKILL_NUMBER_COLOR[sk.fx] ?? color;
+    if (ev.damage === 0 && sk && sk.power === 0) return; // skill só de efeito (Frasco, Marca…)
     this.fx.damageNumber(dst.head, ev.crit ? `${ev.damage}!` : String(ev.damage), color, ev.crit || !!sk);
     if (!ev.kill && !dst.dead) dst.anim?.play("hit");
   }
@@ -451,7 +583,22 @@ export class EntityManager {
     const sk = this.catalog.get(ev.skillId);
     if (!src || !sk) return;
     this.fx.skillName(src.head, sk.name);
+    // Skill de alvo sem dano direto (Frasco Tóxico, Praga): projétil até o alvo.
+    const dst = ev.targetId ? this.views.get(ev.targetId) : undefined;
+    if (dst) {
+      if (src !== dst) this.face(src, dst);
+      src.anim?.play("skill");
+      const from = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
+      const to = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
+      const travel = Vector3.Distance(from, to) / PROJECTILE_SPEED;
+      const color = BOLT_COLOR[sk.fx] ?? new Color3(0.8, 0.8, 1);
+      this.fx.bolt(from, to, travel, color, () => {
+        if (sk.fx === "r_flask" || sk.fx === "r_plague") this.fx.poisonSplash(dst.root.position.clone(), sk.splash || 1.5, color);
+      });
+      return;
+    }
     src.anim?.play(sk.target === SkillTarget.AREA ? "skill" : "buff");
+    const mine = ev.sourceId === this.localId;
     switch (sk.fx) {
       case "ice_nova":
         this.fx.iceNova(src.root.position, sk.range);
@@ -465,6 +612,42 @@ export class EntityManager {
       case "shadow_step":
         this.fx.shadowStep(src);
         break;
+      case "k_taunt":
+        this.fx.shout(src, new Color3(1, 0.3, 0.2), sk.range);
+        break;
+      case "k_cry":
+        this.fx.shout(src, new Color3(1, 0.65, 0.25), 10);
+        break;
+      case "b_roar":
+        this.fx.shout(src, new Color3(0.7, 0.4, 0.9), sk.range);
+        if (mine) this.fx.shake(6);
+        break;
+      case "k_spin":
+        this.fx.whirl(src, sk.range, mine);
+        break;
+      case "b_quake":
+      case "b_stomp":
+        this.fx.slam(src.root.position, sk.range, new Color3(1, 0.7, 0.35), mine);
+        break;
+      case "r_smoke":
+        this.fx.smokeCloud(src.root.position.clone(), sk.range, (sk.effectMs || 6000) / 1000);
+        break;
+      case "m_armor":
+        this.fx.castGlow(src.root.position.add(new Vector3(0, 1, 0)), new Color3(0.6, 0.9, 1));
+        break;
+      case "m_shield":
+        this.fx.castGlow(src.root.position.add(new Vector3(0, 1, 0)), new Color3(0.45, 0.55, 1));
+        break;
+      case "b_frenzy":
+      case "b_undying":
+        this.fx.castGlow(src.root.position.add(new Vector3(0, 1, 0)), new Color3(1, 0.35, 0.2));
+        break;
+      case "r_vanish":
+      case "m_blink":
+      case "k_banner":
+        break; // o próprio efeito (fumaça, teleporte, estandarte) já aparece
+      default:
+        this.fx.castGlow(src.root.position.add(new Vector3(0, 1, 0)), new Color3(1, 0.85, 0.5));
     }
   }
 
@@ -473,6 +656,7 @@ export class EntityManager {
     if (!v || v.dead) return;
     const ms = ev.durationMs;
     v.effects.get(ev.effect)?.visual?.stop(); // renovado: troca o visual
+    if (ev.effect === Effect.INVISIBLE) this.setGhost(v, true);
     const visual = this.fx.effect(ev.effect, v, ms);
     v.effects.set(ev.effect, { effect: ev.effect, until: performance.now() + ms, durationMs: ms, value: ev.value, visual });
   }
@@ -483,6 +667,15 @@ export class EntityManager {
     if (!v || !ef) return;
     ef.visual?.stop();
     v.effects.delete(ev.effect);
+    if (ev.effect === Effect.INVISIBLE) this.setGhost(v, false);
+  }
+
+  /** Invisível: você se vê translúcido; os outros quase não veem (nem o nome). */
+  private setGhost(v: View, on: boolean): void {
+    const alpha = !on ? 1 : v.id === this.localId ? 0.35 : 0.08;
+    for (const m of v.meshes) m.visibility = alpha;
+    if (v.capsule) v.capsule.visibility = alpha;
+    v.label.alpha = on && v.id !== this.localId ? 0 : 1;
   }
 
   /** Efeitos ativos (para os ícones do HUD), do que acaba antes para o que acaba depois. */
@@ -610,7 +803,7 @@ export class EntityManager {
   /** Entidades vivas para o mapa (posição desenhada, não a do servidor). */
   forEachMarker(cb: (m: MapMarker) => void): void {
     for (const v of this.views.values()) {
-      if (v.dead) continue;
+      if (v.dead || v.kind === EntityKind.OBJECT) continue;
       cb({
         id: v.id, x: v.root.position.x, z: v.root.position.z, kind: v.kind, boss: v.boss,
         local: v.id === this.localId, target: v.id === this.targetId, heading: v.visual.rotation.y,
@@ -735,7 +928,23 @@ export class EntityManager {
 }
 
 /** Cor do número de dano de cada skill. */
+/** Cor do projétil das skills de alvo à distância (as que não têm visual próprio). */
+const BOLT_COLOR: Record<string, Color3> = {
+  m_lance: new Color3(0.55, 0.85, 1),
+  m_prison: new Color3(0.4, 0.75, 1),
+  r_mark: new Color3(1, 0.2, 0.2),
+  r_flask: new Color3(0.45, 0.95, 0.3),
+  r_plague: new Color3(0.35, 0.6, 0.2),
+};
+
 const SKILL_NUMBER_COLOR: Record<string, string> = {
+  m_lance: "#9fe0ff",
+  m_prison: "#9fe0ff",
+  m_rain: "#ffb14a",
+  m_meteor: "#ffcf6a",
+  k_judg: "#ffe9a0",
+  b_exec: "#ff7a5a",
+  r_twin: "#e0b4ff",
   fireball: "#ffb14a",
   ice_nova: "#9fe0ff",
   shield_bash: "#cfe0ff",

@@ -835,6 +835,240 @@ export class Fx {
   // ------------------------------------------------------------------------------------
 
   /** Visual enquanto o efeito dura. O handle encerra antes da hora (fim ou morte). */
+  // ------------------------------------------------------------------------------------
+  // Skills da árvore (Fase B)
+  // ------------------------------------------------------------------------------------
+
+  /** Projétil colorido (Lança de Gelo, Marca da Morte, Prisão Glacial, Frasco Tóxico…). */
+  bolt(from: Vector3, to: Vector3, dur: number, color: Color3, onArrive?: (at: Vector3) => void): void {
+    const light = new Color3(Math.min(1, color.r + 0.35), Math.min(1, color.g + 0.35), Math.min(1, color.b + 0.35));
+    this.orb(from, to, dur, {
+      core: light,
+      halo: color,
+      size: 0.3,
+      arc: 0.2,
+      trail: {
+        tex: this.tex.flare,
+        life: [0.18, 0.32],
+        size: [0.12, 0.26],
+        speed: [0, 0.3],
+        colors: [c4(light.r, light.g, light.b, 0.9), c4(color.r, color.g, color.b, 0.8), c4(color.r * 0.5, color.g * 0.5, color.b * 0.5, 0)],
+        grow: 0.2,
+      },
+      rate: 70,
+      onArrive: (at) => {
+        this.burst(at, 16, {
+          tex: this.tex.flare,
+          life: [0.2, 0.45],
+          size: [0.1, 0.24],
+          speed: [1.5, 3.5],
+          colors: [c4(light.r, light.g, light.b), c4(color.r, color.g, color.b), c4(color.r, color.g, color.b, 0)],
+          emitter: new SphereParticleEmitter(0.1),
+          grow: 0.3,
+        });
+        this.flash(at, 1, color, 0.2);
+        onArrive?.(at);
+      },
+    });
+  }
+
+  /** Grito (Provocar, Grito de Guerra, Rugido): ondas que saem do corpo. */
+  shout(body: FxBody, color: Color3, radius: number): void {
+    const at = body.root.position.clone();
+    for (let i = 0; i < 3; i++) {
+      window.setTimeout(() => this.decal(at, this.tex.ring, color, { size: [0.6, radius * 2], dur: 0.55 }), i * 110);
+    }
+    this.burst(body.head.getAbsolutePosition(), 18, {
+      tex: this.tex.spark,
+      life: [0.3, 0.55],
+      size: [0.12, 0.3],
+      speed: [3, 6],
+      colors: [c4(color.r, color.g, color.b), c4(1, 1, 1, 0.8), c4(color.r, color.g, color.b, 0)],
+      emitter: new SphereParticleEmitter(0.2),
+      stretched: true,
+    });
+  }
+
+  /** Pancada no chão (Corte Giratório, Rachar o Chão, Pisotear, Execução). */
+  slam(at: Vector3, radius: number, color: Color3, mine: boolean, crack = true): void {
+    const ground = new Vector3(at.x, 0, at.z);
+    if (crack) this.decal(ground, this.tex.crack, new Color3(0.25, 0.2, 0.18), { size: [radius * 1.2, radius * 1.6], dur: 1.6, additive: false });
+    this.decal(ground, this.tex.ring, color, { size: [0.5, radius * 2.1], dur: 0.45 });
+    this.burst(ground.add(new Vector3(0, 0.2, 0)), 26, {
+      tex: this.tex.smoke,
+      life: [0.5, 0.9],
+      size: [0.3, 0.6],
+      speed: [1.5, 3],
+      colors: [c4(0.55, 0.48, 0.4, 0.7), c4(0.4, 0.35, 0.3, 0.6), c4(0.3, 0.25, 0.2, 0)],
+      emitter: new CylinderParticleEmitter(radius * 0.5, 0.1, 1, 0),
+      additive: false,
+      grow: 0.8,
+      drag: 2,
+    });
+    this.flash(ground.add(new Vector3(0, 0.3, 0)), radius * 0.8, color, 0.22);
+    if (mine) this.shake(10, 0.3);
+  }
+
+  /** Corte em volta (Corte Giratório). */
+  whirl(body: FxBody, radius: number, mine: boolean): void {
+    const at = body.root.position.add(new Vector3(0, 1, 0));
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      const from = at.add(new Vector3(Math.cos(a) * 0.4, 0, Math.sin(a) * 0.4));
+      const to = at.add(new Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius));
+      this.slash(from, to, new Color3(1, 0.9, 0.6), [0], 1.3);
+    }
+    this.slam(body.root.position, radius, new Color3(1, 0.85, 0.5), mine, false);
+  }
+
+  /** Meteoro: pedra em chamas caindo do céu. */
+  meteor(at: Vector3, radius: number, mine: boolean): void {
+    const from = at.add(new Vector3(-7, 22, -5));
+    this.orb(from, at, 0.75, {
+      core: new Color3(1, 0.85, 0.4),
+      halo: new Color3(1, 0.4, 0.1),
+      size: 1.1,
+      arc: 0,
+      smoke: true,
+      trail: {
+        tex: this.tex.flame,
+        life: [0.3, 0.6],
+        size: [0.6, 1.2],
+        speed: [0, 0.5],
+        colors: [c4(1, 0.7, 0.2), c4(1, 0.3, 0.05), c4(0.3, 0.05, 0, 0)],
+        grow: 0.6,
+      },
+      rate: 120,
+      onArrive: (p) => {
+        this.fireExplosion(p);
+        this.slam(p, radius + 1, new Color3(1, 0.45, 0.1), mine);
+        this.decal(new Vector3(p.x, 0, p.z), this.tex.scorch, new Color3(0.15, 0.1, 0.08), { size: [radius * 2, radius * 2.4], dur: 4, additive: false });
+        this.lightFlash(p.add(new Vector3(0, 2, 0)), new Color3(1, 0.5, 0.2), 4, 0.6);
+        if (mine) this.shake(16, 0.45);
+      },
+    });
+  }
+
+  /** Chuva de Brasas: várias bolas de fogo pequenas caindo em volta do alvo. */
+  emberRain(at: Vector3, radius: number): void {
+    for (let i = 0; i < 8; i++) {
+      window.setTimeout(() => {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * radius;
+        const to = at.add(new Vector3(Math.cos(a) * r, 0.2, Math.sin(a) * r));
+        this.fireball(to.add(new Vector3(-2, 12, -1.5)), to, 0.45);
+      }, i * 90);
+    }
+  }
+
+  /** Teleporte (Piscar, Investida): clarão onde saiu e onde chegou. */
+  blinkFlash(from: Vector3, to: Vector3, color: Color3): void {
+    for (const p of [from, to]) {
+      const at = p.add(new Vector3(0, 1, 0));
+      this.flash(at, 2, color, 0.3);
+      this.burst(at, 20, {
+        tex: this.tex.flare,
+        life: [0.3, 0.6],
+        size: [0.08, 0.2],
+        speed: [1, 3],
+        colors: [c4(color.r, color.g, color.b), c4(1, 1, 1, 0.8), c4(color.r, color.g, color.b, 0)],
+        emitter: new CylinderParticleEmitter(0.4, 1.6, 1, 0),
+      });
+    }
+    // Rastro no chão entre os dois pontos.
+    const n = Math.max(2, Math.round(Vector3.Distance(from, to) / 1.2));
+    for (let i = 1; i < n; i++) {
+      const p = Vector3.Lerp(from, to, i / n);
+      this.decal(p, this.tex.flare, color, { size: [0.6, 1], dur: 0.5 });
+    }
+  }
+
+  /** Nuvem de fumaça parada no chão (Bomba de Fumaça). */
+  smokeCloud(at: Vector3, radius: number, secs: number): void {
+    const p = at.clone();
+    this.stream(() => p, 40, {
+      tex: this.tex.smoke,
+      life: [1.2, 2],
+      size: [1, 1.8],
+      speed: [0.1, 0.4],
+      colors: [c4(0.18, 0.16, 0.22, 0.7), c4(0.1, 0.08, 0.12, 0.65), c4(0.05, 0.05, 0.08, 0)],
+      emitter: new CylinderParticleEmitter(radius * 0.8, 0.4, 1, 0),
+      additive: false,
+      grow: 0.5,
+    }, secs);
+  }
+
+  /** Estandarte cravado no chão. */
+  bannerPlant(at: Vector3, color: Color3): void {
+    this.slam(at, 1.5, color, false, false);
+    this.decal(at, this.tex.runes, color, { size: [1, 3], dur: 0.8, spin: 1 });
+  }
+
+  /** Frasco que estoura em veneno (Frasco Tóxico, Praga). */
+  poisonSplash(at: Vector3, radius: number, color: Color3): void {
+    this.decal(new Vector3(at.x, 0, at.z), this.tex.scorch, color.scale(0.6), { size: [radius, radius * 1.6], dur: 2.5, additive: false });
+    this.burst(at, 30, {
+      tex: this.tex.smoke,
+      life: [0.6, 1.2],
+      size: [0.4, 0.8],
+      speed: [1, 2.5],
+      colors: [c4(color.r, color.g, color.b, 0.7), c4(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.6), c4(0.1, 0.15, 0.05, 0)],
+      emitter: new SphereParticleEmitter(radius * 0.4),
+      additive: false,
+      grow: 0.6,
+    });
+  }
+
+  /** Bolha em volta do corpo (escudos). */
+  private bubble(body: FxBody, color: Color3, secs: number, tex: Texture | null = null): FxHandle {
+    const m = MeshBuilder.CreateSphere("fx-bubble", { diameter: 2.1 * body.scale, segments: 18 }, this.scene);
+    m.material = this.mat(color, tex ?? this.tex.ring, true, 0.55);
+    m.isPickable = false;
+    m.parent = body.root;
+    m.position.y = 0.95 * body.scale;
+    this.addGlow(m);
+    let fadeAt = -1;
+    let stop = false;
+    this.run(
+      (t) => {
+        if (fadeAt < 0 && (t > secs - 0.3 || stop)) fadeAt = t;
+        const intro = Math.min(1, t / 0.25);
+        const out = fadeAt < 0 ? 1 : Math.max(0, 1 - (t - fadeAt) / 0.3);
+        m.scaling.setAll(0.7 + 0.3 * intro + 0.03 * Math.sin(t * 4));
+        m.visibility = intro * out * (0.55 + 0.15 * Math.sin(t * 3));
+        return out > 0 && !body.root.isDisposed();
+      },
+      () => {
+        this.removeGlow(m);
+        m.dispose();
+      },
+    );
+    return { stop: () => (stop = true) };
+  }
+
+  /** Sinal girando acima da cabeça (Marca da Morte, Provocar). */
+  private headSigil(body: FxBody, color: Color3, secs: number, tex: Texture): FxHandle {
+    const m = MeshBuilder.CreatePlane("fx-sigil", { size: 0.9 }, this.scene);
+    m.material = this.mat(color, tex);
+    m.billboardMode = Mesh.BILLBOARDMODE_ALL;
+    m.isPickable = false;
+    m.parent = body.head;
+    m.position.y = 0.35;
+    let fadeAt = -1;
+    let stop = false;
+    this.run(
+      (t) => {
+        if (fadeAt < 0 && (t > secs - 0.25 || stop)) fadeAt = t;
+        const out = fadeAt < 0 ? 1 : Math.max(0, 1 - (t - fadeAt) / 0.25);
+        m.scaling.setAll((0.9 + 0.12 * Math.sin(t * 5)) * out);
+        m.rotation.z = t * 1.5;
+        return out > 0 && !body.head.isDisposed();
+      },
+      () => m.dispose(),
+    );
+    return { stop: () => (stop = true) };
+  }
+
   effect(kind: Effect, body: FxBody, ms: number): FxHandle | null {
     const secs = ms / 1000;
     const feet = () => (body.root.isDisposed() ? null : body.root.position);
@@ -894,6 +1128,131 @@ export class Fx {
           emitter: new CylinderParticleEmitter(0.3, 0.9, 1, 0),
           additive: false,
           grow: 0.4,
+        }, secs);
+      case Effect.ROOT:
+        return this.all([
+          this.footRing(body, this.tex.frostRing, new Color3(0.55, 0.85, 1), secs, 2.2),
+          this.bubble(body, new Color3(0.6, 0.9, 1), secs, this.tex.flake),
+        ]);
+      case Effect.POISON:
+      case Effect.PLAGUE: {
+        const plague = kind === Effect.PLAGUE;
+        return this.stream(chest, plague ? 26 : 18, {
+          tex: plague ? this.tex.smoke : this.tex.flare,
+          life: [0.6, 1.1],
+          size: plague ? [0.25, 0.45] : [0.08, 0.18],
+          speed: [0.3, 0.8],
+          colors: plague
+            ? [c4(0.3, 0.45, 0.15, 0.7), c4(0.15, 0.25, 0.08, 0.6), c4(0.05, 0.08, 0.03, 0)]
+            : [c4(0.55, 1, 0.35), c4(0.3, 0.85, 0.2), c4(0.1, 0.4, 0.05, 0)],
+          emitter: rising(0.45 * body.scale, 1.2 * body.scale, 0.2),
+          additive: !plague,
+          gravity: 0.6,
+        }, secs);
+      }
+      case Effect.BURN:
+        return this.stream(chest, 40, {
+          tex: this.tex.flame,
+          life: [0.35, 0.6],
+          size: [0.25, 0.45],
+          speed: [0.8, 1.5],
+          colors: [c4(1, 0.65, 0.2), c4(1, 0.3, 0.06), c4(0.3, 0, 0, 0)],
+          emitter: rising(0.35 * body.scale, 1.2 * body.scale, 0.2),
+          gravity: 1.5,
+          grow: 0.3,
+        }, secs);
+      case Effect.TAUNT:
+        return this.all([
+          this.headSigil(body, new Color3(1, 0.3, 0.2), secs, this.tex.star),
+          this.footRing(body, this.tex.ring, new Color3(1, 0.3, 0.2), secs, 1.6),
+        ]);
+      case Effect.SHIELD:
+        return this.bubble(body, new Color3(1, 0.82, 0.35), secs);
+      case Effect.MANA_SHIELD:
+        return this.bubble(body, new Color3(0.4, 0.55, 1), secs, this.tex.runes);
+      case Effect.INVISIBLE:
+        // A transparência do modelo é feita pelo EntityManager; aqui, só a fumaça de entrada.
+        this.burst(body.root.position.add(new Vector3(0, 0.8, 0)), 30, {
+          tex: this.tex.smoke,
+          life: [0.6, 1],
+          size: [0.5, 0.9],
+          speed: [0.5, 1.5],
+          colors: [c4(0.2, 0.12, 0.3, 0.7), c4(0.1, 0.06, 0.15, 0.6), c4(0.05, 0.03, 0.08, 0)],
+          emitter: new CylinderParticleEmitter(0.5, 1.4, 1, 0),
+          additive: false,
+          grow: 0.6,
+        });
+        return null;
+      case Effect.MARK:
+        return this.headSigil(body, new Color3(1, 0.15, 0.15), secs, this.tex.runes);
+      case Effect.UNDYING:
+        return this.all([
+          this.footRing(body, this.tex.runes, new Color3(1, 0.8, 0.3), secs, 2.4, 1),
+          this.stream(feet, 30, {
+            tex: this.tex.flare,
+            life: [0.7, 1.1],
+            size: [0.1, 0.22],
+            speed: [1, 1.8],
+            colors: [c4(1, 0.9, 0.5), c4(1, 0.7, 0.2), c4(0.6, 0.3, 0, 0)],
+            emitter: rising(0.6 * body.scale, 0.1, 0.15),
+          }, secs),
+        ]);
+      case Effect.BLIND:
+        return this.stream(() => (body.head.isDisposed() ? null : body.head.getAbsolutePosition()), 16, {
+          tex: this.tex.smoke,
+          life: [0.6, 1],
+          size: [0.35, 0.6],
+          speed: [0.05, 0.25],
+          colors: [c4(0.12, 0.1, 0.15, 0.7), c4(0.06, 0.05, 0.08, 0.6), c4(0, 0, 0, 0)],
+          emitter: new SphereParticleEmitter(0.3),
+          additive: false,
+          grow: 0.4,
+        }, secs);
+      case Effect.BUFF_ATK_SPEED:
+        return this.stream(chest, 40, {
+          tex: this.tex.spark,
+          life: [0.2, 0.35],
+          size: [0.1, 0.25],
+          speed: [2, 4],
+          colors: [c4(1, 0.5, 0.3), c4(1, 0.2, 0.1), c4(0.5, 0, 0, 0)],
+          emitter: new SphereParticleEmitter(0.6 * body.scale),
+          stretched: true,
+        }, secs);
+      case Effect.WEAKEN:
+        return this.stream(chest, 18, {
+          tex: this.tex.flare,
+          life: [0.7, 1.1],
+          size: [0.1, 0.2],
+          speed: [0.2, 0.6],
+          colors: [c4(0.6, 0.35, 0.8), c4(0.35, 0.15, 0.5), c4(0.1, 0, 0.2, 0)],
+          emitter: rising(0.4 * body.scale, 1.4 * body.scale, 0.2, -0.6),
+          gravity: -1.5,
+        }, secs);
+      case Effect.FROST_ARMOR:
+        return this.all([
+          this.bubble(body, new Color3(0.6, 0.9, 1), secs, this.tex.flake),
+          this.stream(chest, 14, {
+            tex: this.tex.flake,
+            life: [0.6, 1],
+            size: [0.12, 0.22],
+            speed: [0.2, 0.5],
+            colors: [c4(0.9, 0.97, 1), c4(0.7, 0.9, 1), c4(0.5, 0.8, 1, 0)],
+            emitter: new SphereParticleEmitter(0.8 * body.scale),
+            spin: 2,
+          }, secs),
+        ]);
+      case Effect.WAR_CRY:
+        return this.footRing(body, this.tex.ring, new Color3(1, 0.55, 0.2), secs, 1.8, 0.5);
+      case Effect.BANNER:
+        return this.footRing(body, this.tex.runes, new Color3(0.45, 0.7, 1), secs, 1.6, 0.8);
+      case Effect.COURAGE:
+        return this.stream(feet, 6, {
+          tex: this.tex.flare,
+          life: [0.8, 1.2],
+          size: [0.08, 0.14],
+          speed: [0.8, 1.2],
+          colors: [c4(0.5, 1, 0.7), c4(0.3, 0.9, 0.5), c4(0.1, 0.5, 0.2, 0)],
+          emitter: rising(0.5 * body.scale, 0.1, 0.1),
         }, secs);
       default:
         return null;

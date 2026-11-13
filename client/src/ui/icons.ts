@@ -1,4 +1,6 @@
 import { Effect } from "../gen/erevia/v1/game_pb";
+import { skillArt, type SkillTheme } from "./art";
+import { SKILL_THEMES } from "./skill-themes";
 
 /**
  * Ícones originais das skills e dos efeitos, em SVG (64×64), desenhados à mão aqui:
@@ -165,12 +167,38 @@ export function render(t: Theme, id: string): string {
 
 /** SVG do ícone da skill (id do fx). Skills desconhecidas usam um ícone neutro. */
 export function skillIcon(fx: string): string {
-  return render(SKILL_ICONS[fx] ?? SKILL_ICONS.brutal_strike, `sk-${fx || "x"}`);
+  const own = SKILL_ICONS[fx];
+  if (own) return render(own, `sk-${fx || "x"}`);
+  const theme = SKILL_THEMES[fx];
+  return theme ? skillArt(theme) : render(SKILL_ICONS.brutal_strike, `sk-${fx || "x"}`);
 }
+
+/** Ícones dos efeitos novos (Fase B), no mesmo estilo dos glifos da árvore. */
+const EFFECT_THEMES: Partial<Record<Effect, SkillTheme>> = {
+  [Effect.ROOT]: { glyph: "cage", bg: ["#4ab0e8", "#081e34"], accent: "#e0ffff" },
+  [Effect.POISON]: { glyph: "drop", bg: ["#4ab04a", "#0a2a0a"], accent: "#d0ffa0" },
+  [Effect.BURN]: { glyph: "flame", bg: ["#e06a20", "#3a1004"], accent: "#ffb040" },
+  [Effect.TAUNT]: { glyph: "shout", bg: ["#c0583a", "#3a120a"], accent: "#ffc08a" },
+  [Effect.SHIELD]: { glyph: "shield", bg: ["#d0a040", "#3e2a08"], accent: "#fff2c4" },
+  [Effect.MANA_SHIELD]: { glyph: "shield", bg: ["#9a6ae8", "#1e0e40"], accent: "#f0e0ff" },
+  [Effect.INVISIBLE]: { glyph: "mask", bg: ["#5a4ab0", "#100a30"], accent: "#e0d0ff" },
+  [Effect.MARK]: { glyph: "mark", bg: ["#c02a2a", "#2a0606"], accent: "#ffd28a" },
+  [Effect.UNDYING]: { glyph: "hourglass", bg: ["#b02838", "#28040a"], accent: "#ffd0a0" },
+  [Effect.BLIND]: { glyph: "smoke", bg: ["#6a6a90", "#16162a"], accent: "#c0a0ff" },
+  [Effect.BUFF_ATK_SPEED]: { glyph: "bolt", bg: ["#d84a3a", "#3a0a08"], accent: "#ffe08a" },
+  [Effect.WEAKEN]: { glyph: "shout", bg: ["#7a4ab0", "#1e0a30"], accent: "#e0c0ff" },
+  [Effect.FROST_ARMOR]: { glyph: "crystal", bg: ["#6ad0f0", "#0c2a3a"], accent: "#ffffff" },
+  [Effect.PLAGUE]: { glyph: "skull", bg: ["#3a9a3a", "#081e08"], accent: "#c0ff80" },
+  [Effect.WAR_CRY]: { glyph: "shout", bg: ["#4fae8e", "#0e2a22"], accent: "#c0ffe8" },
+  [Effect.BANNER]: { glyph: "banner", bg: ["#3fa88a", "#0a2a20"], accent: "#ffe9a8" },
+  [Effect.COURAGE]: { glyph: "heart", bg: ["#4fb0a0", "#0c2a28"], accent: "#e0fff6" },
+};
 
 export function effectIcon(effect: Effect): string {
   const t = EFFECT_ICONS[effect];
-  return t ? render(t, `ef-${effect}`) : "";
+  if (t) return render(t, `ef-${effect}`);
+  const theme = EFFECT_THEMES[effect];
+  return theme ? skillArt(theme) : "";
 }
 
 /** Nome do efeito para a dica. */
@@ -186,6 +214,40 @@ export function effectName(effect: Effect): string {
       return "Ataque aumentado";
     case Effect.BUFF_SPEED:
       return "Velocidade aumentada";
+    case Effect.ROOT:
+      return "Preso";
+    case Effect.POISON:
+      return "Envenenado";
+    case Effect.BURN:
+      return "Queimando";
+    case Effect.TAUNT:
+      return "Provocado";
+    case Effect.SHIELD:
+      return "Escudo";
+    case Effect.MANA_SHIELD:
+      return "Escudo arcano";
+    case Effect.INVISIBLE:
+      return "Invisível";
+    case Effect.MARK:
+      return "Marcado";
+    case Effect.UNDYING:
+      return "Imortal";
+    case Effect.BLIND:
+      return "Cego";
+    case Effect.BUFF_ATK_SPEED:
+      return "Frenesi";
+    case Effect.WEAKEN:
+      return "Enfraquecido";
+    case Effect.FROST_ARMOR:
+      return "Armadura de gelo";
+    case Effect.PLAGUE:
+      return "Praga";
+    case Effect.WAR_CRY:
+      return "Grito de guerra";
+    case Effect.BANNER:
+      return "Estandarte";
+    case Effect.COURAGE:
+      return "Coragem";
     default:
       return "Efeito";
   }
@@ -206,6 +268,39 @@ export function effectText(effect: Effect, value: number, ms: number): string {
       return `+${pct} de ataque por ${dur}`;
     case Effect.BUFF_SPEED:
       return `+${pct} de velocidade por ${dur}`;
+    case Effect.ROOT:
+      return `Não consegue andar por ${dur}`;
+    case Effect.POISON:
+    case Effect.BURN:
+      return `Perde ${Math.round(value)} de vida por segundo por ${dur}`;
+    case Effect.PLAGUE:
+      return `Perde ${Math.round(value)} de vida por segundo por ${dur}; passa para os vizinhos ao morrer`;
+    case Effect.TAUNT:
+      return `Obrigado a atacar quem provocou por ${dur}`;
+    case Effect.SHIELD:
+      return `Absorve até ${Math.round(value)} de dano por ${dur}`;
+    case Effect.MANA_SHIELD:
+      return `O dano sai da mana por ${dur}`;
+    case Effect.INVISIBLE:
+      return `Os monstros não veem você por ${dur}; o próximo golpe é crítico`;
+    case Effect.MARK:
+      return `Recebe +${pct} de dano por ${dur}`;
+    case Effect.UNDYING:
+      return `A vida não cai abaixo de 1 por ${dur}`;
+    case Effect.BLIND:
+      return `Erra ${pct} mais por ${dur}`;
+    case Effect.BUFF_ATK_SPEED:
+      return `+${pct} de velocidade de ataque por ${dur}`;
+    case Effect.WEAKEN:
+      return `-${pct} de ataque por ${dur}`;
+    case Effect.FROST_ARMOR:
+      return `+${pct} de defesa; quem bate de perto fica lento (${dur})`;
+    case Effect.WAR_CRY:
+      return `+${pct} de ataque por ${dur}`;
+    case Effect.BANNER:
+      return `+${pct} de defesa perto do estandarte`;
+    case Effect.COURAGE:
+      return `Regenera ${Math.round(value)} de vida por segundo`;
     default:
       return "";
   }
@@ -213,7 +308,7 @@ export function effectText(effect: Effect, value: number, ms: number): string {
 
 /** Efeitos ruins (bordas vermelhas). */
 export function isDebuff(effect: Effect): boolean {
-  return effect === Effect.STUN || effect === Effect.SLOW;
+  return [Effect.STUN, Effect.SLOW, Effect.ROOT, Effect.POISON, Effect.BURN, Effect.TAUNT, Effect.MARK, Effect.BLIND, Effect.WEAKEN, Effect.PLAGUE].includes(effect);
 }
 
 export function formatSeconds(ms: number): string {

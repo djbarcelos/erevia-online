@@ -88,6 +88,21 @@ export class Connection {
     this.send({ case: "sell", value: { npcId, slot, count } });
   }
 
+  /** Distribui pontos de atributo (soma aos já gastos). */
+  allocateAttrs(add: { str?: number; dex?: number; con?: number; int?: number; wis?: number; spi?: number }): void {
+    this.send({ case: "allocateAttrs", value: { add } });
+  }
+
+  /** Novos ranks de skills (o servidor confere nível, pontos e o nó de cima). */
+  learnSkills(ranks: { skillId: number; rank: number }[]): void {
+    this.send({ case: "learnSkills", value: { ranks } });
+  }
+
+  /** Barra de atalhos inteira (10 espaços). */
+  setHotbar(slots: string[]): void {
+    this.send({ case: "setHotbar", value: { slots } });
+  }
+
   close(): void {
     this.ws.close();
   }

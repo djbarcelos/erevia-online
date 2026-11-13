@@ -1737,3 +1737,33 @@ button.mm-frame:focus-visible .mm-open {
   color: inherit;
   padding: 0;
 }
+
+/* Pontos livres para gastar (Personagem e Skills) */
+.menu-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #f1d58e, #b78c3c);
+  color: #2a1d07;
+  font-size: 0.66rem;
+  font-weight: 800;
+  box-shadow: 0 0 10px rgba(243, 217, 149, 0.8);
+  animation: badge 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes badge {
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.menu-burger.has-badge {
+  box-shadow: 0 0 0 2px var(--gold-hi), 0 0 14px rgba(243, 217, 149, 0.6);
+}

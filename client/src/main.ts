@@ -1,12 +1,12 @@
 import { api, ApiError, type CharacterInfo } from "./api";
 import { Color3 } from "@babylonjs/core";
-import { EntityKind, ItemKind, SkillTarget, type SelfStats, type ServerMessage, type SkillInfo, type Welcome } from "./gen/erevia/v1/game_pb";
+import { EntityKind, ItemKind, SkillTarget, type Progress, type SelfStats, type ServerMessage, type SkillInfo, type Welcome } from "./gen/erevia/v1/game_pb";
 import { classInfo } from "./classes";
 import { Connection } from "./net/connection";
 import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
-import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type HotbarEntry, type WindowId } from "./ui/hud";
+import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
@@ -151,6 +151,37 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   };
   const me = () => ({ myClass: character.class, myLevel: lastStats?.level ?? character.level ?? 1, name: character.name, emblem });
 
+  // ---------- Progressão: atributos, árvore de skills e barra (vêm do servidor) ----------
+  let progress: Progress | null = welcome.progress ?? null;
+  const progressListeners = new Set<() => void>();
+  const onProgress = (fn: () => void) => {
+    progressListeners.add(fn);
+    return () => progressListeners.delete(fn);
+  };
+  const rankOf = (id: number) => progress?.ranks.find((r) => r.skillId === id)?.rank ?? 0;
+  /**
+   * Skill como ela é agora: valores do rank aprendido, mana com Sobrecarga e recarga
+   * dividida pela velocidade de conjuração (mesma conta do servidor).
+   */
+  const effectiveSkill = (s: SkillInfo): SkillInfo => {
+    const r = Math.max(1, rankOf(s.id));
+    const ri = s.ranks[Math.min(r, s.ranks.length) - 1];
+    if (!ri) return s;
+    const overload = welcome.skills.find((x) => x.fx === "m_over");
+    const mpMult = overload && rankOf(overload.id) > 0 ? 1.1 : 1;
+    const cs = lastStats?.castSpeed || 1;
+    return {
+      ...s,
+      mpCost: Math.round(ri.mpCost * mpMult),
+      cooldownMs: Math.round(ri.cooldownMs / cs),
+      power: ri.power,
+      effectMs: ri.effectMs || s.effectMs,
+      effectValue: ri.effectValue || s.effectValue,
+    };
+  };
+  /** Ativas aprendidas (as que podem ir para a barra e ser usadas). */
+  const learnedActives = () => welcome.skills.filter((s) => !s.passive && rankOf(s.id) > 0).map(effectiveSkill);
+
   // ---------- Itens ----------
   const store = new ItemStore(welcome.itemCatalog);
   store.setInventory(welcome.inventory);
@@ -159,34 +190,25 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId);
   loot.add(welcome.groundItems);
 
-  // ---------- Barra de atalhos (10 teclas), salva neste navegador ----------
-  // Formato: "skill:<id>" ou "item:<id do item>". Padrão: skills nas teclas 1–2, poções nas 3–6
-  // (o mesmo de antes). A barra antiga só de poções (4 espaços) é aproveitada.
-  const hotbarKey = `erevia.hotbar2.${character.id}`;
-  const loadHotbar = (): HotbarEntry[] => {
+  // ---------- Barra de atalhos (10 teclas): salva no servidor ----------
+  // A barra salva no navegador (versão anterior) é enviada uma vez ao servidor e apagada.
+  const migrateLocalHotbar = () => {
+    const key = `erevia.hotbar2.${character.id}`;
     try {
-      const saved = JSON.parse(localStorage.getItem(hotbarKey) ?? "null");
-      if (Array.isArray(saved) && saved.length === HOTBAR_SIZE) return saved;
+      const saved = JSON.parse(localStorage.getItem(key) ?? "null");
+      localStorage.removeItem(key);
+      localStorage.removeItem(`erevia.hotbar.${character.id}`);
+      if (Array.isArray(saved) && saved.length === HOTBAR_SIZE && saved.some((e) => e)) {
+        const valid = saved.map((e: string | null) => {
+          if (!e) return "";
+          if (e.startsWith("skill:")) return rankOf(Number(e.slice(6))) > 0 ? e : "";
+          const info = store.get(e.slice(5));
+          return info && (info.healHp || info.healMp) ? e : "";
+        });
+        conn.setHotbar(valid);
+      }
     } catch {
-      /* sem storage: usa o padrão */
-    }
-    const bar: HotbarEntry[] = Array(HOTBAR_SIZE).fill(null);
-    [...welcome.skills].sort((a, b) => a.key - b.key).forEach((s, i) => (bar[i] = `skill:${s.id}`));
-    let potions: (string | null)[] = ["potion_hp_s", "potion_mp_s", "potion_hp_l", "potion_mp_l"];
-    try {
-      const old = JSON.parse(localStorage.getItem(`erevia.hotbar.${character.id}`) ?? "null");
-      if (Array.isArray(old) && old.length === 4) potions = old;
-    } catch {
-      /* ignora */
-    }
-    potions.forEach((p, i) => (bar[2 + i] = p ? `item:${p}` : null));
-    return bar;
-  };
-  const saveHotbar = (entries: HotbarEntry[]) => {
-    try {
-      localStorage.setItem(hotbarKey, JSON.stringify(entries));
-    } catch {
-      /* ignora */
+      /* sem storage: fica a do servidor */
     }
   };
 
@@ -218,7 +240,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     conn.attack(id);
   };
   const useSkill = (s: SkillInfo) => {
-    if (entities.localDead) return;
+    if (entities.localDead || s.passive || rankOf(s.id) < 1) return;
     if (!hud.isReady(s.id)) return;
     if (!hud.hasMana(s)) {
       chat.system("Mana insuficiente.");
@@ -330,7 +352,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       hud
         .getHotbar()
         .filter((e): e is string => !!e && e.startsWith("skill:"))
-        .map((e) => welcome.skills.find((s) => s.id === Number(e.slice(6))))
+        .map((e) => learnedActives().find((s) => s.id === Number(e.slice(6))))
         .filter((s): s is SkillInfo => !!s),
     skillReady: (s) => hud.isReady(s.id) && hud.hasMana(s),
     useSkill,
@@ -356,11 +378,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   });
 
   // ---------- HUD ----------
-  const hud = new Hud(welcome.skills, store, {
+  const hud = new Hud(learnedActives(), store, {
     onSkill: useSkill,
     onItem: (id) => void useItemById(id),
     onRespawn: () => conn.respawn(),
-    onHotbarChange: saveHotbar,
+    onHotbarChange: (entries) => conn.setHotbar(entries.map((e) => e ?? "")),
     onAuto: (on) => (on ? auto.start() : auto.stop()),
     openWindow: (id: WindowId) => wm.toggle(id),
     onAttack: () => {
@@ -382,7 +404,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     clock: () => clock.phase(),
   });
   hud.setIdentity(character.name, classInfo(character.class).label[0], emblem);
-  hud.setHotbar(loadHotbar());
+  hud.setHotbar(welcome.hotbar?.slots ?? []);
+  migrateLocalHotbar();
+  /** Pontos livres viram uma bolinha nos botões de Personagem e Skills. */
+  const refreshBadges = () =>
+    hud.setBadges({ character: progress?.freeAttrPoints ?? 0, skills: progress?.freeSkillPoints ?? 0 });
+  refreshBadges();
 
   const chat = new Chat(hud.chatRoot, character.name, (text, to) => conn.chat(text, to));
   chat.system(`Bem-vindo a Erevia, ${character.name}! Clique num monstro para atacar; as teclas 1–0 usam a barra de atalhos.`);
@@ -470,15 +497,33 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hotkey: keys().character,
     width: 900,
     height: 600,
-    build: () => buildCharacter({ store, me, stats: () => lastStats, onStats }),
+    build: () =>
+      buildCharacter({
+        store,
+        me,
+        stats: () => lastStats,
+        progress: () => progress,
+        onStats,
+        onProgress,
+        allocate: (add) => conn.allocateAttrs(add),
+      }),
   });
   reg({
     id: "skills",
     title: "Skills",
     hotkey: keys().skills,
-    width: 640,
-    height: 560,
-    build: () => buildSkills({ skills: welcome.skills, toHotbar: (id, i) => toHotbar(`skill:${id}`, i) }),
+    width: 1000,
+    height: 700,
+    build: () =>
+      buildSkills({
+        skills: welcome.skills,
+        branches: welcome.branches,
+        level: () => me().myLevel,
+        progress: () => progress,
+        onProgress,
+        learn: (ranks) => conn.learnSkills(ranks),
+        toHotbar: (id, i) => toHotbar(`skill:${id}`, i),
+      }),
   });
   reg({
     id: "map",
@@ -719,13 +764,24 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           if (targetId) hud.setTarget(entities.info(targetId));
           break;
         }
+        case "progress":
+          progress = msg.msg.value;
+          hud.setSkills(learnedActives());
+          refreshBadges();
+          for (const fn of progressListeners) fn();
+          break;
+        case "hotbar":
+          hud.setHotbar(msg.msg.value.slots);
+          break;
         case "selfStats": {
           const s = msg.msg.value;
+          const castChanged = s.castSpeed !== lastStats?.castSpeed;
           // XP ganha vira um aviso no canto (só subidas; morrer perde um pouco).
           if (lastXp !== null && s.xp > lastXp && s.level === lastStats?.level) hud.lootLine(`+${(s.xp - lastXp).toLocaleString("pt-BR")} XP`, "xp");
           lastXp = s.xp;
           lastStats = s;
           hud.setStats(s);
+          if (castChanged) hud.setSkills(learnedActives());
           for (const fn of statsListeners) fn();
           break;
         }

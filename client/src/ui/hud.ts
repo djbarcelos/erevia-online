@@ -489,6 +489,39 @@ export class Hud {
     return [...this.skills.values()].map((s) => s.info);
   }
 
+  /** Troca os dados das skills (rank novo, velocidade de conjuração) sem perder as recargas. */
+  setSkills(list: SkillInfo[]): void {
+    for (const info of list) {
+      const st = this.skills.get(info.id);
+      if (st) st.info = info;
+      else this.skills.set(info.id, { info, readyAt: 0, span: 1 });
+    }
+    // O ícone não muda; força o redesenho das dicas e estados.
+    this.slotEls.forEach((s) => (s.entry = undefined));
+    this.touchSlots.forEach((s) => (s.entry = undefined));
+    this.renderSlots();
+  }
+
+  /** Bolinha com pontos livres nos botões de Personagem e Skills. */
+  setBadges(badges: Partial<Record<WindowId, number>>): void {
+    for (const [id, n] of Object.entries(badges) as [WindowId, number][]) {
+      const b = this.menuBtns.get(id);
+      if (!b) continue;
+      let dot = b.querySelector<HTMLElement>(".menu-badge");
+      if (!n) {
+        dot?.remove();
+        continue;
+      }
+      if (!dot) {
+        dot = el("span", "menu-badge");
+        b.append(dot);
+      }
+      dot.textContent = String(n);
+    }
+    const total = Object.values(badges).reduce((a, b) => a + (b ?? 0), 0);
+    this.root.querySelector(".menu-burger")?.classList.toggle("has-badge", total > 0);
+  }
+
   setTarget(info: EntityInfo | undefined): void {
     if (!info) {
       this.target.hidden = true;

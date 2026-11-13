@@ -210,6 +210,10 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 
 	switch s.Target {
 	case game.TargetEnemy:
+		if s.Mult.At(rank) <= 0 {
+			// Sem golpe não há CombatEvent: o cast leva o alvo para o cliente animar.
+			z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID, TargetId: target.id})
+		}
 		z.skillHit(src, target, s, rank)
 		if s.Splash > 0 {
 			for _, m := range z.monsters {
