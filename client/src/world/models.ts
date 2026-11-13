@@ -336,7 +336,7 @@ export class CharacterModels {
       doNotInstantiate: true,
       predicate: (e: unknown) => !(e instanceof TransformNode && e.name.startsWith("Head_") && e !== srcHead),
     });
-    const gltfRoot = entries.rootNodes[0] as TransformNode;
+    const gltfRoot = asNode(entries.rootNodes[0] as TransformNode);
 
     const root = new TransformNode(`model#${id}`, gltfRoot.getScene());
     gltfRoot.parent = root;
@@ -521,6 +521,23 @@ function buildSitPose(idle: AnimationGroup, death: AnimationGroup, scene: Scene)
   }
   g.stop();
   return g;
+}
+
+/**
+ * O __root__ do glTF é uma malha vazia que só converte o sistema de coordenadas. Como malha
+ * ela entra na escolha das malhas ativas a cada quadro (uma por personagem); como nó, não.
+ */
+function asNode(gltfRoot: TransformNode): TransformNode {
+  if (!(gltfRoot instanceof AbstractMesh) || gltfRoot.getTotalVertices() > 0) return gltfRoot;
+  const node = new TransformNode(gltfRoot.name, gltfRoot.getScene());
+  node.position.copyFrom(gltfRoot.position);
+  node.rotation.copyFrom(gltfRoot.rotation);
+  node.rotationQuaternion = gltfRoot.rotationQuaternion?.clone() ?? null;
+  node.scaling.copyFrom(gltfRoot.scaling);
+  node.parent = gltfRoot.parent;
+  for (const c of gltfRoot.getChildren()) (c as TransformNode).parent = node;
+  gltfRoot.dispose(true);
+  return node;
 }
 
 /** Escala que deixa o modelo com TARGET_HEIGHT de altura (com a cabeça da própria classe). */
