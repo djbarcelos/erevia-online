@@ -41,6 +41,7 @@ type Character struct {
 	Ranks  map[uint32]int
 	Hotbar []string
 	Emblem string
+	Look   game.Appearance
 	// Fase 4
 	AccountID  int64
 	Karma      int
@@ -115,7 +116,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.zone.Join(ctx, zone.JoinInfo{
 		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z,
 		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
-		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem,
+		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem, Look: char.Look,
 		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills,
 		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage, Peer: sess,
 	})
@@ -209,6 +210,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.ItemAction(ctx, id, m.StorageGold)
 		case *pb.ClientMessage_Enchant:
 			s.zone.ItemAction(ctx, id, m.Enchant)
+		case *pb.ClientMessage_ChangeLook:
+			s.zone.ItemAction(ctx, id, m.ChangeLook)
 		case *pb.ClientMessage_PartyCmd:
 			s.zone.Social(ctx, id, m.PartyCmd)
 		case *pb.ClientMessage_ClanCmd:

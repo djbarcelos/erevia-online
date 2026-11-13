@@ -35,7 +35,7 @@ const (
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
 		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
-		"karma, pk_count, pvp_kills, clan_left_at"
+		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat"
 )
 
 var (
@@ -75,6 +75,8 @@ type Character struct {
 	Emblem    string            `json:"emblem"` // sempre preenchido (padrão da classe se vazio no banco)
 	// Look: o que o personagem tem nas mãos agora (para a tela de seleção).
 	Look       CharacterLook `json:"look"`
+	// Appearance: visual do corpo (pele, cabelo, roupa, rosto e chapéu).
+	Appearance game.Appearance `json:"appearance"`
 	Karma      int           `json:"-"`
 	PKs        int           `json:"-"`
 	PvPKills   int           `json:"-"`
@@ -114,6 +116,7 @@ type CharacterState struct {
 	Karma       int
 	PKs         int
 	PvPKills    int
+	Appearance  game.Appearance
 	Seq         int64 // salvamento mais velho que o gravado é ignorado
 	// Storage (opcional): o armazém da conta mudou e vai junto, na mesma transação.
 	Storage *StorageState
@@ -311,6 +314,7 @@ func (s *Store) CreateCharacter(ctx context.Context, accountID int64, name, clas
 	r := mrand.Float64() * spawnRadius
 	x, z := r*math.Cos(angle), r*math.Sin(angle)
 
+	ap := game.NormalAppearance(class, look.Appearance)
 	var c Character
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		// Trava a linha da conta para o limite de personagens valer com pedidos simultâneos.
@@ -325,8 +329,10 @@ func (s *Store) CreateCharacter(ctx context.Context, accountID int64, name, clas
 			return ErrTooManyCharacters
 		}
 		rows, err := tx.Query(ctx, `
-			INSERT INTO characters (account_id, name, class, x, z, emblem) VALUES ($1, $2, $3, $4, $5, $6)
-			RETURNING `+characterCols, accountID, name, class, x, z, look.Emblem)
+			INSERT INTO characters (account_id, name, class, x, z, emblem, skin, hair, outfit, head, hide_hat)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			RETURNING `+characterCols, accountID, name, class, x, z, look.Emblem,
+			ap.Skin, ap.Hair, ap.Outfit, ap.Head, ap.HideHat)
 		if err != nil {
 			return err
 		}
@@ -460,11 +466,13 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 			batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, gold = $8,
 				save_seq = GREATEST(save_seq, $9::bigint), last_seen_at = now(),
 				attr_str = $10, attr_dex = $11, attr_con = $12, attr_int = $13, attr_wis = $14, attr_spi = $15,
-				skill_ranks = $16, hotbar = $17, karma = $18, pk_count = $19, pvp_kills = $20
+				skill_ranks = $16, hotbar = $17, karma = $18, pk_count = $19, pvp_kills = $20,
+				skin = $21, hair = $22, outfit = $23, head = $24, hide_hat = $25
 				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
 				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq,
 				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar,
-				max(c.Karma, 0), max(c.PKs, 0), max(c.PvPKills, 0))
+				max(c.Karma, 0), max(c.PKs, 0), max(c.PvPKills, 0),
+				c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit, c.Appearance.Head, c.Appearance.HideHat)
 		}
 		br := tx.SendBatch(ctx, batch)
 		var ids []int64
@@ -550,13 +558,18 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var x, z float32
 	var ranks, hotbar []byte
 	var a [6]int16
+	var skin, hair, outfit int16
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
 		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
-		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt)
+		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat)
 	if err != nil {
 		return c, err
 	}
 	c.Emblem = game.EmblemOr(c.Class, c.Emblem)
+	c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit = int(skin), int(hair), int(outfit)
+	if !game.ValidAppearance(c.Appearance) { // paleta encolheu: volta ao original
+		c.Appearance = game.Appearance{}
+	}
 	c.X, c.Z = float64(x), float64(z)
 	c.Attrs = game.Attrs{Str: int(a[0]), Dex: int(a[1]), Con: int(a[2]), Int: int(a[3]), Wis: int(a[4]), Spi: int(a[5])}
 	c.Ranks, c.Hotbar, err = parseProgress(ranks, hotbar)

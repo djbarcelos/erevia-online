@@ -206,3 +206,37 @@ func TestRollLoot(t *testing.T) {
 		t.Fatalf("boss drops = %+v", drops)
 	}
 }
+
+func TestAppearance(t *testing.T) {
+	good := []Appearance{
+		{},
+		{Skin: len(SkinTones), Hair: len(HairColors), Outfit: len(OutfitColors), Head: "ranger", HideHat: true},
+		{Skin: 1, Hair: 1, Outfit: 1, Head: "knight"},
+	}
+	for _, a := range good {
+		if !ValidAppearance(a) || !ValidLook("knight", Look{Weapon: "sword_common", Offhand: "", Emblem: Emblems[0], Appearance: a}) {
+			t.Errorf("rejected %+v", a)
+		}
+	}
+	bad := []Appearance{
+		{Skin: -1}, {Skin: len(SkinTones) + 1}, {Hair: len(HairColors) + 1}, {Outfit: len(OutfitColors) + 1},
+		{Outfit: -2}, {Head: "skeleton_mage"}, {Head: "Knight"},
+	}
+	for _, a := range bad {
+		if ValidAppearance(a) {
+			t.Errorf("accepted %+v", a)
+		}
+	}
+	// A cabeça da própria classe vira "" e quem não tem chapéu não o esconde.
+	if n := NormalAppearance("mage", Appearance{Head: "mage", HideHat: true}); n != (Appearance{HideHat: true}) {
+		t.Errorf("mage: %+v", n)
+	}
+	if n := NormalAppearance("rogue", Appearance{Head: "knight", HideHat: true}); n != (Appearance{Head: "knight"}) {
+		t.Errorf("rogue: %+v", n)
+	}
+	for c := range Classes {
+		if HatClasses[c] == (c == "rogue") {
+			t.Errorf("%s: hat %v", c, HatClasses[c])
+		}
+	}
+}

@@ -329,10 +329,19 @@ var creationOptions = func() map[string]any {
 		}
 		classes[c] = cc
 	}
-	return map[string]any{"classes": classes, "emblems": game.Emblems}
+	hats := []string{}
+	for c := range game.HatClasses {
+		hats = append(hats, c)
+	}
+	return map[string]any{
+		"classes": classes, "emblems": game.Emblems,
+		// Visual do corpo: índice 0 = original da classe, i = lista[i-1].
+		"skins": game.SkinTones, "hairs": game.HairColors, "outfits": game.OutfitColors,
+		"heads": game.Heads, "hatClasses": hats, "barberPrice": game.BarberPrice,
+	}
 }()
 
-// handleCreation: opções de aparência de cada classe (armas iniciais, escudos e cores).
+// handleCreation: opções de aparência (armas iniciais, escudos, cores e visual do corpo).
 func (a *API) handleCreation(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, creationOptions)
 }

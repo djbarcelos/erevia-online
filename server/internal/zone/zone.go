@@ -76,6 +76,7 @@ type JoinInfo struct {
 	Ranks  map[uint32]int
 	Hotbar []string
 	Emblem string // cor do emblema ("" = padrão da classe)
+	Look   game.Appearance
 	// Fase 4: conta (armazém) e PvP.
 	AccountID int64
 	Karma     int
@@ -103,6 +104,7 @@ type SavedState struct {
 	Karma    int
 	PKs      int
 	PvPKills int
+	Look     game.Appearance
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -376,6 +378,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.X, info.Z, info.XP, info.HP, info.MP, info.Gold, info.Items = st.X, st.Z, st.XP, st.HP, st.MP, st.Gold, st.Items
 		info.Attrs, info.Ranks, info.Hotbar = st.Attrs, st.Ranks, st.Hotbar
 		info.Karma, info.PKs, info.PvPKills = st.Karma, st.PKs, st.PvPKills
+		info.Look = st.Look
 		delete(z.recent, info.ID)
 	}
 
@@ -393,6 +396,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		lastCombat: -math.MaxFloat64 / 2,
 		pl: &playerState{
 			peer: info.Peer, class: info.Class, xp: info.XP, emblem: game.EmblemOr(info.Class, info.Emblem),
+			look:       game.NormalAppearance(info.Class, info.Look),
 			cooldowns:  map[uint32]float64{},
 			moveTokens: z.cfg.MaxMovesPerSec, chatTokens: z.cfg.ChatBurst,
 			inv:   inv,
@@ -698,7 +702,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: int(math.Floor(p.mp)),
 		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),
 		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
-		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills,
+		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Storage: z.storageSave(p),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
@@ -801,12 +805,16 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		w, o, g := e.pl.inv.look()
 		out.Weapon, out.Offhand, out.WeaponGrade = w, o, uint32(g)
 		out.Emblem = e.pl.emblem
+		out.Look = lookPB(e.pl.look)
 		out.WeaponEnchant = uint32(e.pl.inv.weaponEnchant())
 		out.PvpState = z.pvpState(e)
 		out.ClanName = z.clanName(e)
 	}
 	if e.npc != nil {
 		out.Title = e.npc.title
+		if e.npc.look != nil {
+			out.Look = lookPB(*e.npc.look)
+		}
 	}
 	if e.obj != nil {
 		out.Title = "Estandarte"

@@ -106,6 +106,9 @@ func TestLoginAndCharacters(t *testing.T) {
 		{`{"name":"Valido","class":"mage","look":{"weapon":"staff_common","offhand":"shield_badge","emblem":"#8c6fd6"}}`, http.StatusBadRequest},
 		{`{"name":"Valido","class":"rogue","look":{"weapon":"daggers_common","offhand":"","emblem":"#123456"}}`, http.StatusBadRequest},
 		{`{"name":"Valido","class":"rogue","look":{"weapon":"daggers_common","offhand":"","emblem":"#d04050","x":1}}`, http.StatusBadRequest},
+		// Visual do corpo fora das paletas.
+		{`{"name":"Valido","class":"rogue","look":{"weapon":"daggers_common","offhand":"","emblem":"#d04050","skin":99}}`, http.StatusBadRequest},
+		{`{"name":"Valido","class":"rogue","look":{"weapon":"daggers_common","offhand":"","emblem":"#d04050","head":"dragon"}}`, http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		if code := c.do("POST", "/api/characters", tc.body, &errBody); code != tc.code {
@@ -113,14 +116,22 @@ func TestLoginAndCharacters(t *testing.T) {
 		}
 	}
 
-	var beto struct {
-		Emblem string
-		Look   struct{ Right, Left string }
+	type appearance struct {
+		Skin, Hair, Outfit int
+		Head               string
+		HideHat            bool
 	}
-	if code := c.do("POST", "/api/characters", `{"name":"Beto","class":"rogue","look":{"weapon":"daggers_mixed_common","offhand":"","emblem":"#d04050"}}`, &beto); code != http.StatusCreated {
+	var beto struct {
+		Emblem     string
+		Look       struct{ Right, Left string }
+		Appearance appearance
+	}
+	if code := c.do("POST", "/api/characters", `{"name":"Beto","class":"rogue","look":{"weapon":"daggers_mixed_common","offhand":"","emblem":"#d04050","skin":3,"hair":2,"outfit":5,"head":"mage","hideHat":true}}`, &beto); code != http.StatusCreated {
 		t.Fatalf("create with look = %d", code)
 	}
-	if beto.Emblem != "#d04050" || beto.Look.Right != "dagger" || beto.Look.Left != "skeleton_blade" {
+	// O ladino não tem chapéu: esconder é ignorado.
+	if beto.Emblem != "#d04050" || beto.Look.Right != "dagger" || beto.Look.Left != "skeleton_blade" ||
+		beto.Appearance != (appearance{Skin: 3, Hair: 2, Outfit: 5, Head: "mage"}) {
 		t.Fatalf("created with look = %+v", beto)
 	}
 	c.do("POST", "/api/characters", `{"name":"Caio","class":"barbarian"}`, nil)
@@ -130,9 +141,10 @@ func TestLoginAndCharacters(t *testing.T) {
 
 	var list struct {
 		Characters []struct {
-			Name   string
-			Emblem string
-			Look   struct{ Right, Left string }
+			Name       string
+			Emblem     string
+			Look       struct{ Right, Left string }
+			Appearance appearance
 		}
 		Max int
 	}
@@ -144,7 +156,10 @@ func TestLoginAndCharacters(t *testing.T) {
 	if a := list.Characters[0]; a.Name != "Aria" || a.Emblem != "#8c6fd6" || a.Look.Right != "staff" {
 		t.Fatalf("list[0] = %+v", a)
 	}
-	if b := list.Characters[1]; b.Look.Left != "skeleton_blade" || b.Emblem != "#d04050" {
+	if a := list.Characters[0]; a.Appearance != (appearance{}) {
+		t.Fatalf("list[0] appearance = %+v", a.Appearance)
+	}
+	if b := list.Characters[1]; b.Look.Left != "skeleton_blade" || b.Emblem != "#d04050" || b.Appearance.Head != "mage" || b.Appearance.Outfit != 5 {
 		t.Fatalf("list[1] = %+v", b)
 	}
 

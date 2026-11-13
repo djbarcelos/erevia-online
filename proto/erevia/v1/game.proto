@@ -32,7 +32,23 @@ message ClientMessage {
     Enchant enchant = 22;
     StorageMove storage_move = 23;
     StorageGold storage_gold = 24;
+    ChangeLook change_look = 25;
   }
+}
+
+// Visual do corpo. O valor zero é o visual original da classe.
+message BodyLook {
+  uint32 skin = 1; // 0 = original; i = paleta de pele [i-1]
+  uint32 hair = 2; // 0 = original; i = paleta de cabelo [i-1]
+  uint32 outfit = 3; // 0 = original; i = paleta de roupa [i-1]
+  string head = 4; // "" = a cabeça da classe; senão knight, barbarian, mage, rogue ou ranger
+  bool hide_hat = 5; // esconde elmo/gorro/chapéu
+}
+
+// Barbeiro: muda o visual (custa moedas).
+message ChangeLook {
+  uint32 npc_id = 1;
+  BodyLook look = 2;
 }
 
 // ---------- Fase 4: grupo, clã, teleporte, encantamento e armazém ----------
@@ -384,6 +400,7 @@ enum NpcRole {
   NPC_ROLE_SHOP = 0;
   NPC_ROLE_TELEPORT = 1;
   NPC_ROLE_STORAGE = 2;
+  NPC_ROLE_BARBER = 3;
 }
 
 // Atributos e skills aprendidas do jogador.
@@ -579,6 +596,7 @@ message Appearance {
   string offhand = 3;
   uint32 weapon_grade = 4;
   uint32 weapon_enchant = 5;
+  BodyLook look = 6;
 }
 
 // ---------- Tipos ----------
@@ -713,6 +731,7 @@ message Entity {
   PvpState pvp_state = 21;
   string clan_name = 22;
   uint32 weapon_enchant = 23;
+  BodyLook look = 24; // jogadores: visual do corpo
 }
 
 message EntityState {

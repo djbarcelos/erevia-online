@@ -17,18 +17,24 @@ type npcState struct {
 	role  pb.NpcRole
 	stock []*game.ItemDef
 	stone int // pedra de teleporte: índice em teleportStones (role TELEPORT)
+	look  *game.Appearance // NPC com modelo de herói: o visual dele
 }
 
 type npcDef struct {
 	name, title, model string
 	x, z               float64
 	stock              []string
+	role               pb.NpcRole
+	look               *game.Appearance
 }
 
 // townNPCs: comerciantes da praça, ao lado das tendas e do suporte de armas.
 var townNPCs = []npcDef{
 	{name: "Lívia", title: "Mercadora", model: "npc_merchant", x: 4.6, z: -4.4, stock: game.MerchantStock},
 	{name: "Bruno", title: "Ferreiro", model: "npc_smith", x: -7.4, z: -4.4, stock: game.SmithStock},
+	// Barbeiro: ao norte do poço. Um herói com o próprio visual trocado, para mostrar o serviço.
+	{name: "Teodoro", title: "Barbeiro", model: "rogue", x: 0, z: 9.5, role: pb.NpcRole_NPC_ROLE_BARBER,
+		look: &game.Appearance{Skin: 4, Hair: 5, Outfit: 4, Head: "mage"}},
 }
 
 func (z *Zone) spawnNPCs() {
@@ -38,7 +44,7 @@ func (z *Zone) spawnNPCs() {
 			id: npcIDBase + uint32(i), kind: pb.EntityKind_ENTITY_KIND_NPC,
 			name: d.name, model: d.model, level: 1, scale: 1,
 			pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
-			npc: &npcState{title: d.title},
+			npc: &npcState{title: d.title, role: d.role, look: d.look},
 		}
 		for _, id := range d.stock {
 			if def := game.Items[id]; def != nil {

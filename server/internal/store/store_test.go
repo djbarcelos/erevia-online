@@ -102,13 +102,18 @@ func TestStarterKitItemsAndSaveOrder(t *testing.T) {
 	ctx := context.Background()
 	acc, _ := s.LoginIdentity(ctx, "dev", "k", "k")
 	// Aparência escolhida: lâmina curva, sem escudo na mão (vai para a bolsa), emblema azul.
-	look := game.Look{Weapon: "blade_common", Offhand: "", Emblem: "#4f9dff"}
+	look := game.Look{Weapon: "blade_common", Offhand: "", Emblem: "#4f9dff",
+		Appearance: game.Appearance{Skin: 2, Hair: 4, Outfit: 1, Head: "knight", HideHat: true}}
 	c, err := s.CreateCharacter(ctx, acc, "Kit", "knight", look)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.Emblem != "#4f9dff" || c.Look.Right != "skeleton_blade" || c.Look.Left != "" || c.Gold != game.StarterGold {
 		t.Fatalf("created = %+v", c)
+	}
+	// A cabeça da própria classe é guardada como "" (o padrão).
+	if c.Appearance != (game.Appearance{Skin: 2, Hair: 4, Outfit: 1, HideHat: true}) {
+		t.Fatalf("created appearance = %+v", c.Appearance)
 	}
 
 	// O kit é entregue na criação, uma vez só.
@@ -137,7 +142,9 @@ func TestStarterKitItemsAndSaveOrder(t *testing.T) {
 		{Equipped: true, Slot: game.SlotWeapon, ItemID: "sword_good", Count: 1},
 		{Slot: 3, ItemID: "bone_old", Count: 42},
 	}
-	newer := store.CharacterState{CharacterID: c.ID, Level: 2, XP: 200, HP: -1, MP: -1, Gold: 777, Items: items, Seq: 1794527065649061000} // nanossegundos, como a zona usa
+	barber := game.Appearance{Skin: 6, Hair: 8, Outfit: 3, Head: "ranger"}
+	newer := store.CharacterState{CharacterID: c.ID, Level: 2, XP: 200, HP: -1, MP: -1, Gold: 777, Items: items,
+		Appearance: barber, Seq: 1794527065649061000} // nanossegundos, como a zona usa
 	older := store.CharacterState{CharacterID: c.ID, Level: 1, XP: 100, HP: -1, MP: -1, Gold: 1, Seq: 1794527065649060000}
 	if err := s.SaveStates(ctx, []store.CharacterState{newer}); err != nil {
 		t.Fatal(err)
@@ -147,7 +154,7 @@ func TestStarterKitItemsAndSaveOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, _ = s.CharacterForAccount(ctx, acc, c.ID)
-	if got.Gold != 777 || got.XP != 200 || len(got.Items) != 2 {
+	if got.Gold != 777 || got.XP != 200 || len(got.Items) != 2 || got.Appearance != barber {
 		t.Fatalf("after saves: %+v", got)
 	}
 	if got.Items[0] != items[0] || got.Items[1] != items[1] {

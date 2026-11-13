@@ -54,6 +54,8 @@ func (z *Zone) onItem(e itemEvent) {
 		z.storageGold(p, m.NpcId, m.Amount)
 	case *pb.Enchant:
 		z.enchant(p, int(m.ScrollSlot), int(m.Place), int(m.Slot))
+	case *pb.ChangeLook:
+		z.changeLook(p, m.NpcId, m.Look)
 	}
 }
 
@@ -61,10 +63,7 @@ func (z *Zone) onItem(e itemEvent) {
 func (z *Zone) inventoryChanged(p *entity, gearChanged bool) {
 	if gearChanged {
 		z.refreshStats(p)
-		w, o, g := p.pl.inv.look()
-		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Appearance{Appearance: &pb.Appearance{
-			Id: p.id, Weapon: w, Offhand: o, WeaponGrade: uint32(g), WeaponEnchant: uint32(p.pl.inv.weaponEnchant()),
-		}}}, 0)
+		z.broadcast(appearancePB(p), 0)
 	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Inventory{Inventory: inventoryPB(&p.pl.inv)}})
 	z.saveSoon(p)
