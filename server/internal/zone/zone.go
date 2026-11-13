@@ -263,6 +263,8 @@ type Zone struct {
 	xp2          xp2State
 	eventBackend EventBackend
 	eventJobs    chan EventData
+
+	paths []*entity // fila de caminhos longos (ver pathqueue.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -626,7 +628,7 @@ func (z *Zone) onMove(e moveEvent) {
 	if p.stunned(z.now) {
 		return
 	}
-	z.goTo(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.bounds()))
+	z.requestPath(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.bounds()))
 }
 
 // onStop para o andar livre. Não gasta token (parar não é abusável, e perder o pedido
@@ -636,6 +638,7 @@ func (z *Zone) onStop(e stopEvent) {
 	if !ok || p.dead || p.act.kind != actNone {
 		return
 	}
+	p.pl.pathGoal = nil
 	p.stopMoving()
 }
 
@@ -737,6 +740,7 @@ func (z *Zone) update(dt float64) {
 	z.tick++
 	z.now += dt
 	z.updateDaytime()
+	z.updatePaths()
 
 	if z.now >= z.nextAura {
 		z.nextAura = z.now + auraEvery

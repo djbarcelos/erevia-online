@@ -234,6 +234,11 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
             "A missão rastreada (clique no painel Missões) aparece no minimapa e no mapa, com a seta na borda da tela.",
           ),
           row(
+            "Continuar andando se atacado",
+            toggle(s.goKeepIfHit, set("goKeepIfHit"), "Continuar andando se atacado"),
+            "O botão Ir das missões para quando você leva dano. Ligado, ele segue até o lugar.",
+          ),
+          row(
             "Idioma",
             select(
               [
