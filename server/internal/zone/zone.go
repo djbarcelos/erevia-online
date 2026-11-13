@@ -193,7 +193,7 @@ type frame struct {
 	levelUps []*pb.LevelUp
 	ends     []*pb.EffectEnd
 	casts    []*pb.SkillCast
-	// Avisos no chão do raid boss (começo, golpe e cancelamento).
+	// Avisos no chão das habilidades de monstro (começo, golpe e cancelamento).
 	telegraphs []*pb.Telegraph
 }
 

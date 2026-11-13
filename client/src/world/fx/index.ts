@@ -1481,58 +1481,8 @@ export class Fx {
   // Raid boss
   // ------------------------------------------------------------------------------------
 
-  /**
-   * Aviso no chão: círculo com borda pulsando e um disco que se enche até o golpe cair.
-   * follow (Marca da Morte) faz o círculo andar junto com o marcado.
-   */
-  telegraph(at: Vector3, radius: number, ms: number, color: Color3, follow?: () => Vector3 | null): FxHandle {
-    const holder = new TransformNode("fx-telegraph", this.scene);
-    holder.position.set(at.x, 0.07, at.z);
-    const disc = (name: string, alpha: number, additive: boolean) => {
-      const d = MeshBuilder.CreateDisc(name, { radius: 1, tessellation: 48 }, this.scene);
-      d.rotation.x = Math.PI / 2;
-      d.material = this.mat(color, null, additive, alpha);
-      d.isPickable = false;
-      d.parent = holder;
-      return d;
-    };
-    const base = disc("fx-tg-base", 0.18, false);
-    base.scaling.setAll(radius);
-    const fill = disc("fx-tg-fill", 0.32, false);
-    fill.position.y = 0.01;
-    const ring = MeshBuilder.CreateGround("fx-tg-ring", { width: 1, height: 1 }, this.scene);
-    ring.material = this.mat(color, this.tex.ring, true);
-    ring.isPickable = false;
-    ring.parent = holder;
-    ring.position.y = 0.02;
-    ring.scaling.set(radius * 2.15, 1, radius * 2.15);
-    const runes = MeshBuilder.CreateGround("fx-tg-runes", { width: 1, height: 1 }, this.scene);
-    runes.material = this.mat(color, this.tex.runes, true, 0.6);
-    runes.isPickable = false;
-    runes.parent = holder;
-    runes.position.y = 0.03;
-    runes.scaling.set(radius * 1.6, 1, radius * 1.6);
-    const secs = ms / 1000;
-    let stopped = false;
-    this.run(
-      (t, dt) => {
-        if (follow) {
-          const p = follow();
-          if (p) holder.position.set(p.x, 0.07, p.z);
-        }
-        const k = Math.min(1, t / Math.max(0.05, secs));
-        fill.scaling.setAll(Math.max(0.01, radius * k));
-        const pulse = 0.75 + 0.25 * Math.sin(t * (6 + 10 * k));
-        ring.visibility = pulse;
-        base.visibility = Math.min(1, t / 0.15);
-        runes.rotation.y += dt * (0.6 + 2 * k);
-        // Segura um instante depois do fim: o impacto chega no mesmo snapshot.
-        return !stopped && t < secs + 0.25;
-      },
-      () => holder.dispose(false, true),
-    );
-    return { stop: () => (stopped = true) };
-  }
+  // O aviso no chão (círculo, cone, linha e anel) fica em ground-warnings.ts: um pool fixo
+  // de quadrados com a forma no shader, sem malha nova por aviso.
 
   /** O golpe do aviso caiu: ossos explodindo do chão (Onda/Chuva) ou a marca estourando. */
   telegraphImpact(at: Vector3, radius: number, color: Color3, kind: "wave" | "rain" | "mark", mine: boolean): void {
