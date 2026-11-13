@@ -128,6 +128,18 @@ func run(log *slog.Logger) error {
 	z.SetBossBackend(bossStore{st})
 	z.SetModBackend(modStore{st})
 	z.SetEventSink(eventStore{st})
+
+	// Conta apagada: o banco já apagou tudo; a zona derruba quem estiver online e acerta os
+	// clãs em memória do jeito que o banco deixou.
+	httpAPI.OnAccountDeleted(func(d store.DeletedAccount) {
+		g := zone.AccountGone{AccountID: d.AccountID, Characters: d.Characters}
+		for _, c := range d.Clans {
+			g.Clans = append(g.Clans, zone.ClanSuccession{ClanID: c.ClanID, LeaderID: c.LeaderID})
+		}
+		pctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		z.AccountDeleted(pctx, g)
+		cancel()
+	})
 	zoneDone := make(chan struct{})
 	go func() { z.Run(ctx); close(zoneDone) }()
 

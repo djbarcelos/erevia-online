@@ -7,10 +7,13 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"erevia/server/internal/api"
+	"erevia/server/internal/store"
 	"erevia/server/internal/store/storetest"
 )
 
@@ -274,5 +277,100 @@ func TestOAuthLoginRedirectsWithPKCE(t *testing.T) {
 		if c.Name == api.SessionCookie && c.Value != "" {
 			t.Fatal("session must not be created on bad state")
 		}
+	}
+}
+
+func TestDeleteAccount(t *testing.T) {
+	st := storetest.New(t)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	a := api.New(st, api.Config{PublicURL: "http://example.test", DevLogin: true}, log)
+	var mu sync.Mutex // o handler roda em outra goroutine
+	var deleted []store.DeletedAccount
+	a.OnAccountDeleted(func(d store.DeletedAccount) { mu.Lock(); deleted = append(deleted, d); mu.Unlock() })
+	notified := func() []store.DeletedAccount { mu.Lock(); defer mu.Unlock(); return slices.Clone(deleted) }
+	mux := http.NewServeMux()
+	a.Register(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	newClient := func() *client {
+		jar, _ := cookiejar.New(nil)
+		return &client{t: t, base: srv.URL, http: &http.Client{Jar: jar}}
+	}
+
+	// Sem sessão: 401.
+	anon := newClient()
+	if code := anon.do("DELETE", "/api/account", `{"confirm":"APAGAR"}`, nil); code != http.StatusUnauthorized {
+		t.Fatalf("delete without session = %d, want 401", code)
+	}
+
+	c := newClient()
+	c.do("POST", "/api/auth/dev", `{"username":"Ana"}`, nil)
+	var created struct{ ID int64 }
+	if code := c.do("POST", "/api/characters", `{"name":"Aria","class":"mage"}`, &created); code != http.StatusCreated {
+		t.Fatalf("create = %d", code)
+	}
+	bob := newClient()
+	bob.do("POST", "/api/auth/dev", `{"username":"Bob"}`, nil)
+	bob.do("POST", "/api/characters", `{"name":"Bobo","class":"knight"}`, nil)
+
+	// Sem a confirmação certa, nada acontece.
+	for _, body := range []string{`{}`, `{"confirm":"apagar"}`, `{"confirm":"SIM"}`, `{"confirm":"APAGAR","x":1}`} {
+		if code := c.do("DELETE", "/api/account", body, nil); code != http.StatusBadRequest {
+			t.Errorf("%s → %d, want 400", body, code)
+		}
+	}
+	// Formulário (sem preflight) e outra origem são recusados, como nos outros pedidos de escrita.
+	req, _ := http.NewRequest("DELETE", srv.URL+"/api/account", strings.NewReader("confirm=APAGAR"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if resp, _ := c.http.Do(req); resp.StatusCode != http.StatusUnsupportedMediaType {
+		t.Fatalf("form delete = %d", resp.StatusCode)
+	}
+	req, _ = http.NewRequest("DELETE", srv.URL+"/api/account", strings.NewReader(`{"confirm":"APAGAR"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://site-malicioso.example")
+	if resp, _ := c.http.Do(req); resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("cross-origin delete = %d", resp.StatusCode)
+	}
+	if deleted := notified(); len(deleted) != 0 {
+		t.Fatalf("deleted before confirming: %+v", deleted)
+	}
+	if code := c.do("GET", "/api/me", "", nil); code != http.StatusOK {
+		t.Fatalf("/me before delete = %d", code)
+	}
+
+	// Confirmado: apaga, avisa a zona com os personagens e derruba a sessão (e o cookie).
+	req, _ = http.NewRequest("DELETE", srv.URL+"/api/account", strings.NewReader(`{"confirm":"APAGAR"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("delete = %v %v", resp, err)
+	}
+	cleared := false
+	for _, ck := range resp.Cookies() {
+		if ck.Name == api.SessionCookie && ck.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Fatal("session cookie not cleared")
+	}
+	if deleted := notified(); len(deleted) != 1 || len(deleted[0].Characters) != 1 || deleted[0].Characters[0] != created.ID {
+		t.Fatalf("zone notified with %+v", deleted)
+	}
+	if code := c.do("GET", "/api/me", "", nil); code != http.StatusUnauthorized {
+		t.Fatalf("/me after delete = %d", code)
+	}
+	if code := c.do("DELETE", "/api/account", `{"confirm":"APAGAR"}`, nil); code != http.StatusUnauthorized {
+		t.Fatalf("second delete = %d", code)
+	}
+
+	// Bob não foi afetado; entrar de novo como Ana dá uma conta nova, vazia.
+	var list struct{ Characters []struct{ Name string } }
+	if bob.do("GET", "/api/characters", "", &list); len(list.Characters) != 1 {
+		t.Fatalf("bob = %+v", list)
+	}
+	c.do("POST", "/api/auth/dev", `{"username":"Ana"}`, nil)
+	if c.do("GET", "/api/characters", "", &list); len(list.Characters) != 0 {
+		t.Fatalf("ana after delete = %+v", list)
 	}
 }
