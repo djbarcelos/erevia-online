@@ -25,6 +25,14 @@ type MonsterDef struct {
 	// 0 = corpo de tamanho normal (ninguém mudou de alcance).
 	BodyRadius float64
 	Boss       bool // chefe (marcado no mapa)
+	// Raid boss: covil com coleira própria, fases e habilidades (zone/raid.go), recompensa
+	// dividida por dano e renascimento longo salvo no banco.
+	Raid        bool
+	Immune      []EffectKind // efeitos que não pegam (raid: atordoar, enraizar…)
+	LeashRadius float64      // distância máxima do ponto de origem (0 = a padrão da zona)
+	// Renascimento do raid em segundos de relógio, sorteado entre os dois.
+	RespawnMin, RespawnMax float64
+	NoGear                 bool // nunca deixa cair equipamento (invocações)
 	// Drops: moedas (por nível do monstro) e itens.
 	GoldChance       float64
 	GoldMin, GoldMax float64
@@ -41,6 +49,10 @@ var (
 	lootBoss = []LootEntry{{"broken_crown", 1, 1, 1}, {"shadow_essence", 1, 2, 4}, {"potion_hp_l", 1, 2, 3}, {"potion_mp_l", 1, 1, 2},
 		{"scroll_ench_weapon", 0.5, 1, 1}, {"scroll_ench_armor", 0.6, 1, 2},
 		{"scroll_ench_weapon_b", 0.15, 1, 1}, {"scroll_ench_armor_b", 0.2, 1, 1}}
+	// Raid: tudo garantido, menos os pergaminhos (os equipamentos vêm de gearDrops).
+	lootRaid = []LootEntry{{"raid_fragment", 1, 1, 1}, {"shadow_essence", 1, 5, 8}, {"potion_hp_l", 1, 4, 6}, {"potion_mp_l", 1, 3, 4},
+		{"scroll_ench_weapon", 0.8, 1, 2}, {"scroll_ench_armor", 1, 2, 3},
+		{"scroll_ench_weapon_b", 0.35, 1, 1}, {"scroll_ench_armor_b", 0.45, 1, 1}}
 	lootGolem = []LootEntry{{"rune_core", 0.3, 1, 1}, {"potion_hp_s", 0.12, 1, 2}, {"potion_hp_l", 0.03, 1, 1},
 		{"scroll_ench_armor", 0.02, 1, 1}, {"scroll_ench_weapon", 0.01, 1, 1},
 		{"scroll_ench_armor_b", 0.004, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
@@ -66,6 +78,28 @@ var Monsters = map[string]*MonsterDef{
 	"bone_lord": {ID: "bone_lord", Name: "Senhor dos Ossos", Model: "skeleton_warrior",
 		HP: 400, HPLvl: 60, Atk: 14, AtkLv: 3, Def: 20, DefLv: 4, Range: 2.8, Interval: 1.8, Speed: 4, Aggressive: true, XPBase: 120, Scale: 1.6, Boss: true,
 		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootBoss},
+	// Raid boss da Cripta Esquecida: um lich gigante. Imune a controle (menos provocar),
+	// preso ao covil e com habilidades por fase (zone/raid.go).
+	"ozrhal": {ID: "ozrhal", Name: "Ozrhal, o Rei Ossário", Model: "skeleton_mage",
+		HP: 6000, HPLvl: 2700, Atk: 40, AtkLv: 4, Def: 40, DefLv: 5, Range: 3, Interval: 2.0, Speed: 4.2, Magic: true,
+		Aggressive: true, XPBase: 260, Scale: 2.6, BodyRadius: 1.2, Boss: true, Raid: true,
+		Immune:      []EffectKind{EffectStun, EffectRoot, EffectSlow, EffectBlind},
+		LeashRadius: 30, RespawnMin: 3 * 3600, RespawnMax: 4 * 3600,
+		GoldChance: 1, GoldMin: 120, GoldMax: 160, Loot: lootRaid},
+	// Invocação do Ozrhal: não renasce e não deixa equipamento.
+	"bone_guard": {ID: "bone_guard", Name: "Guarda Ossário", Model: "skeleton_warrior",
+		HP: 120, HPLvl: 30, Atk: 12, AtkLv: 2.4, Def: 14, DefLv: 3, Range: 2.2, Interval: 1.6, Speed: 4.4, Aggressive: true, XPBase: 6, Scale: 1.15,
+		NoGear: true},
+}
+
+// ImmuneTo informa se o efeito não pega no monstro.
+func (m *MonsterDef) ImmuneTo(k EffectKind) bool {
+	for _, i := range m.Immune {
+		if i == k {
+			return true
+		}
+	}
+	return false
 }
 
 // MonsterStats calcula os atributos do monstro num nível.
@@ -103,6 +137,13 @@ type Spawn struct {
 	Region string // nome da região (aparece no mapa)
 }
 
+// Covil do raid boss (a Cripta Esquecida, no nordeste do mapa).
+const (
+	RaidLairX      = 108.0
+	RaidLairZ      = 108.0
+	RaidLairRadius = 24.0
+)
+
 // SpawnPoint é a posição concreta de um monstro.
 type SpawnPoint struct {
 	Monster *MonsterDef
@@ -123,6 +164,8 @@ func DefaultSpawns() []Spawn {
 		// No fim da lista para não mudar os ids dos monstros que já existiam.
 		{Monster: "stone_golem", Count: 12, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 25, Respawn: 60,
 			Region: "Vale das Pedras Vivas"},
+		// Raid boss no covil da Cripta Esquecida (o renascimento vem da def, em horas).
+		{Monster: "ozrhal", Count: 1, Fixed: true, X: RaidLairX, Z: RaidLairZ, LevelMin: 25},
 	}
 }
 

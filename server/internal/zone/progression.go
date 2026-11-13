@@ -3,6 +3,7 @@ package zone
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
@@ -23,6 +24,10 @@ func (z *Zone) kill(dead, killer *entity) {
 	dead.stopMoving()
 	z.frame.deaths = append(z.frame.deaths, dead.id)
 
+	if dead.mon != nil && dead.mon.raid != nil {
+		z.raidKilled(dead)
+		return
+	}
 	if dead.mon != nil {
 		ms := dead.mon
 		// O drop fica reservado para quem causou mais dano (lido antes de zerar o ódio), e a
@@ -35,6 +40,13 @@ func (z *Zone) kill(dead, killer *entity) {
 		ms.hate = map[uint32]float64{}
 		ms.corpseEnd = z.now + corpseSeconds
 		ms.respawnAt = z.now + ms.spawn.Respawn*(1+z.rng.Float64())
+		if ms.def.Boss && !ms.summon {
+			// Janela mostrada no mapa: de Respawn a 2×Respawn a partir de agora.
+			wall := z.cfg.Clock()
+			ms.windowStart = wall.Add(time.Duration(ms.spawn.Respawn * float64(time.Second)))
+			ms.windowEnd = wall.Add(time.Duration(2 * ms.spawn.Respawn * float64(time.Second)))
+			z.bossChanged(dead)
+		}
 		z.shareMonsterXP(dead, takers)
 		return
 	}

@@ -24,7 +24,7 @@ const (
 
 // enchantPerGrade: bônus por nível, por raridade (índice = Grade). Armas somam ataque;
 // as outras peças somam metade disso em defesa.
-var enchantPerGrade = [...]float64{0, 1, 2, 3, 4}
+var enchantPerGrade = [...]float64{0, 1, 2, 3, 4, 5}
 
 // EnchantPerGrade: bônus de ataque por nível de encantamento da raridade.
 func EnchantPerGrade(g Grade) float64 {

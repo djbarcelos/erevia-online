@@ -112,8 +112,19 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("load clans: %w", err)
 	}
 	zcfg.Clans = clanData(clans)
+	lctx, lcancel = context.WithTimeout(ctx, 30*time.Second)
+	bosses, err := st.LoadBosses(lctx)
+	lcancel()
+	if err != nil {
+		return fmt.Errorf("load bosses: %w", err)
+	}
+	for _, b := range bosses {
+		zcfg.Bosses = append(zcfg.Bosses, zone.BossData{ID: b.ID, RespawnAt: b.RespawnAt, KilledAt: b.KilledAt, TopName: b.TopName})
+	}
+	zcfg.DevCommands = devLogin // /raid no chat: só em desenvolvimento
 	z := zone.New(zcfg, log.With("zone", "starter"), saves)
 	z.SetClanBackend(clanStore{st})
+	z.SetBossBackend(bossStore{st})
 	zoneDone := make(chan struct{})
 	go func() { z.Run(ctx); close(zoneDone) }()
 
@@ -226,6 +237,13 @@ func (c clanStore) ApplyClanOp(ctx context.Context, op zone.ClanOp) error {
 		Kind: store.ClanOpKind(op.Kind), ClanID: op.ClanID, CharacterID: op.CharacterID,
 		Rank: op.Rank, Text: op.Text, LeftAt: op.LeftAt,
 	})
+}
+
+// bossStore liga o worker de renascimento dos raid bosses ao banco.
+type bossStore struct{ st *store.Store }
+
+func (b bossStore) SaveBoss(ctx context.Context, d zone.BossData) error {
+	return b.st.SaveBoss(ctx, store.Boss{ID: d.ID, RespawnAt: d.RespawnAt, KilledAt: d.KilledAt, TopName: d.TopName})
 }
 
 func env(key, def string) string {

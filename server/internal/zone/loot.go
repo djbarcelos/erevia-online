@@ -27,6 +27,7 @@ type groundItem struct {
 	pos           Vec2
 	enchant       int
 	owner         uint32
+	clan          int64 // raid: reservado também para este clã
 	reservedUntil float64
 	expires       float64
 }
@@ -153,7 +154,7 @@ func (z *Zone) runPickup(p *entity) {
 	}
 	p.stopMoving()
 	p.clearAction()
-	if z.now < g.reservedUntil && !z.canTakeReserved(p, g.owner) {
+	if z.now < g.reservedUntil && !z.canTakeReserved(p, g) {
 		z.system(p, "Este item ainda está reservado para quem derrotou o monstro.")
 		return
 	}

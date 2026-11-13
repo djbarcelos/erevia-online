@@ -370,6 +370,12 @@ func (z *Zone) creditGroup(hate map[uint32]float64, at Vec2) []*entity {
 	} else if p := z.players[best.solo]; p != nil {
 		cands = []*entity{p}
 	}
+	return z.eligible(cands, at)
+}
+
+// eligible: dos candidatos, os vivos a até partyRange de at e no máximo partyLevelGap
+// níveis abaixo do mais alto deles.
+func (z *Zone) eligible(cands []*entity, at Vec2) []*entity {
 	var near []*entity
 	top := 0
 	for _, m := range cands {
@@ -389,6 +395,12 @@ func (z *Zone) creditGroup(hate map[uint32]float64, at Vec2) []*entity {
 
 // shareMonsterXP divide a XP do monstro entre quem recebe (proporcional ao nível).
 func (z *Zone) shareMonsterXP(dead *entity, takers []*entity) {
+	z.shareMonsterXPScaled(dead, takers, 1)
+}
+
+// shareMonsterXPScaled: como shareMonsterXP, com só uma fração da XP (raid: a parte do
+// dano daquele lado).
+func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64) {
 	if len(takers) == 0 {
 		return
 	}
@@ -401,7 +413,7 @@ func (z *Zone) shareMonsterXP(dead *entity, takers []*entity) {
 	if z.night {
 		total *= game.NightXP
 	}
-	total *= partyBonus[min(len(takers), len(partyBonus))-1]
+	total *= partyBonus[min(len(takers), len(partyBonus))-1] * frac
 	for _, m := range takers {
 		if xp := int64(math.Round(total * float64(m.level) / float64(sum))); xp > 0 {
 			z.grantXP(m, xp)
@@ -410,8 +422,13 @@ func (z *Zone) shareMonsterXP(dead *entity, takers []*entity) {
 	}
 }
 
-// canTakeReserved: o item reservado pode ser pego pelo dono ou por quem está no grupo dele.
-func (z *Zone) canTakeReserved(p *entity, owner uint32) bool {
+// canTakeReserved: o item reservado pode ser pego pelo dono, por quem está no grupo dele
+// ou (saque do raid boss ganho por um clã) por quem é do clã.
+func (z *Zone) canTakeReserved(p *entity, g *groundItem) bool {
+	if g.clan != 0 && p.pl.clan != nil && p.pl.clan.id == g.clan {
+		return true
+	}
+	owner := g.owner
 	if owner == 0 || owner == p.id {
 		return true
 	}
