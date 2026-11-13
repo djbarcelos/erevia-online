@@ -231,19 +231,20 @@ type Zone struct {
 	stats          tickStats
 	aoiDirty       bool // alguém entrou, saiu ou renasceu: atualizar a AOI já neste tick
 
-	modJobs        chan modJob
-	modBackend     ModBackend
-	telemetry      chan GameEvent
-	eventSink      EventSink
-	droppedEvents  int
-	bossBackend    BossBackend
-	bossJobs       chan BossData
-	telegraphs     []*telegraph
-	telegraphSeq   uint32
-	summonSeq      uint32
-	socialJobs     chan socialJob
-	socialBackend  SocialBackend
-	mailSent       map[uint32][]time.Time // cartas enviadas na última hora, por remetente
+	modJobs       chan modJob
+	modBackend    ModBackend
+	telemetry     chan GameEvent
+	eventSink     EventSink
+	droppedEvents int
+	bossBackend   BossBackend
+	bossJobs      chan BossData
+	telegraphs    []*telegraph
+	telegraphSeq  uint32
+	summonSeq     uint32
+	socialJobs    chan socialJob
+	socialBackend SocialBackend
+	mailSent      map[uint32][]time.Time // cartas enviadas na última hora, por remetente
+
 	rankingBackend RankingBackend
 	ranking        *rankingCache // último cálculo do ranking (nil = ainda não chegou)
 
