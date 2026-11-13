@@ -1,5 +1,6 @@
 import {
   AbstractMesh,
+  BoundingInfo,
   Color3,
   Matrix,
   Mesh,
@@ -228,6 +229,17 @@ interface View extends EntityInfo {
   faceYaw: number | null;
   /** Encaixe da mão da arma (rastro do golpe); undefined = ainda não procurado. */
   hand: TransformNode | null | undefined;
+  /**
+   * Caixa fixa e generosa do corpo, dividida por todas as malhas com esqueleto do modelo
+   * (doNotSyncBoundingInfo): o Babylon não refaz a caixa de cada malha a cada quadro; ela
+   * só anda junto com a entidade (ver moveBounds). null = sem modelo com esqueleto.
+   */
+  bounds: BoundingInfo | null;
+  boundsAt: Matrix;
+  /** Onde a caixa estava da última vez (NaN = refazer). */
+  boundsX: number;
+  boundsY: number;
+  boundsZ: number;
 }
 
 /** Jogadores e monstros na tela: criação, movimento suave, animações e combate. */
@@ -408,6 +420,7 @@ export class EntityManager {
     v.model3d.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
     v.meshes = v.model3d.meshes();
     this.notPickable(v.meshes);
+    this.fixBounds(v); // a cabeça nova é outra malha
   }
 
   isEnemy(id: number): boolean {
@@ -548,6 +561,7 @@ export class EntityManager {
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
       impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, hand: undefined,
+      bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
     };
     this.views.set(e.id, v);
     // NPCs ficam parados, virados para o centro da praça.
@@ -1479,12 +1493,13 @@ export class EntityManager {
       } else if (v.faceYaw !== null) {
         v.visual.rotation.y = lerpAngle(v.visual.rotation.y, v.faceYaw, 1 - Math.exp(-FACE_RATE * dt));
       }
+      if (v.bounds) this.moveBounds(v);
       if (v.anim) {
         // LOD de animação: quem está fora da tela ou longe não tem os ossos recalculados.
         let active = always;
         if (!active) {
           const near = !cam || Vector3.DistanceSquared(cam, pos) < ANIM_DISTANCE * ANIM_DISTANCE;
-          active = near && (!planes || v.meshes.some((m) => m.isInFrustum(planes)));
+          active = near && (!planes || (v.bounds ? v.bounds.isInFrustum(planes) : v.meshes.some((m) => m.isInFrustum(planes))));
         }
         // Andar acaba com o emote na hora (o aviso do servidor chega depois).
         if (moving && v.anim.emoting) v.anim.endEmote();
@@ -1642,11 +1657,50 @@ export class EntityManager {
     this.setShadow(v, false);
     v.meshes = meshes;
     v.model3d = inst;
+    this.fixBounds(v);
     v.anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
     v.hand = undefined; // modelo novo: procura o encaixe da mão de novo no próximo golpe
     v.capsule?.dispose();
     v.capsule = null;
     if (v.dead) this.showDead(v, true);
+  }
+
+  /**
+   * Malhas com esqueleto: caixa fixa e generosa (cobre qualquer pose, inclusive deitado na
+   * morte), a mesma para todas, sem sincronizar com a matriz de cada uma (o Babylon refazia
+   * a caixa de cada malha a cada quadro em que a entidade anda). As armas seguem normais.
+   */
+  private fixBounds(v: View): void {
+    if (!v.bounds) {
+      const body = MODEL_BODY[v.model];
+      const h = (body?.height ?? 2.1) * v.scale;
+      const w = 0.85 * h; // deitado: o corpo inteiro para um lado
+      v.bounds = new BoundingInfo(new Vector3(-w, -0.3 * v.scale, -w), new Vector3(w, h + 0.5 * v.scale, w));
+    }
+    let any = false;
+    for (const m of v.meshes) {
+      if (!m.skeleton || (m.subMeshes?.length ?? 0) > 1) continue;
+      if (m.getBoundingInfo() === v.bounds) {
+        any = true;
+        continue;
+      }
+      m.doNotSyncBoundingInfo = true;
+      m.setBoundingInfo(v.bounds);
+      any = true;
+    }
+    if (!any) v.bounds = null;
+    v.boundsX = NaN; // reposiciona no próximo quadro
+  }
+
+  /** Leva a caixa fixa até onde a entidade está (só quando ela se mexeu). */
+  private moveBounds(v: View): void {
+    const p = v.root.position;
+    if (p.x === v.boundsX && p.y === v.boundsY && p.z === v.boundsZ) return;
+    v.boundsX = p.x;
+    v.boundsY = p.y;
+    v.boundsZ = p.z;
+    Matrix.TranslationToRef(p.x, p.y, p.z, v.boundsAt);
+    v.bounds!.update(v.boundsAt);
   }
 
   private createCapsule(v: View): Mesh {
