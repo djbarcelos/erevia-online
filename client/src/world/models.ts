@@ -17,6 +17,7 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
+import { reportClientError } from "../net/errors";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { bodyPalettes, colorKey, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook } from "./body-look";
 
@@ -214,7 +215,12 @@ export class CharacterModels {
 
   /** Baixa modelos, armas e animações em paralelo. Arquivos que faltarem são ignorados. */
   static async load(scene: Scene): Promise<CharacterModels> {
-    const load = (file: string) => LoadAssetContainerAsync(BASE + file, scene);
+    // Toda falha de carga vai ao relatório de erros; as opcionais viram null (cápsula/sem arma).
+    const load = (file: string) =>
+      LoadAssetContainerAsync(BASE + file, scene).catch((err: unknown) => {
+        reportClientError("model", `modelo não carregou: ${file}`, { file, error: String((err as Error)?.message ?? err) }, err);
+        throw err;
+      });
     const tryLoad = (file: string) => load(file).catch(() => null);
 
     const allWeapons = { ...WEAPONS, ...MONSTER_WEAPONS };

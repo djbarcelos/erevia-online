@@ -21,6 +21,7 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import type { ClassId } from "../api";
+import { watchEngine } from "../net/errors";
 import { AnimController } from "../world/anim";
 import { ORIGINAL_LOOK, type BodyLook } from "../world/body-look";
 import { CharacterModels, type AnimRole, type CharacterInstance } from "../world/models";
@@ -50,6 +51,7 @@ export interface Preview {
 export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number; interactive?: boolean } = {}): Preview {
   const engine = new Engine(canvas, true, { alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: false, stencil: true }, true);
   engine.setHardwareScalingLevel(1 / Math.min(2, devicePixelRatio || 1));
+  watchEngine(engine, "prévia"); // o engine.dispose() solta o ouvinte
   const scene = new Scene(engine);
   scene.clearColor = new Color4(0, 0, 0, 0);
   scene.ambientColor = new Color3(0.25, 0.22, 0.28);

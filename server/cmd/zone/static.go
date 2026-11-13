@@ -9,11 +9,17 @@ import (
 
 // staticHandler serve o cliente já compilado (client/dist).
 // Arquivos com hash em /assets/ ganham cache longo; o resto cai no index.html (SPA).
+// Os sourcemaps (*.map) nunca são servidos: eles entregariam o código-fonte. A imagem
+// Docker já os tira da pasta, e isto vale também para quem servir um client/dist local.
 func staticHandler(dir string) http.Handler {
 	fs := http.FileServer(http.Dir(dir))
 	index := filepath.Join(dir, "index.html")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		clean := filepath.Clean("/" + r.URL.Path)
+		if strings.EqualFold(filepath.Ext(clean), ".map") {
+			http.NotFound(w, r)
+			return
+		}
 		path := filepath.Join(dir, clean)
 		if info, err := os.Stat(path); err == nil && !info.IsDir() {
 			if strings.HasPrefix(clean, "/assets/") {
