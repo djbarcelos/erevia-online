@@ -220,6 +220,7 @@ type Zone struct {
 	telegraphs     []*telegraph
 	telegraphSeq   uint32
 	summonSeq      uint32
+	gone           map[uint32]bool // personagens de contas apagadas (ver account.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -362,6 +363,8 @@ func (z *Zone) handle(e event) {
 		z.onSocial(e)
 	case clanCreatedEvent:
 		z.onClanCreated(e)
+	case accountGoneEvent:
+		z.onAccountGone(e.d)
 	}
 }
 
@@ -385,6 +388,9 @@ func (z *Zone) get(id uint32) *entity {
 }
 
 func (z *Zone) onJoin(info JoinInfo) {
+	if z.refuseGone(info) {
+		return
+	}
 	// Mesmo personagem conectado em outro lugar: derruba a sessão antiga.
 	if old, ok := z.players[info.ID]; ok {
 		z.sendTo(old, &pb.ServerMessage{Msg: &pb.ServerMessage_Kicked{Kicked: &pb.Kicked{

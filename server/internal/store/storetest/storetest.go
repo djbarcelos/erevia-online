@@ -18,6 +18,13 @@ import (
 
 func New(t *testing.T) *store.Store {
 	t.Helper()
+	s, _ := NewWithURL(t)
+	return s
+}
+
+// NewWithURL também devolve a URL do schema do teste (para conferir o banco direto).
+func NewWithURL(t *testing.T) (*store.Store, string) {
+	t.Helper()
 	base := os.Getenv("TEST_DATABASE_URL")
 	if base == "" {
 		t.Skip("TEST_DATABASE_URL vazio: pulando teste com Postgres")
@@ -57,5 +64,5 @@ func New(t *testing.T) *store.Store {
 			c.Close(ctx)
 		}
 	})
-	return s
+	return s, u.String()
 }
