@@ -158,7 +158,13 @@ func Open(ctx context.Context, url string) (*Store, error) {
 func migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, mustSub(migrations, "migrations"))
+	// Fora de ordem liberado: dois PCs desenvolvem em paralelo com faixas de números
+	// separadas (ex.: PC 1 em 00009–00019, PC 2 em 00020–00029), e uma migração de número
+	// menor pode chegar à produção depois de uma maior. As migrações só criam colunas e
+	// tabelas novas, independentes entre si; sem isto o servidor não sobe ("missing
+	// (out-of-order) migrations").
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, mustSub(migrations, "migrations"),
+		goose.WithAllowOutofOrder(true))
 	if err != nil {
 		return fmt.Errorf("goose: %w", err)
 	}
