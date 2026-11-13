@@ -187,6 +187,10 @@ func (z *Zone) command(p *entity, text string) {
 		z.bugReport(p, strings.Join(args, " "))
 		return
 	}
+	if cmd == "/raid" && z.cfg.DevCommands { // teste do raid boss: só com DEV_LOGIN
+		z.devRaid(p, args)
+		return
+	}
 	if !p.pl.gm {
 		z.system(p, "Comando desconhecido: "+fields[0])
 		return

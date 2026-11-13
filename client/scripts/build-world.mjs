@@ -436,6 +436,89 @@ for (const [x, z] of torchCandidates) {
   collide(x, z, 0.3);
 }
 
+// ---------- Cripta Esquecida (covil do raid boss, nordeste) ----------
+// Sorteio próprio (nada do resto muda de lugar). A arena fica limpa: o chefe e quem luta
+// com ele andam livres num raio de 24 m. Entrada virada para a cidade.
+const LAIR = { x: 108, z: 108, r: 24 }; // igual ao servidor (game.RaidLairX/Z/Radius)
+const lrand = mulberry32(20261115);
+const lpick = (arr) => arr[Math.floor(lrand() * arr.length)];
+const lbetween = (a, b) => a + lrand() * (b - a);
+const lairDist = (o) => Math.hypot(o.x - LAIR.x, o.z - LAIR.z);
+for (const arr of [objects, colliders, torches]) {
+  for (let i = arr.length - 1; i >= 0; i--) if (lairDist(arr[i]) < LAIR.r + 4) arr.splice(i, 1);
+}
+const ENTRANCE = Math.atan2(-LAIR.z, -LAIR.x); // ângulo que aponta para a cidade
+const angleGap = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+const lairAt = (a, r) => [LAIR.x + Math.cos(a) * r, LAIR.z + Math.sin(a) * r];
+// Círculo de monólitos, uns de pé, outros partidos ou tombados (com a entrada aberta).
+for (let i = 0; i < 16; i++) {
+  const a = ENTRANCE + (i / 16) * Math.PI * 2 + lbetween(-0.06, 0.06);
+  if (angleGap(a, ENTRANCE) < 0.42) continue;
+  const [x, z] = lairAt(a, LAIR.r - 1.5);
+  const roll = lrand();
+  const k = roll < 0.5 ? 'monolith' : roll < 0.8 ? 'monolith_broken' : 'monolith_fallen';
+  const sc = lbetween(1.3, 1.7);
+  const rot = k === 'monolith_fallen' ? -a + lbetween(-0.3, 0.3) : facing(x, z, LAIR.x, LAIR.z) + lbetween(-0.15, 0.15);
+  place(k, x, z, rot, [sc, sc * lbetween(1, 1.25), sc]);
+  collide(x, z, k === 'monolith_fallen' ? 1.1 * sc : 0.75 * sc);
+}
+// Pilares da entrada: dois rochedos grandes.
+for (const side of [-1, 1]) {
+  const [x, z] = lairAt(ENTRANCE + side * 0.3, LAIR.r + 0.5);
+  const k = lpick(['rock_3_g', 'rock_3_j']);
+  const sc = lbetween(2.6, 3);
+  place(k, x, z, lrand() * 6.28, sc);
+  collideItem(k, x, z, sc, 0.4);
+}
+// Trono: rochedo largo atrás do centro, ladeado por dois monólitos altos.
+{
+  const back = ENTRANCE + Math.PI;
+  const [x, z] = lairAt(back, 9);
+  place('rock_3_c', x, z, facing(x, z, LAIR.x, LAIR.z), 3.2);
+  collideItem('rock_3_c', x, z, 3.2, 0.4);
+  for (const side of [-1, 1]) {
+    const [mx, mz] = lairAt(back + side * 0.38, 10);
+    place('monolith', mx, mz, facing(mx, mz, LAIR.x, LAIR.z), [1.8, 2.3, 1.8]);
+    collide(mx, mz, 0.75 * 1.8);
+  }
+}
+// Do lado de fora: muralha de pedras e árvores mortas (a entrada fica livre).
+for (let i = 0; i < 14; i++) {
+  const a = ENTRANCE + (i / 14) * Math.PI * 2 + lbetween(-0.1, 0.1);
+  if (angleGap(a, ENTRANCE) < 0.5) continue;
+  const [x, z] = lairAt(a, lbetween(LAIR.r + 4, LAIR.r + 8));
+  const k = lpick(['rock_3_a', 'rock_3_e', 'rock_3_b', 'rock_3_g']);
+  const sc = lbetween(2.2, 3.2);
+  place(k, x, z, lrand() * 6.28, sc);
+  collideItem(k, x, z, sc, 0.4);
+}
+for (let i = 0; i < 10; i++) {
+  const a = ENTRANCE + lbetween(0.6, Math.PI * 2 - 0.6);
+  const [x, z] = lairAt(a, lbetween(LAIR.r + 9, LAIR.r + 14));
+  if (!freeOfColliders(x, z, 2)) continue;
+  const sc = lbetween(2.8, 3.6);
+  place(lpick(['tree_bare_1_a', 'tree_bare_1_b', 'tree_bare_2_a', 'tree_bare_2_b']), x, z, lrand() * 6.28, sc);
+  collide(x, z, 0.22 * sc);
+}
+// Chão: cascalho e lascas de pedra (sem colisão).
+for (let i = 0; i < 26; i++) {
+  const [x, z] = lairAt(lrand() * 6.28, Math.sqrt(lrand()) * (LAIR.r - 3));
+  place(lpick(['rock_2_a', 'rock_1_a', 'rock_1_e']), x, z, lrand() * 6.28, lbetween(0.5, 1));
+}
+// Tochas em volta da arena (e duas na entrada).
+for (let i = 0; i < 8; i++) {
+  const a = ENTRANCE + ((i + 0.5) / 8) * Math.PI * 2;
+  if (angleGap(a, ENTRANCE) < 0.4) continue;
+  const [x, z] = lairAt(a, LAIR.r - 5);
+  torches.push({ x: round(x), z: round(z) });
+  collide(x, z, 0.3);
+}
+for (const side of [-1, 1]) {
+  const [x, z] = lairAt(ENTRANCE + side * 0.19, LAIR.r + 1.5);
+  torches.push({ x: round(x), z: round(z) });
+  collide(x, z, 0.3);
+}
+
 // ---------- Saída ----------
 const world = {
   version: 1,

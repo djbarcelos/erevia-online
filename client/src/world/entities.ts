@@ -32,7 +32,7 @@ import {
 } from "../gen/erevia/v1/game_pb";
 import { AnimController } from "./anim";
 import { toBodyLook, type BodyLook } from "./body-look";
-import type { Fx, FxHandle } from "./fx";
+import type { Fx, FxBody, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
 import { GOLEM_BODY, GOLEM_MODEL } from "./golem";
 import { buildTeleportStone } from "./teleport-stone";
@@ -61,6 +61,8 @@ const ANIM_DISTANCE = 50;
 /** Só personagens até esta distância do jogador projetam sombra. */
 const SHADOW_DISTANCE = 35;
 const BONE_COLOR = "#d9d2c0";
+/** Ids dos golpes de área do raid boss nos CombatEvent (zone/raid.go: RaidHitWave…). */
+export const RAID_HIT_BASE = 9001;
 const NPC_COLOR = "#e0c27a";
 
 /** Velocidade dos projéteis (m/s): o dano só aparece quando o projétil chega. */
@@ -341,6 +343,16 @@ export class EntityManager {
   /** Ponto acima da cabeça (para textos flutuantes). */
   headOf(id: number): TransformNode | undefined {
     return this.views.get(id)?.head;
+  }
+
+  /** Corpo de uma entidade para efeitos presos nela (aura, coroa do raid boss). */
+  bodyOf(id: number): FxBody | undefined {
+    return this.views.get(id);
+  }
+
+  /** Malhas do modelo 3D de uma entidade (vazio enquanto o modelo carrega). */
+  meshesOf(id: number): AbstractMesh[] {
+    return this.views.get(id)?.model3d?.meshes() ?? [];
   }
 
   /** A arma ou o visual de alguém mudou. */
@@ -814,6 +826,14 @@ export class EntityManager {
       this.at(Math.max(now, dst.impactUntil), dst.id, () => {
         this.fx.damageNumber(dst.head, String(ev.damage), color, false);
         if (ev.kill) dst.anim?.play("hit");
+      });
+      return;
+    }
+    // Golpes de área do raid boss: o visual veio no aviso do chão; aqui só o número.
+    if (ev.skillId >= RAID_HIT_BASE) {
+      this.at(Math.max(now, dst.impactUntil), dst.id, () => {
+        if (ev.damage > 0) this.fx.damageNumber(dst.head, String(ev.damage), "#d68cff", ev.crit);
+        dst.anim?.play("hit");
       });
       return;
     }

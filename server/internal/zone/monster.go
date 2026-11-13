@@ -2,6 +2,7 @@ package zone
 
 import (
 	"math"
+	"time"
 
 	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
@@ -26,6 +27,10 @@ type monsterState struct {
 	respawnAt  float64
 	corpseEnd  float64
 	hidden     bool // corpo já sumiu; aguardando respawn
+	raid       *raidState // raid boss (nil nos outros)
+	summon     bool       // invocação: não renasce e some ao morrer
+	// Chefes mortos: janela de renascimento mostrada no mapa (relógio de parede).
+	windowStart, windowEnd time.Time
 }
 
 func (z *Zone) spawnMonsters() {
@@ -44,6 +49,9 @@ func (z *Zone) spawnMonsters() {
 			},
 		}
 		m.hp = m.stats.MaxHP
+		if sp.Monster.Raid {
+			z.initRaid(m) // pode começar morto (renascimento salvo no banco)
+		}
 		m.sentHP, m.sentMaxHP = m.hpInt(), m.maxHPInt()
 		z.monsters[id] = m
 	}
@@ -54,6 +62,14 @@ func (z *Zone) think(m *entity) {
 	ms := m.mon
 	if m.stunned(z.now) {
 		return
+	}
+	// Raid boss: fases, habilidades e reinício rodam mesmo provocado (o tanque segura o
+	// chefe, mas a luta continua).
+	if ms.raid != nil && !ms.returning {
+		z.pruneHate(m)
+		if z.thinkRaid(m) {
+			return
+		}
 	}
 	// Provocado: só pode atacar quem provocou (enquanto ele estiver vivo e visível).
 	if ef := m.effectRef(game.EffectTaunt, z.now); ef != nil {
@@ -76,18 +92,12 @@ func (z *Zone) think(m *entity) {
 		return
 	}
 
-	if dist(m.pos, ms.home) > leashRange {
+	if dist(m.pos, ms.home) > leashOf(m) {
 		z.resetMonster(m)
 		return
 	}
 
-	// Esquece quem morreu, saiu ou fugiu para a cidade.
-	for id := range ms.hate {
-		p := z.players[id]
-		if p == nil || p.dead || z.inSafe(p.pos) || p.invisible(z.now) {
-			delete(ms.hate, id)
-		}
-	}
+	z.pruneHate(m)
 
 	if ms.def.Aggressive && len(ms.hate) == 0 {
 		if p := z.nearestPlayer(m.pos, z.aggroRange()); p != nil {
@@ -123,8 +133,21 @@ func (z *Zone) think(m *entity) {
 	}
 }
 
+// pruneHate esquece quem morreu, saiu ou fugiu para a cidade.
+func (z *Zone) pruneHate(m *entity) {
+	for id := range m.mon.hate {
+		p := z.players[id]
+		if p == nil || p.dead || z.inSafe(p.pos) || p.invisible(z.now) {
+			delete(m.mon.hate, id)
+		}
+	}
+}
+
 // resetMonster: desiste da luta, volta para casa e recupera a vida ao chegar.
 func (z *Zone) resetMonster(m *entity) {
+	if m.mon.raid != nil {
+		z.raidReset(m)
+	}
 	m.mon.hate = map[uint32]float64{}
 	m.mon.returning = true
 	m.clearAction()
@@ -138,19 +161,35 @@ func (z *Zone) updateDeadMonster(m *entity) {
 	if !ms.hidden && z.now >= ms.corpseEnd {
 		ms.hidden = true
 		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: m.id}}}, 0)
+		if ms.summon {
+			delete(z.monsters, m.id)
+			return
+		}
 	}
-	if z.now >= ms.respawnAt {
-		m.dead = false
-		ms.hidden = false
-		ms.returning = false
-		ms.hate = map[uint32]float64{}
-		m.pos, m.dest, m.path = ms.home, ms.home, nil
-		m.hp = m.stats.MaxHP
-		m.effects = nil
-		m.clearAction()
-		m.sentHP, m.sentMaxHP = m.hpInt(), m.maxHPInt()
-		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(m)}}}, 0)
+	switch {
+	case ms.summon:
+	case ms.raid != nil:
+		z.updateDeadRaid(m)
+	case z.now >= ms.respawnAt:
+		z.reviveMonster(m)
+		z.bossChanged(m)
 	}
+}
+
+// reviveMonster faz o monstro renascer no ponto de origem, inteiro.
+func (z *Zone) reviveMonster(m *entity) {
+	ms := m.mon
+	m.dead = false
+	ms.hidden = false
+	ms.returning = false
+	ms.hate = map[uint32]float64{}
+	ms.windowStart, ms.windowEnd = time.Time{}, time.Time{}
+	m.pos, m.dest, m.path = ms.home, ms.home, nil
+	m.hp = m.stats.MaxHP
+	m.effects = nil
+	m.clearAction()
+	m.sentHP, m.sentMaxHP = m.hpInt(), m.maxHPInt()
+	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(m)}}}, 0)
 }
 
 func (z *Zone) nearestPlayer(from Vec2, maxDist float64) *entity {

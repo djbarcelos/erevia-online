@@ -1,0 +1,242 @@
+/* ---------- Raid boss: barra no topo e anúncios ---------- */
+
+.raid-bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(620px, calc(100vw - 32px));
+  padding: 6px 12px 8px;
+  display: grid;
+  gap: 5px;
+  border-color: rgba(180, 108, 255, 0.55);
+  box-shadow:
+    0 0 26px rgba(150, 70, 230, 0.28),
+    0 6px 18px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.rb-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.rb-skull {
+  color: #d9a6ff;
+  font-size: 1rem;
+}
+
+.rb-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-title);
+  letter-spacing: 0.06em;
+  color: #f1dcff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rb-phase {
+  padding: 1px 7px;
+  border-radius: 3px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #b46cff, #6a2cb0);
+  color: #fff;
+}
+
+.rb-timer {
+  min-width: 3.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.rb-track {
+  position: relative;
+  height: 16px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(10, 6, 14, 0.85);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.rb-fill,
+.rb-lag {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+}
+
+.rb-lag {
+  background: rgba(255, 220, 160, 0.55);
+  transition: width 0.9s ease-out 0.25s;
+}
+
+.rb-fill {
+  background: linear-gradient(180deg, #c45cff, #6c1fae 60%, #4a1080);
+  transition: width 0.15s linear;
+}
+
+.rb-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255, 240, 210, 0.75);
+  box-shadow: 0 0 4px #000;
+}
+
+.rb-pct {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+}
+
+.raid-bar.enraged {
+  border-color: rgba(255, 80, 60, 0.7);
+  animation: raid-enrage 1.1s ease-in-out infinite;
+}
+
+.raid-bar.enraged .rb-fill {
+  background: linear-gradient(180deg, #ff6a4a, #b2201a 60%, #7a0f0f);
+}
+
+.raid-bar.enraged .rb-phase {
+  background: linear-gradient(180deg, #ff6a4a, #a3170f);
+}
+
+@keyframes raid-enrage {
+  50% {
+    box-shadow:
+      0 0 32px rgba(255, 70, 50, 0.55),
+      0 6px 18px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* O quadro do alvo desce para não ficar embaixo da barra do chefe. */
+body.raid-bar-on .hud-target {
+  top: 76px;
+}
+
+/* ---------- Anúncio para o servidor inteiro ---------- */
+
+.raid-announce {
+  position: absolute;
+  left: 50%;
+  top: 20%;
+  transform: translateX(-50%);
+  width: min(640px, calc(100vw - 32px));
+  text-align: center;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.raid-announce.show {
+  animation: raid-banner 6s var(--ease) forwards;
+}
+
+.ra-title {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 5vw, 2.8rem);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #f6dcff, #a45cf0);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 12px #000);
+}
+
+.raid-announce.defeat .ra-title {
+  background: linear-gradient(180deg, #fff3cf, #c99d4c);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.raid-announce.soon .ra-title {
+  background: linear-gradient(180deg, #e8e0d4, #8f8577);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.ra-text {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: clamp(0.9rem, 2.4vw, 1.1rem);
+  text-shadow: 0 1px 4px #000;
+}
+
+@keyframes raid-banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 18px) scale(0.92);
+  }
+  10%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -10px) scale(1);
+  }
+}
+
+@media (max-width: 700px) {
+  .raid-bar {
+    top: 6px;
+    padding: 4px 8px 6px;
+  }
+
+  body.raid-bar-on .hud-target {
+    top: 64px;
+  }
+}
+
+/* Linha de anúncio no chat (ui/chat.ts: announce) */
+.chat-log li.announce {
+  color: #f3d488;
+  font-weight: 600;
+}
+
+/* Mapa do mundo: chefes com estado (ui/windows/worldmap.ts) */
+.qm.boss {
+  color: #e6a6ff;
+  border-color: #b46cff;
+  background: #1e0f2c;
+}
+
+.qm.boss.raid {
+  font-size: 0.85rem;
+  text-shadow: 0 0 8px rgba(200, 120, 255, 0.85);
+}
+
+.wmap-quest.alive small {
+  color: #8fe39a;
+}
+
+.wmap-quest.alive .qm.boss {
+  box-shadow: 0 0 10px rgba(180, 108, 255, 0.7);
+  animation: raid-alive 1.4s ease-in-out infinite;
+}
+
+@keyframes raid-alive {
+  50% {
+    box-shadow: 0 0 18px rgba(214, 140, 255, 0.95);
+  }
+}

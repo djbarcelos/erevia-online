@@ -89,6 +89,11 @@ export class Chat {
     this.line("system", [document.createTextNode(text)]);
   }
 
+  /** Anúncio para o servidor inteiro (linha dourada; aparece também na aba Sistema). */
+  announce(text: string): void {
+    this.line("system announce", [document.createTextNode(`★ ${text}`)]);
+  }
+
   private submit(): void {
     const raw = this.input.value.trim();
     this.input.value = "";
@@ -124,6 +129,9 @@ export class Chat {
           if (!text) return this.system("Uso: /c mensagem para o clã");
           return this.onSend(text, "", ChatChannel.CLAN);
         }
+        // Comandos de teste do raid boss (o servidor só aceita em desenvolvimento).
+        case "/raid":
+          return this.onSend(raw, "");
         case "/convidar":
         case "/invite": {
           if (!rest[0]) return this.system("Uso: /convidar Nome");
@@ -146,7 +154,7 @@ export class Chat {
     return s;
   }
 
-  private line(kind: "general" | "whisper" | "system" | "party" | "clan", parts: Node[]): void {
+  private line(kind: "general" | "whisper" | "system" | "system announce" | "party" | "clan", parts: Node[]): void {
     const stick = this.log.scrollTop + this.log.clientHeight >= this.log.scrollHeight - 8;
     const li = document.createElement("li");
     li.className = kind;

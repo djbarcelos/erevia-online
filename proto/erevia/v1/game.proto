@@ -270,7 +270,9 @@ message ServerMessage {
     ChannelBar channel_bar = 22;
     EnchantResult enchant_result = 23;
     Storage storage = 24;
-    QuestLog quest_log = 25;
+    Announce announce = 25;
+    BossStatus boss_status = 26;
+    QuestLog quest_log = 27;
   }
 }
 
@@ -292,6 +294,61 @@ message QuestStepInfo {
   string text = 1;
   uint32 count = 2;
   uint32 need = 3;
+}
+
+// ---------- Raid boss ----------
+
+enum AnnounceKind {
+  ANNOUNCE_KIND_UNSPECIFIED = 0;
+  ANNOUNCE_KIND_BOSS_SOON = 1; // o raid boss desperta em breve
+  ANNOUNCE_KIND_BOSS_SPAWN = 2; // despertou
+  ANNOUNCE_KIND_BOSS_DEFEAT = 3; // foi derrotado
+}
+
+// Anúncio para o servidor inteiro (banner no centro da tela e linha dourada no chat).
+message Announce {
+  string title = 1;
+  string text = 2;
+  AnnounceKind kind = 3;
+}
+
+// Estado de um chefe (mapa do mundo e barra do raid). Vai no Welcome e a cada mudança.
+message BossStatus {
+  uint32 id = 1;
+  string name = 2;
+  uint32 level = 3;
+  float x = 4;
+  float z = 5;
+  bool raid = 6;
+  bool alive = 7;
+  // Morto: janela em que ele renasce (Unix, ms). O minuto exato não é revelado.
+  int64 window_start_ms = 8;
+  int64 window_end_ms = 9;
+  uint32 phase = 10; // raid: fase da luta (1–3)
+  bool enraged = 11; // raid: fúria (abaixo de 20%)
+  bool final_enrage = 12; // raid: fúria final (luta longa demais)
+  int64 fight_start_ms = 13; // raid: início da luta (0 = parado)
+}
+
+enum TelegraphKind {
+  TELEGRAPH_KIND_UNSPECIFIED = 0;
+  TELEGRAPH_KIND_WAVE = 1; // Onda de Ossos: em volta do chefe
+  TELEGRAPH_KIND_RAIN = 2; // Chuva de Ossos: em cima de um jogador
+  TELEGRAPH_KIND_MARK = 3; // Marca da Morte: segue o marcado e explode em volta dele
+}
+
+// Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro do círculo.
+message Telegraph {
+  uint32 id = 1;
+  TelegraphKind kind = 2;
+  float x = 3;
+  float z = 4;
+  float radius = 5;
+  uint32 duration_ms = 6;
+  uint32 source_id = 7;
+  uint32 follow_id = 8; // segue esta entidade (Marca da Morte)
+  bool resolved = 9; // o golpe caiu agora (em x, z)
+  bool cancelled = 10; // o chefe reiniciou ou morreu antes
 }
 
 enum PvpState {
@@ -489,6 +546,7 @@ message Welcome {
   SelfPvp pvp = 18;
   ClanState clan = 19;
   EnchantRules enchant = 20;
+  repeated BossStatus bosses = 21; // chefes fixos (vivos ou com a janela de renascimento)
 }
 
 // Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
@@ -505,6 +563,7 @@ message MapZone {
   bool area = 10; // área de caça própria (disco de centro x, z e raio radius)
   float radius = 11;
   string region = 12; // nome da região ("Vale das Pedras Vivas")
+  bool raid = 13; // raid boss (covil próprio)
 }
 
 message Spawn {
@@ -527,6 +586,7 @@ message Snapshot {
   repeated LevelUp level_ups = 8;
   repeated EffectEnd effect_ends = 9;
   repeated SkillCast casts = 10;
+  repeated Telegraph telegraphs = 11;
 }
 
 message Pong {
@@ -757,6 +817,7 @@ message Entity {
   string clan_name = 22;
   uint32 weapon_enchant = 23;
   BodyLook look = 24; // jogadores: visual do corpo
+  bool raid = 25; // raid boss (barra no topo da tela)
 }
 
 message EntityState {
@@ -812,6 +873,7 @@ enum Effect {
   EFFECT_WAR_CRY = 20; // +value de ataque (grito de guerra, soma com outros buffs)
   EFFECT_BANNER = 21; // +value de defesa (perto do estandarte)
   EFFECT_COURAGE = 22; // regenera value de vida por segundo (aura)
+  EFFECT_DEATH_MARK = 23; // Marca da Morte do raid boss: explode em volta do marcado
 }
 
 message EffectEvent {

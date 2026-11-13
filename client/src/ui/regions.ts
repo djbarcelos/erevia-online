@@ -27,7 +27,12 @@ export interface BossPoint {
   level: number;
   x: number;
   z: number;
+  /** Raid boss (covil próprio, renasce em horas). */
+  raid?: boolean;
 }
+
+/** Nome e raio do covil do raid boss (server/internal/game: RaidLairRadius). */
+export const RAID_LAIR = { name: "Cripta Esquecida", r: 24 };
 
 const RING_NAMES = ["Arredores", "Campos dos Ossos", "Ermos Partidos", "Terras Mortas", "Confins"];
 
@@ -65,8 +70,22 @@ export function buildRegions(zones: MapZone[], safeRadius: number): { regions: R
         rgb: tierRgb(z.levelMax),
         area: { x: z.x, z: z.z, r: z.radius },
       })),
+    // Covil do raid boss: uma região própria (aparece no minimapa ao entrar).
+    ...zones
+      .filter((z) => z.fixed && z.raid)
+      .map((z) => ({
+        name: RAID_LAIR.name,
+        monsters: z.name,
+        rMin: 0,
+        rMax: 0,
+        levelMin: z.levelMin,
+        levelMax: z.levelMax,
+        safe: false,
+        rgb: "200,90,220",
+        area: { x: z.x, z: z.z, r: RAID_LAIR.r },
+      })),
   ];
-  const bosses = zones.filter((z) => z.fixed).map((z) => ({ name: z.name, level: z.levelMin, x: z.x, z: z.z }));
+  const bosses = zones.filter((z) => z.fixed).map((z) => ({ name: z.name, level: z.levelMin, x: z.x, z: z.z, raid: z.raid }));
   return { regions, bosses };
 }
 
