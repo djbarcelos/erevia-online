@@ -52,7 +52,7 @@ const POSES: { role: "idle" | "attack" | "skill" | "buff"; label: string }[] = [
 function roster() {
   const h = game.hero;
   return [
-    { name: h.name, cls: h.cls, level: h.level, place: "Campos ao norte", look: h.look, last: "agora" },
+    { name: h.name, cls: h.cls, level: h.level, place: "Campos ao norte", look: game.look(), last: "agora" },
     { name: "Selene", cls: "mage" as ClassId, level: 9, place: "Cidade de Vel'Aran", look: { ...DEFAULT_LOOK.mage, emblem: "#58c7d6" }, last: "ontem" },
   ];
 }

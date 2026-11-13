@@ -755,6 +755,7 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
   };
   const offState = game.onChange((what) => {
     if (what === "hotbar" || what === "hero" || what === "ranks") drawHotbar();
+    if (what === "equip") sim.refreshPlayerModel();
   });
   cleanups.push(offState);
 

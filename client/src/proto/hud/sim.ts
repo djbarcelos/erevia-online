@@ -242,7 +242,7 @@ export class Sim {
 
   private attachModel(u: Unit): void {
     if (!this.models) return;
-    const look = game.hero.look;
+    const look = game.look();
     const inst = u.monster
       ? this.models.instantiate(u.model, `m${u.id}`)
       : this.models.instantiate(u.model, `m${u.id}`, { "handslot.r": look.right, "handslot.l": look.left });
@@ -255,6 +255,20 @@ export class Sim {
     }
     u.inst = inst;
     u.anim = new AnimController(inst.anims, inst.resetPose);
+  }
+
+  /** Recria o modelo do jogador (ex.: trocou a arma no inventário). */
+  refreshPlayerModel(): void {
+    if (!this.models || !this.me) return;
+    const rot = this.me.inst?.root.rotation.y ?? this.me.heading;
+    this.me.inst?.dispose();
+    this.me.inst = null;
+    this.me.anim = null;
+    this.attachModel(this.me);
+    // Variável nova: o TS não enxerga que attachModel preencheu inst/anim.
+    const me: Unit = this.me;
+    if (me.inst) me.inst.root.rotation.y = rot;
+    if (me.dead) me.anim?.play("death", { hold: true });
   }
 
   // ------------------------------------------------------------------------------------

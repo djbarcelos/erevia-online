@@ -5,7 +5,7 @@
 
 import type { ClassId } from "../../api";
 import { CLASS_BASE_ATTRS, derive, attrPointsTotal, type Attrs, type Bonus, type DerivedId } from "./attributes";
-import { initialInventory, itemStats, type EquipSlot, type ItemStack } from "./items";
+import { initialInventory, ITEMS, itemStats, stack, type EquipSlot, type ItemStack } from "./items";
 import { initialRanks, skillPointsTotal, TREES, type SkillNode } from "./skilltree";
 
 export interface Appearance {
@@ -71,10 +71,37 @@ function defaultHotbar(cls: ClassId, ranks: Record<string, number>): (string | n
   return bar;
 }
 
+/** Modelo 3D de arma/escudo usado por cada desenho de item (em /models/weapons). */
+const HAND_MODEL: Record<string, string> = {
+  sword: "sword_1handed",
+  axe: "axe_1handed",
+  dagger: "dagger",
+  staff: "staff",
+  shield: "shield_badge_color",
+  buckler: "shield_round_barbarian",
+};
+
+/** Ajusta a arma inicial equipada à classe (a antiga vai para a mochila). */
+function classGear(cls: ClassId, inv: ReturnType<typeof initialInventory>): void {
+  const weapon: Record<ClassId, string> = { knight: "sw_vigil", barbarian: "ax_war", mage: "st_ash", rogue: "dg_curve" };
+  const want = weapon[cls];
+  if (inv.equip.weapon?.id === want) return;
+  const i = inv.bag.findIndex((s) => s?.id === want);
+  const old = inv.equip.weapon;
+  inv.equip.weapon = i >= 0 ? inv.bag[i]! : stack(want, 1);
+  if (i >= 0) inv.bag[i] = old ?? null;
+  if (cls === "mage" && inv.equip.offhand) {
+    const free = inv.bag.findIndex((s) => !s);
+    if (free >= 0) inv.bag[free] = inv.equip.offhand;
+    delete inv.equip.offhand;
+  }
+}
+
 export function makeHero(name: string, cls: ClassId, look?: Appearance): Hero {
   const level = 14;
   const ranks = initialRanks(cls);
   const inv = initialInventory();
+  classGear(cls, inv);
   return {
     name,
     cls,
@@ -133,6 +160,13 @@ class GameState {
       // ignora
     }
     this.emit("hero");
+  }
+
+  /** Aparência no jogo: as mãos mostram o que está equipado; a cor vem da criação. */
+  look(): Appearance {
+    const eq = this.hero.equip;
+    const model = (s?: ItemStack) => (s ? (HAND_MODEL[ITEMS[s.id]?.art] ?? null) : null);
+    return { right: model(eq.weapon), left: model(eq.offhand), emblem: this.hero.look.emblem };
   }
 
   attrs(): Attrs {

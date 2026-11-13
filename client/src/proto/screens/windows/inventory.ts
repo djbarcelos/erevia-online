@@ -25,6 +25,7 @@ import {
 import { game } from "../../data/mock";
 import { beginDrag } from "../../hud/dragdrop";
 import { art, button, closeSheet, contextMenu, el, fmt, isTouch, openSheet, tabs, toast, tooltip, type MenuItem } from "../../kit";
+import { createPreview } from "../../preview3d";
 
 const LEFT: EquipSlot[] = ["head", "chest", "legs", "hands", "feet", "cape"];
 const RIGHT: EquipSlot[] = ["neck", "ear1", "ear2", "ring1", "ring2"];
@@ -95,7 +96,20 @@ export function build(): HTMLElement {
   };
   const colL = el("div", "doll-col", ...LEFT.map(mkEquip));
   const colR = el("div", "doll-col", ...RIGHT.map(mkEquip));
-  const figure = el("div", "doll-figure", el("div", "doll-sil"), el("div", "doll-name"));
+  // Miniatura 3D do personagem com o equipamento atual (arraste para girar).
+  const dollCanvas = el("canvas", "doll-canvas");
+  dollCanvas.setAttribute("aria-label", "Seu personagem — arraste para girar");
+  const figure = el("div", "doll-figure", el("div", "doll-stage", dollCanvas), el("div", "doll-name"));
+  figure.style.setProperty("--emblem", h.look.emblem);
+  const pv = createPreview(dollCanvas, { radius: 3.7 });
+  let lastLook = "";
+  const showModel = () => {
+    const look = game.look();
+    const key = JSON.stringify(look);
+    if (key === lastLook) return;
+    lastLook = key;
+    void pv.show(h.cls, look);
+  };
   const hands = el("div", "doll-hands", ...HANDS.map(mkEquip));
   const summary = el("div", "doll-summary");
   doll.append(el("div", "doll-grid", colL, el("div", "doll-mid", figure, hands), colR), summary);
@@ -400,6 +414,7 @@ export function build(): HTMLElement {
     // Resumo do boneco
     const st = game.stats();
     figure.querySelector(".doll-name")!.textContent = `${h.name} · Nv ${h.level}`;
+    showModel();
     summary.replaceChildren(
       ...(
         [
@@ -419,6 +434,7 @@ export function build(): HTMLElement {
   // Para de ouvir quando a janela fecha.
   root.addEventListener("win-close", () => {
     off();
+    pv.dispose();
   });
   return root;
 }

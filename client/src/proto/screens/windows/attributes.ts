@@ -19,7 +19,7 @@ export function build(): HTMLElement {
   const portrait = el("section", "attr-portrait");
   const canvas = el("canvas", "attr-canvas");
   const pv = createPreview(canvas, { radius: 5.2 });
-  void pv.show(h.cls, h.look);
+  void pv.show(h.cls, game.look());
   const xp = bar("xp");
   xp.set(h.xp, xpNeeded(h.level), `${fmt.format(h.xp)} / ${fmt.format(xpNeeded(h.level))} XP`);
   portrait.append(
@@ -151,6 +151,7 @@ export function build(): HTMLElement {
 
   render();
   const off = game.onChange((w) => {
+    if (w === "equip") void pv.show(h.cls, game.look());
     if (w === "equip" || w === "xp") render();
   });
   root.addEventListener("win-close", () => {

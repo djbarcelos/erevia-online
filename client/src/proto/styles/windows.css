@@ -288,18 +288,27 @@
   padding-top: 6px;
 }
 
-.doll-sil {
-  width: 92px;
-  height: 200px;
-  opacity: 0.9;
+.doll-stage {
+  position: relative;
+  width: 120px;
+  height: 236px;
+  border-radius: 60px 60px 8px 8px;
   background:
-    radial-gradient(circle at 50% 13%, rgba(214, 180, 110, 0.4) 0 15%, transparent 16%),
-    radial-gradient(ellipse 34% 28% at 50% 42%, rgba(214, 180, 110, 0.28) 0 98%, transparent 100%),
-    linear-gradient(rgba(214, 180, 110, 0.22), rgba(214, 180, 110, 0.22)) 32% 72% / 14% 36% no-repeat,
-    linear-gradient(rgba(214, 180, 110, 0.22), rgba(214, 180, 110, 0.22)) 68% 72% / 14% 36% no-repeat,
-    linear-gradient(rgba(214, 180, 110, 0.18), rgba(214, 180, 110, 0.18)) 10% 40% / 12% 30% no-repeat,
-    linear-gradient(rgba(214, 180, 110, 0.18), rgba(214, 180, 110, 0.18)) 90% 40% / 12% 30% no-repeat;
-  filter: drop-shadow(0 0 12px rgba(214, 180, 110, 0.3));
+    radial-gradient(60% 40% at 50% 82%, color-mix(in srgb, var(--emblem, var(--gold)) 22%, transparent), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--line);
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.doll-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+  cursor: grab;
 }
 
 .doll-name {
@@ -548,8 +557,8 @@
     align-items: start;
   }
 
-  .doll-sil {
-    height: 140px;
+  .doll-stage {
+    height: 170px;
   }
 }
 
