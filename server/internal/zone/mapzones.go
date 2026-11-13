@@ -28,7 +28,7 @@ func mapZones(spawns []game.Spawn) []*pb.MapZone {
 		if s.Fixed {
 			out = append(out, &pb.MapZone{
 				Name: def.Name, Fixed: true, X: float32(s.X), Z: float32(s.Z),
-				LevelMin: uint32(s.LevelMin), LevelMax: uint32(s.LevelMin), Boss: def.Boss,
+				LevelMin: uint32(s.LevelMin), LevelMax: uint32(s.LevelMin), Boss: def.Boss, Raid: def.Raid,
 			})
 			continue
 		}

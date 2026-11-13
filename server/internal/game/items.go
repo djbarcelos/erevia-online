@@ -36,6 +36,7 @@ const (
 	GradeGood
 	GradeRare
 	GradeEpic
+	GradeLegendary // só o raid boss deixa cair
 )
 
 // Encaixes de equipamento. Os 4 primeiros são os de antes (os números ficam iguais no
@@ -393,6 +394,20 @@ var Items = func() map[string]*ItemDef {
 		gear("ring_epic", "Selo do Senhor dos Ossos", KindRing, nil, GradeEpic, 18, Stats{MDef: 12, Crit: 0.03, CritDamage: 0.2, PAtk: 5, MAtk: 5}, 8500,
 			"", "ring", "Quem usa o selo dá ordens aos mortos. Ou acha que dá."),
 
+		// Lendários: só o raid boss (Ozrhal) deixa cair.
+		weapon("sword_legend", "Lâmina do Rei Ossário", "knight", GradeLegendary, 20, Stats{PAtk: 44, MaxHP: 90, Crit: 0.04}, 30000, "sword_2handed_color", "",
+			"Fria ao toque. Os mortos recuam quando ela é erguida."),
+		weapon("axe_legend", "Machado do Rei Ossário", "barbarian", GradeLegendary, 20, Stats{PAtk: 49, Crit: 0.05, CritDamage: 0.15}, 30000, "axe_2handed", "",
+			"Cada golpe ecoa como um sino de cripta."),
+		weapon("staff_legend", "Cetro do Rei Ossário", "mage", GradeLegendary, 20, Stats{MAtk: 51, MaxMP: 120, Crit: 0.04, CastSpeed: 0.05}, 30000, "staff", "",
+			"O cetro de Ozrhal. As runas ainda sussurram ordens."),
+		weapon("daggers_legend", "Garras do Rei Ossário", "rogue", GradeLegendary, 20, Stats{PAtk: 39, Crit: 0.08, CritDamage: 0.1}, 30000, "dagger", "dagger",
+			"Feitas dos dedos do próprio rei. Não pergunte como."),
+		gear("ring_legend", "Anel do Rei Ossário", KindRing, nil, GradeLegendary, 20, Stats{MDef: 15, Crit: 0.04, CritDamage: 0.25, PAtk: 7, MAtk: 7}, 26000,
+			"", "ring", "Pesa mais do que deveria."),
+		gear("neck_legend", "Colar do Rei Ossário", KindNecklace, nil, GradeLegendary, 20, Stats{MDef: 27, MaxHP: 120, MaxMP: 100, PAtk: 8, MAtk: 8}, 28000,
+			"", "necklace", "Vértebras de ouro presas num fio de prata."),
+
 		// Poções.
 		potion("potion_hp_s", "Poção de Vida Menor", CooldownHP, 80, 0, 20, "potion_hp", "Recupera 80 de vida na hora."),
 		potion("potion_hp_l", "Poção de Vida Maior", CooldownHP, 260, 0, 75, "potion_hp_big", "Recupera 260 de vida na hora."),
@@ -416,6 +431,8 @@ var Items = func() map[string]*ItemDef {
 		stackable("skull_cracked", "Crânio Rachado", KindMaterial, 35, "skull", "Os alquimistas pagam bem por isso."),
 		stackable("shadow_essence", "Essência Sombria", KindMaterial, 100, "essence", "Fumaça escura presa num frasco."),
 		stackable("rune_core", "Núcleo Rúnico", KindMaterial, 220, "rune_core", "O coração de um Golem de Pedra. Ainda pulsa, morno, na mão."),
+		stackable("raid_fragment", "Fragmento do Rei Ossário", KindMaterial, 5000, "crown",
+			"Um pedaço da coroa de Ozrhal. Ainda está frio como uma tumba."),
 		stackable("broken_crown", "Coroa Partida", KindMaterial, 1500, "crown", "A coroa do Senhor dos Ossos. Vale uma fortuna."),
 
 		// Moedas no chão.
@@ -517,6 +534,12 @@ var gearByGrade = func() map[Grade][]*ItemDef {
 	return m
 }()
 
+// Saque de equipamento do raid boss.
+const (
+	RaidEpicDrops       = 2
+	RaidLegendaryChance = 0.35
+)
+
 // gearChances: chance de cair um equipamento de cada raridade, pelo nível do monstro.
 func gearChances(level int, boss bool) map[Grade]float64 {
 	switch {
@@ -551,6 +574,21 @@ func RollLoot(m *MonsterDef, level int, rng *rand.Rand) []Drop {
 		if d := Items[e.ItemID]; d != nil && n > 0 {
 			out = append(out, Drop{Item: d, Count: n})
 		}
+	}
+	if m.NoGear {
+		return out
+	}
+	if m.Raid {
+		// Raid: 2 épicos garantidos e 35% de chance de um lendário.
+		for range RaidEpicDrops {
+			pool := gearByGrade[GradeEpic]
+			out = append(out, Drop{Item: pool[rng.IntN(len(pool))], Count: 1})
+		}
+		if rng.Float64() < RaidLegendaryChance {
+			pool := gearByGrade[GradeLegendary]
+			out = append(out, Drop{Item: pool[rng.IntN(len(pool))], Count: 1})
+		}
+		return out
 	}
 	chances := gearChances(level, m.Boss)
 	for _, g := range []Grade{GradeEpic, GradeRare, GradeGood, GradeCommon} {

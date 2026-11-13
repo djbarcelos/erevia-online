@@ -44,6 +44,8 @@ type Config struct {
 	Seed           uint64           // semente do sorteio (posições, dano…)
 	World          *world.World     // obstáculos e caminhos (nil = campo aberto)
 	Clans          []ClanData       // clãs salvos (carregados na partida)
+	Bosses         []BossData       // renascimento dos raid bosses (carregado na partida)
+	DevCommands    bool             // comandos de teste no chat (/raid); só com DEV_LOGIN
 	Clock          func() time.Time // relógio do ciclo dia/noite (nil = time.Now)
 	Version        string           // versão do servidor (vai nos relatos de /bug)
 }
@@ -174,6 +176,8 @@ type frame struct {
 	levelUps []*pb.LevelUp
 	ends     []*pb.EffectEnd
 	casts    []*pb.SkillCast
+	// Avisos no chão do raid boss (começo, golpe e cancelamento).
+	telegraphs []*pb.Telegraph
 }
 
 type Zone struct {
@@ -218,6 +222,11 @@ type Zone struct {
 	storages       map[int64]*storage // conta → armazém
 	modJobs        chan modJob
 	modBackend     ModBackend
+	bossBackend    BossBackend
+	bossJobs       chan BossData
+	telegraphs     []*telegraph
+	telegraphSeq   uint32
+	summonSeq      uint32
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -244,6 +253,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		clanJobs:       make(chan clanJob, clanJobQueue),
 		storages:       map[int64]*storage{},
 		modJobs:        make(chan modJob, modJobQueue),
+		bossJobs:       make(chan BossData, 16),
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
 	}
@@ -307,6 +317,7 @@ func (z *Zone) Run(ctx context.Context) {
 	defer saveTicker.Stop()
 	go z.runClanWorker(ctx)
 	go z.runModWorker(ctx)
+	go z.runBossWorker(ctx)
 
 	for {
 		select {
@@ -495,6 +506,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Pvp:          z.selfPvpPB(p),
 		Clan:         z.clanPB(p),
 		Enchant:      enchantRulesPB(),
+		Bosses:       z.bossList(),
 	}}})
 	z.sendSelfStats(p)
 	for id, ready := range p.pl.cooldowns {
@@ -638,6 +650,7 @@ func (z *Zone) update(dt float64) {
 		z.think(m)
 		z.step(m, dt)
 	}
+	z.updateTelegraphs()
 
 	if z.tick%uint32(z.cfg.TickRate) == 0 { // 1×/s
 		z.expireGround()
@@ -725,10 +738,11 @@ func (z *Zone) flushSnapshot() {
 	snap.LevelUps = z.frame.levelUps
 	snap.EffectEnds = z.frame.ends
 	snap.Casts = z.frame.casts
+	snap.Telegraphs = z.frame.telegraphs
 	z.frame = frame{}
 
 	if len(snap.States)+len(snap.Hp)+len(snap.Combat)+len(snap.Effects)+len(snap.Deaths)+len(snap.Revives)+
-		len(snap.LevelUps)+len(snap.EffectEnds)+len(snap.Casts) == 0 {
+		len(snap.LevelUps)+len(snap.EffectEnds)+len(snap.Casts)+len(snap.Telegraphs) == 0 {
 		return
 	}
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Snapshot{Snapshot: snap}}, 0)
@@ -844,6 +858,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		Level: uint32(e.level), Hp: uint32(e.hpInt()), MaxHp: uint32(e.maxHPInt()),
 		Dead: e.dead, Scale: float32(e.scale),
 		Boss: e.mon != nil && e.mon.def.Boss,
+		Raid: e.mon != nil && e.mon.def.Raid,
 	}
 	if e.pl != nil {
 		w, o, g := e.pl.inv.look()

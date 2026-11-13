@@ -32,6 +32,7 @@ const (
 	EffectWarCry                  // Value = +fração de ataque (soma com outros buffs)
 	EffectBanner                  // Value = +fração de defesa (perto do estandarte)
 	EffectCourage                 // Value = vida regenerada por segundo (aura)
+	EffectDeathMark               // Marca da Morte (raid): explode em volta do marcado no fim
 )
 
 // IsDoT: efeitos que causam dano a cada segundo.

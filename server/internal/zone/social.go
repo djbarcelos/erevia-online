@@ -279,7 +279,7 @@ func enchantRulesPB() *pb.EnchantRules {
 	for _, c := range game.EnchantChances() {
 		out.Chance = append(out.Chance, float32(c))
 	}
-	for g := game.Grade(0); g <= game.GradeEpic; g++ {
+	for g := game.Grade(0); g <= game.GradeLegendary; g++ {
 		out.WeaponBonus = append(out.WeaponBonus, uint32(game.EnchantPerGrade(g)))
 	}
 	return out

@@ -47,6 +47,8 @@ import { buildSkills } from "./ui/windows/skills";
 import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { InvitePrompt } from "./ui/invite";
+import { RaidUi } from "./ui/raid";
+import { RaidDirector } from "./world/raid";
 import { AutoHunt } from "./world/autohunt";
 import { GroundLoot } from "./world/loot";
 import { Fx } from "./world/fx";
@@ -542,6 +544,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   const chat = new Chat(hud.chatRoot, character.name, (text, to, channel) => conn.chat(text, to, channel));
   chat.onPartyInvite = inviteParty;
+  // Raid boss: barra no topo, anúncios, avisos no chão e o estado dos chefes no mapa.
+  const serverOffset = Number(welcome.serverTimeMs) - Date.now();
+  const serverNow = () => Date.now() + serverOffset;
+  const raidUi = new RaidUi(serverNow);
+  hud.mount(raidUi.bar, raidUi.banner);
+  const raid = new RaidDirector(world.scene, fx, entities, raidUi, welcome.yourId, (text) => chat.announce(text));
+  raid.setBosses(welcome.bosses);
   const invites = new InvitePrompt(hud.element, (id, accept) => conn.inviteReply(id, accept));
   /** Atualiza tudo que depende do grupo (nomes azuis, painel, janela, quadro do alvo). */
   const applyParty = () => {
@@ -776,6 +785,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           .filter((n) => n.role === NpcRole.TELEPORT)
           .map((n) => ({ id: n.id, name: entities.info(n.id)?.name ?? "", x: entities.rootOf(n.id)?.position.x ?? 0, z: entities.rootOf(n.id)?.position.z ?? 0 })),
         nameOf: (id) => entities.info(id)?.name ?? "",
+        bossStatus: (b) => {
+          const st = raid.statusAt(b.x, b.z);
+          return st && { alive: st.alive, windowStartMs: Number(st.windowStartMs), windowEndMs: Number(st.windowEndMs) };
+        },
+        serverNow,
         moveTo: (x, z) => {
           hud.setQueued(0);
           pendingShop = 0;
@@ -897,6 +911,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     const dt = Math.min(world.engine.getDeltaTime() / 1000, 0.1);
     entities.setLatency(conn.ping, welcome.tickRate);
     entities.update(dt);
+    raid.update();
     const pos = entities.localPosition();
     if (pos) {
       world.camera.target.x = pos.x;
@@ -988,6 +1003,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       partyInvite: (name: string) => inviteParty(name),
       answerInvite: (accept: boolean) => invites.answer(accept),
       clan: () => clan,
+      raid: () => raid.all(),
+      raidCmd: (args: string) => conn.chat(`/raid ${args}`, ""),
       clanCmd: (kind: number, opts: { name?: string; targetId?: number; text?: string }) => conn.clanCmd(kind, opts),
     };
   }
@@ -1010,13 +1027,20 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       storageWin.dispose();
       barberWin.dispose();
       window.clearInterval(channelFx);
+      raid.dispose();
+      raidUi.dispose();
       itemTip.root.remove();
     },
     apply(msg: ServerMessage) {
       switch (msg.msg.case) {
-        case "spawn":
-          if (msg.msg.value.entity) entities.add(msg.msg.value.entity, true);
+        case "spawn": {
+          const e = msg.msg.value.entity;
+          if (e) {
+            entities.add(e, true);
+            raid.onSpawn(e.id, e.model, e.x, e.z);
+          }
           break;
+        }
         case "despawn":
           if (msg.msg.value.id === targetId) selectTarget(0);
           entities.remove(msg.msg.value.id);
@@ -1040,6 +1064,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
             auto.onDeath(id);
           }
           for (const r of snap.revives) entities.onRevive(r);
+          for (const t of snap.telegraphs) raid.onTelegraph(t);
           for (const l of snap.levelUps) {
             entities.onLevelUp(l);
             if (l.id === welcome.yourId) hud.levelBanner(l.level);
@@ -1159,6 +1184,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           break;
         case "chat":
           chat.receive(msg.msg.value);
+          break;
+        case "announce":
+          raid.announce(msg.msg.value);
+          break;
+        case "bossStatus":
+          raid.onStatus(msg.msg.value);
           break;
       }
     },

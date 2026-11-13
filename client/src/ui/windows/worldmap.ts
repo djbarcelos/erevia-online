@@ -23,6 +23,26 @@ export interface WorldMapDeps {
   nameOf(id: number): string;
   /** Andar até um ponto (o servidor calcula o caminho). */
   moveTo(x: number, z: number): void;
+  /** Estado de um chefe (vivo ou janela de renascimento), se o servidor mandou. */
+  bossStatus?(b: BossPoint): { alive: boolean; windowStartMs: number; windowEndMs: number } | undefined;
+  /** Relógio do servidor (ms), para as janelas de renascimento. */
+  serverNow?(): number;
+}
+
+const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+/** Texto do estado de um chefe na lista: vivo, janela de renascimento ou "a qualquer momento". */
+function bossLine(d: WorldMapDeps, bo: BossPoint): { text: string; alive: boolean } {
+  const base = `${bo.raid ? "Raid boss" : "Chefe"} · nível ${bo.level}`;
+  const st = d.bossStatus?.(bo);
+  if (!st) return { text: base, alive: false };
+  if (st.alive) return { text: `${base} · Vivo`, alive: true };
+  const now = d.serverNow?.() ?? Date.now();
+  if (!st.windowStartMs || now >= st.windowEndMs) return { text: `${base} · Renasce a qualquer momento`, alive: false };
+  if (now >= st.windowStartMs) return { text: `${base} · Pode renascer a qualquer momento (até ${hhmm(st.windowEndMs)})`, alive: false };
+  // Chefes de campo renascem em minutos; o raid, numa janela de horas.
+  if (st.windowEndMs - now < 3_600_000 && !bo.raid) return { text: `${base} · Renasce em ~${Math.max(1, Math.ceil((st.windowStartMs - now) / 60_000))} min`, alive: false };
+  return { text: `${base} · Renasce entre ${hhmm(st.windowStartMs)} e ${hhmm(st.windowEndMs)}`, alive: false };
 }
 
 type Layer = "zones" | "places" | "party" | "players" | "monsters";
@@ -119,13 +139,27 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     zoneList.append(b);
   }
   const bossList = el("div", "wmap-quests");
+  const bossLines: { bo: BossPoint; row: HTMLButtonElement; sub: HTMLElement }[] = [];
   for (const bo of d.bosses) {
     const b = el("button", "wmap-quest");
     b.type = "button";
-    b.append(el("span", "qm boss", "◆"), el("span", null, el("b", null, bo.name), el("small", null, `Chefe · nível ${bo.level}`)));
+    const sub = el("small", null);
+    b.append(el("span", bo.raid ? "qm boss raid" : "qm boss", bo.raid ? "☠" : "◆"), el("span", null, el("b", null, bo.name), sub));
     b.onclick = () => flyTo(bo.x, bo.z, 3.5);
     bossList.append(b);
+    bossLines.push({ bo, row: b, sub });
   }
+  let bossTextAt = 0;
+  const refreshBosses = (now: number) => {
+    if (now - bossTextAt < 1000) return;
+    bossTextAt = now;
+    for (const l of bossLines) {
+      const s = bossLine(d, l.bo);
+      if (l.sub.textContent !== s.text) l.sub.textContent = s.text;
+      l.row.classList.toggle("alive", s.alive);
+    }
+  };
+  refreshBosses(performance.now());
   side.append(el("h3", "wmap-title", "Erevia"), here, el("div", "wmap-sec", "Camadas"), layers, el("div", "wmap-sec", "Regiões"), zoneList);
   if (d.bosses.length) side.append(el("div", "wmap-sec", "Chefes"), bossList);
   if (d.stones.length) {
@@ -425,6 +459,24 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     });
     // Chefes que ainda não estão por perto (posição fixa)
     if (show.monsters && scale <= 2) for (const bo of d.bosses) drawBossMarker(ctx, sx(bo.x), sy(bo.z), 8);
+    // Covil do raid boss: brilho roxo pulsando enquanto ele está vivo.
+    if (show.monsters) {
+      for (const bo of d.bosses) {
+        if (!bo.raid || !d.bossStatus?.(bo)?.alive) continue;
+        const x = sx(bo.x);
+        const y = sy(bo.z);
+        const r = 16 * (1 + Math.sin(performance.now() / 380) * 0.18);
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, "rgba(214,140,255,.85)");
+        g.addColorStop(1, "rgba(140,50,220,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        if (scale <= 2) label(bo.name, x, y - 18, 11, "#e6a6ff", 700);
+      }
+    }
+    refreshBosses(now);
 
     // Destino marcado + caminho
     if (waypoint) {

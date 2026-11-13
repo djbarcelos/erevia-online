@@ -339,7 +339,7 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 }
 
 func (z *Zone) applyEffect(src, e *entity, def *game.EffectDef) {
-	if e.dead {
+	if e.dead || (e.mon != nil && e.mon.def.ImmuneTo(def.Kind)) {
 		return
 	}
 	e.addEffect(def, z.now, src.id)
@@ -448,6 +448,9 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 	if dst.has(game.EffectUndying, z.now) && dst.hp-dmg < 1 {
 		dmg = math.Max(0, dst.hp-1)
 	}
+	if dst.mon != nil && dst.mon.raid != nil {
+		z.raidCredit(dst, src, math.Min(dmg, dst.hp))
+	}
 	dst.hp -= dmg
 	if dst.hp <= 0 {
 		if ev != nil {
@@ -478,7 +481,8 @@ func (z *Zone) checkLastStand(p *entity) {
 func (z *Zone) regen(e *entity, dt float64) {
 	calm := z.now-e.lastCombat > outOfCombatAfter
 	if e.mon != nil {
-		if calm && !e.mon.returning && e.hp < e.stats.MaxHP {
+		// O raid boss não se cura sozinho: só ao voltar ao trono (reinício).
+		if calm && !e.mon.returning && e.mon.raid == nil && e.hp < e.stats.MaxHP {
 			e.hp = math.Min(e.stats.MaxHP, e.hp+e.stats.MaxHP*0.03*dt)
 		}
 		return
