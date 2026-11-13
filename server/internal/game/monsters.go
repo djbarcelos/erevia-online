@@ -25,6 +25,9 @@ type MonsterDef struct {
 	// 0 = corpo de tamanho normal (ninguém mudou de alcance).
 	BodyRadius float64
 	Boss       bool // chefe (marcado no mapa)
+	Elite      bool // elite: mais forte que o comum (o aviso das habilidades dura mais)
+	// Habilidades com aviso no chão (abilities.go e zone/abilities.go).
+	Abilities []AbilityDef
 	// Raid boss: covil com coleira própria, fases e habilidades (zone/raid.go), recompensa
 	// dividida por dano e renascimento longo salvo no banco.
 	Raid        bool
@@ -58,6 +61,21 @@ var (
 		{"scroll_ench_armor_b", 0.004, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
 )
 
+// Marca da Morte do Ozrhal (os testes do raid usam os números).
+const RaidMarkRadius, RaidMarkDelay, RaidMarkMult = 5.0, 5.0, 1.4
+
+// Habilidades do Ozrhal, por fase. A ordem é a de checagem a cada think (Onda, Chuva,
+// Marca), e os ids ligam cada uma ao relógio dela no raidState (zone/raid.go).
+var raidAbilities = []AbilityDef{
+	{ID: "wave", Look: LookWave, Shape: ShapeCircle, Target: AimSelf, Radius: 8, Delay: 2.5, Cooldown: 14, First: 8,
+		Mult: 1.6, Effect: &EffectDef{Kind: EffectSlow, Duration: 3, Value: 0.4}, MinPhase: 1, HitID: HitRaidWave},
+	{ID: "rain", Look: LookRain, Shape: ShapeCircle, Target: AimRandom, Count: 3, Radius: 4, Delay: 2, Cooldown: 12, First: 3,
+		Mult: 1, Effect: &EffectDef{Kind: EffectStun, Duration: 1}, MinPhase: 2, HitID: HitRaidRain},
+	{ID: "mark", Look: LookMark, Shape: ShapeCircle, Target: AimMark, Radius: RaidMarkRadius, Delay: RaidMarkDelay, Cooldown: 16, First: 4,
+		Mult: RaidMarkMult, OnMarked: &EffectDef{Kind: EffectDeathMark, Duration: RaidMarkDelay}, MinPhase: 3, HitID: HitRaidMark,
+		Warn: "Você foi marcado pela morte! Afaste-se do seu grupo antes que a marca exploda."},
+}
+
 var Monsters = map[string]*MonsterDef{
 	"skeleton_minion": {ID: "skeleton_minion", Name: "Esqueleto Lacaio", Model: "skeleton_minion",
 		HP: 50, HPLvl: 18, Atk: 6, AtkLv: 1.6, Def: 8, DefLv: 2.2, Range: 2, Interval: 1.6, Speed: 3.5, XPBase: 12, Scale: 1,
@@ -74,10 +92,17 @@ var Monsters = map[string]*MonsterDef{
 	// Lento e muito resistente; bate forte e devagar.
 	"stone_golem": {ID: "stone_golem", Name: "Golem de Pedra", Model: "stone_golem",
 		HP: 180, HPLvl: 40, Atk: 14, AtkLv: 2.6, Def: 26, DefLv: 4, Range: 2.6, Interval: 2.4, Speed: 2.8, Aggressive: true, XPBase: 40, Scale: 1.25, BodyRadius: 1.0,
-		GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem},
+		GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem,
+		// Pancada em cone à frente: ~25% do dano da luta (4 golpes de 2,4 s + 1,5 a cada 10 s).
+		Abilities: []AbilityDef{{ID: "golem_slam", Shape: ShapeCone, Target: AimSelf, Radius: 5, Arc: 90,
+			Delay: 1.2, Cooldown: 10, First: 4, Mult: 1.5, Effect: &EffectDef{Kind: EffectSlow, Duration: 2, Value: 0.3}}}},
 	"bone_lord": {ID: "bone_lord", Name: "Senhor dos Ossos", Model: "skeleton_warrior",
 		HP: 400, HPLvl: 60, Atk: 14, AtkLv: 3, Def: 20, DefLv: 4, Range: 2.8, Interval: 1.8, Speed: 4, Aggressive: true, XPBase: 120, Scale: 1.6, Boss: true,
-		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootBoss},
+		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootBoss,
+		// Anel de ossos: quem está colado nele escapa; quem bate de longe precisa entrar ou
+		// sair. ~25% do dano da luta (6,7 golpes de 1,8 s + 2,2 a cada 12 s).
+		Abilities: []AbilityDef{{ID: "bone_ring", Shape: ShapeDonut, Target: AimSelf, Inner: 3.5, Radius: 9,
+			Delay: 2, Cooldown: 12, First: 5, Mult: 2.2}}},
 	// Raid boss da Cripta Esquecida: um lich gigante. Imune a controle (menos provocar),
 	// preso ao covil e com habilidades por fase (zone/raid.go).
 	"ozrhal": {ID: "ozrhal", Name: "Ozrhal, o Rei Ossário", Model: "skeleton_mage",
@@ -85,7 +110,8 @@ var Monsters = map[string]*MonsterDef{
 		Aggressive: true, XPBase: 260, Scale: 2.6, BodyRadius: 1.2, Boss: true, Raid: true,
 		Immune:      []EffectKind{EffectStun, EffectRoot, EffectSlow, EffectBlind},
 		LeashRadius: 30, RespawnMin: 3 * 3600, RespawnMax: 4 * 3600,
-		GoldChance: 1, GoldMin: 120, GoldMax: 160, Loot: lootRaid},
+		GoldChance: 1, GoldMin: 120, GoldMax: 160, Loot: lootRaid,
+		Abilities: raidAbilities},
 	// Invocação do Ozrhal: não renasce e não deixa equipamento.
 	"bone_guard": {ID: "bone_guard", Name: "Guarda Ossário", Model: "skeleton_warrior",
 		HP: 120, HPLvl: 30, Atk: 12, AtkLv: 2.4, Def: 14, DefLv: 3, Range: 2.2, Interval: 1.6, Speed: 4.4, Aggressive: true, XPBase: 6, Scale: 1.15,

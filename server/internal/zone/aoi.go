@@ -165,7 +165,6 @@ func encField(num protowire.Number, m proto.Message) []byte {
 type tickEvent struct {
 	a, b uint32 // relevante para quem conhece a ou b (0 = ninguém)
 	enc  []byte
-	all  bool // para todos (avisos no chão do raid)
 }
 
 // encodeFrame codifica os eventos do tick uma vez.
@@ -189,8 +188,9 @@ func encodeFrame(all *pb.Snapshot) []tickEvent {
 	for _, c := range all.Casts {
 		ev = append(ev, tickEvent{a: c.SourceId, enc: encField(snapFieldCasts, c)})
 	}
+	// Avisos no chão: para quem conhece o monstro ou o marcado (nunca para o mapa todo).
 	for _, t := range all.Telegraphs {
-		ev = append(ev, tickEvent{all: true, enc: encField(snapFieldTelegraphs, t)})
+		ev = append(ev, tickEvent{a: t.SourceId, b: t.FollowId, enc: encField(snapFieldTelegraphs, t)})
 	}
 	return ev
 }
@@ -219,7 +219,7 @@ func snapshotBytes(p *entity, tick uint32, deaths []uint32, events []tickEvent, 
 		body = append(body, e.encHP...)
 	}
 	for _, ev := range events {
-		if ev.all || has(ev.a) || has(ev.b) {
+		if has(ev.a) || has(ev.b) {
 			body = append(body, ev.enc...)
 		}
 	}
