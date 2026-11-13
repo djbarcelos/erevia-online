@@ -1,6 +1,10 @@
 package zone
 
-import "erevia/server/internal/world"
+import (
+	"math"
+
+	"erevia/server/internal/world"
+)
 
 // Navegação: caminhos que contornam obstáculos e colisão ao andar.
 // Sem Config.World (testes antigos), tudo anda em linha reta como antes.
@@ -85,6 +89,9 @@ func (z *Zone) advance(e *entity, dist float64) {
 			e.stopMoving()
 			return
 		}
+	}
+	if d := math.Hypot(newPos.X-e.pos.X, newPos.Z-e.pos.Z); d > 1e-6 {
+		e.face = Vec2{X: (newPos.X - e.pos.X) / d, Z: (newPos.Z - e.pos.Z) / d}
 	}
 	e.pos = newPos
 	e.moved = true

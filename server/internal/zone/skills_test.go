@@ -36,7 +36,7 @@ func TestCooldownSurvivesRelog(t *testing.T) {
 
 	p2, peer := joinAt(z, 7, "knight", 30, 0, 0)
 	left := p2.pl.cooldowns[game.SkillFortress] - z.now
-	want := game.Skills[game.SkillFortress].Cooldown - 5
+	want := game.Skills[game.SkillFortress].Cooldown(1) - 5
 	if left < want-0.1 || left > want+0.1 {
 		t.Fatalf("recarga depois de voltar: %.2f s, esperava ~%.0f s", left, want)
 	}
@@ -63,8 +63,8 @@ func TestCastSkillRechecksCooldown(t *testing.T) {
 	mp0 := p.mp
 	z.castSkill(p, s, nil)
 	z.castSkill(p, s, nil) // chamada direta, sem passar por requestSkill
-	if spent := mp0 - p.mp; spent != s.MPCost {
-		t.Fatalf("gastou %.0f de mana, esperava %.0f (uma vez só)", spent, s.MPCost)
+	if spent := mp0 - p.mp; spent != s.MPCost(1) {
+		t.Fatalf("gastou %.0f de mana, esperava %.0f (uma vez só)", spent, s.MPCost(1))
 	}
 }
 

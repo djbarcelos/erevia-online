@@ -15,6 +15,12 @@ type Stats struct {
 	Crit         float64 // chance de crítico (0–1)
 	Speed        float64 // m/s
 	Magic        bool    // ataque básico usa MAtk/MDef
+	// Detalhes (ver attributes.go): precisão contra esquiva decide o erro; a velocidade de
+	// conjuração divide a recarga das skills; regen é por segundo em combate.
+	Accuracy, Evasion float64
+	CastSpeed         float64 // 1 = normal
+	HPRegen, MPRegen  float64
+	CritDamage        float64 // multiplicador do crítico (2 = dobro)
 }
 
 // ClassDef descreve uma classe jogável.
@@ -23,7 +29,9 @@ type ClassDef struct {
 	Name     string
 	Base     Stats // nível 1
 	PerLevel Stats // somado a cada nível acima do 1 (só os campos numéricos de recurso/ataque/defesa)
+	// Skills que todo personagem da classe já começa sabendo (rank 1): as raízes dos ramos.
 	Skills   [2]uint32
+	Branches [3]Branch // os 3 ramos da árvore de skills (nomes vêm de skilltree.go)
 }
 
 var Classes = map[string]*ClassDef{
@@ -70,7 +78,7 @@ func ClassStats(class string, level int) Stats {
 	return s
 }
 
-// AddBonus soma os bônus de equipamento aos atributos (só os campos numéricos de status).
+// AddBonus soma bônus planos (equipamento) aos atributos de status.
 func (s Stats) AddBonus(b Stats) Stats {
 	s.MaxHP += b.MaxHP
 	s.MaxMP += b.MaxMP
@@ -79,6 +87,8 @@ func (s Stats) AddBonus(b Stats) Stats {
 	s.PDef += b.PDef
 	s.MDef += b.MDef
 	s.Crit += b.Crit
+	s.Accuracy += b.Accuracy
+	s.Evasion += b.Evasion
 	return s
 }
 

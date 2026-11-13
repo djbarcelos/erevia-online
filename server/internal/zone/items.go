@@ -45,14 +45,6 @@ func (z *Zone) onItem(e itemEvent) {
 	}
 }
 
-// refreshStats recalcula os atributos: classe no nível + equipamento.
-func (z *Zone) refreshStats(p *entity) {
-	p.stats = game.ClassStats(p.pl.class, p.level).AddBonus(p.pl.inv.bonus())
-	p.hp = math.Min(p.hp, p.stats.MaxHP)
-	p.mp = math.Min(p.mp, p.stats.MaxMP)
-	p.pl.statsDirty = true
-}
-
 // inventoryChanged avisa o dono, agenda o salvamento e, se a arma mudou, mostra a todos.
 func (z *Zone) inventoryChanged(p *entity, gearChanged bool) {
 	if gearChanged {

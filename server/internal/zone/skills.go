@@ -8,13 +8,28 @@ import (
 	"erevia/server/internal/pb"
 )
 
-// skillInfoPB descreve a skill para o cliente (barra, dica e efeitos visuais).
+// skillInfoPB descreve a skill para o cliente: valores do rank 1 nos campos principais
+// (barra, dica e efeitos visuais), a tabela de ranks e o lugar na árvore.
 func skillInfoPB(s *game.SkillDef) *pb.SkillInfo {
 	info := &pb.SkillInfo{
-		Id: s.ID, Name: s.Name, Key: uint32(s.Key), MpCost: uint32(s.MPCost),
-		CooldownMs: uint32(s.Cooldown * 1000), Range: float32(s.Range), Target: pb.SkillTarget(s.Target),
-		Description: s.Description, Fx: s.FX, Magic: s.Magic, Power: float32(s.Mult),
+		Id: s.ID, Name: s.Name, MpCost: uint32(s.MPCost(1)),
+		CooldownMs: uint32(s.Cooldown(1) * 1000), Range: float32(s.Range), Target: pb.SkillTarget(s.Target),
+		Description: s.Description, Fx: s.FX, Magic: s.Magic, Power: float32(s.Mult.At(1)),
 		ExtraCrit: float32(s.ExtraCrit),
+		Branch:    uint32(s.Branch), Tier: uint32(s.Tier), MaxRank: uint32(s.MaxRank), Passive: s.IsPassive(),
+		LevelReq: uint32(s.LevelReq()), Splash: float32(s.Splash),
+	}
+	if s.IsPassive() {
+		info.Target = pb.SkillTarget_SKILL_TARGET_UNSPECIFIED
+	}
+	if p := s.Parent(); p != nil {
+		info.ParentId = p.ID
+	}
+	// Tecla padrão (só as duas iniciais; a barra de atalhos é do jogador).
+	for i, st := range game.ClassSkills(s.Class) {
+		if st.ID == s.ID {
+			info.Key = uint32(i + 1)
+		}
 	}
 	ef, self := s.OnTarget, false
 	if ef == nil {
@@ -22,9 +37,20 @@ func skillInfoPB(s *game.SkillDef) *pb.SkillInfo {
 	}
 	if ef != nil {
 		info.Effect = pb.Effect(ef.Kind)
-		info.EffectMs = uint32(ef.Duration * 1000)
-		info.EffectValue = float32(ef.Value)
+		info.EffectMs = uint32(ef.Duration.At(1) * 1000)
+		info.EffectValue = float32(ef.Value.At(1))
 		info.EffectOnSelf = self
+	}
+	for r := 1; r <= s.MaxRank; r++ {
+		ri := &pb.SkillRankInfo{
+			MpCost: uint32(s.MPCost(r)), CooldownMs: uint32(s.Cooldown(r) * 1000), Power: float32(s.Mult.At(r)),
+			Text: s.Text(r),
+		}
+		if ef != nil {
+			ri.EffectMs = uint32(ef.Duration.At(r) * 1000)
+			ri.EffectValue = float32(ef.Value.At(r))
+		}
+		info.Ranks = append(info.Ranks, ri)
 	}
 	return info
 }

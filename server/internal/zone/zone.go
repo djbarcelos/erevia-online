@@ -9,9 +9,11 @@ package zone
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"math"
 	"math/rand/v2"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -67,6 +69,11 @@ type JoinInfo struct {
 	HP, MP int // <= 0 = cheio
 	Gold   int64
 	Items  []game.ItemRecord
+	// Progressão: pontos de atributo gastos, ranks da árvore (nil = só as iniciais) e
+	// barra de atalhos (nil = padrão).
+	Attrs  game.Attrs
+	Ranks  map[uint32]int
+	Hotbar []string
 	Peer   Peer
 }
 
@@ -79,6 +86,9 @@ type SavedState struct {
 	HP, MP int // -1 = cheio
 	Gold   int64
 	Items  []game.ItemRecord
+	Attrs  game.Attrs
+	Ranks  map[uint32]int
+	Hotbar []string
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
 	Seq int64
 }
@@ -151,6 +161,9 @@ type Zone struct {
 	ground         map[uint32]*groundItem
 	groundSeq      uint32
 	recent         map[uint32]recentState
+	objects        map[uint32]*entity // objetos temporários (estandartes)
+	objectSeq      uint32
+	nextAura       float64
 	pending        map[uint32]SavedState // salvamentos que não couberam na fila
 	lastSeq        int64
 }
@@ -161,6 +174,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		cfg:            cfg,
 		log:            log,
 		events:         make(chan event, 4096),
+		objects:        make(map[uint32]*entity),
 		players:        make(map[uint32]*entity),
 		monsters:       make(map[uint32]*entity),
 		byName:         make(map[string]uint32),
@@ -271,6 +285,8 @@ func (z *Zone) handle(e event) {
 		}
 	case itemEvent:
 		z.onItem(e)
+	case progressEvent:
+		z.onProgress(e)
 	}
 }
 
@@ -284,8 +300,11 @@ func (z *Zone) spendAction(p *entity) bool {
 }
 
 func (z *Zone) get(id uint32) *entity {
-	if id >= monsterIDBase {
+	switch {
+	case id >= monsterIDBase:
 		return z.monsters[id]
+	case id >= objectIDBase:
+		return z.objects[id]
 	}
 	return z.players[id]
 }
@@ -304,11 +323,13 @@ func (z *Zone) onJoin(info JoinInfo) {
 	if r, ok := z.recent[info.ID]; ok {
 		st := r.state
 		info.X, info.Z, info.XP, info.HP, info.MP, info.Gold, info.Items = st.X, st.Z, st.XP, st.HP, st.MP, st.Gold, st.Items
+		info.Attrs, info.Ranks, info.Hotbar = st.Attrs, st.Ranks, st.Hotbar
 		delete(z.recent, info.ID)
 	}
 
 	level := game.LevelForXP(info.XP)
 	pos := z.freeSpot(clampToZone(Vec2{X: info.X, Z: info.Z}, z.cfg.Size/2))
+	attrs, ranks, hotbar := loadProgress(info.Class, level, info.Attrs, info.Ranks, info.Hotbar)
 	inv, skipped := loadInventory(info.Gold, info.Items)
 	if skipped > 0 {
 		z.log.Warn("items skipped on load", "id", info.ID, "count", skipped)
@@ -322,11 +343,12 @@ func (z *Zone) onJoin(info JoinInfo) {
 			peer: info.Peer, class: info.Class, xp: info.XP,
 			cooldowns:  map[uint32]float64{},
 			moveTokens: z.cfg.MaxMovesPerSec, chatTokens: z.cfg.ChatBurst,
-			inv: inv,
+			inv:   inv,
+			attrs: attrs, ranks: ranks, hotbar: hotbar,
 		},
 	}
 	p.hp, p.mp = math.MaxFloat64, math.MaxFloat64
-	z.refreshStats(p) // classe + equipamento; limita a vida/mana ao máximo
+	z.refreshStats(p) // classe + atributos + equipamento + passivas; limita a vida/mana ao máximo
 	if info.HP > 0 && float64(info.HP) < p.stats.MaxHP {
 		p.hp = float64(info.HP)
 	}
@@ -354,9 +376,19 @@ func (z *Zone) onJoin(info JoinInfo) {
 			entities = append(entities, z.entityPB(m))
 		}
 	}
+	for _, o := range z.objects {
+		entities = append(entities, z.entityPB(o))
+	}
+	// A árvore inteira da classe (ativas e passivas); o cliente sabe o rank por Progress.
 	var skills []*pb.SkillInfo
-	for _, s := range game.ClassSkills(info.Class) {
+	for _, s := range game.ClassTree(info.Class) {
 		skills = append(skills, skillInfoPB(s))
+	}
+	var branches []*pb.SkillBranch
+	if c := game.Classes[info.Class]; c != nil {
+		for _, b := range c.Branches {
+			branches = append(branches, &pb.SkillBranch{Name: b.Name, Description: b.Description, Color: b.Color})
+		}
 	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		YourId:       p.id,
@@ -373,6 +405,9 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Inventory:    inventoryPB(&p.pl.inv),
 		GroundItems:  z.groundList(),
 		Npcs:         z.npcList(),
+		Progress:     z.progressPB(p),
+		Hotbar:       &pb.Hotbar{Slots: p.pl.hotbar},
+		Branches:     branches,
 	}}})
 	z.sendSelfStats(p)
 	for id, ready := range p.pl.cooldowns {
@@ -472,6 +507,10 @@ func (z *Zone) update(dt float64) {
 	z.now += dt
 	z.updateDaytime()
 
+	if z.now >= z.nextAura {
+		z.nextAura = z.now + auraEvery
+		z.updateAuras()
+	}
 	for _, p := range z.players {
 		p.pl.moveTokens = math.Min(z.cfg.MaxMovesPerSec, p.pl.moveTokens+z.cfg.MaxMovesPerSec*dt)
 		p.pl.chatTokens = math.Min(z.cfg.ChatBurst, p.pl.chatTokens+z.cfg.ChatPerSec*dt)
@@ -504,10 +543,16 @@ func (z *Zone) update(dt float64) {
 
 // step: efeitos, regeneração, ação e movimento de uma entidade viva.
 func (z *Zone) step(e *entity, dt float64) {
+	if !e.dead {
+		z.tickDoTs(e) // antes de vencer: o último segundo também dói
+	}
 	for _, k := range e.pruneEffects(z.now) {
 		z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: e.id, Effect: pb.Effect(k)})
 		if k == game.EffectSlow || k == game.EffectBuffSpeed {
 			e.moved = true
+		}
+		if k == game.EffectInvisible && e.pl != nil {
+			e.pl.ambushCrit = false // a invisibilidade acabou sem atacar
 		}
 		if e.pl != nil {
 			e.pl.statsDirty = true
@@ -518,7 +563,10 @@ func (z *Zone) step(e *entity, dt float64) {
 	}
 	z.regen(e, dt)
 	z.runAction(e)
-	if e.stunned(z.now) {
+	if e.rooted(z.now) {
+		if e.dest != e.pos {
+			e.stopMoving()
+		}
 		return
 	}
 	z.advance(e, e.speed(z.now)*dt)
@@ -532,10 +580,10 @@ func (z *Zone) flushSnapshot() {
 				Id: e.id,
 				X:  float32(e.pos.X), Z: float32(e.pos.Z),
 				TargetX: float32(e.dest.X), TargetZ: float32(e.dest.Z),
-				Speed: float32(e.speed(z.now)),
+				Speed: float32(e.speed(z.now)), Teleport: e.teleport,
 			})
 		}
-		e.moved = false
+		e.moved, e.teleport = false, false
 		if hp, max := e.hpInt(), e.maxHPInt(); hp != e.sentHP || max != e.sentMaxHP {
 			snap.Hp = append(snap.Hp, &pb.HpUpdate{Id: e.id, Hp: uint32(hp), MaxHp: uint32(max)})
 			e.sentHP, e.sentMaxHP = hp, max
@@ -575,6 +623,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 	s := SavedState{
 		ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: int(math.Floor(p.mp)),
 		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),
+		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
@@ -677,6 +726,9 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 	}
 	if e.npc != nil {
 		out.Title = e.npc.title
+	}
+	if e.obj != nil {
+		out.Title = "Estandarte"
 	}
 	return out
 }

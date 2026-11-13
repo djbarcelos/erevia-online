@@ -21,7 +21,40 @@ message ClientMessage {
     DestroyItem destroy_item = 11;
     Buy buy = 12;
     Sell sell = 13;
+    AllocateAttrs allocate_attrs = 14;
+    LearnSkills learn_skills = 15;
+    SetHotbar set_hotbar = 16;
   }
+}
+
+// Distribui pontos de atributo livres (soma aos já gastos). Tudo ou nada.
+message AllocateAttrs {
+  Attrs add = 1;
+}
+
+// Novos ranks das skills (só aumentar). Tudo ou nada: o servidor confere nível,
+// pontos livres e o nó de cima de cada ramo.
+message LearnSkills {
+  repeated SkillRank ranks = 1;
+}
+
+// Barra de atalhos inteira (10 espaços): "skill:<id>", "item:<id do item>" ou "".
+message SetHotbar {
+  repeated string slots = 1;
+}
+
+message Attrs {
+  uint32 str = 1; // Força
+  uint32 dex = 2; // Destreza
+  uint32 con = 3; // Constituição
+  uint32 int = 4; // Inteligência
+  uint32 wis = 5; // Sabedoria
+  uint32 spi = 6; // Espírito
+}
+
+message SkillRank {
+  uint32 skill_id = 1;
+  uint32 rank = 2;
 }
 
 // Primeira mensagem após conectar. A conta vem do cookie de sessão;
@@ -118,7 +151,51 @@ message ServerMessage {
     GroundItemsRemoved ground_removed = 12;
     ItemCooldown item_cooldown = 13;
     Appearance appearance = 14;
+    Progress progress = 15;
+    Hotbar hotbar = 16;
   }
+}
+
+// Atributos e skills aprendidas do jogador.
+message Progress {
+  Attrs base = 1; // base da classe
+  Attrs spent = 2; // pontos já distribuídos
+  uint32 free_attr_points = 3;
+  repeated SkillRank ranks = 4;
+  uint32 free_skill_points = 5;
+  // O que +1 ponto em cada atributo muda agora (ordem: for, des, con, int, sab, esp).
+  // As fórmulas são lineares nos atributos: dá para prever qualquer distribuição somando.
+  repeated StatBlock per_point = 6;
+}
+
+// Atributos de combate (valores finais ou diferenças).
+message StatBlock {
+  float max_hp = 1;
+  float max_mp = 2;
+  float p_atk = 3;
+  float m_atk = 4;
+  float p_def = 5;
+  float m_def = 6;
+  float crit = 7; // chance (0–1)
+  float accuracy = 8;
+  float evasion = 9;
+  float atk_speed = 10; // ataques por segundo
+  float cast_speed = 11; // multiplicador da recarga (1 = normal; 1,2 = recarrega 20% mais rápido)
+  float hp_regen = 12; // por segundo, em combate
+  float mp_regen = 13;
+  float crit_damage = 14; // multiplicador do crítico (2 = dobro)
+  float speed = 15;
+}
+
+message Hotbar {
+  repeated string slots = 1;
+}
+
+// Ramo da árvore de skills da classe.
+message SkillBranch {
+  string name = 1;
+  string description = 2;
+  string color = 3; // "#rrggbb"
 }
 
 // Resposta ao Join: quem você é, quem já está na zona e suas skills.
@@ -137,6 +214,9 @@ message Welcome {
   Inventory inventory = 12;
   repeated GroundItem ground_items = 13; // itens no chão agora
   repeated NpcInfo npcs = 14; // lojas dos NPCs
+  Progress progress = 15;
+  Hotbar hotbar = 16;
+  repeated SkillBranch branches = 17; // os 3 ramos da árvore da classe (skills.branch aponta aqui)
 }
 
 // Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
@@ -215,6 +295,14 @@ message SelfStats {
   bool dead = 13;
   uint32 m_def = 14;
   float crit = 15; // chance de crítico (0–1)
+  // Detalhes de combate (valores finais, com atributos, equipamento, passivas e buffs).
+  float accuracy = 16;
+  float evasion = 17;
+  float atk_speed = 18; // ataques por segundo
+  float cast_speed = 19;
+  float hp_regen = 20; // por segundo, em combate (fora de combate: 5×)
+  float mp_regen = 21;
+  float crit_damage = 22;
 }
 
 // Recarga de skill (só para o dono).
@@ -328,6 +416,7 @@ enum EntityKind {
   ENTITY_KIND_PLAYER = 1;
   ENTITY_KIND_MONSTER = 2;
   ENTITY_KIND_NPC = 3;
+  ENTITY_KIND_OBJECT = 4; // objeto temporário no chão (ex.: estandarte)
 }
 
 message Entity {
@@ -359,6 +448,7 @@ message EntityState {
   float target_x = 4;
   float target_z = 5;
   float speed = 6; // velocidade atual (buffs/lentidão)
+  bool teleport = 7; // pulou para (x, z): o cliente não interpola (Piscar, Investida)
 }
 
 message HpUpdate {
@@ -375,6 +465,9 @@ message CombatEvent {
   bool crit = 5;
   bool miss = 6;
   bool kill = 7;
+  Effect dot = 8; // dano de veneno/queimadura/praga (sem animação de golpe)
+  uint32 absorbed = 9; // quanto um escudo segurou
+  uint32 heal = 10; // vida que quem bateu recuperou (roubo de vida)
 }
 
 enum Effect {
@@ -384,6 +477,23 @@ enum Effect {
   EFFECT_BUFF_DEF = 3;
   EFFECT_BUFF_ATK = 4;
   EFFECT_BUFF_SPEED = 5;
+  EFFECT_ROOT = 6; // não anda (ainda ataca)
+  EFFECT_POISON = 7; // dano por segundo (value)
+  EFFECT_BURN = 8; // dano por segundo (value)
+  EFFECT_TAUNT = 9; // monstro obrigado a atacar quem provocou
+  EFFECT_SHIELD = 10; // absorve dano (value = quanto ainda absorve)
+  EFFECT_MANA_SHIELD = 11; // dano sai da mana (value = MP por ponto de dano)
+  EFFECT_INVISIBLE = 12; // monstros não veem; atacar revela; próximo golpe é crítico
+  EFFECT_MARK = 13; // recebe +value de dano (fração)
+  EFFECT_UNDYING = 14; // a vida não cai abaixo de 1
+  EFFECT_BLIND = 15; // erra mais (value = precisão perdida)
+  EFFECT_BUFF_ATK_SPEED = 16; // +value de velocidade de ataque
+  EFFECT_WEAKEN = 17; // -value de ataque
+  EFFECT_FROST_ARMOR = 18; // +value de defesa; quem bate corpo a corpo fica lento
+  EFFECT_PLAGUE = 19; // veneno que pula para os vizinhos quando o alvo morre (value = dano/s)
+  EFFECT_WAR_CRY = 20; // +value de ataque (grito de guerra, soma com outros buffs)
+  EFFECT_BANNER = 21; // +value de defesa (perto do estandarte)
+  EFFECT_COURAGE = 22; // regenera value de vida por segundo (aura)
 }
 
 message EffectEvent {
@@ -444,4 +554,23 @@ message SkillInfo {
   float effect_value = 14;
   bool effect_on_self = 15;
   float extra_crit = 16;
+  // Árvore de skills
+  uint32 branch = 17; // 0–2 (Welcome.branches)
+  uint32 tier = 18; // 0–3
+  uint32 max_rank = 19;
+  bool passive = 20;
+  uint32 level_req = 21;
+  uint32 parent_id = 22; // nó de cima no ramo (0 = raiz)
+  repeated SkillRankInfo ranks = 23; // valores em cada rank (índice 0 = rank 1)
+  float splash = 24; // raio em volta do alvo (0 = só o alvo)
+}
+
+// Valores de uma skill num rank.
+message SkillRankInfo {
+  uint32 mp_cost = 1;
+  uint32 cooldown_ms = 2;
+  float power = 3;
+  uint32 effect_ms = 4;
+  float effect_value = 5;
+  string text = 6; // o que faz neste rank, para a dica
 }

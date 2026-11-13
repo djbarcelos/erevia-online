@@ -143,8 +143,15 @@ func TestTwoPlayersMoveAndChat(t *testing.T) {
 			self = e
 		}
 	}
-	if len(welcomeA.Skills) != 2 {
-		t.Fatalf("welcome should carry 2 class skills, got %d", len(welcomeA.Skills))
+	// A árvore inteira da classe (12 skills), com as 2 iniciais aprendidas, e a barra padrão.
+	if len(welcomeA.Skills) != 12 || len(welcomeA.Branches) != 3 {
+		t.Fatalf("welcome should carry the class tree, got %d skills / %d branches", len(welcomeA.Skills), len(welcomeA.Branches))
+	}
+	if welcomeA.Progress == nil || len(welcomeA.Progress.Ranks) != 2 || len(welcomeA.Progress.PerPoint) != 6 {
+		t.Fatalf("welcome progress wrong: %+v", welcomeA.Progress)
+	}
+	if welcomeA.Hotbar == nil || len(welcomeA.Hotbar.Slots) != 10 || welcomeA.Hotbar.Slots[0] == "" {
+		t.Fatalf("welcome hotbar wrong: %+v", welcomeA.Hotbar)
 	}
 	if self == nil || self.X != 1 || self.Z != 2 || self.Model != "mage" || self.Kind != pb.EntityKind_ENTITY_KIND_PLAYER {
 		t.Fatalf("saved position/class not used: %+v", self)

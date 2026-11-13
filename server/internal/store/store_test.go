@@ -140,3 +140,41 @@ func TestStarterKitItemsAndSaveOrder(t *testing.T) {
 		t.Fatalf("items = %+v", got.Items)
 	}
 }
+
+func TestProgressionRoundTrip(t *testing.T) {
+	s := storetest.New(t)
+	ctx := context.Background()
+	acc, _ := s.LoginIdentity(ctx, "dev", "prog", "prog")
+	c, err := s.CreateCharacter(ctx, acc, "Arvore", "rogue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Personagem novo: nada distribuído, árvore e barra vazias (a zona preenche o padrão).
+	got, err := s.CharacterForAccount(ctx, acc, c.ID)
+	if err != nil || got.Attrs.Sum() != 0 || len(got.Ranks) != 0 || len(got.Hotbar) != 0 {
+		t.Fatalf("new character progression = %+v / %v", got, err)
+	}
+	st := store.CharacterState{
+		CharacterID: c.ID, Level: 9, XP: 5000, HP: -1, MP: -1,
+		Attrs:  game.Attrs{Str: 2, Dex: 14, Con: 4, Wis: 1, Spi: 3},
+		Ranks:  map[uint32]int{game.SkillBackstab: 3, game.SkillWeakSpot: 2, game.SkillShadowStep: 1},
+		Hotbar: []string{"skill:7", "skill:8", "item:potion_hp_s", "", "", "", "", "", "", ""},
+		Seq:    1,
+	}
+	if err := s.SaveStates(ctx, []store.CharacterState{st}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.CharacterForAccount(ctx, acc, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Attrs != st.Attrs {
+		t.Errorf("attrs = %+v", got.Attrs)
+	}
+	if len(got.Ranks) != 3 || got.Ranks[game.SkillBackstab] != 3 || got.Ranks[game.SkillWeakSpot] != 2 {
+		t.Errorf("ranks = %v", got.Ranks)
+	}
+	if len(got.Hotbar) != 10 || got.Hotbar[0] != "skill:7" || got.Hotbar[2] != "item:potion_hp_s" {
+		t.Errorf("hotbar = %v", got.Hotbar)
+	}
+}

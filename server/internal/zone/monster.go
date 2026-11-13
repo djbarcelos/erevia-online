@@ -55,6 +55,16 @@ func (z *Zone) think(m *entity) {
 	if m.stunned(z.now) {
 		return
 	}
+	// Provocado: só pode atacar quem provocou (enquanto ele estiver vivo e visível).
+	if ef := m.effectRef(game.EffectTaunt, z.now); ef != nil {
+		if t := z.players[ef.source]; t != nil && !t.dead && !t.invisible(z.now) {
+			ms.returning = false
+			if m.act.kind != actAttack || m.act.target != t.id {
+				m.act = action{kind: actAttack, target: t.id}
+			}
+			return
+		}
+	}
 
 	if ms.returning {
 		if dist(m.pos, ms.home) < 0.5 {
@@ -74,7 +84,7 @@ func (z *Zone) think(m *entity) {
 	// Esquece quem morreu, saiu ou fugiu para a cidade.
 	for id := range ms.hate {
 		p := z.players[id]
-		if p == nil || p.dead || z.inSafe(p.pos) {
+		if p == nil || p.dead || z.inSafe(p.pos) || p.invisible(z.now) {
 			delete(ms.hate, id)
 		}
 	}
@@ -147,7 +157,7 @@ func (z *Zone) nearestPlayer(from Vec2, maxDist float64) *entity {
 	var best *entity
 	bestD := maxDist
 	for _, p := range z.players {
-		if p.dead || z.inSafe(p.pos) {
+		if p.dead || z.inSafe(p.pos) || p.invisible(z.now) {
 			continue
 		}
 		if d := dist(from, p.pos); d <= bestD {

@@ -21,12 +21,126 @@ func TestClassStatsGrowWithLevel(t *testing.T) {
 	}
 }
 
-func TestEveryClassHasTwoSkills(t *testing.T) {
+func TestEveryClassHasTwoStarterSkills(t *testing.T) {
 	for id := range Classes {
 		s := ClassSkills(id)
-		if len(s) != 2 || s[0] == nil || s[1] == nil || s[0].Class != id || s[0].Key != 1 || s[1].Key != 2 {
-			t.Errorf("%s skills wrong: %+v", id, s)
+		if len(s) != 2 || s[0] == nil || s[1] == nil || s[0].Class != id || s[0].Tier != 0 || s[1].Tier != 0 || s[0].IsPassive() || s[1].IsPassive() {
+			t.Errorf("%s starter skills wrong: %+v", id, s)
 		}
+	}
+}
+
+func TestSkillTreeShape(t *testing.T) {
+	for id, c := range Classes {
+		tree := ClassTree(id)
+		if len(tree) != 12 {
+			t.Fatalf("%s: %d skills in the tree, want 12", id, len(tree))
+		}
+		seen := map[[2]int]bool{}
+		for _, s := range tree {
+			key := [2]int{s.Branch, s.Tier}
+			if seen[key] {
+				t.Errorf("%s: two skills at branch %d tier %d", id, s.Branch, s.Tier)
+			}
+			seen[key] = true
+			if s.MaxRank < 1 || s.Text == nil || s.Text(1) == "" || s.FX == "" {
+				t.Errorf("%s: incomplete", s.Name)
+			}
+			if s.ID >= 1000 {
+				t.Errorf("%s: skill ids must stay below 1000 (potions use 1000+)", s.Name)
+			}
+			if s.Tier > 0 && s.Parent() == nil {
+				t.Errorf("%s: no parent", s.Name)
+			}
+			if !s.IsPassive() && s.Target == 0 {
+				t.Errorf("%s: active skill without target", s.Name)
+			}
+		}
+		for _, b := range c.Branches {
+			if b.Name == "" || b.Color == "" {
+				t.Errorf("%s: branch without name", id)
+			}
+		}
+	}
+}
+
+func TestRankScaling(t *testing.T) {
+	b := Skills[SkillShieldBash]
+	if b.Mult.At(1) != 1.5 || b.Mult.At(3) <= b.Mult.At(1) {
+		t.Errorf("shield bash rank scaling: %v %v", b.Mult.At(1), b.Mult.At(3))
+	}
+	if d := b.OnTarget.At(2).Duration; d != 1.75 {
+		t.Errorf("stun at rank 2 = %v", d)
+	}
+}
+
+func TestValidateRanks(t *testing.T) {
+	start := StarterRanks("knight")
+	if err := ValidateRanks("knight", 1, start); err != nil {
+		t.Fatalf("starter ranks invalid: %v", err)
+	}
+	// Nível 1: nenhum ponto livre.
+	more := map[uint32]int{SkillShieldBash: 2, SkillFortress: 1}
+	if ValidateRanks("knight", 1, more) == nil {
+		t.Error("should be out of points at level 1")
+	}
+	if ValidateRanks("knight", 2, more) != nil {
+		t.Error("level 2 has one free point")
+	}
+	// Degrau exige nível e o nó de cima.
+	if ValidateRanks("knight", 20, map[uint32]int{SkillTaunt: 1}) == nil {
+		t.Error("taunt needs iron skin")
+	}
+	if ValidateRanks("knight", 9, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1}) == nil {
+		t.Error("taunt needs level 10")
+	}
+	if ValidateRanks("knight", 10, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1}) != nil {
+		t.Error("taunt at level 10 with parent should work")
+	}
+	if ValidateRanks("knight", 20, map[uint32]int{SkillFireball: 1}) == nil {
+		t.Error("other class skill accepted")
+	}
+	if ValidateRanks("knight", 20, map[uint32]int{SkillJudgment: 2}) == nil {
+		t.Error("rank above max accepted")
+	}
+}
+
+func TestAttributesAreNeutralAtClassBase(t *testing.T) {
+	for id := range Classes {
+		base := ClassStats(id, 7)
+		got := ApplyAttrs(base, id, 7, ClassBaseAttrs[id])
+		if got.MaxHP != base.MaxHP || got.PAtk != base.PAtk || got.MDef != base.MDef || got.AtkInterval != base.AtkInterval {
+			t.Errorf("%s: class base attributes should not change stats", id)
+		}
+		if ClassBaseAttrs[id].Sum() != 60 {
+			t.Errorf("%s: base attributes sum %d", id, ClassBaseAttrs[id].Sum())
+		}
+	}
+}
+
+func TestAttributesAreLinear(t *testing.T) {
+	// O cliente prevê a distribuição somando o efeito de +1 ponto: as fórmulas precisam ser lineares.
+	stat := func(a Attrs) Stats {
+		s := ApplyAttrs(ClassStats("rogue", 9), "rogue", 9, a)
+		return FinishRegen(s, "rogue", a)
+	}
+	base := ClassBaseAttrs["rogue"]
+	s0 := stat(base)
+	for i := 0; i < 6; i++ {
+		s1 := stat(base.Add(UnitAttr(i)))
+		s3 := stat(base.Add(UnitAttr(i)).Add(UnitAttr(i)).Add(UnitAttr(i)))
+		for _, pair := range [][3]float64{
+			{s0.MaxHP, s1.MaxHP, s3.MaxHP}, {s0.PAtk, s1.PAtk, s3.PAtk}, {s0.Crit, s1.Crit, s3.Crit},
+			{1 / s0.AtkInterval, 1 / s1.AtkInterval, 1 / s3.AtkInterval}, {s0.HPRegen, s1.HPRegen, s3.HPRegen},
+			{s0.MPRegen, s1.MPRegen, s3.MPRegen}, {s0.CastSpeed, s1.CastSpeed, s3.CastSpeed}, {s0.Evasion, s1.Evasion, s3.Evasion},
+		} {
+			if math.Abs((pair[2]-pair[0])-3*(pair[1]-pair[0])) > 1e-9 {
+				t.Errorf("attribute %d not linear: %v", i, pair)
+			}
+		}
+	}
+	if stat(base.Add(Attrs{Str: 5})).PAtk <= s0.PAtk || stat(base.Add(Attrs{Con: 5})).MaxHP <= s0.MaxHP {
+		t.Error("points should raise stats")
 	}
 }
 
@@ -36,7 +150,7 @@ func TestRollHit(t *testing.T) {
 	var sum float64
 	n := 20000
 	for i := 0; i < n; i++ {
-		h := RollHit(rng, 100, 100, 1, 0.2)
+		h := RollHit(rng, HitInput{Atk: 100, Def: 100, Mult: 1, Crit: 0.2, Accuracy: 100, Evasion: 50})
 		switch {
 		case h.Miss:
 			misses++
@@ -49,14 +163,23 @@ func TestRollHit(t *testing.T) {
 			}
 		}
 	}
-	if r := float64(misses) / float64(n); math.Abs(r-MissChance) > 0.01 {
+	if r := float64(misses) / float64(n); math.Abs(r-(1-HitChance(100, 50))) > 0.01 {
 		t.Errorf("miss rate %.3f", r)
 	}
 	if r := float64(crits) / float64(n-misses); math.Abs(r-0.2) > 0.02 {
 		t.Errorf("crit rate %.3f", r)
 	}
-	if h := RollHit(rng, 1, 10000, 1, 0); !h.Miss && h.Damage < 1 {
+	if h := RollHit(rng, HitInput{Atk: 1, Def: 10000, Mult: 1}); !h.Miss && h.Damage < 1 {
 		t.Error("damage should be at least 1")
+	}
+	// Sem erro e crítico forçado (Julgamento, golpe saindo da invisibilidade).
+	for i := 0; i < 200; i++ {
+		if h := RollHit(rng, HitInput{Atk: 50, Mult: 1, NoMiss: true, Accuracy: 0, Evasion: 1000}); h.Miss {
+			t.Fatal("NoMiss missed")
+		}
+		if h := RollHit(rng, HitInput{Atk: 50, Mult: 1, ForceCrit: true, CritMult: 2.5}); !h.Crit || h.Damage < 50*2.5*0.9-1 {
+			t.Fatalf("ForceCrit: %+v", h)
+		}
 	}
 }
 

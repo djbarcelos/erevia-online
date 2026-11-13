@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	MissChance    = 0.05
 	CritMult      = 2.0
 	DeathXPLoss   = 0.04 // fração da XP do nível perdida ao morrer
 	xpCurveBase   = 80.0
@@ -22,16 +21,34 @@ type Hit struct {
 	Miss   bool
 }
 
+// HitInput é tudo o que decide um golpe.
+type HitInput struct {
+	Atk, Def, Mult    float64
+	Crit, CritMult    float64 // chance e multiplicador do crítico (CritMult 0 = CritMult padrão)
+	Accuracy, Evasion float64 // precisão de quem bate × esquiva de quem apanha
+	NoMiss, ForceCrit bool
+}
+
+// HitChance: 85% com precisão = esquiva, +0,2% por ponto de diferença, entre 60% e 98%.
+// Jogador e monstro do mesmo nível ficam perto de 95% (5% de erro, como antes).
+func HitChance(acc, eva float64) float64 {
+	return math.Max(0.6, math.Min(0.98, 0.85+(acc-eva)*0.002))
+}
+
 // RollHit calcula um golpe: atk × mult × 100/(100+def) × [0,9–1,1], com erro e crítico.
-func RollHit(rng *rand.Rand, atk, def, mult, crit float64) Hit {
-	if rng.Float64() < MissChance {
+func RollHit(rng *rand.Rand, in HitInput) Hit {
+	if !in.NoMiss && !in.ForceCrit && rng.Float64() >= HitChance(in.Accuracy, in.Evasion) {
 		return Hit{Miss: true}
 	}
-	dmg := atk * mult * 100 / (100 + math.Max(0, def)) * (0.9 + 0.2*rng.Float64())
+	dmg := in.Atk * in.Mult * 100 / (100 + math.Max(0, in.Def)) * (0.9 + 0.2*rng.Float64())
 	h := Hit{Damage: math.Max(1, dmg)}
-	if rng.Float64() < crit {
+	if in.ForceCrit || rng.Float64() < in.Crit {
 		h.Crit = true
-		h.Damage *= CritMult
+		cm := in.CritMult
+		if cm <= 0 {
+			cm = CritMult
+		}
+		h.Damage *= cm
 	}
 	h.Damage = math.Round(h.Damage)
 	return h

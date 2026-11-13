@@ -14,6 +14,7 @@ const townSpawnRadius = 5.0
 func (z *Zone) kill(dead, killer *entity) {
 	dead.dead = true
 	dead.hp = 0
+	z.spreadPlague(dead)
 	for _, ef := range dead.effects {
 		z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: dead.id, Effect: pb.Effect(ef.kind)})
 	}
@@ -75,6 +76,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	}
 	z.refreshStats(p)
 	p.hp, p.mp = p.stats.MaxHP, p.stats.MaxMP
+	z.sendProgress(p) // pontos novos de atributo e de skill
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
 	z.system(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
@@ -110,12 +112,15 @@ func (z *Zone) selfStats(p *entity) *pb.SelfStats {
 		Mp: uint32(math.Floor(p.mp)), MaxMp: uint32(math.Round(p.stats.MaxMP)),
 		Level: uint32(p.level), Xp: uint64(p.pl.xp),
 		XpLevelStart: uint64(game.XPLevelStart(p.level)), XpNextLevel: next,
-		PAtk:  uint32(math.Round(p.atk(false, z.now))),
-		MAtk:  uint32(math.Round(p.atk(true, z.now))),
-		PDef:  uint32(math.Round(p.def(false, z.now))),
-		MDef:  uint32(math.Round(p.def(true, z.now))),
-		Crit:  float32(p.stats.Crit),
-		Speed: float32(p.speed(z.now)),
-		Dead:  p.dead,
+		PAtk:     uint32(math.Round(p.atk(false, z.now))),
+		MAtk:     uint32(math.Round(p.atk(true, z.now))),
+		PDef:     uint32(math.Round(p.def(false, z.now))),
+		MDef:     uint32(math.Round(p.def(true, z.now))),
+		Crit:     float32(p.stats.Crit),
+		Speed:    float32(p.speed(z.now)),
+		Dead:     p.dead,
+		Accuracy: float32(p.accuracy(z.now)), Evasion: float32(p.stats.Evasion),
+		AtkSpeed: float32(1 / p.attackInterval(z.now)), CastSpeed: float32(p.stats.CastSpeed),
+		HpRegen: float32(p.stats.HPRegen), MpRegen: float32(p.stats.MPRegen), CritDamage: float32(p.stats.CritDamage),
 	}
 }

@@ -60,7 +60,9 @@ func MonsterStats(m *MonsterDef, level int) Stats {
 		PAtk:  m.Atk + m.AtkLv*l,
 		PDef:  m.Def + m.DefLv*l,
 		Range: m.Range, AtkInterval: m.Interval, Speed: m.Speed,
-		Crit: 0.05, Magic: m.Magic,
+		Crit: 0.05, Magic: m.Magic, CritDamage: CritMult, CastSpeed: 1,
+		// Mesma conta de um jogador com Destreza 10 no mesmo nível.
+		Accuracy: accuracyFor(10, level), Evasion: evasionFor(10, level),
 	}
 	s.MAtk = s.PAtk
 	s.MDef = s.PDef * 0.8

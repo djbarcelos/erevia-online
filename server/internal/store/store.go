@@ -7,10 +7,12 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	mrand "math/rand/v2"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -31,7 +33,8 @@ const (
 	spawnRadius          = 8.0
 	pgUniqueViolation    = "23505"
 	charactersNameIdxKey = "characters_name_lower_idx"
-	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given"
+	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
+		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar"
 )
 
 var (
@@ -65,6 +68,9 @@ type Character struct {
 	MP        int               `json:"-"` // -1 = cheio
 	Gold      int64             `json:"-"`
 	Items     []game.ItemRecord `json:"-"`
+	Attrs     game.Attrs        `json:"-"`
+	Ranks     map[uint32]int    `json:"-"`
+	Hotbar    []string          `json:"-"`
 	kitGiven  bool
 }
 
@@ -77,6 +83,9 @@ type CharacterState struct {
 	HP, MP      int // -1 = cheio
 	Gold        int64
 	Items       []game.ItemRecord
+	Attrs       game.Attrs
+	Ranks       map[uint32]int
+	Hotbar      []string
 	Seq         int64 // salvamento mais velho que o gravado é ignorado
 }
 
@@ -328,10 +337,18 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 		order := make([]CharacterState, 0, len(latest))
 		for _, c := range latest {
 			order = append(order, c)
+			ranks, hotbar, err := progressJSON(c.Ranks, c.Hotbar)
+			if err != nil {
+				return err
+			}
+			a := c.Attrs
 			batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, gold = $8,
-				save_seq = GREATEST(save_seq, $9::bigint), last_seen_at = now()
+				save_seq = GREATEST(save_seq, $9::bigint), last_seen_at = now(),
+				attr_str = $10, attr_dex = $11, attr_con = $12, attr_int = $13, attr_wis = $14, attr_spi = $15,
+				skill_ranks = $16, hotbar = $17
 				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
-				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq)
+				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq,
+				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar)
 		}
 		br := tx.SendBatch(ctx, batch)
 		var ids []int64
@@ -376,7 +393,57 @@ func nullIfFull(v int) *int {
 func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var c Character
 	var x, z float32
-	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven)
+	var ranks, hotbar []byte
+	var a [6]int16
+	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
+		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar)
+	if err != nil {
+		return c, err
+	}
 	c.X, c.Z = float64(x), float64(z)
+	c.Attrs = game.Attrs{Str: int(a[0]), Dex: int(a[1]), Con: int(a[2]), Int: int(a[3]), Wis: int(a[4]), Spi: int(a[5])}
+	c.Ranks, c.Hotbar, err = parseProgress(ranks, hotbar)
 	return c, err
+}
+
+// progressJSON: ranks como {"id": rank} e a barra como lista (JSONB).
+func progressJSON(ranks map[uint32]int, hotbar []string) ([]byte, []byte, error) {
+	m := make(map[string]int, len(ranks))
+	for id, r := range ranks {
+		if r > 0 {
+			m[strconv.FormatUint(uint64(id), 10)] = r
+		}
+	}
+	rb, err := json.Marshal(m)
+	if err != nil {
+		return nil, nil, err
+	}
+	if hotbar == nil {
+		hotbar = []string{}
+	}
+	hb, err := json.Marshal(hotbar)
+	return rb, hb, err
+}
+
+func parseProgress(ranksJSON, hotbarJSON []byte) (map[uint32]int, []string, error) {
+	var m map[string]int
+	if len(ranksJSON) > 0 {
+		if err := json.Unmarshal(ranksJSON, &m); err != nil {
+			return nil, nil, fmt.Errorf("skill_ranks: %w", err)
+		}
+	}
+	ranks := make(map[uint32]int, len(m))
+	for k, r := range m {
+		id, err := strconv.ParseUint(k, 10, 32)
+		if err == nil && r > 0 {
+			ranks[uint32(id)] = r
+		}
+	}
+	var hotbar []string
+	if len(hotbarJSON) > 0 {
+		if err := json.Unmarshal(hotbarJSON, &hotbar); err != nil {
+			return nil, nil, fmt.Errorf("hotbar: %w", err)
+		}
+	}
+	return ranks, hotbar, nil
 }

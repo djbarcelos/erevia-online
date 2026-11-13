@@ -235,6 +235,14 @@ func (inv *inventory) bonus() game.Stats {
 	return b
 }
 
+// weaponModel: modelo da arma equipada ("" = sem arma). Esgrima vale com espadas.
+func (inv *inventory) weaponModel() string {
+	if w := inv.equip[game.SlotWeapon]; !w.empty() {
+		return w.def.Model
+	}
+	return ""
+}
+
 // look é o que os outros veem: modelos das armas e a raridade da principal.
 func (inv *inventory) look() (weapon, offhand string, grade game.Grade) {
 	if w := inv.equip[game.SlotWeapon]; !w.empty() {

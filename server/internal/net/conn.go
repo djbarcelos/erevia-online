@@ -37,6 +37,9 @@ type Character struct {
 	HP, MP int // <= 0 = cheio
 	Gold   int64
 	Items  []game.ItemRecord
+	Attrs  game.Attrs
+	Ranks  map[uint32]int
+	Hotbar []string
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -103,7 +106,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	go sess.writePump(ctx)
 	s.zone.Join(ctx, zone.JoinInfo{
 		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z,
-		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items, Peer: sess,
+		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
+		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)
@@ -179,6 +183,12 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.ItemAction(ctx, id, m.Buy)
 		case *pb.ClientMessage_Sell:
 			s.zone.ItemAction(ctx, id, m.Sell)
+		case *pb.ClientMessage_AllocateAttrs:
+			s.zone.ProgressAction(ctx, id, m.AllocateAttrs)
+		case *pb.ClientMessage_LearnSkills:
+			s.zone.ProgressAction(ctx, id, m.LearnSkills)
+		case *pb.ClientMessage_SetHotbar:
+			s.zone.ProgressAction(ctx, id, m.SetHotbar)
 		case *pb.ClientMessage_Ping:
 			// Respondido aqui mesmo, sem passar pela zona, para medir só a rede.
 			pong, _ := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Pong{

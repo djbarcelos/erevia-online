@@ -172,7 +172,7 @@ func TestSkillCooldownAndMana(t *testing.T) {
 			casts++
 		}
 	}
-	if casts != 1 || p.mp > mp0-game.Skills[game.SkillFireball].MPCost+1 {
+	if casts != 1 || p.mp > mp0-game.Skills[game.SkillFireball].MPCost(1)+1 {
 		t.Fatalf("fireball should hit once and cost mana: casts=%d mp %.0f→%.0f", casts, mp0, p.mp)
 	}
 
