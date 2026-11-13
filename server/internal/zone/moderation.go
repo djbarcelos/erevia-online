@@ -15,7 +15,8 @@ import (
 )
 
 // Moderação e relatos: comandos de chat que começam com "/" no canal geral.
-// Qualquer jogador usa /bug; os outros comandos são só de GM (accounts.gm) e ficam
+// Qualquer jogador usa /bug, /amigo, /amigos, /correio e os emotes (friends.go, mail.go e
+// emote.go); os outros comandos são só de GM (accounts.gm) e ficam
 // registrados no gm_log. Para quem não é GM, eles nem existem ("comando desconhecido").
 
 const (
@@ -185,6 +186,9 @@ func (z *Zone) command(p *entity, text string) {
 	args := fields[1:]
 	if cmd == "/bug" {
 		z.bugReport(p, strings.Join(args, " "))
+		return
+	}
+	if z.friendsCommand(p, cmd, args) || z.mailCommand(p, cmd, args, text) || z.emoteCommand(p, cmd) {
 		return
 	}
 	if cmd == "/raid" && z.cfg.DevCommands { // teste do raid boss: só com DEV_LOGIN

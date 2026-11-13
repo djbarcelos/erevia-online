@@ -18,7 +18,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { mulberry32 } from "./map-painter";
-import type { AnimRole, CharacterInstance } from "./models";
+import type { AnimRole, CharacterInstance, EmoteRole } from "./models";
 import { heightToNormal } from "./teleport-stone";
 
 /**
@@ -376,7 +376,7 @@ const BASE: Pose = {
 };
 const at = (p: Pose): Pose => ({ ...BASE, ...p });
 
-const CLIPS: Record<AnimRole, Clip> = {
+const CLIPS: Record<Exclude<AnimRole, EmoteRole>, Clip> = {
   idle: {
     frames: 72,
     keys: [
@@ -448,7 +448,7 @@ const CLIPS: Record<AnimRole, Clip> = {
   },
 };
 
-function buildGroup(role: AnimRole, id: string, nodes: Record<Joint, TransformNode>, glows: Mesh[], scene: Scene): AnimationGroup {
+function buildGroup(role: keyof typeof CLIPS, id: string, nodes: Record<Joint, TransformNode>, glows: Mesh[], scene: Scene): AnimationGroup {
   const clip = CLIPS[role];
   const group = new AnimationGroup(`golem-${role}#${id}`, scene);
   const ease = new SineEase();
@@ -524,7 +524,7 @@ export function createGolem(scene: Scene, id: string): CharacterInstance {
   for (const g of glows) glowLayer?.addIncludedOnlyMesh(g);
 
   const anims = new Map<AnimRole, AnimationGroup>();
-  for (const role of Object.keys(CLIPS) as AnimRole[]) anims.set(role, buildGroup(role, id, nodes, glows, scene));
+  for (const role of Object.keys(CLIPS) as (keyof typeof CLIPS)[]) anims.set(role, buildGroup(role, id, nodes, glows, scene));
 
   const resetPose = () => {
     for (const j of JOINTS) {

@@ -41,10 +41,10 @@ export const HOTBAR_KEYS = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "D
 /** Um atalho: "skill:<id>" ou "item:<id do item>". */
 export type HotbarEntry = string | null;
 
-export type WindowId = "character" | "inventory" | "skills" | "party" | "clan" | "glory" | "map" | "settings";
+export type WindowId = "character" | "inventory" | "skills" | "party" | "clan" | "social" | "glory" | "map" | "settings";
 
 /** Ações sobre um jogador selecionado (quadro do alvo). */
-export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade";
+export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade" | "friend";
 
 /** O que o quadro do alvo precisa saber de um jogador além do EntityInfo. */
 export interface TargetExtras {
@@ -53,6 +53,8 @@ export interface TargetExtras {
   canParty: boolean;
   /** Mostrar "Convidar ao clã" (você convida e ele não tem clã). */
   canClan: boolean;
+  /** Mostrar "Amigo +" (ele ainda não está na sua lista). */
+  canFriend: boolean;
 }
 
 export interface HudCallbacks {
@@ -104,6 +106,7 @@ const MENU: { id: WindowId; icon: string; label: string; key: string }[] = [
   { id: "skills", icon: "book", label: "Skills", key: "skills" },
   { id: "party", icon: "users", label: "Grupo", key: "party" },
   { id: "clan", icon: "clan", label: "Clã", key: "clan" },
+  { id: "social", icon: "mail", label: "Social", key: "social" },
   { id: "glory", icon: "trophy", label: "Glória", key: "glory" },
   { id: "map", icon: "map", label: "Mapa", key: "map" },
   { id: "settings", icon: "gear", label: "Configurações", key: "settings" },
@@ -247,6 +250,7 @@ export class Hud {
       ["clan", "Clã +", "Convidar para o seu clã"],
       ["whisper", "Sussurrar", "Mandar uma mensagem particular"],
       ["trade", "Trocar", "Propor uma troca de itens e moedas (chegue perto)"],
+      ["friend", "Amigo +", "Adicionar à sua lista de amigos (você vê quando ele está online)"],
     ] as const) {
       const b = button(label, "btn btn-sm t-act", () => cb.onTargetAction(action));
       b.title = title;
@@ -698,6 +702,7 @@ export class Hud {
       this.tActionBtns.get("attack")!.hidden = extras.ally || info.dead;
       this.tActionBtns.get("party")!.hidden = !extras.canParty;
       this.tActionBtns.get("clan")!.hidden = !extras.canClan;
+      this.tActionBtns.get("friend")!.hidden = !extras.canFriend;
     }
     this.target.classList.toggle("dead", info.dead);
     this.target.classList.toggle("boss", !!info.boss);

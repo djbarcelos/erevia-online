@@ -36,6 +36,8 @@ message ClientMessage {
     TradeCmd trade_cmd = 26;
     Craft craft = 27;
     ClientStats client_stats = 28;
+    FriendCmd friend_cmd = 29;
+    MailCmd mail_cmd = 30;
     RankingRequest ranking_request = 31;
     AchievementCmd achievement_cmd = 32;
   }
@@ -329,6 +331,8 @@ message ServerMessage {
     BossStatus boss_status = 26;
     QuestLog quest_log = 27;
     TradeState trade = 28;
+    SocialUpdate social = 29;
+    Emote emote = 30;
     Ranking ranking = 31;
     Achievements achievements = 32;
   }
@@ -1105,4 +1109,90 @@ message SkillRankInfo {
   uint32 effect_ms = 4;
   float effect_value = 5;
   string text = 6; // o que faz neste rank, para a dica
+}
+
+// ---------- Amigos, correio e emotes ----------
+
+enum FriendCmdKind {
+  FRIEND_CMD_UNSPECIFIED = 0;
+  FRIEND_CMD_ADD = 1; // name (pode estar offline) ou target_id (botão do quadro do alvo)
+  FRIEND_CMD_REMOVE = 2; // name ou target_id (id do personagem)
+  FRIEND_CMD_LIST = 3; // pede a lista com as posições de agora (janela aberta)
+}
+
+message FriendCmd {
+  FriendCmdKind kind = 1;
+  string name = 2;
+  uint32 target_id = 3;
+}
+
+enum MailCmdKind {
+  MAIL_CMD_UNSPECIFIED = 0;
+  MAIL_CMD_SEND = 1; // to + subject (opcional) + body
+  MAIL_CMD_LIST = 2; // caixa de entrada
+  MAIL_CMD_READ = 3; // mail_id: marcar como lida
+  MAIL_CMD_DELETE = 4; // mail_id
+}
+
+message MailCmd {
+  MailCmdKind kind = 1;
+  string to = 2;
+  string subject = 3;
+  string body = 4;
+  uint64 mail_id = 5;
+}
+
+// Um amigo (amizade de mão única: quem você segue). Online: posição atual (o cliente acha a região).
+message Friend {
+  uint32 character_id = 1;
+  string name = 2;
+  string class = 3;
+  uint32 level = 4;
+  bool online = 5;
+  float x = 6;
+  float z = 7;
+}
+
+message FriendList {
+  repeated Friend friends = 1;
+  uint32 max = 2;
+}
+
+message Mail {
+  uint64 id = 1;
+  string from_name = 2;
+  string subject = 3;
+  string body = 4;
+  int64 sent_at_ms = 5;
+  bool read = 6;
+}
+
+// Caixa de entrada. listed = false: só os contadores (aviso de carta nova ou ao entrar).
+message MailBox {
+  repeated Mail mails = 1;
+  uint32 unread = 2;
+  uint32 total = 3;
+  uint32 max = 4;
+  bool listed = 5;
+  uint32 body_max = 6; // tamanho máximo do texto (caracteres)
+  uint32 subject_max = 7;
+}
+
+// Amigos e/ou correio (só o que mudou vem preenchido).
+message SocialUpdate {
+  FriendList friends = 1;
+  MailBox mail = 2;
+}
+
+enum EmoteKind {
+  EMOTE_KIND_NONE = 0; // acabou (andou, atacou ou morreu)
+  EMOTE_KIND_WAVE = 1; // acenar (uma vez)
+  EMOTE_KIND_SIT = 2; // sentar (até se mexer)
+  EMOTE_KIND_DANCE = 3; // dançar (até se mexer)
+}
+
+// Emote de um jogador, para quem está perto.
+message Emote {
+  uint32 id = 1;
+  EmoteKind kind = 2;
 }
