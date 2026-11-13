@@ -484,6 +484,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // ---------- Mapa e regiões ----------
   const { regions, bosses } = buildRegions(welcome.zones, welcome.safeRadius);
+  dayNight.setRegions(regions);
   const mapSource = {
     world: worldData,
     mapCanvas: renderMapCanvas(worldData),

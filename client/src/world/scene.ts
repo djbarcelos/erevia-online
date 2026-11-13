@@ -149,6 +149,8 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
   const gui = AdvancedDynamicTexture.CreateFullscreenUI("ui", true, scene);
+  // Nomes, barras e números de dano ficam fora do pós-processamento (SSAO e FXAA do preset alto).
+  if (gui.layer) gui.layer.applyPostProcess = false;
 
   window.addEventListener("resize", () => engine.resize());
   engine.runRenderLoop(() => scene.render());

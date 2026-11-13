@@ -14,6 +14,7 @@ import {
   tabs,
   toast,
   toggle,
+  type Quality,
   type Settings,
 } from "../kit";
 
@@ -34,6 +35,17 @@ function row(label: string, control: HTMLElement, hint?: string): HTMLElement {
 
 function group(title: string, ...rows: HTMLElement[]): HTMLElement {
   return el("section", "set-group", el("h3", "set-group-title", title), ...rows);
+}
+
+/** O que cada preset liga (o mesmo de world/render.ts: PRESETS). */
+const QUALITY_HINTS: Record<Quality, string> = {
+  baixa: "Render a 80%, sombras simples, sem brilho (bloom) nem SSAO. Para celulares.",
+  media: "Brilho nas chamas e efeitos, vinheta e sombras boas.",
+  alta: "Tudo da média, mais oclusão de ambiente (SSAO), FXAA e sombras suaves.",
+};
+
+function qualityHint(q: Quality, picked: boolean): string {
+  return `${QUALITY_HINTS[q]}${picked ? "" : " (escolhida pelo aparelho)"} Aplica na hora.`;
 }
 
 const set = <K extends keyof Settings>(k: K) => (v: Settings[K]) => settings.set(k, v);
@@ -78,21 +90,29 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "set-page",
         group(
           "Qualidade",
-          row(
-            "Predefinição",
-            segmented(
-              [
-                { id: "baixa", label: "Baixa" },
-                { id: "media", label: "Média" },
-                { id: "alta", label: "Alta" },
-                { id: "ultra", label: "Ultra" },
-              ],
-              s.quality,
-              set("quality"),
-            ),
-            "Ajusta sombras, distância e efeitos de uma vez.",
-          ),
-          row("Sombras", toggle(s.shadows, set("shadows"), "Sombras")),
+          (() => {
+            const hint = el("small", null, qualityHint(s.quality, s.qualityPicked));
+            const r = row(
+              "Predefinição",
+              segmented(
+                [
+                  { id: "baixa", label: "Baixa" },
+                  { id: "media", label: "Média" },
+                  { id: "alta", label: "Alta" },
+                ],
+                s.quality,
+                (v: Quality) => {
+                  // Escolha do jogador: deixa de seguir o aparelho. Aplica na hora (world/render.ts).
+                  settings.set("qualityPicked", true);
+                  settings.set("quality", v);
+                  hint.textContent = qualityHint(v, true);
+                },
+              ),
+            );
+            r.querySelector(".set-label")?.append(hint);
+            return r;
+          })(),
+          row("Sombras", toggle(s.shadows, set("shadows"), "Sombras"), "Desligar economiza bastante no celular."),
           row("Distância de visão", slider(s.viewDistance, 30, 150, 10, set("viewDistance"), (v) => `${v} m`)),
           row(
             "Limite de FPS",
