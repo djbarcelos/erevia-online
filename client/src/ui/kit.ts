@@ -92,6 +92,8 @@ export interface Settings {
   showNames: boolean;
   showDamage: boolean;
   showHelm: boolean;
+  /** Missão rastreada no minimapa, no mapa e na seta da borda da tela. */
+  questMarkers: boolean;
   language: "pt-BR" | "en" | "es";
   autoRadius: number;
   autoSkills: boolean;
@@ -155,6 +157,7 @@ const DEFAULT_SETTINGS: Settings = {
   showNames: true,
   showDamage: true,
   showHelm: true,
+  questMarkers: true,
   language: "pt-BR",
   autoRadius: 25,
   autoSkills: true,
