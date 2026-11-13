@@ -23,6 +23,9 @@ var (
 func testConfig() Config {
 	cfg := DefaultConfig()
 	cfg.Clock = func() time.Time { return noon }
+	// Sem eventos pelo horário: a XP em dobro de fim de semana e a invasão sorteada à noite
+	// mudariam as contas dos outros testes (events_test.go e invasion_test.go ligam).
+	cfg.InvasionChance, cfg.XP2Days = 0, nil
 	return cfg
 }
 

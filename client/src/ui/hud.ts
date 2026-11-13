@@ -1,7 +1,8 @@
 /**
  * HUD do jogo (HTML sobre o canvas), no visual novo:
  * - topo esquerdo: personagem (vida, mana, nível, buffs);
- * - topo direito: minimapa (clique abre o mapa), zoom, X/Y, FPS e ping;
+ * - topo direito: minimapa (clique abre o mapa), zoom, X/Y, FPS e ping, e os eventos
+ *   (XP em dobro, invasão da cidade) num selo discreto embaixo;
  * - embaixo: barra de 10 atalhos (skills e itens), AUTO e menu das janelas; XP na borda;
  * - alvo no topo, chat embaixo à esquerda, avisos de saque e de nível, tela de morte;
  * - no toque: joystick e botões de ação (ataque, skills em arco, poção, alvo, AUTO).
@@ -14,8 +15,10 @@ import { classInfo } from "../classes";
 import {
   Effect,
   EntityKind,
+  InvasionPhase,
   PvpState,
   SkillTarget,
+  type EventStatus,
   type ItemInfo,
   type PartyState,
   type QuestLog,
@@ -191,6 +194,12 @@ export class Hud {
   private coordY = el("b", "mm-cv", "0");
   private fpsEl = el("span");
   private pingEl = el("span");
+  /** Eventos do servidor: só texto, atualizado com o resto do HUD lento (2×/s). */
+  private eventsEl = el("div", "hud-events");
+  private xp2El = el("span", "ev-xp2", "XP ×2");
+  private invEl = el("span", "ev-inv");
+  private events: EventStatus | null = null;
+  private serverNow: () => number = () => Date.now();
   private menuBtns = new Map<WindowId, HTMLButtonElement>();
   private autoBtn = el("button", "auto-btn");
   private autoTouch = el("button", "act-auto");
@@ -277,7 +286,11 @@ export class Hud {
     const coords = el("span", "mm-coords", el("i", "mm-ax", "X"), this.coordX, el("i", "mm-ax", "Y"), this.coordY);
     coords.title = "Sua posição (X = leste/oeste, Y = norte/sul)";
     const statsEl = el("div", "hud-stats", this.fpsEl, this.pingEl);
-    const mini = el("div", "hud-minimap", this.zoneName, frame, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl);
+    this.eventsEl.append(this.xp2El, this.invEl);
+    this.eventsEl.hidden = true;
+    tooltip(this.xp2El, () => this.xp2Tip());
+    tooltip(this.invEl, () => "<h4>Invasão da cidade</h4>Esqueletos entram pelos 4 portões. Enquanto durar, as estradas e a praça deixam de ser zona segura (o PvP continua proibido). A recompensa sai no fim, pelo dano e pelos abates.");
+    const mini = el("div", "hud-minimap", this.zoneName, frame, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl, this.eventsEl);
 
     // ---------- Menu ☰ (toque) ----------
     const burger = el("button", "menu-burger");
@@ -626,6 +639,33 @@ export class Hud {
     return !this.channelEl.hidden;
   }
 
+  /** Estado dos eventos do servidor (EventStatus). */
+  setEvents(s: EventStatus, serverNow: () => number): void {
+    this.events = s;
+    this.serverNow = serverNow;
+    this.renderEvents();
+  }
+
+  private renderEvents(): void {
+    const s = this.events!;
+    const inv = s.invasion !== InvasionPhase.NONE;
+    this.xp2El.hidden = !s.xp2;
+    this.invEl.hidden = !inv;
+    this.eventsEl.hidden = !s.xp2 && !inv;
+    if (!inv) return;
+    const left = Math.max(0, Math.ceil((Number(s.invasionAtMs) - this.serverNow()) / 1000));
+    const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    this.invEl.classList.toggle("active", s.invasion === InvasionPhase.ACTIVE);
+    this.invEl.textContent =
+      s.invasion === InvasionPhase.WARNING ? `Invasão em ${clock}` : `Invasão · onda ${s.wave}/${s.waves} · ${s.alive} ☠ · ${clock}`;
+  }
+
+  private xp2Tip(): string {
+    const until = Number(this.events?.xp2UntilMs ?? 0);
+    const when = until > 0 ? `até ${new Date(until).toLocaleString("pt-BR", { weekday: "long", hour: "2-digit", minute: "2-digit" })}` : "por tempo indeterminado";
+    return `<h4>XP em dobro</h4>Monstros dão o dobro de experiência ${when}.`;
+  }
+
   /** Painel de missões: redesenhado só quando o servidor manda um QuestLog (nada por quadro). */
   setQuests(log: QuestLog): void {
     this.questsEl.hidden = log.quests.length === 0;
@@ -953,6 +993,7 @@ export class Hud {
       this.pingEl.className = st.ping < 80 ? "ok" : "warn";
       const phase = this.cb.clock();
       this.clock.innerHTML = `${ui(isNight(phase) ? "moon" : "sun", 12)}${hourLabel(phase)}`;
+      if (this.events) this.renderEvents();
     }
   }
 

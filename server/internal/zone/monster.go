@@ -31,6 +31,10 @@ type monsterState struct {
 	summon     bool       // invocação: não renasce e some ao morrer
 	// Chefes mortos: janela de renascimento mostrada no mapa (relógio de parede).
 	windowStart, windowEnd time.Time
+	// Invasão da cidade (invasion.go): marcha para a praça, não deixa saque e conta para
+	// a recompensa. leash > 0 troca a coleira padrão.
+	invader bool
+	leash   float64
 }
 
 func (z *Zone) spawnMonsters() {
@@ -99,7 +103,8 @@ func (z *Zone) think(m *entity) {
 
 	z.pruneHate(m)
 
-	if ms.def.Aggressive && len(ms.hate) == 0 {
+	// Invasores procuram alvo a cada invAggroEvery ticks (são muitos de uma vez na cidade).
+	if (ms.def.Aggressive || ms.invader) && len(ms.hate) == 0 && (!ms.invader || (z.tick+m.id)%invAggroEvery == 0) {
 		if p := z.nearestPlayer(m.pos, z.aggroRange()); p != nil {
 			ms.hate[p.id] = 1
 		}
@@ -114,6 +119,10 @@ func (z *Zone) think(m *entity) {
 
 	if m.act.kind != actNone {
 		m.clearAction()
+	}
+	if ms.invader {
+		z.marchInvader(m) // sem alvo: segue para a praça (e briga com quem achar no caminho)
+		return
 	}
 	if dist(m.pos, ms.home) > wanderRadius+1 {
 		ms.returning = true
@@ -133,11 +142,12 @@ func (z *Zone) think(m *entity) {
 	}
 }
 
-// pruneHate esquece quem morreu, saiu ou fugiu para a cidade.
+// pruneHate esquece quem morreu, saiu ou fugiu para a cidade (durante a invasão, para a
+// parte da cidade que continua segura).
 func (z *Zone) pruneHate(m *entity) {
 	for id := range m.mon.hate {
 		p := z.players[id]
-		if p == nil || p.dead || z.inSafe(p.pos) || p.invisible(z.now) {
+		if p == nil || p.dead || z.pveSafe(p.pos) || p.invisible(z.now) {
 			delete(m.mon.hate, id)
 		}
 	}
@@ -198,12 +208,12 @@ func (z *Zone) nearestPlayer(from Vec2, maxDist float64) *entity {
 	var best *entity
 	bestD := maxDist
 	for _, p := range z.players {
-		if p.dead || z.inSafe(p.pos) || p.invisible(z.now) {
+		// A distância primeiro: quase todos estão longe, e ela já descarta.
+		d := dist(from, p.pos)
+		if d > bestD || p.dead || z.pveSafe(p.pos) || p.invisible(z.now) {
 			continue
 		}
-		if d := dist(from, p.pos); d <= bestD {
-			best, bestD = p, d
-		}
+		best, bestD = p, d
 	}
 	return best
 }

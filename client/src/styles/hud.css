@@ -552,6 +552,43 @@ button.mm-frame:focus-visible .mm-open {
   color: var(--warn);
 }
 
+/* Eventos do servidor (XP em dobro, invasão): selos pequenos embaixo do minimapa. Só texto,
+   sem animação: nada novo por quadro. */
+.hud-events {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  max-width: 184px;
+}
+
+.hud-events > span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(10, 8, 14, 0.75);
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px #000;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.ev-xp2 {
+  color: var(--gold-hi);
+  border-color: rgba(214, 180, 110, 0.6) !important;
+}
+
+.ev-inv {
+  color: #e8e0d4;
+}
+
+.ev-inv.active {
+  color: #ffb4a8;
+  border-color: rgba(220, 90, 70, 0.6) !important;
+}
+
 /* ---------- Missões e grupo ---------- */
 
 .hud-side {

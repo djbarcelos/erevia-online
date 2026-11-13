@@ -369,6 +369,7 @@ message ServerMessage {
     Ranking ranking = 31;
     Achievements achievements = 32;
     SpecChoice spec_choice = 50;
+    EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
   }
 }
 
@@ -467,6 +468,26 @@ message QuestStepInfo {
   string text = 1;
   uint32 count = 2;
   uint32 need = 3;
+}
+
+// ---------- Eventos (invasão da cidade e XP em dobro) ----------
+
+enum InvasionPhase {
+  INVASION_PHASE_NONE = 0;
+  INVASION_PHASE_WARNING = 1; // anunciada: começa em at_ms
+  INVASION_PHASE_ACTIVE = 2; // as ondas estão chegando; acaba por tempo em at_ms
+}
+
+// Estado dos eventos do servidor (indicador discreto no HUD). Vai logo depois do Welcome
+// (se houver algo ligado) e a cada mudança; durante a invasão, no máximo 1×/s.
+message EventStatus {
+  bool xp2 = 1; // XP de monstros em dobro
+  int64 xp2_until_ms = 2; // até quando (relógio do servidor; 0 = sem previsão)
+  InvasionPhase invasion = 3;
+  int64 invasion_at_ms = 4; // aviso: quando as ondas começam; ativa: o tempo limite
+  uint32 wave = 5; // onda atual (1…waves)
+  uint32 waves = 6;
+  uint32 alive = 7; // esqueletos vivos agora
 }
 
 // ---------- Raid boss ----------
