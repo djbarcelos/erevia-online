@@ -7,6 +7,7 @@ import {
   Color3,
   LoadAssetContainerAsync,
   Material,
+  Mesh,
   Node,
   PBRMaterial,
   RawTexture,
@@ -151,6 +152,8 @@ interface ModelAssets {
   body: AssetContainer;
   weapons: Partial<Record<Slot, AssetContainer>>;
   scale: number;
+  /** Cabeças que o arquivo traz ("Head_<id>"), por id: só a escolhida é copiada para a cena. */
+  heads: Map<string, AbstractMesh>;
 }
 
 export class CharacterModels {
@@ -248,7 +251,9 @@ export class CharacterModels {
         const w = weaponByFile.get(file);
         if (w) weapons[slot] = w;
       }
-      models.set(id, { body, weapons, scale: measureScale(body, id) });
+      const heads = new Map<string, AbstractMesh>();
+      for (const m of body.meshes) if (m.name.startsWith("Head_")) heads.set(m.name.slice(5), m);
+      models.set(id, { body, weapons, scale: measureScale(body, id), heads });
     }
 
     // Os grupos de animação servem de molde; não tocam sozinhos.
@@ -317,8 +322,19 @@ export class CharacterModels {
       }
     }
 
+    // Cabeça: o arquivo dos heróis traz cinco, mas só a escolhida vai para a cena (cada
+    // malha a mais custa na escolha das malhas ativas a cada quadro, mesmo desligada).
+    const headOf = (l: BodyLook) => {
+      const h = normalLook(model, l).head;
+      return assets.heads.has(h) ? h : model;
+    };
+    const firstHead = headOf(look ?? ORIGINAL_LOOK);
+    const srcHead = assets.heads.get(firstHead);
     // Malhas com esqueleto precisam ser clonadas (não instanciadas).
-    const entries = assets.body.instantiateModelsToScene((n) => `${n}#${id}`, false, { doNotInstantiate: true });
+    const entries = assets.body.instantiateModelsToScene((n) => `${n}#${id}`, false, {
+      doNotInstantiate: true,
+      predicate: (e: unknown) => !(e instanceof AbstractMesh && e.name.startsWith("Head_") && e !== srcHead),
+    });
     const gltfRoot = entries.rootNodes[0] as TransformNode;
 
     const root = new TransformNode(`model#${id}`, gltfRoot.getScene());
@@ -356,20 +372,34 @@ export class CharacterModels {
     for (const [slot, container] of Object.entries(handItems) as [Slot, AssetContainer][]) attach(slot, container, 0);
 
     // Visual do corpo: só os heróis têm várias cabeças e o chapéu separado.
-    const heads = new Map<string, AbstractMesh>();
-    for (const [n, node] of byName) if (n.startsWith("Head_") && node instanceof AbstractMesh) heads.set(n.slice(5), node);
     const hat = byName.get("Hat");
     // Só as malhas com esqueleto (as armas presas nas mãos não entram).
     const bodyMeshes = gltfRoot.getChildMeshes(false).filter((m) => !!m.skeleton && !!m.material);
-    const baseMat = bodyMeshes[0]?.material ?? null;
+    let head = { id: firstHead, mesh: byName.get(`Head_${firstHead}`) as AbstractMesh | undefined };
+    const baseMat = bodyMeshes.find((m) => m !== head.mesh)?.material ?? bodyMeshes[0]?.material ?? null;
     let painted: BodyLook | null = null; // cores em uso (material repintado)
     let disposed = false;
+    /** Troca a cabeça (Barbeiro, criação): a nova é copiada do arquivo e a velha, descartada. */
+    const swapHead = (want: string) => {
+      const src = assets.heads.get(want);
+      const old = head.mesh;
+      if (want === head.id || !(src instanceof Mesh) || !old) return;
+      const mesh = src.clone(`${src.name}#${id}`, old.parent, true);
+      mesh.skeleton = old.skeleton;
+      mesh.material = old.material;
+      mesh.isPickable = old.isPickable;
+      mesh.receiveShadows = old.receiveShadows;
+      const i = bodyMeshes.indexOf(old);
+      if (i >= 0) bodyMeshes[i] = mesh;
+      old.dispose(false, false);
+      head = { id: want, mesh };
+    };
     const applyLook = (l: BodyLook) => {
-      l = normalLook(model, l);
-      if (heads.size) {
-        const want = heads.has(l.head) ? l.head : model;
-        for (const [hid, mesh] of heads) mesh.setEnabled(hid === want);
+      if (head.mesh) {
+        swapHead(headOf(l));
+        head.mesh!.setEnabled(true);
       }
+      l = normalLook(model, l);
       if (hat instanceof TransformNode) hat.setEnabled(!l.hideHat);
       if (!baseMat || (painted && colorKey(model, painted) === colorKey(model, l))) return;
       if (painted) this.releasePaint(model, painted);
@@ -383,7 +413,7 @@ export class CharacterModels {
       });
     };
     if (look) applyLook(look);
-    else if (heads.size) applyLook(ORIGINAL_LOOK);
+    else if (head.mesh) applyLook(ORIGINAL_LOOK);
 
     // Animações (só as do conjunto do modelo), reaplicadas pelo nome dos ossos.
     const anims = new Map<AnimRole, AnimationGroup>();
