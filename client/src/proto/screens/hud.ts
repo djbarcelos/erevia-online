@@ -159,13 +159,19 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
   let miniRadius = 40;
   const zoomIn = button("+", "mm-btn", () => (miniRadius = Math.max(20, miniRadius - 10)));
   const zoomOut = button("−", "mm-btn", () => (miniRadius = Math.min(90, miniRadius + 10)));
-  const mapBtn = button("", "mm-btn", () => wm.toggle("map"));
-  mapBtn.innerHTML = ui("map", 14);
-  mapBtn.title = "Mapa (M)";
-  mini.append(zoneName, el("div", "mm-frame", miniCanvas, el("span", "mm-n", "N"), clock), el("div", "mm-row", zoomOut, coords, zoomIn, mapBtn));
+  zoomOut.setAttribute("aria-label", "Afastar o minimapa");
+  zoomIn.setAttribute("aria-label", "Aproximar o minimapa");
+  // Clicar no minimapa abre o mapa do mundo (o botão separado saiu).
+  const openBadge = el("span", "mm-open");
+  openBadge.innerHTML = ui("map", 14);
+  const miniFrame = el("button", "mm-frame", miniCanvas, el("span", "mm-n", "N"), clock, openBadge);
+  miniFrame.type = "button";
+  miniFrame.setAttribute("aria-label", "Abrir o mapa do mundo");
+  miniFrame.onclick = () => wm.toggle("map");
+  tooltip(miniFrame, () => `<b>Abrir mapa</b> <span class="muted">(${keyLabel(settings.get().keys.map)})</span>`);
   let mapCanvas: HTMLCanvasElement | null = null;
 
-  // ---------- Menu (canto superior direito) ----------
+  // ---------- Menu (embaixo, ao lado do AUTO) ----------
   const menu = el("div", "hud-menu");
   const menuBtns = new Map<string, HTMLButtonElement>();
   const MENU = [
@@ -194,7 +200,9 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
   const fpsEl = el("span");
   const pingEl = el("span");
   stats.append(fpsEl, pingEl);
-  const topRight = el("div", "hud-tr", menu, hamburger, stats);
+  const topRight = el("div", "hud-tr", hamburger);
+  // Embaixo do minimapa: zoom, depois X/Y, depois FPS e ping.
+  mini.append(zoneName, miniFrame, el("div", "mm-zoom", zoomOut, zoomIn), coords, stats);
 
   // ---------- Missões e grupo ----------
   const side = el("div", "hud-side");
@@ -267,7 +275,7 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
   autoBtn.onclick = () => toggleAuto();
   tooltip(autoBtn, () => `<h4>Auto-caça</h4>Procura monstros num raio de ${settings.get().autoRadius} m, ataca, usa as skills da barra e toma poção abaixo de ${settings.get().autoPotion}% de HP.<div class="cmp muted">Ajuste em Configurações → Jogo</div>`);
   const xpBar = bar("xp", "hud-xp");
-  const bottom = el("div", "hud-bottom", el("div", "hb-row", hotbar, autoBtn));
+  const bottom = el("div", "hud-bottom", el("div", "hb-row", hotbar, autoBtn, menu));
 
   // ---------- Status da auto-caça ----------
   const autoPill = el("div", "auto-pill");
