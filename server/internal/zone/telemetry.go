@@ -84,6 +84,7 @@ func (z *Zone) runTelemetryWorker(ctx context.Context) {
 		cctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		if err := z.eventSink.InsertEvents(cctx, batch); err != nil {
 			z.log.Warn("telemetry insert", "err", err, "count", len(batch))
+			z.ReportDBError("telemetry", err)
 		}
 		cancel()
 		batch = batch[:0]
@@ -91,7 +92,8 @@ func (z *Zone) runTelemetryWorker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Esvazia o que ainda está na fila antes de sair.
+			// Esvazia o que ainda está na fila antes de sair (e os erros ainda não gravados).
+			batch = append(batch, z.errs.rep.drain(z.cfg.Clock())...)
 			for {
 				select {
 				case e := <-z.telemetry:
@@ -107,6 +109,7 @@ func (z *Zone) runTelemetryWorker(ctx context.Context) {
 				flush()
 			}
 		case <-tick.C:
+			batch = append(batch, z.dueErrors()...) // contagens de erro acumuladas (errors.go)
 			flush()
 		}
 	}

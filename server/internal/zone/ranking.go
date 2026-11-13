@@ -84,6 +84,7 @@ func (z *Zone) runRankingWorker(ctx context.Context) {
 		cancel()
 		if err != nil {
 			z.log.Warn("ranking", "err", err) // fica o cálculo anterior
+			z.ReportDBError("ranking", err)
 		} else {
 			z.post(ctx, rankingEvent{data: data})
 		}

@@ -157,6 +157,9 @@ func (z *Zone) doClanJob(ctx context.Context, job clanJob) event {
 			cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			id, err = z.clanBackend.CreateClan(cctx, job.create.name, int64(job.create.player))
 			cancel()
+			if err != nil && !errors.Is(err, ErrClanNameTaken) {
+				z.ReportDBError("clan_create", err)
+			}
 		}
 		return clanCreatedEvent{req: *job.create, id: id, err: err}
 	}
@@ -171,6 +174,7 @@ func (z *Zone) doClanJob(ctx context.Context, job clanJob) event {
 			return nil
 		}
 		z.log.Error("clan op", "err", err, "kind", job.op.Kind, "clan", job.op.ClanID, "attempt", attempt)
+		z.ReportDBError("clan_op", err)
 		select {
 		case <-ctx.Done():
 			return nil
