@@ -1,4 +1,5 @@
 import { api, ApiError, type CharacterInfo } from "./api";
+import { gameAudio } from "./audio";
 import { Color3, Vector3 } from "@babylonjs/core";
 import { create } from "@bufbuild/protobuf";
 import {
@@ -67,6 +68,8 @@ const canvas = $<HTMLCanvasElement>("game");
 applyEnvClasses();
 settings.on(applyEnvClasses);
 addEventListener("resize", applyEnvClasses);
+// Som: liga no primeiro toque/clique e segue Configurações → Áudio.
+gameAudio.init();
 
 void boot();
 
@@ -618,6 +621,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (!info || d === null || !root) return;
     if (d <= SHOP_OPEN_DIST) {
       pendingShop = 0;
+      gameAudio.ui("open");
       const npc = npcInfo.get(id);
       shop.close();
       teleportWin.close();
@@ -798,6 +802,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const wm = new WindowManager(defs);
   wm.onChange = () => {
     for (const id of defs.keys()) hud.setWindowOpen(id, wm.isOpen(id));
+    gameAudio.windowCount([...defs.keys()].filter((id) => wm.isOpen(id)).length);
   };
 
   // ---------- Teclado ----------
@@ -885,6 +890,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     isEnemy: (id, force) => entities.isEnemy(id) || entities.canAttack(id, force || forcedId === id),
   });
   const stopTouchCamera = setupTouchCamera(canvas, world.camera);
+  const stopAudio = gameAudio.attachWorld({
+    scene: world.scene,
+    regions,
+    phase: () => clock.phase(),
+    listener: () => entities.localPosition(),
+    dead: () => entities.localDead,
+    camera: world.camera,
+    gold: () => store.gold,
+    onInventory: (fn) => store.onChange(fn),
+  });
 
   // A câmera segue o jogador local.
   world.scene.onBeforeRenderObservable.add(() => {
@@ -998,6 +1013,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       window.clearInterval(effectsTimer);
       window.clearInterval(stickTimer);
       stopTouchCamera();
+      stopAudio();
       wm.closeAll();
       wm.layer.remove();
       hud.dispose();
@@ -1097,6 +1113,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
                 fx.pickup(at, color);
                 if (head) fx.damageNumber(head, `+${itemLabel(info, g.count)}`, color.toHexString(), false);
                 hud.lootLine(itemLabel(info, g.count));
+                if (info.kind !== ItemKind.GOLD) gameAudio.ui("pickup"); // moedas: o som vem da bolsa
               }
             }
             loot.remove(ids);
@@ -1108,6 +1125,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           hud.itemCooldown(c.group, c.readyInMs, c.totalMs);
           // Recarga cheia = acabou de beber: efeito no personagem.
           const root = entities.rootOf(welcome.yourId);
+          if (c.readyInMs >= c.totalMs - 250) gameAudio.ui("potion");
           if (root && c.readyInMs >= c.totalMs - 250) fx.potion(root, c.group === 2 ? new Color3(0.35, 0.6, 1) : new Color3(1, 0.35, 0.3));
           break;
         }
@@ -1128,6 +1146,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           const r = msg.msg.value;
           const root = entities.rootOf(welcome.yourId);
           const at = root?.position.add(new Vector3(0, 1.2, 0));
+          gameAudio.ui(r.ok ? "enchant" : "fail");
           if (r.ok) {
             toast(`Sucesso! +${r.level} ${r.itemName}`);
             if (at) fx.pickup(at, new Color3(1, 0.8, 0.3));
