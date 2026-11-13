@@ -142,6 +142,7 @@ func (z *Zone) dbTry(ctx context.Context, what string, retry bool, fn func(ctx c
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err = fn(cctx)
 		cancel()
+		z.reportSocialDBError(what, err) // db_error (ver errors.go)
 		if err == nil || errors.Is(err, ErrNoSuchCharacter) || attempt == attempts {
 			break
 		}

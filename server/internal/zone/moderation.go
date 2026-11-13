@@ -106,6 +106,7 @@ func (z *Zone) doModJob(ctx context.Context, job modJob) event {
 				break
 			}
 			z.log.Error("mod job", "err", err, "attempt", attempt)
+			z.ReportDBError("moderation", err)
 			select {
 			case <-ctx.Done():
 				return nil

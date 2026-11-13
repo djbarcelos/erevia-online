@@ -170,7 +170,7 @@ func (z *Zone) selfStats(p *entity) *pb.SelfStats {
 	}
 	return &pb.SelfStats{
 		Hp: uint32(p.hpInt()), MaxHp: uint32(p.maxHPInt()),
-		Mp: uint32(math.Floor(p.mp)), MaxMp: uint32(math.Round(p.stats.MaxMP)),
+		Mp: uint32(p.mpInt()), MaxMp: uint32(p.maxMPInt()),
 		Level: uint32(p.level), Xp: uint64(p.pl.xp),
 		XpLevelStart: uint64(game.XPLevelStart(p.level)), XpNextLevel: next,
 		PAtk:     uint32(math.Round(p.atk(false, z.now))),
