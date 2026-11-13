@@ -7,6 +7,7 @@ import (
 	"math"
 	"testing"
 
+	"erevia/server/internal/game"
 	"erevia/server/internal/world"
 )
 
@@ -42,3 +43,35 @@ func TestMoveToNaNIsIgnored(t *testing.T) {
 		}
 	}
 }
+
+// O saque espalhado em volta do corpo (dropItem → scatter) só conferia obstáculos, não os
+// limites: quem morria na borda (PK com karma, monstro, recompensa de missão com a bolsa
+// cheia) deixava itens até 1,5 m fora do mapa, e ir pegar levava o personagem para fora
+// também (o movimento não limita à borda). Achado pelo FuzzZoneSemantic: Ana mata Beto
+// (com karma) depois de ele andar até a borda com move_to:{x:inf}; o item caiu em
+// x=150,38 num mapa de ±150.
+func TestDropAtEdgeStaysInsideMap(t *testing.T) {
+	mapa, err := world.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range []*world.World{nil, mapa} {
+		z := newTestZone(nil)
+		z.cfg.World = w
+		b := z.bounds()
+		corners := []Vec2{{X: b.MaxX, Z: b.MaxZ}, {X: b.MinX, Z: b.MinZ}, {X: b.MaxX, Z: 0}, {X: 0, Z: b.MinZ}}
+		def := game.Items["boots_good"]
+		for i := range 200 {
+			at := corners[i%len(corners)]
+			g := z.dropItem(at, def, 1, 0, 0, 0)
+			if g == nil {
+				t.Fatal("dropItem não pôs o item")
+			}
+			if !b.Contains(world.Point{X: g.pos.X, Z: g.pos.Z}) {
+				t.Fatalf("world=%v: item caiu fora do mapa em %v (limites %+v)", w != nil, g.pos, b)
+			}
+			delete(z.ground, g.id)
+		}
+	}
+}
+
