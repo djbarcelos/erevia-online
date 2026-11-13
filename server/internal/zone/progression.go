@@ -128,6 +128,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	z.systemAfterFlush(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
 	z.track(p, "level", "", int64(p.level), nil)
 	z.questLevel(p)
+	z.achValue(p, game.AchLevel, "", p.level)
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
 }
 

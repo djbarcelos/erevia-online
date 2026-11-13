@@ -1,5 +1,5 @@
 import { create, fromBinary, toBinary, type MessageInitShape } from "@bufbuild/protobuf";
-import { ChatChannel, ClanCmdKind, ClanRank, ClientMessageSchema, PartyCmdKind, ServerMessageSchema, type ServerMessage, type TradeCmdKind } from "../gen/erevia/v1/game_pb";
+import { AchievementCmdKind, ChatChannel, ClanCmdKind, ClanRank, ClientMessageSchema, PartyCmdKind, ServerMessageSchema, type ServerMessage, type TradeCmdKind } from "../gen/erevia/v1/game_pb";
 
 const PING_INTERVAL_MS = 2000;
 
@@ -142,6 +142,16 @@ export class Connection {
   /** Telemetria: amostra de FPS (a cada ~60 s). */
   clientStats(fpsAvg: number, fpsLow: number, device: string, seconds: number): void {
     this.send({ case: "clientStats", value: { fpsAvg, fpsLow, device, seconds } });
+  }
+
+  /** Pede o ranking (a janela Glória, quando abre e o que tem guardado está velho). */
+  rankingRequest(): void {
+    this.send({ case: "rankingRequest", value: {} });
+  }
+
+  /** Escolhe o título (id da conquista; "" tira). */
+  setTitle(id: string): void {
+    this.send({ case: "achievementCmd", value: { kind: AchievementCmdKind.ACHIEVEMENT_CMD_SET_TITLE, id } });
   }
 
   /** Ferreiro: criar um item com a receita. */

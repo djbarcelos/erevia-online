@@ -77,6 +77,7 @@ func run(log *slog.Logger) error {
 					CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP,
 					Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
 					Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
+					Achievements: p.Achievements, Title: p.Title,
 				}
 				if s := p.Storage; s != nil {
 					states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
@@ -128,6 +129,7 @@ func run(log *slog.Logger) error {
 	z.SetBossBackend(bossStore{st})
 	z.SetModBackend(modStore{st})
 	z.SetEventSink(eventStore{st})
+	z.SetRankingBackend(rankingStore{st})
 
 	// Conta apagada: o banco já apagou tudo; a zona derruba quem estiver online e acerta os
 	// clãs em memória do jeito que o banco deixou.
@@ -214,6 +216,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		ClanLeftAt: derefTime(c.ClanLeftAt),
 		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
 		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
+		Achievements: c.Achievements, Title: c.Title,
 	}, nil
 }
 
@@ -290,6 +293,28 @@ func (c clanStore) ApplyClanOp(ctx context.Context, op zone.ClanOp) error {
 		Kind: store.ClanOpKind(op.Kind), ClanID: op.ClanID, CharacterID: op.CharacterID,
 		Rank: op.Rank, Text: op.Text, LeftAt: op.LeftAt,
 	})
+}
+
+// rankingStore liga o worker do ranking ao banco.
+type rankingStore struct{ st *store.Store }
+
+func (r rankingStore) Rankings(ctx context.Context, limit int) (zone.RankingData, error) {
+	d, err := r.st.Rankings(ctx, limit)
+	if err != nil {
+		return zone.RankingData{}, err
+	}
+	rows := func(list []store.RankRow) []zone.RankRow {
+		out := make([]zone.RankRow, len(list))
+		for i, x := range list {
+			out[i] = zone.RankRow(x)
+		}
+		return out
+	}
+	out := zone.RankingData{At: d.At, Level: rows(d.Level), PvP: rows(d.PvP), LevelPos: d.LevelPos, PvPPos: d.PvPPos, ClanPos: d.ClanPos}
+	for _, c := range d.Clans {
+		out.Clans = append(out.Clans, zone.ClanRankRow(c))
+	}
+	return out, nil
 }
 
 // bossStore liga o worker de renascimento dos raid bosses ao banco.

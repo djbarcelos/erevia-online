@@ -47,6 +47,7 @@ func (z *Zone) craft(p *entity, npcID uint32, recipeID string) {
 	z.trackItem(p, true, res.ID, r.Count, "craft")
 	z.system(p, fmt.Sprintf("%s criou %s para você por %d moedas.", n.name, itemLabel(res, r.Count), r.Gold))
 	z.inventoryChanged(p, false) // também agenda o salvamento
+	z.achValue(p, game.AchCraft, "", int(res.Grade))
 }
 
 func recipesPB() []*pb.RecipeInfo {
