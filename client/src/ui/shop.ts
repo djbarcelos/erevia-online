@@ -1,5 +1,5 @@
 import { el, formatGold, goldIcon, GRADE_COLOR, itemIcon, ItemStore, ItemTip } from "./items";
-import { ItemKind, type ItemInfo } from "../gen/erevia/v1/game_pb";
+import { ItemKind, type ItemInfo, type RecipeInfo } from "../gen/erevia/v1/game_pb";
 
 /** Categorias do filtro da aba Comprar (só aparecem as que a loja tem). */
 type ShopCat = "all" | "weapon" | "armor" | "jewel" | "potion";
@@ -27,20 +27,25 @@ function shopCat(i: ItemInfo): ShopCat {
 export interface ShopActions {
   buy(npcId: number, itemId: string, count: number): void;
   sell(npcId: number, slot: number, count: number): void;
+  /** Ferreiro: criar com uma receita. */
+  craft(npcId: number, recipeId: string): void;
   me(): { myClass: string; myLevel: number };
   /** A loja abriu: o inventário abre ao lado (para arrastar e vender). */
   onOpen(): void;
 }
 
-/** Janela da loja de um NPC: comprar da lista dele ou vender o que está na bolsa. */
+type ShopMode = "buy" | "sell" | "craft";
+
+/** Janela da loja de um NPC: comprar da lista dele, vender o que está na bolsa ou (Ferreiro) criar. */
 export class ShopWindow {
   readonly root = el("div", "shop-panel frame");
   private title = el("h2");
   private list = el("div", "shop-list");
   private goldEl = el("span", "shop-gold-value");
   private tabs: HTMLButtonElement[] = [];
-  private mode: "buy" | "sell" = "buy";
+  private mode: ShopMode = "buy";
   private stock: ItemInfo[] = [];
+  private recipes: RecipeInfo[] = [];
   private filters = el("div", "shop-filters");
   private cat: ShopCat = "all";
   /** Esconde equipamentos que a sua classe não usa. */
@@ -66,9 +71,10 @@ export class ShopWindow {
     head.append(this.title, close);
 
     const tabs = el("div", "shop-tabs");
-    for (const [mode, label] of [["buy", "Comprar"], ["sell", "Vender"]] as const) {
+    for (const [mode, label] of [["buy", "Comprar"], ["sell", "Vender"], ["craft", "Criar"]] as const) {
       const b = el("button", "shop-tab", label);
       b.type = "button";
+      b.dataset.mode = mode;
       b.onclick = () => this.setMode(mode);
       tabs.append(b);
       this.tabs.push(b);
@@ -90,10 +96,12 @@ export class ShopWindow {
     return !this.root.hidden;
   }
 
-  open(npcId: number, title: string, stock: string[]): void {
+  open(npcId: number, title: string, stock: string[], recipes: RecipeInfo[] = []): void {
     this.npcId = npcId;
     this.title.textContent = title;
     this.stock = stock.map((id) => this.store.get(id)).filter((i): i is ItemInfo => !!i);
+    this.recipes = recipes;
+    for (const t of this.tabs) if (t.dataset.mode === "craft") t.hidden = recipes.length === 0;
     this.cat = "all";
     this.root.hidden = false;
     this.setMode("buy");
@@ -111,9 +119,9 @@ export class ShopWindow {
     this.root.remove();
   }
 
-  setMode(mode: "buy" | "sell"): void {
+  setMode(mode: ShopMode): void {
     this.mode = mode;
-    this.tabs.forEach((t, i) => t.classList.toggle("active", (i === 0) === (mode === "buy")));
+    this.tabs.forEach((t) => t.classList.toggle("active", t.dataset.mode === mode));
     this.renderFilters();
     this.render(true);
   }
@@ -168,6 +176,13 @@ export class ShopWindow {
       return;
     }
     this.list.replaceChildren();
+    if (this.mode === "craft") {
+      for (const r of this.recipes) {
+        const row = this.recipeRow(r);
+        if (row) this.list.append(row);
+      }
+      return;
+    }
     if (this.mode === "buy") {
       for (const info of this.stock) {
         if (this.visible(info)) this.list.append(this.row(info, info.price, info.stack > 1 ? 999 : 1, (n) => this.actions.buy(this.npcId, info.id, n), "Comprar"));
@@ -219,7 +234,38 @@ export class ShopWindow {
       act(count);
     };
     row.append(btn);
-    row.onmouseenter = () => this.tip.show(info, this.root, { ...this.actions.me(), price: this.mode, count: have, side: true });
+    row.onmouseenter = () => this.tip.show(info, this.root, { ...this.actions.me(), price: this.mode === "craft" ? undefined : this.mode, count: have, side: true });
+    row.onmouseleave = () => this.tip.hide();
+    return row;
+  }
+
+  /** Receita: resultado, materiais (tenho/preciso), custo e Criar (só quando dá). */
+  private recipeRow(r: RecipeInfo): HTMLElement | null {
+    const info = this.store.get(r.resultId);
+    if (!info) return null;
+    const row = el("div", "shop-row craft-row");
+    const icon = el("div", "shop-icon");
+    icon.innerHTML = itemIcon(info);
+    if (r.count > 1) icon.append(el("span", "qty", String(r.count)));
+    const name = el("div", "shop-name");
+    const n = el("strong", "", info.name);
+    n.style.color = GRADE_COLOR[info.grade] ?? GRADE_COLOR[1];
+    const mats = el("span", "craft-mats");
+    let ok = this.store.gold >= Number(r.gold);
+    for (const m of r.materials) {
+      const have = this.store.countOf(m.itemId);
+      if (have < m.count) ok = false;
+      const mi = this.store.get(m.itemId);
+      mats.append(el("span", have >= m.count ? "craft-mat" : "craft-mat missing", `${mi?.name ?? m.itemId} ${Math.min(have, m.count)}/${m.count}`));
+    }
+    name.append(n, mats, el("span", "shop-price", `${formatGold(Number(r.gold))} moedas`));
+    const btn = el("button", "btn btn-gold shop-btn", "Criar");
+    btn.type = "button";
+    btn.disabled = !ok;
+    btn.onclick = () => this.actions.craft(this.npcId, r.id);
+    row.classList.toggle("poor", !ok);
+    row.append(icon, name, btn);
+    row.onmouseenter = () => this.tip.show(info, this.root, { ...this.actions.me(), side: true });
     row.onmouseleave = () => this.tip.hide();
     return row;
   }

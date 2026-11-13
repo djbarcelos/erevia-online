@@ -119,6 +119,27 @@ func (inv *inventory) add(def *game.ItemDef, count int) int {
 	return count
 }
 
+// takeID tira count unidades do item id da bolsa (das pilhas do fim para o começo).
+// Devolve false (sem mexer em nada) se não houver o bastante.
+func (inv *inventory) takeID(id string, count int) bool {
+	if inv.countOf(id) < count {
+		return false
+	}
+	for i := len(inv.bag) - 1; i >= 0 && count > 0; i-- {
+		s := &inv.bag[i]
+		if s.empty() || s.def.ID != id {
+			continue
+		}
+		n := min(count, s.count)
+		s.count -= n
+		count -= n
+		if s.count == 0 {
+			*s = stack{}
+		}
+	}
+	return true
+}
+
 // put guarda o item mantendo o encantamento (encantado = sempre um espaço vazio só dele).
 // Devolve quantas unidades não couberam.
 func (inv *inventory) put(def *game.ItemDef, count, enchant int) int {

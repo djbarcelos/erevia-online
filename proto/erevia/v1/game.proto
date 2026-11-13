@@ -34,7 +34,14 @@ message ClientMessage {
     StorageGold storage_gold = 24;
     ChangeLook change_look = 25;
     TradeCmd trade_cmd = 26;
+    Craft craft = 27;
   }
+}
+
+// Criar um item com uma receita do Ferreiro (materiais + moedas).
+message Craft {
+  uint32 npc_id = 1;
+  string recipe_id = 2;
 }
 
 // ---------- Troca entre jogadores ----------
@@ -757,6 +764,20 @@ message NpcInfo {
   repeated string stock = 2; // ids dos itens à venda
   NpcRole role = 3;
   repeated TeleportDest dests = 4; // pedras de teleporte: destinos
+  repeated RecipeInfo recipes = 5; // Ferreiro: o que dá para criar
+}
+
+message RecipeInfo {
+  string id = 1;
+  string result_id = 2;
+  uint32 count = 3;
+  repeated RecipeMaterial materials = 4;
+  int64 gold = 5;
+}
+
+message RecipeMaterial {
+  string item_id = 1;
+  uint32 count = 2;
 }
 
 enum ItemKind {
