@@ -205,7 +205,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number
       shadows.addShadowCaster(mesh);
       mesh.isPickable = false;
     }
-    anim = new AnimController(inst.anims, inst.resetPose);
+    anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
     setEmblem(look.emblem);
   };
 

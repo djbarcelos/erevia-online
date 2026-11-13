@@ -1,6 +1,7 @@
 package zone
 
 import (
+	"strings"
 	"testing"
 
 	"erevia/server/internal/game"
@@ -281,5 +282,36 @@ func TestSaveQueueFullKeepsStatePending(t *testing.T) {
 	z.saveAll(true)
 	if b := <-got; len(b) != 1 || b[0].Gold != 7 {
 		t.Fatalf("batch = %+v", b)
+	}
+}
+
+// O saque e o "+XP" chegam depois do snapshot com a morte: o cliente mostra o golpe e o
+// corpo caindo antes de o item aparecer no chão.
+func TestLootAndXPArriveAfterDeathSnapshot(t *testing.T) {
+	z := newCombatZone(fixed("bone_lord", 22, 40, 0)) // o chefe sempre deixa itens
+	m := z.onlyMonster()
+	a, peer := joinKit(z, 1, "knight", 38, 0, 0)
+	m.mon.respawnAt = 1e9
+	z.kill(m, a)
+	z.update(0.05)
+
+	death, loot, xp := -1, -1, -1
+	peer.mu.Lock()
+	for i, msg := range peer.msgs {
+		switch {
+		case death < 0 && len(msg.GetSnapshot().GetDeaths()) > 0:
+			death = i
+		case loot < 0 && msg.GetGroundAdded() != nil:
+			loot = i
+		case xp < 0 && strings.Contains(msg.GetChat().GetText(), "XP"):
+			xp = i
+		}
+	}
+	peer.mu.Unlock()
+	if death < 0 || loot < 0 || xp < 0 {
+		t.Fatalf("missing messages: death=%d loot=%d xp=%d", death, loot, xp)
+	}
+	if loot < death || xp < death {
+		t.Fatalf("loot (%d) and xp (%d) must come after the death snapshot (%d)", loot, xp, death)
 	}
 }

@@ -90,7 +90,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	}
 	p.pl.xp += xp
 	p.pl.statsDirty = true
-	z.system(p, fmt.Sprintf("+%d XP", xp))
+	z.systemAfterFlush(p, fmt.Sprintf("+%d XP", xp)) // depois do golpe que matou
 
 	leveled := false
 	for p.level < game.MaxLevel && p.pl.xp >= game.XPLevelStart(p.level+1) {
@@ -105,7 +105,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	z.sendProgress(p) // pontos novos de atributo e de skill
 	z.clanLevelUp(p)
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
-	z.system(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
+	z.systemAfterFlush(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
 }
 

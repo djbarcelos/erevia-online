@@ -254,7 +254,7 @@ export class Sim {
       this.world.shadows.addShadowCaster(m);
     }
     u.inst = inst;
-    u.anim = new AnimController(inst.anims, inst.resetPose);
+    u.anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
   }
 
   /** Recria o modelo do jogador (ex.: trocou a arma no inventário). */

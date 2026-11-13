@@ -182,8 +182,11 @@ type Zone struct {
 	now      float64 // segundos de simulação
 	rng      *rand.Rand
 	frame    frame
-	saves    chan<- []SavedState
-	night    bool // ciclo dia/noite (ver game.DayPhase)
+	// Mensagens que só podem sair depois do snapshot do tick (saque e XP de uma morte
+	// chegariam ao cliente antes do golpe que matou).
+	afterSnapshot []func()
+	saves         chan<- []SavedState
+	night         bool // ciclo dia/noite (ver game.DayPhase)
 	// Recargas de quem saiu (personagem → skill → quando fica pronta, no relógio de
 	// parede): sair e entrar de novo não zera as recargas.
 	savedCooldowns map[uint32]map[uint32]time.Time
@@ -627,6 +630,7 @@ func (z *Zone) update(dt float64) {
 	z.saveDue()
 
 	z.flushSnapshot()
+	z.runAfterSnapshot()
 	for _, p := range z.players {
 		if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || int(math.Floor(p.mp)) != p.pl.sentMP {
 			z.sendSelfStats(p)
@@ -839,6 +843,28 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		out.Title = "Estandarte"
 	}
 	return out
+}
+
+// afterFlush agenda fn para logo depois do próximo snapshot.
+func (z *Zone) afterFlush(fn func()) {
+	z.afterSnapshot = append(z.afterSnapshot, fn)
+}
+
+// systemAfterFlush: aviso do sistema que sai depois do snapshot (se o jogador continuar aqui).
+func (z *Zone) systemAfterFlush(p *entity, text string) {
+	z.afterFlush(func() {
+		if z.players[p.id] == p {
+			z.system(p, text)
+		}
+	})
+}
+
+func (z *Zone) runAfterSnapshot() {
+	fns := z.afterSnapshot
+	z.afterSnapshot = nil
+	for _, fn := range fns {
+		fn()
+	}
 }
 
 // broadcast serializa a mensagem UMA vez e envia os mesmos bytes a todos (exceto skip).

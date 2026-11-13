@@ -62,6 +62,20 @@ const ANIM_SETS: Record<string, AnimSet> = {
   npc_smith: { ...HERO_BASE, attack: "Melee_1H_Attack_Chop", skill: "Melee_1H_Attack_Chop" },
 };
 
+/**
+ * Instante (s) em que o golpe encosta (ou a magia sai da mão) em cada clipe, medido pela
+ * posição das mãos nos arquivos de animação: o fim do movimento rápido do golpe.
+ */
+const CLIP_IMPACT: Record<string, number> = {
+  Melee_1H_Attack_Chop: 0.62,
+  Melee_1H_Attack_Stab: 0.43,
+  Melee_2H_Attack_Chop: 0.85,
+  Melee_Dualwield_Attack_Stab: 0.43,
+  Ranged_Magic_Shoot: 0.27,
+  Ranged_Magic_Spellcasting: 0.4,
+  Ranged_Magic_Raise: 0.45,
+};
+
 export type Slot = "handslot.r" | "handslot.l";
 /** Armas padrão de cada modelo. Os heróis usam o que o servidor manda (equipamento). */
 const WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
@@ -103,6 +117,8 @@ const MONSTER_WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
 export interface CharacterInstance {
   root: TransformNode;
   anims: Map<AnimRole, AnimationGroup>;
+  /** Instante (s) do golpe/soltura de cada ação no próprio clipe (sincroniza dano e efeitos). */
+  impacts: Partial<Record<AnimRole, number>>;
   /**
    * Devolve os ossos à pose de descanso. As animações de ação (algumas feitas para os
    * heróis) movem canais que a pose parada dos esqueletos não anima — como a posição do
@@ -370,9 +386,15 @@ export class CharacterModels {
       }
     }
 
+    const impacts: Partial<Record<AnimRole, number>> = {};
+    for (const [role, animName] of Object.entries(set) as [AnimRole, string][]) {
+      if (CLIP_IMPACT[animName] !== undefined) impacts[role] = CLIP_IMPACT[animName];
+    }
+
     return {
       root,
       anims,
+      impacts,
       resetPose: () => {
         for (const r of rest) {
           r.node.position.copyFrom(r.pos);

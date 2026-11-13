@@ -65,6 +65,21 @@ const NPC_COLOR = "#e0c27a";
 
 /** Velocidade dos projéteis (m/s): o dano só aparece quando o projétil chega. */
 const PROJECTILE_SPEED = 26;
+/**
+ * Quanto da preparação do golpe ainda aparece (s). O servidor decide o dano no instante em
+ * que o golpe começa; o cliente começa o clipe perto do impacto e mostra dano, barra de vida
+ * e morte só quando o golpe encosta (ou o projétil chega).
+ */
+const SWING_LEAD = 0.18;
+/** Segundo golpe que chega enquanto o primeiro ainda sobe: encosta este tempo depois (ms). */
+const FOLLOW_UP_MS = 140;
+/** Quanto a morte espera depois do último impacto, para o golpe ser visto antes da queda (ms). */
+const DEATH_AFTER_HIT_MS = 70;
+/** Quão rápido alguém se vira para o alvo do golpe (1/s): ~95% em 0,12 s. */
+const FACE_RATE = 25;
+/** Corpo sumindo (s) e monstro nascendo (s). */
+const CORPSE_SINK_S = 0.9;
+const SPAWN_FADE_S = 0.5;
 
 /** Efeito ativo numa entidade (para os ícones do HUD). */
 export interface ActiveEffect {
@@ -168,6 +183,18 @@ interface View extends EntityInfo {
   hpFill: Rectangle;
   lastHurt: number;
   effects: Map<Effect, TrackedEffect>;
+  /** Último golpe ainda a caminho deste alvo (performance.now()); dano e morte esperam. */
+  impactUntil: number;
+  /** Vida que chegou do servidor enquanto um golpe ainda não tinha encostado. */
+  pendingHp: HpUpdate | null;
+  /** A morte já aparece na tela (o servidor pode ter avisado antes do golpe encostar). */
+  shownDead: boolean;
+  /** Quando o último golpe deste atacante começou e quando ele encosta. */
+  lastSwing: number;
+  swingImpact: number;
+  lastLand: number;
+  /** Para onde virar (golpes): gira suave até lá; null = segue o movimento. */
+  faceYaw: number | null;
 }
 
 /** Jogadores e monstros na tela: criação, movimento suave, animações e combate. */
@@ -190,8 +217,14 @@ export class EntityManager {
   private lookbackMs = 150;
   private mats = new Map<string, StandardMaterial>();
   private ringMat: StandardMaterial;
-  /** Último evento de skill com área no alvo (para animar uma vez só). */
-  private lastSplash = new Map<string, number>();
+  /** Último evento de skill com área no alvo (para animar uma vez só) e quando ele encosta. */
+  private lastSplash = new Map<string, { t: number; at: number }>();
+  /** Skills em área/em si: quando o efeito sai (os golpes do mesmo snapshot vão juntos). */
+  private castImpact = new Map<string, { t: number; at: number }>();
+  /** Golpes, projéteis e mortes esperando a hora de aparecer, em ordem de horário. */
+  private stage: { at: number; id: number; fn: () => void }[] = [];
+  /** Quando a última morte agendada aparece (o saque espera por ela). */
+  private lastDeathShow = 0;
   private selectRing: Mesh;
   private models: CharacterModels | null = null;
   private targetId = 0;
@@ -353,7 +386,8 @@ export class EntityManager {
     for (const view of this.views.values()) this.refreshHpBar(view);
   }
 
-  add(e: Entity): void {
+  /** fade: monstro que acabou de nascer aparece aos poucos. */
+  add(e: Entity, fade = false): void {
     if (this.views.has(e.id)) return;
     const isLocal = e.id === this.localId;
     if (isLocal) this.resetLocalPrediction();
@@ -456,6 +490,7 @@ export class EntityManager {
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
+      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null,
     };
     this.views.set(e.id, v);
     // NPCs ficam parados, virados para o centro da praça.
@@ -475,6 +510,7 @@ export class EntityManager {
     if (this.models) this.attachModel(v);
     if (!v.model3d) v.capsule = this.createCapsule(v);
     if (v.dead) this.showDead(v, true);
+    else if (fade && e.kind === EntityKind.MONSTER) this.fadeIn(v);
   }
 
   /** Pedra de Teleporte: monólito com runas acesas e núcleo de luz (ver teleport-stone.ts). */
@@ -532,11 +568,49 @@ export class EntityManager {
     if (this.targetId === id) this.setTarget(0);
     if (this.selectRing.parent === v.root) this.selectRing.parent = null;
     this.clearEffects(v);
+    this.dropStage(id);
     v.label.dispose();
+    this.views.delete(id);
+    // Corpo de monstro: afunda e desbota antes de sumir.
+    if (v.shownDead && v.kind === EntityKind.MONSTER) this.sinkAndDispose(v);
+    else this.disposeView(v);
+  }
+
+  private disposeView(v: View): void {
     v.model3d?.dispose();
     // Materiais são compartilhados (modelo, anel, efeitos): só as malhas são descartadas.
     v.root.dispose(false, false);
-    this.views.delete(id);
+  }
+
+  /** Corpo afundando no chão e desbotando (CORPSE_SINK_S), depois descartado. */
+  private sinkAndDispose(v: View): void {
+    for (const m of v.root.getChildMeshes(false)) m.isPickable = false;
+    const meshes = v.meshes.length ? v.meshes : v.root.getChildMeshes(false);
+    let t = 0;
+    const obs = this.scene.onBeforeRenderObservable.add(() => {
+      t += this.scene.getEngine().getDeltaTime() / 1000;
+      const k = Math.min(1, t / CORPSE_SINK_S);
+      v.root.position.y = -0.5 * v.scale * k * k;
+      for (const m of meshes) m.visibility = 1 - k;
+      if (k >= 1) {
+        this.scene.onBeforeRenderObservable.remove(obs);
+        this.disposeView(v);
+      }
+    });
+  }
+
+  /** Monstro que acabou de nascer aparece aos poucos. */
+  private fadeIn(v: View): void {
+    const meshes = v.meshes;
+    if (!meshes.length) return;
+    let t = 0;
+    for (const m of meshes) m.visibility = 0;
+    const obs = this.scene.onBeforeRenderObservable.add(() => {
+      t += this.scene.getEngine().getDeltaTime() / 1000;
+      const k = Math.min(1, t / SPAWN_FADE_S);
+      for (const m of meshes) if (!m.isDisposed()) m.visibility = k;
+      if (k >= 1 || v.root.isDisposed()) this.scene.onBeforeRenderObservable.remove(obs);
+    });
   }
 
   applyState(s: EntityState): void {
@@ -680,6 +754,16 @@ export class EntityManager {
   applyHp(u: HpUpdate): void {
     const v = this.views.get(u.id);
     if (!v) return;
+    // Um golpe ainda não encostou: a barra só desce quando ele chegar.
+    if (v.impactUntil > performance.now()) {
+      v.pendingHp = u;
+      return;
+    }
+    v.pendingHp = null;
+    this.setHp(v, u);
+  }
+
+  private setHp(v: View, u: HpUpdate): void {
     if (u.hp < v.hp) v.lastHurt = performance.now();
     v.hp = u.hp;
     v.maxHp = u.maxHp;
@@ -723,70 +807,144 @@ export class EntityManager {
     const src = this.views.get(ev.sourceId);
     const dst = this.views.get(ev.targetId);
     if (!dst) return;
+    const now = performance.now();
     // Veneno, queimadura e praga: só o número (sem animação de golpe).
     if (ev.dot !== Effect.UNSPECIFIED) {
       const color = ev.dot === Effect.BURN ? "#ffa04a" : ev.dot === Effect.PLAGUE ? "#9ccf5a" : "#7dff7a";
-      this.fx.damageNumber(dst.head, String(ev.damage), color, false);
-      if (ev.kill) dst.anim?.play("hit");
+      this.at(Math.max(now, dst.impactUntil), dst.id, () => {
+        this.fx.damageNumber(dst.head, String(ev.damage), color, false);
+        if (ev.kill) dst.anim?.play("hit");
+      });
       return;
     }
     const sk = ev.skillId ? this.catalog.get(ev.skillId) : undefined;
     const isArea = sk?.target === SkillTarget.AREA; // a animação e o nome já vieram no SkillCast
-    // Skills com área em volta do alvo mandam um evento por inimigo: a animação sai uma vez só.
+    // Skills com área em volta do alvo mandam um evento por inimigo: a animação sai uma vez só
+    // e os outros alvos levam o golpe junto com o principal.
     const key = `${ev.sourceId}:${ev.skillId}`;
-    const now = performance.now();
-    const repeat = !!sk && sk.splash > 0 && now - (this.lastSplash.get(key) ?? 0) < 250;
-    if (sk && sk.splash > 0 && !repeat) this.lastSplash.set(key, now);
-    if (ev.heal && src) this.fx.damageNumber(src.head, `+${ev.heal}`, "#7dff9a", false);
-    if (ev.absorbed && !ev.miss) this.fx.damageNumber(dst.head, `(${ev.absorbed} absorvido)`, "#9fc6ff", false);
+    const last = this.lastSplash.get(key);
+    const repeat = !!sk && sk.splash > 0 && !!last && now - last.t < 250;
     if (repeat) {
-      window.setTimeout(() => this.landHit(ev, src, dst, sk, true), 650);
+      this.hitAt(last!.at, ev, src, dst, sk, true);
       return;
     }
 
-    if (src && src !== dst && !isArea) {
-      this.face(src, dst);
-      src.anim?.play(ev.skillId ? "skill" : "attack");
+    // Quando o golpe encosta (ou a magia sai da mão).
+    let release = now;
+    if (isArea) {
+      // Mesmo instante do SkillCast desse snapshot (que chega antes).
+      const cast = this.castImpact.get(key);
+      if (cast && now - cast.t < 250) release = cast.at;
+    } else if (src && src !== dst) {
+      release = this.swing(src, dst, ev.skillId ? "skill" : "attack", now);
       if (sk && sk.target === SkillTarget.ENEMY) this.fx.skillName(src.head, sk.name);
     }
 
-    const land = () => this.landHit(ev, src, dst, sk);
-    if (!src || src === dst) return land();
-    const from = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
-    const to = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
-    const travel = Vector3.Distance(from, to) / PROJECTILE_SPEED;
-    const bolt = BOLT_COLOR[sk?.fx ?? ""];
-    switch (sk?.fx) {
-      case "fireball":
-        this.fx.fireball(from, to, travel);
-        window.setTimeout(land, travel * 1000);
-        return;
-      case "m_rain":
-        this.fx.emberRain(dst.root.position.clone(), sk.splash);
-        window.setTimeout(land, 650);
-        return;
-      case "m_meteor":
-        this.fx.meteor(dst.root.position.clone(), sk.splash, ev.sourceId === this.localId);
-        window.setTimeout(land, 760);
-        return;
+    let impact = release;
+    if (src && src !== dst && !isArea) {
+      const from = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
+      const to = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
+      const travel = Vector3.Distance(from, to) / PROJECTILE_SPEED;
+      const bolt = BOLT_COLOR[sk?.fx ?? ""];
+      // O projétil sai da mão no instante da soltura, do lugar onde cada um estiver.
+      const launch = (fn: (from: Vector3, to: Vector3) => void) =>
+        this.at(release, dst.id, () =>
+          fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0))),
+        );
+      if (sk?.fx === "fireball") {
+        launch((a, b) => this.fx.fireball(a, b, travel));
+        impact = release + travel * 1000;
+      } else if (sk?.fx === "m_rain") {
+        launch(() => this.fx.emberRain(dst.root.position.clone(), sk.splash));
+        impact = release + 650;
+      } else if (sk?.fx === "m_meteor") {
+        launch(() => this.fx.meteor(dst.root.position.clone(), sk.splash, ev.sourceId === this.localId));
+        impact = release + 760;
+      } else if (bolt) {
+        launch((a, b) => this.fx.bolt(a, b, travel, bolt));
+        impact = release + travel * 1000;
+      } else if (!ev.skillId && isCaster(src.model)) {
+        // Ataque básico de quem usa magia (magos e esqueletos magos).
+        launch((a, b) => this.fx.arcaneBolt(a, b, travel));
+        impact = release + travel * 1000;
+      }
     }
-    if (bolt) {
-      this.fx.bolt(from, to, travel, bolt);
-      window.setTimeout(land, travel * 1000);
+    if (sk && sk.splash > 0) this.lastSplash.set(key, { t: now, at: impact });
+    this.hitAt(impact, ev, src, dst, sk);
+  }
+
+  /**
+   * Toca o golpe de src e devolve quando ele encosta (performance.now()). O clipe começa
+   * já no meio, para o golpe chegar SWING_LEAD depois; se os ataques vêm mais rápido que o
+   * clipe, ele acelera para não recomeçar no meio. Um golpe que chega enquanto o anterior
+   * ainda está subindo (skill + ataque básico no tick seguinte, skills de vários golpes) não
+   * reinicia a animação: vira um segundo impacto logo depois do primeiro.
+   */
+  private swing(src: View, dst: View, role: "attack" | "skill", now: number): number {
+    this.face(src, dst);
+    if (now < src.swingImpact) {
+      src.swingImpact = Math.max(src.swingImpact, src.lastLand) + FOLLOW_UP_MS;
+      src.lastLand = src.swingImpact;
+      return src.swingImpact;
+    }
+    const interval = (now - src.lastSwing) / 1000;
+    src.lastSwing = now;
+    let lead = 0;
+    if (src.anim) {
+      let speed = 1;
+      const rest = src.anim.remaining(role, SWING_LEAD);
+      if (interval > 0.3 && interval < 3 && rest > interval * 0.9) speed = clamp(rest / (interval * 0.9), 1, 2);
+      lead = src.anim.play(role, { lead: SWING_LEAD, speed });
+    }
+    src.swingImpact = src.lastLand = now + lead * 1000;
+    return src.swingImpact;
+  }
+
+  /** Agenda o golpe em dst para `at`: dano, HP e morte esperam por ele. */
+  private hitAt(at: number, ev: CombatEvent, src: View | undefined, dst: View, sk: SkillInfo | undefined, quiet = false): void {
+    dst.impactUntil = Math.max(dst.impactUntil, at);
+    this.at(at, dst.id, () => this.landHit(ev, src, dst, sk, quiet));
+  }
+
+  /** Roda fn em `at` (performance.now()), na ordem; some se a entidade `id` sair. */
+  private at(at: number, id: number, fn: () => void): void {
+    if (at <= performance.now()) {
+      this.runStage(); // o que já venceu antes sai antes
+      fn();
       return;
     }
-    // Ataque básico de quem usa magia (magos e esqueletos magos).
-    if (!ev.skillId && isCaster(src.model)) {
-      this.fx.arcaneBolt(from, to, travel);
-      window.setTimeout(land, travel * 1000);
-      return;
-    }
-    land();
+    // Inserção ordenada e estável (quem foi agendado antes para o mesmo instante sai antes).
+    let i = this.stage.length;
+    while (i > 0 && this.stage[i - 1].at > at) i--;
+    this.stage.splice(i, 0, { at, id, fn });
+  }
+
+  /** Roda o que já chegou a hora (chamado a cada frame). */
+  private runStage(): void {
+    const now = performance.now();
+    while (this.stage.length && this.stage[0].at <= now) this.stage.shift()!.fn();
+  }
+
+  /** Algo de uma entidade que saiu ou reviveu não acontece mais. */
+  private dropStage(id: number): void {
+    this.stage = this.stage.filter((s) => s.id !== id);
+  }
+
+  /**
+   * Agenda fn para depois da última morte que ainda vai aparecer (o saque cai com o corpo).
+   * Chamado também para remoções de saque, para não sair antes de entrar.
+   */
+  afterDeaths(fn: () => void): void {
+    this.at(Math.max(performance.now(), this.lastDeathShow), 0, fn);
   }
 
   /** Número de dano e reação de quem levou o golpe. */
   private landHit(ev: CombatEvent, src: View | undefined, dst: View, sk: SkillInfo | undefined, quiet = false): void {
     if (!this.views.has(dst.id)) return;
+    // Último golpe a caminho chegou: a barra mostra a vida que o servidor mandou.
+    this.flushHp(dst);
+    if (ev.heal && src) this.fx.damageNumber(src.head, `+${ev.heal}`, "#7dff9a", false);
+    if (ev.absorbed && !ev.miss) this.fx.damageNumber(dst.head, `(${ev.absorbed} absorvido)`, "#9fc6ff", false);
     const mine = ev.sourceId === this.localId;
     const onMe = ev.targetId === this.localId;
     if (ev.miss) {
@@ -844,28 +1002,51 @@ export class EntityManager {
     if (!ev.kill && !dst.dead) dst.anim?.play("hit");
   }
 
+  /** Mostra a vida guardada se nenhum golpe estiver mais a caminho (ex.: o golpe errou). */
+  private flushHp(v: View): void {
+    if (v.pendingHp && performance.now() >= v.impactUntil) {
+      this.setHp(v, v.pendingHp);
+      v.pendingHp = null;
+    }
+  }
+
   /** Skill em si mesmo ou em área (o servidor avisa mesmo quando não acerta ninguém). */
   onSkillCast(ev: SkillCast): void {
     const src = this.views.get(ev.sourceId);
     const sk = this.catalog.get(ev.skillId);
     if (!src || !sk) return;
+    const now = performance.now();
     this.fx.skillName(src.head, sk.name);
     // Skill de alvo sem dano direto (Frasco Tóxico, Praga): projétil até o alvo.
     const dst = ev.targetId ? this.views.get(ev.targetId) : undefined;
     if (dst) {
-      if (src !== dst) this.face(src, dst);
-      src.anim?.play("skill");
+      const release = src !== dst ? this.swing(src, dst, "skill", now) : now + (src.anim?.play("skill", { lead: SWING_LEAD }) ?? 0) * 1000;
       const from = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
       const to = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
       const travel = Vector3.Distance(from, to) / PROJECTILE_SPEED;
       const color = BOLT_COLOR[sk.fx] ?? new Color3(0.8, 0.8, 1);
-      this.fx.bolt(from, to, travel, color, () => {
-        if (sk.fx === "r_flask" || sk.fx === "r_plague") this.fx.poisonSplash(dst.root.position.clone(), sk.splash || 1.5, color);
+      // O efeito no alvo (veneno, marca…) só aparece quando o projétil chega.
+      dst.impactUntil = Math.max(dst.impactUntil, release + travel * 1000);
+      this.at(release, dst.id, () => {
+        const a = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
+        const b = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
+        this.fx.bolt(a, b, travel, color, () => {
+          if (sk.fx === "r_flask" || sk.fx === "r_plague") this.fx.poisonSplash(dst.root.position.clone(), sk.splash || 1.5, color);
+        });
       });
       return;
     }
-    src.anim?.play(sk.target === SkillTarget.AREA ? "skill" : "buff");
-    const mine = ev.sourceId === this.localId;
+    // O efeito da área sai no instante do golpe da animação; os golpes desse snapshot também.
+    const lead = src.anim?.play(sk.target === SkillTarget.AREA ? "skill" : "buff", { lead: SWING_LEAD }) ?? 0;
+    const at = now + lead * 1000;
+    src.swingImpact = src.lastLand = at;
+    src.lastSwing = now;
+    this.castImpact.set(`${ev.sourceId}:${ev.skillId}`, { t: now, at });
+    this.at(at, src.id, () => this.castFx(src, sk, ev.sourceId === this.localId));
+  }
+
+  /** Visual de uma skill em si mesmo ou em área. */
+  private castFx(src: View, sk: SkillInfo, mine: boolean): void {
     switch (sk.fx) {
       case "ice_nova":
         this.fx.iceNova(src.root.position, sk.range);
@@ -922,19 +1103,29 @@ export class EntityManager {
     const v = this.views.get(ev.targetId);
     if (!v || v.dead) return;
     const ms = ev.durationMs;
+    const now = performance.now();
     v.effects.get(ev.effect)?.visual?.stop(); // renovado: troca o visual
-    if (ev.effect === Effect.INVISIBLE) this.setGhost(v, true);
-    const visual = this.fx.effect(ev.effect, v, ms);
-    v.effects.set(ev.effect, { effect: ev.effect, until: performance.now() + ms, durationMs: ms, value: ev.value, visual });
+    // O registro vale na hora (ícones, previsão de movimento); o visual nasce quando o
+    // golpe/projétil que causou o efeito encosta.
+    const ef: TrackedEffect = { effect: ev.effect, until: now + ms, durationMs: ms, value: ev.value, visual: null };
+    v.effects.set(ev.effect, ef);
+    this.at(Math.max(now, v.impactUntil), v.id, () => {
+      if (v.effects.get(ev.effect) !== ef || v.shownDead) return; // acabou ou foi renovado antes
+      if (ev.effect === Effect.INVISIBLE) this.setGhost(v, true);
+      ef.visual = this.fx.effect(ev.effect, v, Math.max(0, ef.until - performance.now()));
+    });
   }
 
   onEffectEnd(ev: EffectEnd): void {
     const v = this.views.get(ev.targetId);
     const ef = v?.effects.get(ev.effect);
     if (!v || !ef) return;
-    ef.visual?.stop();
     v.effects.delete(ev.effect);
-    if (ev.effect === Effect.INVISIBLE) this.setGhost(v, false);
+    // Morreu com o efeito: o visual some com a morte, não antes do golpe encostar.
+    this.at(Math.max(performance.now(), v.impactUntil), v.id, () => {
+      ef.visual?.stop();
+      if (ev.effect === Effect.INVISIBLE && !v.effects.has(Effect.INVISIBLE)) this.setGhost(v, false);
+    });
   }
 
   /** Invisível: você se vê translúcido; os outros quase não veem (nem o nome). */
@@ -981,21 +1172,36 @@ export class EntityManager {
     v.effects.clear();
   }
 
+  /**
+   * Morreu: para de andar na hora, mas a queda só aparece depois que o golpe que matou
+   * encosta (o servidor manda a morte junto com o golpe).
+   */
   onDeath(id: number): void {
     const v = this.views.get(id);
     if (!v) return;
-    this.clearEffects(v);
     v.dead = true;
-    v.hp = 0;
     v.target = { ...v.server };
     if (id === this.localId) this.resetLocalPrediction();
-    this.showDead(v, true);
-    this.refreshHpBar(v);
+    const now = performance.now();
+    const at = v.impactUntil > now ? v.impactUntil + DEATH_AFTER_HIT_MS : now;
+    this.lastDeathShow = Math.max(this.lastDeathShow, at);
+    this.at(at, id, () => {
+      if (!v.dead) return;
+      this.clearEffects(v);
+      v.pendingHp = null;
+      v.hp = 0;
+      this.showDead(v, true);
+      this.refreshHpBar(v);
+    });
   }
 
   onRevive(r: Revive): void {
     const v = this.views.get(r.id);
     if (!v) return;
+    this.dropStage(r.id);
+    this.clearEffects(v);
+    v.impactUntil = 0;
+    v.pendingHp = null;
     v.dead = false;
     v.hp = r.hp;
     v.maxHp = r.maxHp;
@@ -1020,6 +1226,7 @@ export class EntityManager {
 
   /** Chamado a cada frame. */
   update(dt: number): void {
+    this.runStage();
     const blend = 1 - Math.exp(-CORRECTION_RATE * dt);
     const me = this.local?.root.position;
     const cam = this.scene.activeCamera?.position;
@@ -1063,7 +1270,12 @@ export class EntityManager {
       if (v.id === this.localId) this.recordLocal(v);
 
       const moving = dist > 0.05 && !v.dead;
-      if (moving) v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
+      if (moving) {
+        v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
+        v.faceYaw = null;
+      } else if (v.faceYaw !== null) {
+        v.visual.rotation.y = lerpAngle(v.visual.rotation.y, v.faceYaw, 1 - Math.exp(-FACE_RATE * dt));
+      }
       if (v.anim) {
         // LOD de animação: quem está fora da tela ou longe não tem os ossos recalculados.
         let active = always;
@@ -1159,13 +1371,15 @@ export class EntityManager {
     return best;
   }
 
+  /** Vira para o alvo do golpe (suave, no update). */
   private face(src: View, dst: View): void {
     const dx = dst.root.position.x - src.root.position.x;
     const dz = dst.root.position.z - src.root.position.z;
-    if (Math.hypot(dx, dz) > 0.01) src.visual.rotation.y = Math.atan2(dx, dz);
+    if (Math.hypot(dx, dz) > 0.01) src.faceYaw = Math.atan2(dx, dz);
   }
 
   private showDead(v: View, dead: boolean): void {
+    v.shownDead = dead;
     if (v.anim) {
       if (dead) v.anim.play("death", { hold: true });
       else v.anim.reset();
@@ -1192,7 +1406,7 @@ export class EntityManager {
     const frac = v.maxHp > 0 ? Math.max(0, Math.min(1, v.hp / v.maxHp)) : 0;
     v.hpFill.width = frac;
     const isLocal = v.id === this.localId;
-    v.hpBar.isVisible = !isLocal && !v.dead && v.kind !== EntityKind.NPC && (v.id === this.targetId || frac < 1);
+    v.hpBar.isVisible = !isLocal && !v.shownDead && v.kind !== EntityKind.NPC && (v.id === this.targetId || frac < 1);
   }
 
   private attachModel(v: View): void {
@@ -1207,7 +1421,7 @@ export class EntityManager {
     this.setShadow(v, false);
     v.meshes = meshes;
     v.model3d = inst;
-    v.anim = new AnimController(inst.anims, inst.resetPose);
+    v.anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
     v.capsule?.dispose();
     v.capsule = null;
     if (v.dead) this.showDead(v, true);

@@ -995,7 +995,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     apply(msg: ServerMessage) {
       switch (msg.msg.case) {
         case "spawn":
-          if (msg.msg.value.entity) entities.add(msg.msg.value.entity);
+          if (msg.msg.value.entity) entities.add(msg.msg.value.entity, true);
           break;
         case "despawn":
           if (msg.msg.value.id === targetId) selectTarget(0);
@@ -1004,13 +1004,15 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "snapshot": {
           const snap = msg.msg.value;
           for (const s of snap.states) entities.applyState(s);
-          for (const u of snap.hp) entities.applyHp(u);
+          // Ordem de encenação: primeiro os golpes (cada um sabe quando encosta), depois a
+          // vida, os efeitos e as mortes, que esperam o golpe chegar no alvo.
+          for (const ev of snap.casts) entities.onSkillCast(ev);
           for (const ev of snap.combat) {
             entities.onCombat(ev);
             // Um jogador atacou você: a auto-caça para (nunca revida sozinha).
             if (ev.targetId === welcome.yourId && ev.sourceId !== welcome.yourId && entities.isPlayer(ev.sourceId)) auto.onPlayerAttack();
           }
-          for (const ev of snap.casts) entities.onSkillCast(ev);
+          for (const u of snap.hp) entities.applyHp(u);
           for (const ev of snap.effects) entities.onEffect(ev);
           for (const ev of snap.effectEnds) entities.onEffectEnd(ev);
           for (const id of snap.deaths) {
@@ -1049,25 +1051,31 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "inventory":
           store.setInventory(msg.msg.value);
           break;
-        case "groundAdded":
-          loot.add(msg.msg.value.items);
+        case "groundAdded": {
+          // O saque cai junto com o corpo (a morte espera o golpe encostar).
+          const items = msg.msg.value.items;
+          entities.afterDeaths(() => loot.add(items));
           break;
+        }
         case "groundRemoved": {
+          // Na mesma fila do saque: nunca sai antes de entrar.
           const { ids, pickedBy } = msg.msg.value;
-          if (pickedBy === welcome.yourId) {
-            for (const id of ids) {
-              const at = loot.position(id);
-              const g = loot.info(id);
-              const info = g && store.get(g.itemId);
-              const head = entities.headOf(welcome.yourId);
-              if (!at || !info) continue;
-              const color = Color3.FromHexString(info.kind === ItemKind.GOLD ? "#f3d488" : (GRADE_COLOR[info.grade] ?? "#e8e1d4"));
-              fx.pickup(at, color);
-              if (head) fx.damageNumber(head, `+${itemLabel(info, g.count)}`, color.toHexString(), false);
-              hud.lootLine(itemLabel(info, g.count));
+          entities.afterDeaths(() => {
+            if (pickedBy === welcome.yourId) {
+              for (const id of ids) {
+                const at = loot.position(id);
+                const g = loot.info(id);
+                const info = g && store.get(g.itemId);
+                const head = entities.headOf(welcome.yourId);
+                if (!at || !info) continue;
+                const color = Color3.FromHexString(info.kind === ItemKind.GOLD ? "#f3d488" : (GRADE_COLOR[info.grade] ?? "#e8e1d4"));
+                fx.pickup(at, color);
+                if (head) fx.damageNumber(head, `+${itemLabel(info, g.count)}`, color.toHexString(), false);
+                hud.lootLine(itemLabel(info, g.count));
+              }
             }
-          }
-          loot.remove(ids);
+            loot.remove(ids);
+          });
           break;
         }
         case "itemCooldown": {

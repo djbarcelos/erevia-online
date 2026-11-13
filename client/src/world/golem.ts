@@ -541,6 +541,8 @@ export function createGolem(scene: Scene, id: string): CharacterInstance {
   return {
     root,
     anims,
+    // Quadro do soco (18), do esmagar (22) e do rugido (14), a 30 quadros por segundo.
+    impacts: { attack: 18 / FPS, skill: 22 / FPS, buff: 14 / FPS },
     resetPose,
     setWeapons: () => {},
     setLook: () => {},

@@ -48,7 +48,10 @@ func (z *Zone) dropLoot(m *entity, owner uint32) {
 		}
 	}
 	if len(added.Items) > 0 {
-		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundAdded{GroundAdded: added}}, 0)
+		// Depois do snapshot com a morte: o saque cai junto com o corpo, não antes do golpe.
+		z.afterFlush(func() {
+			z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundAdded{GroundAdded: added}}, 0)
+		})
 	}
 }
 
