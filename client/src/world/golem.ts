@@ -19,6 +19,7 @@ import {
 } from "@babylonjs/core";
 import { mulberry32 } from "./map-painter";
 import type { AnimRole, CharacterInstance, EmoteRole } from "./models";
+import { setPaletteKind } from "./palette-material";
 import { heightToNormal } from "./teleport-stone";
 
 /**
@@ -163,6 +164,7 @@ function golemMats(scene: Scene): Mats {
   rock.useEmissiveAsIllumination = true;
   rock.specularColor = new Color3(0.08, 0.08, 0.08);
   rock.specularPower = 20;
+  setPaletteKind(rock, "char");
 
   const glow = new StandardMaterial("golemGlow", scene);
   glow.emissiveColor = GLOW.clone();

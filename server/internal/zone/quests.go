@@ -11,7 +11,8 @@ import (
 
 // Missões: o progresso anda com acontecimentos que o servidor já valida (matar, usar
 // skill, tomar poção, comprar, viajar, subir de nível, sair da cidade). O cliente só
-// recebe um QuestLog quando algo muda: nada por quadro.
+// recebe um QuestLog quando algo muda: nada por quadro. Cada passo pendente vai com o
+// lugar dele (questplace.go).
 
 const questRewardReserve = 120.0 // segundos: recompensa que não coube na bolsa fica reservada no chão
 
@@ -91,18 +92,37 @@ func (z *Zone) questEvent(p *entity, goal game.QuestGoal, target string) {
 	})
 }
 
-// questLevel acompanha os objetivos de nível.
-func (z *Zone) questLevel(p *entity) {
-	z.questUpdate(p, func(s game.QuestStep, cur int) int {
+// questLevel acompanha os objetivos de nível e entrega as missões que chegam com o nível.
+// Devolve se mandou o QuestLog.
+func (z *Zone) questLevel(p *entity) bool {
+	sent := z.questUnlock(p)
+	return z.questUpdate(p, func(s game.QuestStep, cur int) int {
 		if s.Goal == game.GoalLevel {
 			return max(cur, p.level)
 		}
 		return cur
-	})
+	}) || sent
 }
 
-// questUpdate aplica f a cada objetivo, conclui o que completou e avisa o cliente se mudou.
-func (z *Zone) questUpdate(p *entity, f func(s game.QuestStep, cur int) int) {
+// questLevelUp: subiu de nível. Além de questLevel, reenvia o QuestLog quando um objetivo
+// pendente tem o lugar ligado ao nível (a área de caça certa muda com ele).
+func (z *Zone) questLevelUp(p *entity) {
+	if p.pl == nil || z.questLevel(p) {
+		return
+	}
+	for _, a := range p.pl.quests.active {
+		for i, s := range a.def.Steps {
+			if a.progress[i] < s.Count && placeByLevel(s) {
+				z.sendQuests(p, "")
+				return
+			}
+		}
+	}
+}
+
+// questUpdate aplica f a cada objetivo, conclui o que completou e avisa o cliente se mudou
+// (devolve se mandou o QuestLog).
+func (z *Zone) questUpdate(p *entity, f func(s game.QuestStep, cur int) int) bool {
 	changed := false
 	for _, a := range p.pl.quests.active {
 		for i, s := range a.def.Steps {
@@ -113,7 +133,7 @@ func (z *Zone) questUpdate(p *entity, f func(s game.QuestStep, cur int) int) {
 		}
 	}
 	if !changed {
-		return
+		return false
 	}
 	z.saveSoon(p)
 	completed := ""
@@ -128,6 +148,7 @@ func (z *Zone) questUpdate(p *entity, f func(s game.QuestStep, cur int) int) {
 		z.finishQuest(p, a.def)
 	}
 	z.sendQuests(p, completed)
+	return true
 }
 
 // finishQuest entrega a recompensa e começa a próxima missão da sequência.
@@ -174,6 +195,34 @@ func (z *Zone) finishQuest(p *entity, def *game.QuestDef) {
 	}
 }
 
+// questUnlock entrega as missões de nível (Unlock) que o jogador já alcançou e ainda não
+// tem nem concluiu. Quem chegou lá antes da missão existir recebe ao entrar. Devolve se
+// mandou o QuestLog.
+func (z *Zone) questUnlock(p *entity) bool {
+	if p.pl == nil {
+		return false
+	}
+	added := false
+	for _, def := range game.QuestsByUnlock {
+		if p.level < def.Unlock || p.pl.quests.done[def.ID] || p.pl.quests.has(def.ID) {
+			continue
+		}
+		p.pl.quests.active = append(p.pl.quests.active, &activeQuest{def: def, progress: make([]int, len(def.Steps))})
+		z.systemAfterFlush(p, "Nova missão: "+def.Title+".")
+		added = true
+	}
+	if added {
+		z.saveSoon(p)
+		z.sendQuests(p, "")
+	}
+	return added
+}
+
+// has diz se a missão está ativa.
+func (q *questLog) has(id string) bool {
+	return slices.ContainsFunc(q.active, func(a *activeQuest) bool { return a.def.ID == id })
+}
+
 func rewardText(r game.QuestReward) string {
 	var parts []string
 	if r.XP > 0 {
@@ -198,7 +247,7 @@ func (z *Zone) sendQuests(p *entity, completed string) {
 	for _, a := range p.pl.quests.active {
 		q := &pb.QuestInfo{Id: a.def.ID, Title: a.def.Title, Text: a.def.Text, Reward: rewardText(a.def.Reward)}
 		for i, s := range a.def.Steps {
-			q.Steps = append(q.Steps, &pb.QuestStepInfo{Text: s.Text, Count: uint32(a.progress[i]), Need: uint32(s.Count)})
+			q.Steps = append(q.Steps, z.stepInfo(p, s, a.progress[i]))
 		}
 		log.Quests = append(log.Quests, q)
 	}

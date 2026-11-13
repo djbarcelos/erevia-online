@@ -16,11 +16,13 @@ func atLevel(z *Zone, p *entity, level int) {
 	p.hp, p.mp = p.stats.MaxHP, p.stats.MaxMP
 }
 
-// learn dá ranks sem validar (para testar a mecânica de uma skill isolada).
+// learn dá ranks sem validar (para testar a mecânica de uma skill isolada); por isso
+// desliga a invariante dos pontos.
 func learn(z *Zone, p *entity, ranks map[uint32]int) {
 	for id, r := range ranks {
 		p.pl.ranks[id] = r
 	}
+	z.invariants.disable("points")
 	z.refreshStats(p)
 }
 
@@ -65,7 +67,7 @@ func TestNewCharacterStartsWithStarterSkillsAndDefaultHotbar(t *testing.T) {
 			w = m.GetWelcome()
 		}
 	}
-	if w == nil || len(w.Skills) != 15 || len(w.Branches) != 3 || w.Progress.FreeSkillPoints != 0 || w.Progress.FreeAttrPoints != 0 {
+	if w == nil || len(w.Skills) != 15+6 || len(w.Branches) != 3 || len(w.Specs) != len(game.SpecList) || w.Progress.FreeSkillPoints != 0 || w.Progress.FreeAttrPoints != 0 {
 		t.Fatalf("welcome progression wrong")
 	}
 	for _, s := range w.Skills {
@@ -220,7 +222,7 @@ func TestProgressSurvivesRelogin(t *testing.T) {
 }
 
 func TestLoadProgressRepairsBadData(t *testing.T) {
-	attrs, ranks, bar := loadProgress("knight", 1, game.Attrs{Str: 99}, map[uint32]int{game.SkillJudgment: 1, game.SkillFireball: 3}, nil)
+	attrs, ranks, bar := loadProgress("knight", "", 1, game.Attrs{Str: 99}, map[uint32]int{game.SkillJudgment: 1, game.SkillFireball: 3}, nil)
 	if attrs.Sum() != 0 {
 		t.Error("too many attribute points kept")
 	}

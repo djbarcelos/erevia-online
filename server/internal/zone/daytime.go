@@ -19,6 +19,9 @@ func (z *Zone) updateDaytime() {
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
 		Channel: pb.ChatChannel_CHAT_CHANNEL_SYSTEM, Text: text,
 	}}}, 0)
+	if night {
+		z.nightInvasion() // em algumas noites, os esqueletos atacam a cidade
+	}
 }
 
 // attackPower é o ataque usado no acerto (buffs + bônus noturno dos monstros).

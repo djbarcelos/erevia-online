@@ -1,6 +1,8 @@
+// Primeiro import: o relatório de erros se instala antes de qualquer outro módulo rodar.
+import { reportClientError, setErrorContext, watchEngine } from "./net/errors";
 import { api, ApiError, type CharacterInfo } from "./api";
 import { gameAudio } from "./audio";
-import { Color3, Vector3 } from "@babylonjs/core";
+import { Color3, Matrix, Vector3 } from "@babylonjs/core";
 import { create } from "@bufbuild/protobuf";
 import {
   EntityKind,
@@ -17,6 +19,7 @@ import {
   PartyStateSchema,
   SelfPvpSchema,
   SkillTarget,
+  SpecCmdKind,
   type AchievementInfo,
   type ClanState,
   type FriendList,
@@ -44,6 +47,8 @@ import { runBench, wantBench } from "./ui/bench";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { TeleportWindow } from "./ui/teleport";
+import { SpecWindow } from "./ui/spec";
+import { setSpecs } from "./ui/specs";
 import { BarberWindow } from "./ui/barber";
 import { toBodyLook } from "./world/body-look";
 import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
@@ -60,6 +65,8 @@ import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
 import { buildGlory } from "./ui/windows/glory";
+import { takeUnseenNews, whatsNewDef } from "./ui/windows/whatsnew";
+import { loadNews } from "./news";
 import { InvitePrompt } from "./ui/invite";
 import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
@@ -185,11 +192,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   const worldData = await loadWorldData();
   const world = await createWorldScene(canvas, worldData);
+  const unwatchEngine = watchEngine(world.engine, "jogo");
   const clock = new WorldClock(Number(welcome.serverTimeMs), welcome.dayCycleMs);
   const dayNight = new DayNight(world, worldData);
   const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
   const collision = new Collision(worldData);
   const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision);
+  setSpecs(welcome.specs);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
   for (const e of welcome.entities) entities.add(e);
 
@@ -200,7 +209,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       env = e;
       console.info(`cenário: ${e.drawn} objetos`);
     })
-    .catch((err) => console.warn("cenário indisponível", err));
+    .catch((err) => {
+      console.warn("cenário indisponível", err);
+      reportClientError("model", "cenário não carregou", { error: String((err as Error)?.message ?? err) }, err);
+    });
 
   // Modelos 3D carregam em segundo plano; até lá, cápsulas coloridas.
   CharacterModels.load(world.scene)
@@ -487,6 +499,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // ---------- Mapa e regiões ----------
   const { regions, bosses } = buildRegions(welcome.zones, welcome.safeRadius);
+  // Contexto dos relatórios de erro enquanto o jogo roda.
+  setErrorContext(() => {
+    const p = entities.localPosition();
+    return { characterId: character.id, region: p ? regionAt(regions, p.x, p.z).name : undefined, x: p?.x, z: p?.z, fps: world.engine.getFps(), ping: conn.ping };
+  });
+  dayNight.setRegions(regions);
   const mapSource = {
     world: worldData,
     mapCanvas: renderMapCanvas(worldData),
@@ -549,6 +567,28 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
   });
 
+  // Seta da missão rastreada: ponto do chão na tela (px do viewport). O HUD chama no
+  // máximo 5×/s, com vetores reaproveitados. O retângulo do canvas só é lido de novo depois
+  // de um resize (ler a cada chamada forçaria layout no meio do quadro).
+  const projIn = new Vector3();
+  const projView = new Vector3();
+  const projOut = new Vector3();
+  let canvasRect: DOMRect | null = null;
+  const onResizeRect = () => (canvasRect = null);
+  addEventListener("resize", onResizeRect);
+  const projectToScreen = (x: number, z: number) => {
+    const canvas = world.engine.getRenderingCanvas();
+    if (!canvas) return null;
+    const rect = (canvasRect ??= canvas.getBoundingClientRect());
+    const w = world.engine.getRenderWidth();
+    const h = world.engine.getRenderHeight();
+    if (!w || !h) return null;
+    projIn.set(x, (entities.rootOf(welcome.yourId)?.position.y ?? 0) + 1, z);
+    Vector3.TransformCoordinatesToRef(projIn, world.camera.getViewMatrix(), projView);
+    Vector3.ProjectToRef(projIn, Matrix.IdentityReadOnly, world.scene.getTransformMatrix(), world.camera.viewport.toGlobal(w, h), projOut);
+    return { x: rect.left + (projOut.x * rect.width) / w, y: rect.top + (projOut.y * rect.height) / h, front: projView.z > 0 };
+  };
+
   // ---------- HUD ----------
   const hud = new Hud(learnedActives(), store, {
     onSkill: useSkill,
@@ -584,6 +624,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     me,
     targetDistance: () => (isAttackable(targetId) ? entities.reachDistanceTo(targetId) : null),
     map: mapSource,
+    project: projectToScreen,
     regions,
     stats: () => ({ fps: world.engine.getFps(), ping: conn.ping }),
     clock: () => clock.phase(),
@@ -665,6 +706,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hud.element,
   );
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma }, hud.element);
+  const specWin = new SpecWindow(
+    store,
+    { choose: (npc, spec) => conn.specCmd(SpecCmdKind.SPEC_CMD_CHOOSE, npc, spec), myClass: () => character.class, skills: () => welcome.skills },
+    hud.element,
+  );
   const barberWin = new BarberWindow(
     store,
     {
@@ -719,7 +765,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       teleportWin.close();
       storageWin.close();
       barberWin.close();
+      specWin.close();
       if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
+      // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
+      else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
       else if (npc?.role === NpcRole.TELEPORT) teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests);
       else if (npc?.role === NpcRole.STORAGE) {
         storageWin.open(id, `${info.title} · ${info.name}`);
@@ -906,6 +955,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           .filter((n) => n.role === NpcRole.TELEPORT)
           .map((n) => ({ id: n.id, name: entities.info(n.id)?.name ?? "", x: entities.rootOf(n.id)?.position.x ?? 0, z: entities.rootOf(n.id)?.position.z ?? 0 })),
         nameOf: (id) => entities.info(id)?.name ?? "",
+        quests: hud.quests,
         bossStatus: (b) => {
           const st = raid.statusAt(b.x, b.z);
           return st && { alive: st.alive, windowStartMs: Number(st.windowStartMs), windowEndMs: Number(st.windowEndMs) };
@@ -934,8 +984,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           location.reload();
         },
         info: () => ({ account: "", character: character.name, level: me().myLevel, ping: conn.ping, online: entities.count }),
+        news: () => void wm.show("news"),
       }),
   });
+  reg(whatsNewDef());
   const wm = new WindowManager(defs);
   wm.onChange = () => {
     for (const id of defs.keys()) hud.setWindowOpen(id, wm.isOpen(id));
@@ -959,6 +1011,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (invites.open) invites.answer(false);
       else if (hud.channeling) conn.cancelChannel();
       else if (teleportWin.isOpen) teleportWin.close();
+      else if (specWin.isOpen) specWin.close();
       else if (storageWin.isOpen) storageWin.close();
       else if (tradeWin.isOpen) conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL);
       else if (barberWin.isOpen) barberWin.close();
@@ -1106,6 +1159,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     }, 3000);
   }
 
+  // "O que há de novo": abre sozinha uma vez por versão do changelog (fora da medição de FPS).
+  if (!wantBench()) {
+    void loadNews().then((news) => {
+      if (news && wm.layer.isConnected && takeUnseenNews(news.latest)) void wm.show("news");
+    });
+  }
+
   canvas.focus();
   if (settings.get().touchMode !== "off" && matchMedia("(pointer: coarse)").matches) {
     toast("Joystick à esquerda · toque num monstro para atacar · AUTO caça sozinho");
@@ -1188,9 +1248,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   let lastXp: bigint | null = null;
   return {
     dispose() {
+      setErrorContext(null);
+      unwatchEngine();
       auto.stop();
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKeyUp);
+      removeEventListener("resize", onResizeRect);
       window.clearInterval(effectsTimer);
       window.clearInterval(stickTimer);
       stopPerf();
@@ -1202,6 +1265,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       invites.dispose();
       shop.dispose();
       teleportWin.dispose();
+      specWin.dispose();
       storageWin.dispose();
       tradeWin.dispose();
       barberWin.dispose();
@@ -1394,6 +1458,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           for (const fn of achListeners) fn();
           break;
         }
+        case "specChoice": {
+          const c = msg.msg.value;
+          const info = entities.info(c.npcId);
+          specWin.open(info ? `${info.title} · ${info.name}` : "Mestra dos Caminhos", c);
+          break;
+        }
         case "playerStatus":
           entities.setStatus(msg.msg.value);
           if (msg.msg.value.id === targetId || msg.msg.value.id === welcome.yourId) refreshTarget();
@@ -1417,6 +1487,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           break;
         case "bossStatus":
           raid.onStatus(msg.msg.value);
+          break;
+        case "eventStatus":
+          hud.setEvents(msg.msg.value, serverNow);
           break;
       }
     },

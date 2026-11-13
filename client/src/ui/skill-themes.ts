@@ -59,4 +59,101 @@ export const SKILL_THEMES: Record<string, SkillTheme> = {
   r_fatal: { glyph: "daggers", bg: ["#d03030", "#2a0404"], accent: "#ffe08a" },
   r_shadow: { glyph: "blink", bg: ["#5a3ab8", "#0a0628"], accent: "#ffd28a" },
   r_miasma: { glyph: "smoke", bg: ["#3aa83a", "#061e06"], accent: "#d0ff80" },
+  // Especializações (níveis 20, 24 e 28): glifos que já existem, no tom do caminho.
+  kb_defy: { glyph: "shout", bg: ["#5f86d8", "#0e1a38"], accent: "#ffe08a" },
+  kb_vigor: { glyph: "heart", bg: ["#6f93d6", "#101c3a"], accent: "#d8e8ff" },
+  kb_last: { glyph: "shield", bg: ["#8fb4ff", "#0a1430"], accent: "#ffffff" },
+  kh_dawn: { glyph: "burst", bg: ["#e8b840", "#3a2404"], accent: "#fff6d0" },
+  kh_bless: { glyph: "star", bg: ["#f0c860", "#3a2a08"], accent: "#ffffff" },
+  kh_sun: { glyph: "crown", bg: ["#ffd86a", "#4a2e04"], accent: "#fffbe8" },
+  bb_red: { glyph: "axe", bg: ["#d83838", "#300606"], accent: "#ffc0a0" },
+  bb_blind: { glyph: "eye", bg: ["#c03040", "#2a0408"], accent: "#ffe08a" },
+  bb_carnage: { glyph: "swirl", bg: ["#e85050", "#3a0606"], accent: "#ffd0a0" },
+  bw_cry: { glyph: "shout", bg: ["#d89a3a", "#3a2208"], accent: "#fff0b0" },
+  bw_charge: { glyph: "dash", bg: ["#c8902a", "#2e1a04"], accent: "#ffe08a" },
+  bw_banner: { glyph: "banner", bg: ["#e0a848", "#3a2404"], accent: "#ffffff" },
+  me_lance: { glyph: "spear", bg: ["#f07a2c", "#3a1004"], accent: "#fff0a0" },
+  me_focus: { glyph: "star", bg: ["#ff9a3c", "#401404"], accent: "#ffffff" },
+  me_cata: { glyph: "meteor", bg: ["#ff6a20", "#4a0a02"], accent: "#bfe8ff" },
+  mo_rot: { glyph: "skull", bg: ["#8a4ac0", "#1a0830"], accent: "#c0ff80" },
+  mo_drain: { glyph: "drop", bg: ["#9a5ad0", "#1e0a38"], accent: "#e8c8ff" },
+  mo_abyss: { glyph: "mark", bg: ["#b46ae0", "#200838"], accent: "#ffd28a" },
+  rc_blades: { glyph: "daggers", bg: ["#d04a64", "#2a0610"], accent: "#ffe0e8" },
+  rc_instinct: { glyph: "eye", bg: ["#c84060", "#28040c"], accent: "#ffd28a" },
+  rc_sentence: { glyph: "skull", bg: ["#e0607a", "#30040e"], accent: "#ffffff" },
+  rh_knife: { glyph: "spear", bg: ["#7aa840", "#142408"], accent: "#f0ffc0" },
+  rh_net: { glyph: "cage", bg: ["#8cc850", "#16280a"], accent: "#ffffff" },
+  rh_rain: { glyph: "daggers", bg: ["#6a9a3a", "#0e1e06"], accent: "#e8ffa0" },
 };
+
+/**
+ * Peças da biblioteca de efeitos (world/fx: rastro da arma, marca de área no chão) que cada
+ * skill usa por cima da receita dela. As cores saem do tema acima (o fundo para a marca, o
+ * brilho para o rastro); `color` só existe para as skills com ícone desenhado à mão (sem
+ * tema).
+ */
+export interface SkillFx {
+  /** Cor da marca e do rastro (padrão: o tema da skill). */
+  color?: string;
+  /**
+   * Marca no chão do tamanho da área (skills em área e com respingo no alvo): anel
+   * (padrão), runas, rachadura, ou nenhuma quando a receita já desenha a área.
+   */
+  mark?: "ring" | "runes" | "crack" | "none";
+}
+
+export const SKILL_FX: Record<string, SkillFx> = {
+  // Skills básicas (ícones em icons.ts).
+  fireball: { color: "#ff8a3a", mark: "none" },
+  ice_nova: { color: "#9fe0ff", mark: "none" }, // o anel de gelo já vai até o raio
+  shield_bash: { color: "#cfe0ff" },
+  brutal_strike: { color: "#ff7a4a" },
+  backstab: { color: "#c08cff" },
+  fortress: { color: "#6fa8ff" },
+  fury: { color: "#ff5a3a" },
+  shadow_step: { color: "#8a5cff" },
+  // Gritos: as ondas da receita já mostram o alcance.
+  k_taunt: { mark: "none" },
+  k_cry: { mark: "none" },
+  bw_cry: { mark: "none" },
+  kb_defy: { mark: "none" },
+  b_roar: { mark: "none" },
+  // Giros: anel no raio do corte.
+  k_spin: { mark: "ring" },
+  b_whirl: { mark: "ring" },
+  bb_carnage: { mark: "ring" },
+  // Pancadas no chão: rachadura no raio.
+  b_quake: { mark: "crack" },
+  b_stomp: { mark: "crack" },
+  b_stone: { mark: "crack" },
+  b_seismic: { mark: "crack" },
+  b_exec: { mark: "crack" },
+  k_judg: { mark: "crack" },
+  k_horizon: { mark: "crack" },
+  kh_dawn: { mark: "crack" },
+  bb_red: { mark: "crack" },
+  // Proteções e estandartes: círculo de runas.
+  k_bulwark: { mark: "runes" },
+  kb_last: { mark: "runes" },
+  kh_sun: { mark: "runes" },
+  bw_banner: { mark: "runes" },
+  // Magias que caem do céu: runas na área do alvo.
+  m_rain: { mark: "runes" },
+  m_inferno: { mark: "runes" },
+  m_meteor: { mark: "runes" },
+  me_cata: { mark: "runes" },
+  m_zero: { mark: "none" },
+  // Venenos e fumaça: a poça e a nuvem já marcam a área.
+  r_miasma: { mark: "none" },
+  r_smoke: { mark: "none" },
+  r_flask: { mark: "none" },
+  r_plague: { mark: "none" },
+};
+
+/** Cores de uma skill na biblioteca de efeitos: a marca no chão (o fundo do tema) e o rastro (o brilho). */
+export function skillFxColors(fx: string): { mark: string; trail: string } | null {
+  const own = SKILL_FX[fx]?.color;
+  const t = SKILL_THEMES[fx];
+  if (own) return { mark: own, trail: own };
+  return t ? { mark: t.bg[0], trail: t.accent ?? t.bg[0] } : null;
+}
