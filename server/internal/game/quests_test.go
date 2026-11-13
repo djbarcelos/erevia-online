@@ -19,8 +19,16 @@ func TestQuestDataIsConsistent(t *testing.T) {
 			t.Fatalf("chain points to missing quest %q", id)
 		}
 	}
-	if len(seen) != len(Quests) {
-		t.Fatalf("tutorial chain reaches %d of %d quests", len(seen), len(Quests))
+	chained := 0
+	for _, q := range Quests {
+		if q.Unlock == 0 {
+			chained++
+		} else if q.Unlock < 1 || q.Unlock > MaxLevel || q.Next != "" && Quests[q.Next] == nil {
+			t.Errorf("%s: unlock level %d or next %q is wrong", q.ID, q.Unlock, q.Next)
+		}
+	}
+	if len(seen) != chained {
+		t.Fatalf("tutorial chain reaches %d of %d quests", len(seen), chained)
 	}
 	for _, q := range Quests {
 		if q.Title == "" || q.Text == "" || len(q.Steps) == 0 {
@@ -29,6 +37,9 @@ func TestQuestDataIsConsistent(t *testing.T) {
 		for _, s := range q.Steps {
 			if s.Count < 1 || s.Text == "" {
 				t.Errorf("%s: step %+v needs count and text", q.ID, s)
+			}
+			if s.Goal == GoalTalk && s.Target != TalkMaster {
+				t.Errorf("%s: unknown talk target %q", q.ID, s.Target)
 			}
 			if s.Goal == GoalKill && s.Target != "" {
 				for _, m := range strings.Split(s.Target, "|") {

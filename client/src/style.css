@@ -538,3 +538,96 @@
     overflow: visible;
   }
 }
+
+/* ---------- Mestra dos Caminhos: escolha da especialização ---------- */
+
+.shop-panel.spec-panel {
+  width: 640px;
+  left: max(12px, calc(50% - 320px));
+}
+
+.spec-cards {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.spec-card {
+  --sc: var(--gold);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--sc) 45%, transparent);
+  border-radius: 6px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sc) 14%, transparent), rgba(0, 0, 0, 0.25));
+}
+
+.spec-card.mine {
+  border-color: var(--sc);
+  box-shadow: 0 0 0 1px var(--sc) inset;
+}
+
+.spec-name {
+  margin: 0;
+  color: var(--sc);
+}
+
+.spec-desc {
+  margin: 0;
+  color: var(--muted);
+}
+
+.spec-bonus {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.spec-skills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.spec-skills li {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.spec-skills li small {
+  display: block;
+}
+
+.spec-icon svg {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+}
+
+.spec-go {
+  margin-top: auto;
+}
+
+.spec-note {
+  margin: 10px 0 6px;
+}
+
+@media (max-width: 767px), (max-height: 520px) {
+  .shop-panel.spec-panel {
+    width: auto;
+    left: 8px;
+    max-height: 80dvh;
+  }
+
+  .spec-cards {
+    grid-template-columns: 1fr;
+  }
+}

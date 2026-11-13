@@ -38,6 +38,7 @@ import type { CharacterInstance, CharacterModels } from "./models";
 import { GOLEM_BODY, GOLEM_MODEL } from "./golem";
 import { buildTeleportStone } from "./teleport-stone";
 import type { Bounds, Collision } from "./world-data";
+import { specInfo } from "../ui/specs";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -113,6 +114,8 @@ export interface EntityInfo {
   pvpState: PvpState;
   /** Jogadores: nome do clã ("" = sem clã). */
   clanName: string;
+  /** Jogadores: especialização (id em Welcome.specs; "" = ainda não escolheu). */
+  spec: string;
 }
 
 /**
@@ -338,6 +341,7 @@ export class EntityManager {
     v.pvpState = s.pvpState;
     v.clanName = s.clanName;
     v.title = s.title;
+    v.spec = s.spec;
     this.refreshName(v);
     // O clã do jogador local mudou: os aliados de clã mudam de cor também.
     if (s.id === this.localId) for (const o of this.views.values()) if (o !== v) this.refreshName(o);
@@ -517,7 +521,7 @@ export class EntityManager {
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
       model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
-      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, baseColor, clanText, titleText, pkRing: null,
+      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, baseColor, clanText, titleText, pkRing: null,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
@@ -891,13 +895,13 @@ export class EntityManager {
         this.at(release, dst.id, () =>
           fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0))),
         );
-      if (sk?.fx === "fireball") {
+      if (sk?.fx === "fireball" || sk?.fx === "me_lance") {
         launch((a, b) => this.fx.fireball(a, b, travel));
         impact = release + travel * 1000;
       } else if (sk?.fx === "m_rain" || sk?.fx === "m_inferno") {
         launch(() => this.fx.emberRain(dst.root.position.clone(), sk.splash));
         impact = release + 650;
-      } else if (sk?.fx === "m_meteor") {
+      } else if (sk?.fx === "m_meteor" || sk?.fx === "me_cata") {
         launch(() => this.fx.meteor(dst.root.position.clone(), sk.splash, ev.sourceId === this.localId));
         impact = release + 760;
       } else if (bolt) {
@@ -1004,6 +1008,12 @@ export class EntityManager {
       case "m_arcane":
       case "r_mark":
       case "b_whirl": // 2 golpes por alvo: o giro já mostra o corte (sem faísca dobrada)
+      case "bb_carnage": // 3 golpes: idem
+      case "me_lance":
+      case "me_cata":
+      case "mo_rot":
+      case "mo_drain":
+      case "mo_abyss":
         break;
       case "r_flask":
       case "r_plague":
@@ -1013,16 +1023,21 @@ export class EntityManager {
       case "k_horizon":
       case "b_exec":
       case "b_seismic":
+      case "kh_dawn":
+      case "bb_red":
         this.fx.brutalStrike(from, at, mine);
         this.fx.slam(dst.root.position, 1.8, new Color3(1, 0.85, 0.4), mine);
         break;
       case "k_charge":
+      case "bw_charge":
         this.fx.shieldBash(at, mine);
         break;
       case "r_twin":
       case "r_para":
       case "r_fatal":
       case "r_shadow":
+      case "rc_blades":
+      case "rc_sentence":
         this.fx.backstab(from, at, ev.crit);
         break;
       case "shield_bash":
@@ -1113,7 +1128,11 @@ export class EntityManager {
         this.fx.shout(src, new Color3(1, 0.3, 0.2), sk.range);
         break;
       case "k_cry":
+      case "bw_cry":
         this.fx.shout(src, new Color3(1, 0.65, 0.25), 10);
+        break;
+      case "kb_defy":
+        this.fx.shout(src, new Color3(0.45, 0.65, 1), sk.range);
         break;
       case "b_roar":
         this.fx.shout(src, new Color3(0.7, 0.4, 0.9), sk.range);
@@ -1121,15 +1140,21 @@ export class EntityManager {
         break;
       case "k_spin":
       case "b_whirl":
+      case "bb_carnage":
         this.fx.whirl(src, sk.range, mine);
         break;
       case "b_quake":
       case "b_stomp":
       case "b_stone":
+      case "bw_banner":
         this.fx.slam(src.root.position, sk.range, new Color3(1, 0.7, 0.35), mine);
         break;
       case "k_bulwark":
+      case "kb_last":
         this.fx.slam(src.root.position, sk.range, new Color3(0.45, 0.65, 1), mine);
+        break;
+      case "kh_sun":
+        this.fx.slam(src.root.position, sk.range, new Color3(1, 0.85, 0.45), mine);
         break;
       case "r_miasma":
         this.fx.poisonSplash(src.root.position.clone(), sk.range, new Color3(0.45, 0.9, 0.3));
@@ -1529,9 +1554,11 @@ export class EntityManager {
     v.clanText.text = v.clanName ? `‹${v.clanName}›` : "";
     v.clanText.isVisible = !!v.clanName;
     // Os setters do TextBlock ignoram o mesmo valor: sem redesenho se nada mudou.
+    // Linha de baixo: a especialização e o título (texto fixo, só muda num PlayerStatus).
     if (v.titleText) {
-      v.titleText.text = v.title ? `«${v.title}»` : "";
-      v.titleText.isVisible = !!v.title;
+      const line = [specInfo(v.spec)?.name ?? "", v.title ? `«${v.title}»` : ""].filter(Boolean).join(" · ");
+      v.titleText.text = line;
+      v.titleText.isVisible = !!line;
     }
     const red = v.pvpState === PvpState.CHAOTIC;
     if (red && !v.pkRing) {
@@ -1578,6 +1605,12 @@ const BOLT_COLOR: Record<string, Color3> = {
   r_flask: new Color3(0.45, 0.95, 0.3),
   r_plague: new Color3(0.35, 0.6, 0.2),
   m_arcane: new Color3(0.7, 0.45, 1),
+  mo_rot: new Color3(0.5, 0.75, 0.3),
+  mo_drain: new Color3(0.65, 0.4, 0.9),
+  mo_abyss: new Color3(0.75, 0.35, 1),
+  rh_knife: new Color3(0.85, 0.9, 0.95),
+  rh_net: new Color3(0.7, 0.85, 0.45),
+  rh_rain: new Color3(0.85, 0.9, 0.95),
 };
 
 const SKILL_NUMBER_COLOR: Record<string, string> = {
@@ -1601,6 +1634,18 @@ const SKILL_NUMBER_COLOR: Record<string, string> = {
   m_arcane: "#d8b4ff",
   r_fatal: "#ffd28a",
   r_shadow: "#e0b4ff",
+  kh_dawn: "#ffe9a0",
+  bb_red: "#ff7a6a",
+  bb_carnage: "#ff9a8a",
+  me_lance: "#ffb14a",
+  me_cata: "#ffd08a",
+  mo_rot: "#c8a8ff",
+  mo_drain: "#d8b4ff",
+  mo_abyss: "#d8b4ff",
+  rc_blades: "#ffc0d0",
+  rc_sentence: "#ffd28a",
+  rh_knife: "#e8f0ff",
+  rh_rain: "#e8ffa0",
 };
 
 /** Modelos que atacam com magia à distância. */

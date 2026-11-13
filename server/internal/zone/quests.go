@@ -91,8 +91,9 @@ func (z *Zone) questEvent(p *entity, goal game.QuestGoal, target string) {
 	})
 }
 
-// questLevel acompanha os objetivos de nível.
+// questLevel acompanha os objetivos de nível e entrega as missões que chegam com o nível.
 func (z *Zone) questLevel(p *entity) {
+	z.questUnlock(p)
 	z.questUpdate(p, func(s game.QuestStep, cur int) int {
 		if s.Goal == game.GoalLevel {
 			return max(cur, p.level)
@@ -172,6 +173,32 @@ func (z *Zone) finishQuest(p *entity, def *game.QuestDef) {
 		z.system(p, "Nova missão: "+next.Title+".")
 		z.questLevel(p) // objetivo de nível que já está cumprido
 	}
+}
+
+// questUnlock entrega as missões de nível (Unlock) que o jogador já alcançou e ainda não
+// tem nem concluiu. Quem chegou lá antes da missão existir recebe ao entrar.
+func (z *Zone) questUnlock(p *entity) {
+	if p.pl == nil {
+		return
+	}
+	added := false
+	for _, def := range game.QuestsByUnlock {
+		if p.level < def.Unlock || p.pl.quests.done[def.ID] || p.pl.quests.has(def.ID) {
+			continue
+		}
+		p.pl.quests.active = append(p.pl.quests.active, &activeQuest{def: def, progress: make([]int, len(def.Steps))})
+		z.systemAfterFlush(p, "Nova missão: "+def.Title+".")
+		added = true
+	}
+	if added {
+		z.saveSoon(p)
+		z.sendQuests(p, "")
+	}
+}
+
+// has diz se a missão está ativa.
+func (q *questLog) has(id string) bool {
+	return slices.ContainsFunc(q.active, func(a *activeQuest) bool { return a.def.ID == id })
 }
 
 func rewardText(r game.QuestReward) string {

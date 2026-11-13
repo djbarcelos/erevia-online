@@ -56,6 +56,7 @@ type Character struct {
 	// Conquistas e título (id da conquista)
 	Achievements game.AchievementState
 	Title        string
+	Spec         string // especialização ("" = nenhuma)
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -127,7 +128,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills,
 		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage,
 		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Quests: char.Quests,
-		Achievements: char.Achievements, Title: char.Title, Peer: sess,
+		Achievements: char.Achievements, Title: char.Title, Spec: char.Spec, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)
@@ -243,6 +244,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.Social(ctx, id, m.RankingRequest)
 		case *pb.ClientMessage_AchievementCmd:
 			s.zone.Social(ctx, id, m.AchievementCmd)
+		case *pb.ClientMessage_SpecCmd:
+			s.zone.ProgressAction(ctx, id, m.SpecCmd)
 		case *pb.ClientMessage_TradeCmd:
 			s.zone.Trade(ctx, id, m.TradeCmd)
 		case *pb.ClientMessage_Ping:

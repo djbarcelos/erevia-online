@@ -76,50 +76,50 @@ func TestRankScaling(t *testing.T) {
 
 func TestValidateRanks(t *testing.T) {
 	start := StarterRanks("knight")
-	if err := ValidateRanks("knight", 1, start); err != nil {
+	if err := ValidateRanks("knight", "", 1, start); err != nil {
 		t.Fatalf("starter ranks invalid: %v", err)
 	}
 	// Nível 1: nenhum ponto livre.
 	more := map[uint32]int{SkillShieldBash: 2, SkillFortress: 1}
-	if ValidateRanks("knight", 1, more) == nil {
+	if ValidateRanks("knight", "", 1, more) == nil {
 		t.Error("should be out of points at level 1")
 	}
-	if ValidateRanks("knight", 2, more) != nil {
+	if ValidateRanks("knight", "", 2, more) != nil {
 		t.Error("level 2 has one free point")
 	}
 	// Degrau exige nível e o nó de cima.
-	if ValidateRanks("knight", 20, map[uint32]int{SkillTaunt: 1}) == nil {
+	if ValidateRanks("knight", "", 20, map[uint32]int{SkillTaunt: 1}) == nil {
 		t.Error("taunt needs iron skin")
 	}
-	if ValidateRanks("knight", 9, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1}) == nil {
+	if ValidateRanks("knight", "", 9, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1}) == nil {
 		t.Error("taunt needs level 10")
 	}
-	if ValidateRanks("knight", 10, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1}) != nil {
+	if ValidateRanks("knight", "", 10, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1}) != nil {
 		t.Error("taunt at level 10 with parent should work")
 	}
-	if ValidateRanks("knight", 20, map[uint32]int{SkillFireball: 1}) == nil {
+	if ValidateRanks("knight", "", 20, map[uint32]int{SkillFireball: 1}) == nil {
 		t.Error("other class skill accepted")
 	}
-	if ValidateRanks("knight", 20, map[uint32]int{SkillJudgment: 2}) == nil {
+	if ValidateRanks("knight", "", 20, map[uint32]int{SkillJudgment: 2}) == nil {
 		t.Error("rank above max accepted")
 	}
 	// 5º degrau: nível 20 e o degrau de cima (Muralha Viva, que pede Provocar, que pede…).
 	chain := map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1, SkillLivingWall: 1, SkillBulwark: 1}
-	if ValidateRanks("knight", 19, chain) == nil {
+	if ValidateRanks("knight", "", 19, chain) == nil {
 		t.Error("tier 5 needs level 20")
 	}
-	if err := ValidateRanks("knight", 20, chain); err != nil {
+	if err := ValidateRanks("knight", "", 20, chain); err != nil {
 		t.Errorf("tier 5 at level 20 with the branch learned should work: %v", err)
 	}
-	if ValidateRanks("knight", 30, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1, SkillBulwark: 1}) == nil {
+	if ValidateRanks("knight", "", 30, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1, SkillBulwark: 1}) == nil {
 		t.Error("tier 5 needs the tier 4 skill of the branch")
 	}
 	chain[SkillBulwark] = 3
-	if ValidateRanks("knight", 20, chain) != nil {
+	if ValidateRanks("knight", "", 20, chain) != nil {
 		t.Error("rank 3 of the tier 5 should work")
 	}
 	chain[SkillBulwark] = 4
-	if ValidateRanks("knight", 30, chain) == nil {
+	if ValidateRanks("knight", "", 30, chain) == nil {
 		t.Error("tier 5 above rank 3 accepted")
 	}
 }
