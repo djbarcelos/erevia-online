@@ -19,12 +19,15 @@ export interface PlayOpts {
    * golpe encostar `lead` segundos depois (o servidor já decidiu o dano quando o pacote chega).
    */
   lead?: number;
+  /** Repete até outra ação (ou endEmote) tomar o lugar: dançar e sentar. */
+  loop?: boolean;
 }
 
 /**
  * Controla as animações de um personagem em duas camadas:
  * - locomoção: parado ↔ correndo, sempre tocando, misturadas por peso;
- * - ação: ataque/skill/apanhar/morrer, toca uma vez por cima e devolve o corpo aos poucos.
+ * - ação: ataque/skill/apanhar/morrer, toca uma vez por cima e devolve o corpo aos poucos
+ *   (os emotes de dançar e sentar repetem até endEmote ou outra ação).
  * A morte segura a pose final até o personagem reviver.
  */
 export class AnimController {
@@ -47,6 +50,8 @@ export class AnimController {
   private actionSpeed = 1;
   /** Sem cena para esperar o próximo quadro (não deveria acontecer): volta à pose na hora. */
   private deferReset = false;
+  /** A ação atual repete (emote de dançar ou sentar). */
+  private looping = false;
 
   /**
    * resetPose: devolve os ossos à pose de descanso quando uma ação sai.
@@ -140,13 +145,14 @@ export class AnimController {
     this.actionDone = false;
     this.frozen = false;
     this.holding = !!opts.hold;
+    this.looping = !!opts.loop;
     this.actionSpeed = speed;
     g.speedRatio = speed;
     // Toca em loop para o grupo não ser removido ao terminar; na primeira volta, para no
     // último quadro. A morte fica assim; as outras ações devolvem o corpo à locomoção.
     g.start(true, speed, g.from + start * fps(g), g.to);
     g.onAnimationGroupLoopObservable.addOnce(() => {
-      if (this.action !== g) return;
+      if (this.action !== g || this.looping) return;
       if (this.holding) {
         g.goToFrame(g.to);
         g.pause();
@@ -160,9 +166,24 @@ export class AnimController {
     return impact !== undefined && opts.lead !== undefined ? (impact - start) / speed : 0;
   }
 
+  /** Um emote em loop (dançar, sentar) está tocando. */
+  get emoting(): boolean {
+    return this.looping && this.action !== null;
+  }
+
+  /** Acaba o emote em loop: o corpo volta à locomoção aos poucos. */
+  endEmote(): void {
+    if (!this.looping) return;
+    this.looping = false;
+    if (this.action) this.fadeOut(this.action, this.actionWeight);
+    this.action = null;
+    this.actionWeight = 0;
+  }
+
   /** Volta ao normal (ao reviver). */
   reset(): void {
     this.holding = false;
+    this.looping = false;
     this.frozen = false;
     this.actionDone = true;
     this.action?.stop();
@@ -201,7 +222,7 @@ export class AnimController {
     // A ação chega ao fim no próximo quadro: para ali (velocidade 0, ainda na mistura). Em
     // loop o Babylon voltaria ao primeiro quadro, e o corpo pularia para o começo do golpe.
     const a = this.action;
-    if (a && !this.actionDone && !this.holding) {
+    if (a && !this.actionDone && !this.holding && !this.looping) {
       const frame = a.animatables[0]?.masterFrame ?? a.from;
       if (frame + this.actionSpeed * fps(a) * dt * 1.5 >= a.to) {
         a.speedRatio = 0;

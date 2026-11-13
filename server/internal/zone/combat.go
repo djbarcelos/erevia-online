@@ -223,6 +223,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			}
 		}
 		src.mp -= cost
+		z.questEvent(src, game.GoalSkill, "")
 		cd := skillCD(src, s)
 		src.pl.cooldowns[s.ID] = z.now + cd
 		src.pl.statsDirty = true
@@ -329,8 +330,9 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 		}
 		z.applyEffect(src, dst, def)
 	}
-	// Brasa Viva: skills de fogo deixam o alvo queimando.
-	if s.Fire && src.pl != nil {
+	// Brasa Viva: skills de fogo deixam o alvo queimando (menos as que já queimam por conta
+	// própria, como o Inferno: a queimadura mais fraca da Brasa substituiria a delas).
+	if s.Fire && src.pl != nil && (s.OnTarget == nil || s.OnTarget.Kind != game.EffectBurn) {
 		if r := src.pl.rank(game.SkillEmber); r > 0 {
 			v := math.Round(src.atk(true, z.now) * game.Skills[game.SkillEmber].PValue.At(r))
 			z.applyEffect(src, dst, &game.EffectDef{Kind: game.EffectBurn, Duration: game.FireBurnSeconds, Value: math.Max(1, v)})

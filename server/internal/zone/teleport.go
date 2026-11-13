@@ -151,6 +151,7 @@ func (z *Zone) updateChannel(p *entity) {
 			return
 		}
 		inv.gold -= ch.price
+		z.trackGold(p, "teleport", -ch.price)
 	case pb.ChannelKind_CHANNEL_KIND_RETURN:
 		slot := inv.slotOf(ch.itemID)
 		if slot < 0 {
@@ -165,6 +166,9 @@ func (z *Zone) updateChannel(p *entity) {
 	z.arrive(p, ch.dest)
 	z.system(p, fmt.Sprintf("Você chegou em %s.", ch.place))
 	z.inventoryChanged(p, false)
+	if ch.kind == pb.ChannelKind_CHANNEL_KIND_TELEPORT {
+		z.questEvent(p, game.GoalTeleport, "")
+	}
 }
 
 // arrive põe o jogador no destino: os monstros esquecem dele e ninguém mais o mira.

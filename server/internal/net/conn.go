@@ -49,6 +49,13 @@ type Character struct {
 	PvPKills   int
 	ClanLeftAt time.Time
 	Storage    *zone.StorageData
+	// Moderação
+	GM         bool
+	MutedUntil time.Time
+	Quests     game.QuestState
+	// Conquistas e título (id da conquista)
+	Achievements game.AchievementState
+	Title        string
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -118,7 +125,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
 		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem, Look: char.Look,
 		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills,
-		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage, Peer: sess,
+		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage,
+		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Quests: char.Quests,
+		Achievements: char.Achievements, Title: char.Title, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)
@@ -222,6 +231,20 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.Social(ctx, id, m.ClanCmd)
 		case *pb.ClientMessage_InviteReply:
 			s.zone.Social(ctx, id, m.InviteReply)
+		case *pb.ClientMessage_FriendCmd:
+			s.zone.Social(ctx, id, m.FriendCmd)
+		case *pb.ClientMessage_MailCmd:
+			s.zone.Social(ctx, id, m.MailCmd)
+		case *pb.ClientMessage_ClientStats:
+			s.zone.ClientStats(ctx, id, m.ClientStats)
+		case *pb.ClientMessage_Craft:
+			s.zone.ItemAction(ctx, id, m.Craft)
+		case *pb.ClientMessage_RankingRequest:
+			s.zone.Social(ctx, id, m.RankingRequest)
+		case *pb.ClientMessage_AchievementCmd:
+			s.zone.Social(ctx, id, m.AchievementCmd)
+		case *pb.ClientMessage_TradeCmd:
+			s.zone.Trade(ctx, id, m.TradeCmd)
 		case *pb.ClientMessage_Ping:
 			// Respondido aqui mesmo, sem passar pela zona, para medir só a rede.
 			pong, _ := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Pong{

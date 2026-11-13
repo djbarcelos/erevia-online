@@ -10,7 +10,7 @@ DATABASE_URL ?= postgres://erevia:erevia@localhost:5432/erevia?sslmode=disable
 TEST_DATABASE_URL ?= $(DATABASE_URL)
 DEV_LOGIN ?= true
 
-.PHONY: help setup proto db-up db-down server client test build docker
+.PHONY: help setup proto db-up db-down server client test build docker gm
 
 help: ## Lista os comandos
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  make %-10s %s\n", $$1, $$2}'
@@ -45,3 +45,8 @@ build: ## Gera binário do servidor e build do cliente
 
 docker: ## Gera a imagem de produção localmente
 	docker build -t erevia .
+
+gm: ## Torna GM a conta do personagem no banco local: make gm NAME=Fulano
+	@echo "$(NAME)" | grep -Eq '^[A-Za-z0-9]{3,16}$$' || (echo "Uso: make gm NAME=Personagem" && exit 1)
+	docker compose -f infra/docker-compose.yml exec -T postgres psql -U erevia -d erevia -c \
+		"UPDATE accounts SET gm = true WHERE id = (SELECT account_id FROM characters WHERE lower(name) = lower('$(NAME)'))"

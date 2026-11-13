@@ -14,7 +14,7 @@ func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
 	for _, z := range zones {
 		if z.Area {
 			areas++
-			if z.Region != "Vale das Pedras Vivas" || z.Radius <= 0 || z.Z > -150 || z.Name != "Golem de Pedra" || z.LevelMin != 20 || z.LevelMax != 25 {
+			if z.Region != "Vale das Pedras Vivas" || z.Radius <= 0 || z.Z > -150 || z.Name != "Golem de Pedra" || z.LevelMin != 20 || z.LevelMax != 30 {
 				t.Errorf("área inesperada: %+v", z)
 			}
 			continue

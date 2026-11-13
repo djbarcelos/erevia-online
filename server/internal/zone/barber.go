@@ -52,6 +52,7 @@ func (z *Zone) changeLook(p *entity, npcID uint32, l *pb.BodyLook) {
 		return
 	}
 	inv.gold -= game.BarberPrice
+	z.trackGold(p, "barber", -game.BarberPrice)
 	p.pl.look = a
 	z.system(p, fmt.Sprintf("%s deixou você de visual novo por %d moedas.", n.name, game.BarberPrice))
 	z.broadcast(appearancePB(p), 0)

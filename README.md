@@ -2,7 +2,7 @@
 
 MMORPG 3D no navegador. Cliente em **TypeScript + Babylon.js**, servidor em **Go**, comunicação por **WebSocket + Protobuf** e banco em **PostgreSQL**.
 
-**Produção:** https://erevia-production.up.railway.app (deploy automático a cada push na `main`).
+**Produção:** https://erevia-production.up.railway.app (deploy automático a cada push na `main`, depois que o CI passa).
 
 Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
@@ -15,11 +15,44 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Armazém:** Otto, o Guarda do Armazém, na praça: 60 espaços e moedas, compartilhados pelos personagens da conta. Arrastar da bolsa guarda; duplo clique retira.
 - **Visual do personagem:** na criação, além da arma e do emblema, escolha o rosto e o cabelo (5 cabeças: Nobre, Selvagem, Sábio, Astuto e Andarilho, que qualquer classe pode usar), o tom de pele, a cor do cabelo e a cor da roupa (8 de cada, ou a original da classe) e se o elmo/gorro/chapéu aparece. Depois, Teodoro, o **Barbeiro** (ao norte do poço), muda o visual por 300 moedas, com prévia 3D. Todos veem o visual novo na hora.
 
+### Nível 30 e o 5º degrau da árvore
+- O nível máximo agora é **30**. Do 20 em diante, cada nível pede 10% a mais de XP por nível acima do 19 (até o 19 a curva não mudou), e a caça é no **Vale das Pedras Vivas**: os golens vão do nível 20, na entrada (norte), ao 30, no fundo (sul). No **nível 20** a árvore (tecla K) ganha um 5º degrau, uma skill por ramo (3 por classe, até rank 3): Baluarte, Corte do Horizonte e Égide da Ordem (cavaleiro); Machadada Sísmica, Redemoinho Sangrento e Pele de Pedra (bárbaro); Inferno, Zero Absoluto e Rajada Arcana (mago); Golpe Fatal, Golpe das Sombras e Miasma (ladino).
+
+### Criação de itens (Ferreiro)
+- A aba **Criar** do Ferreiro Bruno transforma materiais que caem dos monstros + moedas em equipamento que a loja não vende: 24 receitas, de raro (ossos e crânios dos esqueletos) a épico (Essência Sombria) e lendário (Núcleo Rúnico dos golens), mais pergaminhos de encantar (inclusive os abençoados). A lista mostra quanto você tem de cada material; o botão só liga quando dá.
+- O servidor confere materiais, moedas e espaço numa cópia da bolsa e só então aplica. Receitas em `server/internal/game/recipes.go`.
+
+### Troca entre jogadores
+- Selecione um jogador perto (até 8 m) e clique em **Trocar** no quadro do alvo; ele recebe o convite. Na janela de troca, arraste itens da bolsa (ou use "Oferecer na troca" no menu do item), ponha moedas, **trave** a oferta e, com as duas travadas, **confirme**. Qualquer mudança (inclusive usar um item oferecido) destrava as duas ofertas.
+- Nada sai da bolsa até a confirmação dos dois. Na hora, o servidor confere tudo de novo, monta as bolsas novas e aplica de uma vez, salvando os dois personagens na mesma transação. Se alguém sair, morrer, se afastar ou não tiver espaço, a troca é cancelada sem mexer em nada.
+
+### Amigos, correio e emotes (janela Social, tecla O)
+- **Amigos:** `/amigo Nome` (pode estar offline), o botão **Amigo +** no quadro do alvo ou a janela Social; `/amigo remover Nome` tira. A amizade é de mão única (como "seguir"), até 50 por personagem. A janela mostra quem está online, o nível e a região onde está (atualiza a cada 10 s com ela aberta); `/amigos` lista no chat quem está online. Quando um amigo entra no jogo, aparece um aviso no chat.
+- **Correio:** `/correio Nome texto` ou a aba Correio (com assunto opcional). Só texto, até 200 caracteres; o destinatário pode estar offline e vê um aviso ao entrar (e um número no botão Social). Na caixa de entrada, abrir a carta marca como lida; dá para responder e apagar. Contra spam: 10 cartas por hora por remetente (apagar não devolve o limite) e 100 cartas guardadas por destinatário. Quem está silenciado não manda cartas.
+- **Emotes:** `/acenar`, `/sentar` e `/dancar` (ou `/dançar`), vistos por quem está a até 70 m. Sentar e dançar duram até o personagem andar, atacar ou morrer. Os modelos não têm clipes próprios: acenar usa o braço erguido da magia, dançar a conjuração em loop e sentar é uma pose montada no cliente com o fim do `Death_A` (pernas) e o `Idle_A` (tronco).
+- Amigos e cartas ficam nas tabelas `friends` e `mail`, gravadas por um worker (a zona nunca espera o banco).
+
+### Missões
+- **Tutorial dos primeiros 15 minutos** (8 missões em sequência): sair da cidade, derrotar Esqueletos Lacaios, usar skills, tomar uma poção, comprar na praça, chegar ao nível 4, viajar com uma Pedra de Teleporte e enfrentar os Campos dos Ossos. Cada uma dá XP, moedas e/ou itens; se a bolsa estiver cheia, a recompensa fica no chão, reservada para você.
+- O painel **Missões** fica à esquerda, abaixo do grupo, e mostra o progresso (passe o mouse para ver a história e a recompensa). Só personagens novos (abaixo do nível 5 e sem histórico) recebem o tutorial.
+- As missões são dados em `server/internal/game/quests.go` (objetivos: sair da cidade, matar monstros, usar skills, tomar poções, comprar, chegar a um nível, viajar). O servidor controla o progresso e salva no personagem (`characters.quests`).
+
+### Ranking, conquistas e títulos (tecla H)
+- A janela **Glória** (H ou o troféu no menu) tem duas abas. **Ranking:** top 50 de nível (desempate pela XP), de vitórias PvP e de clãs (soma dos níveis dos membros, com a média), mais a sua posição e a do seu clã. Um worker calcula no banco a cada 5 min (contas banidas ficam de fora) e a zona guarda em memória; a janela pede quando abre e guarda a resposta por 2 min. A zona nunca consulta o banco.
+- **Conquistas** (12, dados em `server/internal/game/achievements.go`): Primeiro Sangue, Primeiros Passos (tutorial), Quebra-Ossos (100 esqueletos), níveis 10, 20 e 30, O Senhor Caiu (Senhor dos Ossos), Regicida (participar da morte de Ozrhal), Mão Firme (+7), Negócio Fechado (primeira troca), Forja Lendária (criar um lendário) e Duelista (vitória PvP). Andam com o que o servidor já valida (abate, nível, encantamento, troca, criação, missão, PvP e raid boss); quem já tinha cumprido (nível, vitórias, tutorial) ganha ao entrar. Desbloquear avisa no chat e com um toast.
+- Cada conquista dá um **título**: escolha na aba Conquistas e ele aparece sob o seu nome, em lilás, para todos (texto fixo no nome, que só muda quando você troca de título). Conquistas e título ficam salvos no personagem (`characters.achievements` e `characters.title`).
+
+### Base para crescer (moderação, /bug, reconexão e CI)
+- **Comandos de GM** (contas com `accounts.gm`, ver [Moderação](#moderação)): `/gm` lista os comandos; `/kick Nome [motivo]`, `/mute Nome minutos [motivo]` e `/unmute Nome`, `/ban Nome [motivo]` (vale para a conta inteira, mesmo offline, e derruba quem está online) e `/unban Nome`, `/tp X Z`, `/goto Nome`, `/summon Nome`, `/give Nome item|moedas [qtd]`, `/anuncio texto` e `/online`. Para quem não é GM, eles aparecem como comando desconhecido. Toda ação fica no `gm_log`. O silêncio vale em todos os canais e continua depois de relogar.
+- **`/bug texto`:** qualquer jogador (mesmo silenciado), um a cada 30 s. Vai para `bug_reports` com o personagem, o nível, a posição, a versão do servidor (commit do deploy) e o navegador.
+- **Reconexão automática:** se a conexão cair, o jogo espera o servidor responder e volta sozinho ao mesmo personagem (desiste depois de 2 min com o servidor fora do ar ou de 5 recargas). Quem foi expulso ou banido não volta.
+- **CI:** cada push e pull request roda os testes no GitHub Actions (servidor com Postgres e `-race`, tipos e build do cliente). A Railway só publica a `main` com o CI verde.
+
 ### Fase 3 e interface nova (Fases A–C)
 - **13 encaixes de equipamento:** cabeça, peito, pernas, mãos, pés, capa, arma, mão secundária, colar, 2 brincos e 2 anéis. Anéis e brincos vão no encaixe livre com duplo clique, ou no que você escolher arrastando; dá para trocar anel 1 ↔ anel 2 arrastando. Itens novos nas 4 raridades com bônus novos: precisão, esquiva, velocidade de movimento, de ataque e de conjuração, regeneração de vida e mana e dano crítico.
 - **Aparência na criação:** cada classe escolhe a arma inicial (ex.: espada ou lâmina curva para o cavaleiro; cajado, varinha ou cajado sombrio para o mago; três pares de lâminas para o ladino), o escudo (ou nada, e ele vai para a bolsa) e a cor do emblema. A arma é um item de verdade do kit. A cor pinta o nome e um anel no chão para todos verem, e a tela de seleção mostra cada personagem com o que tem nas mãos.
 - **Atributos com pontos livres (tecla C):** Força, Destreza, Constituição, Inteligência, Sabedoria e Espírito. Cada classe começa com a sua base e ganha 3 pontos por nível. A janela mostra a diferença exata antes de confirmar (vida, ataque, defesa, crítico, precisão, esquiva, velocidade de ataque e de conjuração, regeneração).
-- **Árvore de skills (tecla K):** 12 skills por classe em 3 ramos e 4 degraus (níveis 1, 5, 10 e 15), com ranks; 1 ponto por nível. Mecânicas: prender, veneno/queimadura/praga (dano por segundo), provocar, escudos, escudo de mana, invisibilidade, marca, imortal, cegueira, frenesi, enfraquecer, armadura de gelo, grito de guerra e estandarte para os aliados, aura de coragem, Piscar e Investida (teleporte), execução, golpes duplos, área em volta do alvo, roubo de vida e mais. Uma bolinha nos botões avisa quando há pontos para gastar.
+- **Árvore de skills (tecla K):** 15 skills por classe em 3 ramos e 5 degraus (níveis 1, 5, 10, 15 e 20), com ranks; 1 ponto por nível. Mecânicas: prender, veneno/queimadura/praga (dano por segundo), provocar, escudos, escudo de mana, invisibilidade, marca, imortal, cegueira, frenesi, enfraquecer, armadura de gelo, grito de guerra e estandarte para os aliados, aura de coragem, Piscar e Investida (teleporte), execução, golpes duplos, área em volta do alvo, roubo de vida e mais. Uma bolinha nos botões avisa quando há pontos para gastar.
 - **Barra de atalhos salva no servidor:** a mesma em qualquer computador ou celular.
 - **Interface nova** (protótipo aprovado em `/prototipo.html`, agora no jogo):
   - Telas de login e de personagens com o modelo 3D num pedestal (girar arrastando, zoom com a roda ou a pinça).
@@ -40,7 +73,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Colisão e caminho:** não dá para atravessar casas, muralhas, árvores e pedras grandes. O servidor calcula o caminho (A* numa grade de 1 m), então clicar do outro lado de uma casa faz o personagem contorná-la.
 - **Combate PvE:** a cidade (zona segura) fica no centro, cercada por 3 anéis de esqueletos (níveis 1 a 20) e pelo chefe *Senhor dos Ossos* (nível 22).
 - Clicar num monstro seleciona o alvo e ataca sozinho. As **teclas 1 e 2** usam as 2 skills da classe, com recarga e mana. Os efeitos incluem atordoar, lentidão e buffs.
-- **XP e nível** até 20. Os atributos crescem com o nível. Morrer custa cerca de 4% da XP do nível e o personagem volta à cidade.
+- **XP e nível** até 30 (era 20 até o 5º degrau da árvore). Os atributos crescem com o nível. Morrer custa cerca de 4% da XP do nível e o personagem volta à cidade.
 - Monstros vagam, atacam quem chega perto (os agressivos), perseguem até um limite e reaparecem depois de mortos.
 - Barras de vida, mana e XP, quadro do alvo, números de dano e efeitos de skill.
 - Login com **Google** ou **Discord** (OAuth + PKCE). A sessão fica num cookie HttpOnly.
@@ -74,6 +107,8 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 | `make docker` | Imagem de produção (a mesma que a Railway usa) |
 | `cd server && go run ./cmd/loadbot -bots 100 -duration 2m` | Teste de carga: bots que entram pelo login de dev (servidor local com `DEV_LOGIN=true`), andam, caçam e falam; imprime banda e ping a cada 10 s. O servidor registra o custo do tick no log a cada 30 s ("tick stats") |
 
+| `make gm NAME=Fulano` | Torna GM a conta do personagem no banco local (relogue depois) |
+
 ## Estrutura
 ```
 proto/erevia/v1/game.proto   mensagens cliente ↔ servidor
@@ -83,7 +118,7 @@ server/
   internal/store/            Postgres (pgx) + migrações SQL (goose)
   internal/game/             dados e fórmulas: classes, skills, monstros, itens, drops, dano, XP
   internal/world/            mapa embutido (world.json): colisão e caminhos (A*)
-  internal/zone/             simulação da zona: combate, PvP, IA, chat, inventário, drops, loja, grupo, clã, teleporte, encantamento, armazém (uma goroutine, tick 20 Hz)
+  internal/zone/             simulação da zona: combate, PvP, IA, chat, inventário, drops, loja, grupo, clã, amigos, correio, emotes, teleporte, encantamento, armazém (uma goroutine, tick 20 Hz)
   internal/net/              conexões WebSocket (read/write pumps)
   internal/pb/               código Go gerado (não editar)
 client/
@@ -118,3 +153,40 @@ Projeto com dois serviços no ambiente `production`:
 URLs de retorno do OAuth em produção:
 - `https://erevia-production.up.railway.app/api/auth/google/callback`
 - `https://erevia-production.up.railway.app/api/auth/discord/callback`
+
+O serviço **erevia** espera o CI do GitHub antes de publicar (`checkSuites: true` em `.railway/railway.ts`; no painel, "Wait for CI").
+
+## Moderação
+GM é um campo da conta, marcado direto no banco (no painel da Railway: Postgres → Data, ou `psql`). O jogador precisa relogar para virar GM.
+
+```sql
+-- Tornar GM a conta dona do personagem "Nome"
+UPDATE accounts SET gm = true WHERE id = (SELECT account_id FROM characters WHERE lower(name) = lower('Nome'));
+
+-- Relatos de /bug ainda abertos, e marcar um como resolvido
+SELECT id, at, character_name, level, x, z, version, text FROM bug_reports WHERE NOT resolved ORDER BY at DESC;
+UPDATE bug_reports SET resolved = true WHERE id = 1;
+
+-- Últimas ações de GM
+SELECT at, gm_name, command, target, detail FROM gm_log ORDER BY at DESC LIMIT 50;
+```
+
+## Telemetria
+O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem travar a zona): ouro que entra e sai (e de onde), itens que entram e saem do jogo, abates, mortes, subidas de nível, sessões e o FPS dos jogadores (o cliente mede 1×/s e manda a média a cada 60 s, com o tipo de aparelho). O "painel" são views prontas; abra na aba **Data** do Postgres da Railway ou com `psql`:
+
+| View | Mostra |
+|---|---|
+| `v_gold_daily` | Ouro que entrou e saiu por dia e por origem (loot, venda, missão, loja, criação, teleporte…) |
+| `v_level_times` | Minutos médios para chegar a cada nível |
+| `v_deaths_by_region` | Mortes por região e por quem matou |
+| `v_quit_level` | Último nível de quem não joga há mais de 7 dias |
+| `v_fps` | FPS médio e dos piores momentos, por região e tipo de aparelho |
+| `v_items_daily` | Itens que entraram e saíram do jogo por dia (para caçar duplicação) |
+
+## Pipeline de arte (remaster)
+Ferramentas open source: **Blender**, **blender-mcp** (o Claude Code controla o Blender, com `DISABLE_TELEMETRY=true`) e a skill **blender-image-to-3d** (referência → asset pronto para jogo). A regra de todo asset novo é o [guia de arte](docs/guia-de-arte.md).
+
+1. **Folhas de referência:** `/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/art/reference_sheets.py -- docs/arte`
+2. **Modelar:** a skill blender-image-to-3d no Claude Code, a partir das folhas, até o GLB com LOD0/1/2 (nós com sufixo `_LOD1`/`_LOD2`).
+3. **Importar:** `cd client && node scripts/import-asset.mjs <arquivo.glb> <personagem|arma|monstro|chefe|cenario> [nome]`. Ele limpa e otimiza o GLB, confere o orçamento do guia (triângulos, textura, materiais, ossos) e só copia para `public/models` se couber. `--check` só confere; `--force` copia mesmo fora do orçamento.
+
