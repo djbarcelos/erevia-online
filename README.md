@@ -172,3 +172,10 @@ O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem tr
 | `v_fps` | FPS médio e dos piores momentos, por região e tipo de aparelho |
 | `v_items_daily` | Itens que entraram e saíram do jogo por dia (para caçar duplicação) |
 
+## Pipeline de arte (remaster)
+Ferramentas open source: **Blender**, **blender-mcp** (o Claude Code controla o Blender, com `DISABLE_TELEMETRY=true`) e a skill **blender-image-to-3d** (referência → asset pronto para jogo). A regra de todo asset novo é o [guia de arte](docs/guia-de-arte.md).
+
+1. **Folhas de referência:** `/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/art/reference_sheets.py -- docs/arte`
+2. **Modelar:** a skill blender-image-to-3d no Claude Code, a partir das folhas, até o GLB com LOD0/1/2 (nós com sufixo `_LOD1`/`_LOD2`).
+3. **Importar:** `cd client && node scripts/import-asset.mjs <arquivo.glb> <personagem|arma|monstro|chefe|cenario> [nome]`. Ele limpa e otimiza o GLB, confere o orçamento do guia (triângulos, textura, materiais, ossos) e só copia para `public/models` se couber. `--check` só confere; `--force` copia mesmo fora do orçamento.
+
