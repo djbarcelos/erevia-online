@@ -9,7 +9,9 @@ import (
 
 // makeParty põe os jogadores num grupo (o primeiro é o líder).
 func makeParty(z *Zone, members ...*entity) *party {
-	pt := &party{id: uint32(len(members)) + 1000, leader: members[0].id}
+	z.partySeq++
+	pt := &party{id: z.partySeq, leader: members[0].id}
+	z.parties[pt.id] = pt
 	for _, m := range members {
 		pt.members = append(pt.members, m.id)
 		m.pl.party = pt

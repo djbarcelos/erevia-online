@@ -25,19 +25,17 @@ func (z *Zone) kill(dead, killer *entity) {
 
 	if dead.mon != nil {
 		ms := dead.mon
-		// O drop fica reservado para quem causou mais dano (lido antes de zerar o ódio).
+		// O drop fica reservado para quem causou mais dano (lido antes de zerar o ódio), e a
+		// XP vai para o grupo (ou jogador) que causou mais dano no total.
 		z.dropLoot(dead, topHate(ms.hate))
+		takers := z.creditGroup(ms.hate, dead.pos)
+		if len(takers) == 0 && killer != nil && killer.pl != nil && !killer.dead {
+			takers = []*entity{killer} // sem ódio registrado (ex.: veneno de quem saiu)
+		}
 		ms.hate = map[uint32]float64{}
 		ms.corpseEnd = z.now + corpseSeconds
 		ms.respawnAt = z.now + ms.spawn.Respawn*(1+z.rng.Float64())
-		if killer != nil && killer.pl != nil {
-			xp := game.MonsterXP(ms.def, dead.level, killer.level)
-			if z.night {
-				xp = int64(math.Round(float64(xp) * game.NightXP))
-			}
-			z.grantXP(killer, xp)
-			z.burnKarma(killer, dead.level)
-		}
+		z.shareMonsterXP(dead, takers)
 		return
 	}
 

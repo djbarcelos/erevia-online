@@ -171,7 +171,7 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 		case *pb.ClientMessage_MoveTo:
 			s.zone.Move(ctx, id, float64(m.MoveTo.X), float64(m.MoveTo.Z))
 		case *pb.ClientMessage_ChatSend:
-			s.zone.Chat(ctx, id, m.ChatSend.Text, m.ChatSend.To)
+			s.zone.Chat(ctx, id, m.ChatSend.Text, m.ChatSend.To, m.ChatSend.Channel)
 		case *pb.ClientMessage_Attack:
 			s.zone.Attack(ctx, id, m.Attack.TargetId, m.Attack.Force)
 		case *pb.ClientMessage_UseSkill:
@@ -196,6 +196,12 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.ProgressAction(ctx, id, m.LearnSkills)
 		case *pb.ClientMessage_SetHotbar:
 			s.zone.ProgressAction(ctx, id, m.SetHotbar)
+		case *pb.ClientMessage_PartyCmd:
+			s.zone.Social(ctx, id, m.PartyCmd)
+		case *pb.ClientMessage_ClanCmd:
+			s.zone.Social(ctx, id, m.ClanCmd)
+		case *pb.ClientMessage_InviteReply:
+			s.zone.Social(ctx, id, m.InviteReply)
 		case *pb.ClientMessage_Ping:
 			// Respondido aqui mesmo, sem passar pela zona, para medir só a rede.
 			pong, _ := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Pong{

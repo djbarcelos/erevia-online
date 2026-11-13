@@ -9,7 +9,17 @@
 
 import "../styles/hud.css";
 import "../styles/windows.css";
-import { Effect, EntityKind, PvpState, SkillTarget, type ItemInfo, type SelfStats, type SkillInfo } from "../gen/erevia/v1/game_pb";
+import { classInfo } from "../classes";
+import {
+  Effect,
+  EntityKind,
+  PvpState,
+  SkillTarget,
+  type ItemInfo,
+  type PartyState,
+  type SelfStats,
+  type SkillInfo,
+} from "../gen/erevia/v1/game_pb";
 import { hourLabel, isNight } from "../world/daynight";
 import type { ActiveEffect, EntityInfo } from "../world/entities";
 import { ui, uniqueIds } from "./art";
@@ -29,7 +39,7 @@ export const HOTBAR_KEYS = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "D
 /** Um atalho: "skill:<id>" ou "item:<id do item>". */
 export type HotbarEntry = string | null;
 
-export type WindowId = "character" | "inventory" | "skills" | "map" | "settings";
+export type WindowId = "character" | "inventory" | "skills" | "party" | "map" | "settings";
 
 /** Ações sobre um jogador selecionado (quadro do alvo). */
 export type TargetAction = "attack" | "party" | "clan" | "whisper";
@@ -56,6 +66,8 @@ export interface HudCallbacks {
   onAttack(): void;
   /** Botões do quadro do alvo quando ele é um jogador. */
   onTargetAction(action: TargetAction): void;
+  /** Clique num colega no painel do grupo (seleciona como alvo). */
+  onPartyMember(id: number): void;
   onCycleTarget(): void;
   /** Joystick (direção relativa à câmera) ou null ao soltar. */
   onStick(v: { x: number; y: number } | null): void;
@@ -86,6 +98,7 @@ const MENU: { id: WindowId; icon: string; label: string; key: string }[] = [
   { id: "character", icon: "user", label: "Personagem", key: "character" },
   { id: "inventory", icon: "bag", label: "Inventário", key: "inventory" },
   { id: "skills", icon: "book", label: "Skills", key: "skills" },
+  { id: "party", icon: "users", label: "Grupo", key: "party" },
   { id: "map", icon: "map", label: "Mapa", key: "map" },
   { id: "settings", icon: "gear", label: "Configurações", key: "settings" },
 ];
@@ -146,6 +159,9 @@ export class Hud {
   private tActions = el("div", "t-actions");
   private tActionBtns = new Map<TargetAction, HTMLButtonElement>();
   private deathSub = el("p", "muted", "Você perdeu um pouco de experiência.");
+  private partyEl = el("section", "party");
+  private partyList = el("div", "party-list");
+  private partyRows = new Map<number, { root: HTMLElement; name: HTMLElement; hp: ReturnType<typeof bar>; mp: ReturnType<typeof bar> }>();
   private miniCanvas = el("canvas", "mm-canvas");
   private miniCtx = this.miniCanvas.getContext("2d")!;
   private miniRadius = 45;
@@ -188,7 +204,14 @@ export class Hud {
     crest.onclick = () => cb.openWindow("character");
     tooltip(crest, () => `Personagem <span class="muted">(${keyLabel(settings.get().keys.character)})</span>`);
     this.meEl.append(crest, el("div", "me-body", this.meName, this.hpBar.root, this.mpBar.root), this.myEffects);
-    const left = el("div", "hud-left", this.meEl);
+    // ---------- Grupo (abaixo do personagem; some sem grupo) ----------
+    const pHead = el("button", "side-head");
+    pHead.type = "button";
+    pHead.innerHTML = `${ui("users", 16)}<span>Grupo</span><i>▾</i>`;
+    pHead.onclick = () => this.partyEl.classList.toggle("collapsed");
+    this.partyEl.append(pHead, this.partyList);
+    this.partyEl.hidden = true;
+    const left = el("div", "hud-left", this.meEl, el("div", "hud-side", this.partyEl));
 
     // ---------- Alvo ----------
     const tClose = button("✕", "t-close");
@@ -554,6 +577,44 @@ export class Hud {
     this.root.querySelector(".menu-burger")?.classList.toggle("has-badge", total > 0);
   }
 
+  /** Painel do grupo: um por colega (você não aparece), com vida, mana e o líder. */
+  setParty(state: PartyState, localId: number, near: (id: number) => boolean): void {
+    const others = state.members.filter((m) => m.id !== localId);
+    this.partyEl.hidden = others.length === 0;
+    const seen = new Set<number>();
+    for (const m of others) {
+      seen.add(m.id);
+      let row = this.partyRows.get(m.id);
+      if (!row) {
+        const hp = bar("hp", "thin");
+        const mp = bar("mp", "thin");
+        const name = el("div", "m-name");
+        const root = el("button", "member", el("span", "m-crest", classInfo(m.class).label[0]), el("div", "m-body", name, hp.root, mp.root));
+        (root as HTMLButtonElement).type = "button";
+        root.style.setProperty("--cc", classInfo(m.class).color);
+        root.onclick = () => this.cb.onPartyMember(m.id);
+        row = { root, name, hp, mp };
+        this.partyRows.set(m.id, row);
+      }
+      const lead = m.id === state.leaderId ? el("span", "m-lead", "♛") : "";
+      row.name.replaceChildren(lead, document.createTextNode(m.name), el("small", null, ` Nv ${m.level}`));
+      row.hp.set(m.hp, m.maxHp, "");
+      row.mp.set(m.mp, m.maxMp, "");
+      row.root.classList.toggle("dead", m.dead);
+      row.root.classList.toggle("far", !near(m.id));
+      row.root.title = m.dead ? `${m.name} (morto)` : `Selecionar ${m.name}`;
+    }
+    for (const [id, row] of this.partyRows) {
+      if (!seen.has(id)) {
+        row.root.remove();
+        this.partyRows.delete(id);
+      }
+    }
+    // Ordem: líder primeiro, depois a ordem do servidor.
+    const order = others.slice().sort((a, b) => Number(b.id === state.leaderId) - Number(a.id === state.leaderId));
+    this.partyList.replaceChildren(...order.map((m) => this.partyRows.get(m.id)!.root));
+  }
+
   setTarget(info: EntityInfo | undefined, extras?: TargetExtras): void {
     if (!info) {
       this.target.hidden = true;
@@ -690,7 +751,7 @@ export class Hud {
   // ------------------------------------------------------------------------------------
 
   private buildChat(): void {
-    type Filter = "all" | "general" | "whisper" | "system";
+    type Filter = "all" | "general" | "party" | "clan" | "whisper" | "system";
     const log = el("ol", "chat-log scroll");
     log.id = "chat-log";
     log.setAttribute("aria-live", "polite");
@@ -699,6 +760,8 @@ export class Hud {
     const TABS: { id: Filter; label: string }[] = [
       { id: "all", label: "Todos" },
       { id: "general", label: "Geral" },
+      { id: "party", label: "Grupo" },
+      { id: "clan", label: "Clã" },
       { id: "whisper", label: "Sussurro" },
       { id: "system", label: "Sistema" },
     ];
@@ -723,7 +786,7 @@ export class Hud {
     const input = el("input", "chat-input");
     input.id = "chat-input";
     input.maxLength = 220;
-    input.placeholder = "Enter para falar · /w Nome texto · /r texto";
+    input.placeholder = "Enter para falar · /g grupo · /c clã · /w Nome";
     input.setAttribute("aria-label", "Mensagem do chat");
     form.append(input);
     const bubble = el("button", "chat-bubble");
@@ -856,6 +919,7 @@ export class Hud {
       if (m.boss) drawBossMarker(c, x, y, 6 * dpr);
       else if (m.kind === EntityKind.MONSTER) drawDot(c, x, y, (m.target ? 4.5 : 3.2) * dpr, m.target ? "#ffd36b" : MARKER_COLORS.monster);
       else if (m.kind === EntityKind.NPC) drawDot(c, x, y, 3.5 * dpr, MARKER_COLORS.npc);
+      else if (m.party) drawDot(c, x, y, 4.2 * dpr, MARKER_COLORS.party);
       else drawDot(c, x, y, 3.5 * dpr, MARKER_COLORS.player);
     });
     // Cone da câmera e seta do jogador

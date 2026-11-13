@@ -41,6 +41,7 @@ const set = <K extends keyof Settings>(k: K) => (v: Settings[K]) => settings.set
 const ACTIONS: { id: string; label: string }[] = [
   { id: "inventory", label: "Inventário" },
   { id: "skills", label: "Árvore de skills" },
+  { id: "party", label: "Grupo" },
   { id: "character", label: "Personagem / atributos" },
   { id: "map", label: "Mapa do mundo" },
   { id: "settings", label: "Configurações / fechar janela" },

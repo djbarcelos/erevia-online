@@ -560,7 +560,7 @@ button.mm-frame:focus-visible .mm-open {
 }
 
 .quests,
-.party {
+section.party {
   display: grid;
   gap: 6px;
   padding: 8px 10px 10px;
@@ -1410,7 +1410,8 @@ button.mm-frame:focus-visible .mm-open {
   width: 220px;
 }
 
-.hud-screen.touch .party {
+.hud-screen.touch .party .pbar.mp,
+.hud-screen.touch .party .m-crest {
   display: none;
 }
 
@@ -1602,7 +1603,7 @@ button.mm-frame:focus-visible .mm-open {
 }
 
 @media (max-width: 1100px) {
-  .hud-screen:not(.touch) .party {
+  .hud-screen:not(.touch) .party .pbar.mp {
     display: none;
   }
 
@@ -1629,8 +1630,13 @@ button.mm-frame:focus-visible .mm-open {
 
 /* Pouca altura no desktop: missões recolhem a lista de grupo para não cobrir o chat */
 @media (max-height: 820px) {
-  .hud-screen:not(.touch) .party {
+  .hud-screen:not(.touch) .party .pbar.mp {
     display: none;
+  }
+
+  .hud-screen:not(.touch) .party .m-crest {
+    width: 24px;
+    height: 24px;
   }
 }
 
@@ -1674,10 +1680,22 @@ button.mm-frame:focus-visible .mm-open {
   text-decoration: underline;
 }
 
+.chat-log[data-filter="party"] li:not(.party),
+.chat-log[data-filter="clan"] li:not(.clan),
 .chat-log[data-filter="general"] li:not(.general),
 .chat-log[data-filter="whisper"] li:not(.whisper),
 .chat-log[data-filter="system"] li:not(.system) {
   display: none;
+}
+
+.chat-log li.party,
+.cb-text.party {
+  color: var(--party);
+}
+
+.chat-log li.clan,
+.cb-text.clan {
+  color: #e8cf8a;
 }
 
 .cb-text.whisper {
@@ -1814,4 +1832,101 @@ button.mm-frame:focus-visible .mm-open {
 .t-actions .t-act.danger {
   border-color: rgba(255, 90, 74, 0.6);
   color: #ffb4a8;
+}
+
+/* ---------- Fase 4: painel do grupo ---------- */
+
+.party[hidden] {
+  display: none !important;
+}
+
+.party .member {
+  width: 100%;
+  border: 0;
+  padding: 2px 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.party .member:hover .m-name {
+  color: var(--party);
+}
+
+.party .member.dead {
+  opacity: 0.45;
+}
+
+.party .member.far {
+  opacity: 0.7;
+}
+
+.m-lead {
+  margin-right: 4px;
+  color: var(--gold-hi);
+}
+
+.party-list {
+  display: grid;
+  gap: 6px;
+}
+
+.party.collapsed .party-list {
+  display: none;
+}
+
+.party.collapsed .side-head i {
+  transform: rotate(-90deg);
+}
+
+/* ---------- Fase 4: convite (grupo/clã) ---------- */
+
+.invite-card {
+  position: absolute;
+  top: 128px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(360px, 90vw);
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+  z-index: 30;
+}
+
+.invite-card[hidden] {
+  display: none;
+}
+
+.invite-text {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.invite-text b {
+  color: var(--gold-hi);
+}
+
+.invite-clan {
+  color: #e8cf8a !important;
+}
+
+.invite-time {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.invite-time i {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.2s linear;
+}
+
+.invite-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

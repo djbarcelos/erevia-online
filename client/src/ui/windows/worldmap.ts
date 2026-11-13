@@ -23,11 +23,12 @@ export interface WorldMapDeps {
   moveTo(x: number, z: number): void;
 }
 
-type Layer = "zones" | "places" | "players" | "monsters";
+type Layer = "zones" | "places" | "party" | "players" | "monsters";
 
 const LAYERS: { id: Layer; label: string; dot: string }[] = [
   { id: "zones", label: "Regiões de caça", dot: "linear-gradient(90deg,#78c86e,#e6b450,#e65a46)" },
   { id: "places", label: "Locais e lojas", dot: "#f3d995" },
+  { id: "party", label: "Grupo", dot: MARKER_COLORS.party },
   { id: "players", label: "Jogadores", dot: MARKER_COLORS.player },
   { id: "monsters", label: "Monstros e chefes", dot: MARKER_COLORS.monster },
 ];
@@ -39,7 +40,7 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
   if (!cached || cached.world !== world) cached = { world, canvas: renderMapCanvas(world, 6) };
   const src = cached.canvas;
   const half = world.size / 2;
-  const show: Record<Layer, boolean> = { zones: true, places: true, players: true, monsters: true };
+  const show: Record<Layer, boolean> = { zones: true, places: true, party: true, players: true, monsters: true };
   const gateR = world.wall?.apothem ?? 38;
   const GATES = [
     { name: "Portão Norte", x: 0, z: gateR },
@@ -352,6 +353,10 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
         if (!show.places) return;
         drawDot(ctx, x, y, 5, MARKER_COLORS.npc);
         if (scale > 2.2) label(d.nameOf(m.id), x, y - 13, 11, "#c8f0c0", 700);
+      } else if (m.party) {
+        if (!show.party) return;
+        drawDot(ctx, x, y, 5.5, MARKER_COLORS.party);
+        if (scale > 1.6) label(d.nameOf(m.id), x, y - 13, 11, "#bfe8ff", 700);
       } else {
         if (!show.players) return;
         drawDot(ctx, x, y, 4.5, MARKER_COLORS.player);

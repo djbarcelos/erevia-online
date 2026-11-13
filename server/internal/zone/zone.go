@@ -126,6 +126,7 @@ type moveEvent struct {
 type chatEvent struct {
 	id       uint32
 	text, to string
+	channel  pb.ChatChannel
 }
 type attackEvent struct {
 	id, target uint32
@@ -181,6 +182,10 @@ type Zone struct {
 	nextAura       float64
 	pending        map[uint32]SavedState // salvamentos que não couberam na fila
 	lastSeq        int64
+	parties        map[uint32]*party
+	partySeq       uint32
+	invites        map[uint32]*invite
+	inviteSeq      uint32
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -198,6 +203,8 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		ground:         map[uint32]*groundItem{},
 		recent:         map[uint32]recentState{},
 		pending:        map[uint32]SavedState{},
+		parties:        map[uint32]*party{},
+		invites:        map[uint32]*invite{},
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
 	}
@@ -219,8 +226,14 @@ func (z *Zone) Leave(ctx context.Context, id uint32, peer Peer) {
 func (z *Zone) Move(ctx context.Context, id uint32, x, z2 float64) {
 	z.post(ctx, moveEvent{id: id, x: x, z: z2})
 }
-func (z *Zone) Chat(ctx context.Context, id uint32, text, to string) {
-	z.post(ctx, chatEvent{id: id, text: text, to: to})
+func (z *Zone) Chat(ctx context.Context, id uint32, text, to string, channel pb.ChatChannel) {
+	z.post(ctx, chatEvent{id: id, text: text, to: to, channel: channel})
+}
+
+// Social repassa um pedido de grupo, clã ou resposta a convite (*pb.PartyCmd,
+// *pb.ClanCmd, *pb.InviteReply).
+func (z *Zone) Social(ctx context.Context, id uint32, msg any) {
+	z.post(ctx, socialEvent{id: id, msg: msg})
 }
 func (z *Zone) Attack(ctx context.Context, id, target uint32, force bool) {
 	z.post(ctx, attackEvent{id: id, target: target, force: force})
@@ -298,6 +311,8 @@ func (z *Zone) handle(e event) {
 		z.onItem(e)
 	case progressEvent:
 		z.onProgress(e)
+	case socialEvent:
+		z.onSocial(e)
 	}
 }
 
@@ -463,6 +478,15 @@ func (z *Zone) onChat(e chatEvent) {
 	}
 	p.pl.chatTokens--
 
+	switch e.channel {
+	case pb.ChatChannel_CHAT_CHANNEL_PARTY:
+		z.partyChat(p, text)
+		return
+	case pb.ChatChannel_CHAT_CHANNEL_CLAN:
+		z.clanChat(p, text)
+		return
+	}
+
 	to := strings.TrimSpace(e.to)
 	if to == "" {
 		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
@@ -506,6 +530,8 @@ func (z *Zone) removePlayer(id uint32) {
 		delete(z.byName, strings.ToLower(p.name))
 	}
 	z.forgetTarget(id)
+	z.partyLeave(p, "")
+	z.dropInvites(id)
 	st := z.savedState(p)
 	z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
 	z.save([]SavedState{st}, false)
@@ -540,6 +566,8 @@ func (z *Zone) update(dt float64) {
 	if z.tick%uint32(z.cfg.TickRate) == 0 { // 1×/s
 		z.expireGround()
 		z.expireFlags()
+		z.expireInvites()
+		z.syncParties()
 		if len(z.pending) > 0 {
 			z.save(nil, false)
 		}

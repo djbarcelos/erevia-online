@@ -4,8 +4,11 @@ import { create } from "@bufbuild/protobuf";
 import {
   EntityKind,
   ItemKind,
+  PartyCmdKind,
+  PartyStateSchema,
   SelfPvpSchema,
   SkillTarget,
+  type PartyState,
   type Progress,
   type SelfPvp,
   type SelfStats,
@@ -30,6 +33,8 @@ import { buildWorldMap } from "./ui/windows/worldmap";
 import { buildSettings } from "./ui/windows/settings";
 import { buildCharacter } from "./ui/windows/character";
 import { buildSkills } from "./ui/windows/skills";
+import { buildParty } from "./ui/windows/party";
+import { InvitePrompt } from "./ui/invite";
 import { AutoHunt } from "./world/autohunt";
 import { GroundLoot } from "./world/loot";
 import { Fx } from "./world/fx";
@@ -174,10 +179,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   /** Segundos de flag que ainda faltam. */
   const flagLeft = () => Math.max(0, (pvp.flagMs - (performance.now() - pvpAt)) / 1000);
 
-  // ---------- Grupo e clã (convites pelo quadro do alvo) ----------
-  const canInviteParty = (_id: number) => false;
+  // ---------- Grupo ----------
+  let party: PartyState = create(PartyStateSchema, {});
+  const partyListeners = new Set<() => void>();
+  const onParty = (fn: () => void) => {
+    partyListeners.add(fn);
+    return () => partyListeners.delete(fn);
+  };
+  const inParty = (id: number) => party.members.some((m) => m.id === id);
+  /** Convidar: ele fora do grupo, e você sem grupo ou líder. */
+  const canInviteParty = (id: number) =>
+    !inParty(id) && (party.members.length === 0 || party.leaderId === welcome.yourId) && party.members.length < 6;
+  const inviteParty = (name: string) => conn.partyCmd(PartyCmdKind.PARTY_CMD_INVITE, name);
+  const PARTY_NEAR = 30;
+
+  // ---------- Clã (bloco 3) ----------
   const canInviteClan = (_id: number) => false;
-  const inviteParty = (_name: string) => {};
   const inviteClan = (_name: string) => {};
 
   // ---------- Progressão: atributos, árvore de skills e barra (vêm do servidor) ----------
@@ -450,6 +467,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (action === "party") inviteParty(info.name);
       else if (action === "clan") inviteClan(info.name);
     },
+    onPartyMember: (id) => selectTarget(id),
     onCycleTarget: cycleTarget,
     onStick: (v) => {
       stick = v;
@@ -470,7 +488,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hud.setBadges({ character: progress?.freeAttrPoints ?? 0, skills: progress?.freeSkillPoints ?? 0 });
   refreshBadges();
 
-  const chat = new Chat(hud.chatRoot, character.name, (text, to) => conn.chat(text, to));
+  const chat = new Chat(hud.chatRoot, character.name, (text, to, channel) => conn.chat(text, to, channel));
+  chat.onPartyInvite = inviteParty;
+  const invites = new InvitePrompt(hud.element, (id, accept) => conn.inviteReply(id, accept));
+  /** Atualiza tudo que depende do grupo (nomes azuis, painel, janela, quadro do alvo). */
+  const applyParty = () => {
+    entities.setPartyIds(party.members.map((m) => m.id).filter((id) => id !== welcome.yourId));
+    hud.setParty(party, welcome.yourId, (id) => (entities.distanceTo(id) ?? Infinity) <= PARTY_NEAR);
+    for (const fn of partyListeners) fn();
+    if (targetId) refreshTarget();
+  };
   chat.system(`Bem-vindo a Erevia, ${character.name}! Clique num monstro para atacar; as teclas 1–0 usam a barra de atalhos.`);
 
   const toHotbar = (entry: string, index?: number) => {
@@ -595,6 +622,23 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       }),
   });
   reg({
+    id: "party",
+    title: "Grupo",
+    hotkey: keys().party,
+    width: 460,
+    build: () =>
+      buildParty({
+        localId: welcome.yourId,
+        state: () => party,
+        onChange: onParty,
+        invite: inviteParty,
+        kick: (id) => conn.partyCmd(PartyCmdKind.PARTY_CMD_KICK, "", id),
+        promote: (id) => conn.partyCmd(PartyCmdKind.PARTY_CMD_LEADER, "", id),
+        leave: () => conn.partyCmd(PartyCmdKind.PARTY_CMD_LEAVE),
+        select: (id) => selectTarget(id),
+      }),
+  });
+  reg({
     id: "map",
     title: "Mapa do mundo",
     hotkey: keys().map,
@@ -650,7 +694,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     const k = keys();
     if (ev.code === k.settings) {
       ev.preventDefault();
-      if (shop.isOpen) shop.close();
+      if (invites.open) invites.answer(false);
+      else if (shop.isOpen) shop.close();
       else if (wm.closeTop()) return;
       else if (targetId) selectTarget(0);
       else wm.toggle("settings");
@@ -665,6 +710,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     const actions: Record<string, () => void> = {
       [k.inventory]: () => wm.toggle("inventory"),
       [k.skills]: () => wm.toggle("skills"),
+      [k.party]: () => wm.toggle("party"),
       [k.character]: () => wm.toggle("character"),
       [k.map]: () => wm.toggle("map"),
       [k.auto]: () => hud.setAuto(!hud.autoOn, true),
@@ -792,6 +838,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       select: (id: number) => selectTarget(id),
       info: (id: number) => entities.info(id),
       pvp: () => ({ ...pvp, flag: flagLeft() }),
+      party: () => party,
+      partyInvite: (name: string) => inviteParty(name),
+      answerInvite: (accept: boolean) => invites.answer(accept),
     };
   }
 
@@ -807,6 +856,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       wm.closeAll();
       wm.layer.remove();
       hud.dispose();
+      invites.dispose();
       shop.dispose();
       itemTip.root.remove();
     },
@@ -898,6 +948,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         }
         case "appearance":
           entities.setAppearance(msg.msg.value);
+          break;
+        case "party":
+          party = msg.msg.value;
+          applyParty();
+          break;
+        case "invite":
+          invites.push(msg.msg.value);
           break;
         case "playerStatus":
           entities.setStatus(msg.msg.value);

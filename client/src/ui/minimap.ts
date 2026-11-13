@@ -17,6 +17,7 @@ export const MARKER_COLORS = {
   player: "#5fa8ff",
   boss: "#c03be0",
   local: "#f3d488",
+  party: "#7fd0ff",
 };
 
 /** Seta do jogador apontando para cima (o chamador gira o contexto). */

@@ -149,13 +149,18 @@ func (z *Zone) runPickup(p *entity) {
 	}
 	p.stopMoving()
 	p.clearAction()
-	if g.owner != 0 && g.owner != p.id && z.now < g.reservedUntil {
+	if z.now < g.reservedUntil && !z.canTakeReserved(p, g.owner) {
 		z.system(p, "Este item ainda está reservado para quem derrotou o monstro.")
 		return
 	}
 	inv := &p.pl.inv
+	label := itemLabelEnchant(g.def, g.count, g.enchant)
 	if g.def.Kind == game.KindGold {
-		inv.gold += int64(g.count)
+		kept := z.splitGold(p, g.count)
+		inv.gold += int64(kept)
+		if kept != g.count {
+			label = fmt.Sprintf("%d moedas (dividido com o grupo)", kept)
+		}
 	} else {
 		if (g.enchant > 0 && inv.firstFree() < 0) || (g.enchant == 0 && !inv.canAdd(g.def, g.count)) {
 			z.system(p, "Sua bolsa está cheia.")
@@ -167,6 +172,6 @@ func (z *Zone) runPickup(p *entity) {
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundRemoved{GroundRemoved: &pb.GroundItemsRemoved{
 		Ids: []uint32{g.id}, PickedBy: p.id,
 	}}}, 0)
-	z.system(p, fmt.Sprintf("Você pegou %s.", itemLabelEnchant(g.def, g.count, g.enchant)))
+	z.system(p, fmt.Sprintf("Você pegou %s.", label))
 	z.inventoryChanged(p, false)
 }

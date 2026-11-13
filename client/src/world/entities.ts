@@ -103,6 +103,8 @@ export interface MapMarker {
   target: boolean;
   /** Para onde está virado: 0 = norte (+Z), crescendo no sentido horário (π/2 = leste). */
   heading: number;
+  /** Colega de grupo. */
+  party: boolean;
 }
 
 interface View extends EntityInfo {
@@ -897,6 +899,7 @@ export class EntityManager {
       cb({
         id: v.id, x: v.root.position.x, z: v.root.position.z, kind: v.kind, boss: v.boss,
         local: v.id === this.localId, target: v.id === this.targetId, heading: v.visual.rotation.y,
+        party: this.partyIds.has(v.id),
       });
     }
   }

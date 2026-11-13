@@ -4,18 +4,21 @@ const MAX_LINES = 100;
 
 /**
  * Painel de chat. Enter abre/envia, Esc fecha.
- * Comandos: /w Nome texto (sussurro), /r texto (responde ao último sussurro).
+ * Comandos: /w Nome texto (sussurro), /r texto (responde ao último sussurro),
+ * /g texto (grupo), /convidar Nome (grupo).
  * Todo texto entra com textContent: nada vindo da rede vira HTML.
  */
 export class Chat {
   private log: HTMLOListElement;
   private input: HTMLInputElement;
   private lastWhisperFrom = "";
+  /** /convidar Nome (grupo). */
+  onPartyInvite: (name: string) => void = () => {};
 
   constructor(
     root: HTMLElement,
     private selfName: string,
-    private onSend: (text: string, to: string) => void,
+    private onSend: (text: string, to: string, channel?: ChatChannel) => void,
   ) {
     this.log = root.querySelector("#chat-log")!;
     this.input = root.querySelector("#chat-input")!;
@@ -65,6 +68,12 @@ export class Chat {
         ]);
         break;
       }
+      case ChatChannel.PARTY:
+        this.line("party", [document.createTextNode("[Grupo] "), this.nameSpan(m.fromName), document.createTextNode(`: ${m.text}`)]);
+        break;
+      case ChatChannel.CLAN:
+        this.line("clan", [document.createTextNode("[Clã] "), this.nameSpan(m.fromName), document.createTextNode(`: ${m.text}`)]);
+        break;
       default:
         this.system(m.text);
     }
@@ -102,6 +111,24 @@ export class Chat {
           if (!text) return this.system("Uso: /r mensagem");
           return this.onSend(text, this.lastWhisperFrom);
         }
+        case "/g":
+        case "/grupo": {
+          const text = rest.join(" ");
+          if (!text) return this.system("Uso: /g mensagem para o grupo");
+          return this.onSend(text, "", ChatChannel.PARTY);
+        }
+        case "/c":
+        case "/cla":
+        case "/clã": {
+          const text = rest.join(" ");
+          if (!text) return this.system("Uso: /c mensagem para o clã");
+          return this.onSend(text, "", ChatChannel.CLAN);
+        }
+        case "/convidar":
+        case "/invite": {
+          if (!rest[0]) return this.system("Uso: /convidar Nome");
+          return this.onPartyInvite(rest[0]);
+        }
         default:
           return this.system(`Comando desconhecido: ${cmd}`);
       }
@@ -118,7 +145,7 @@ export class Chat {
     return s;
   }
 
-  private line(kind: "general" | "whisper" | "system", parts: Node[]): void {
+  private line(kind: "general" | "whisper" | "system" | "party" | "clan", parts: Node[]): void {
     const stick = this.log.scrollTop + this.log.clientHeight >= this.log.scrollHeight - 8;
     const li = document.createElement("li");
     li.className = kind;
