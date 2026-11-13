@@ -30,11 +30,9 @@ const (
 	raidFinalMult   = 3.0
 	raidLootSpread  = 4.0
 
-	raidWaveEvery, raidWaveRadius, raidWaveDelay, raidWaveMult = 14.0, 8.0, 2.5, 1.6
-	raidRainEvery, raidRainRadius, raidRainDelay, raidRainMult = 12.0, 4.0, 2.0, 1.0
-	raidMarkEvery, raidMarkRadius, raidMarkDelay, raidMarkMult = 16.0, 5.0, 5.0, 1.4
-	raidRainCount                                              = 3
-	raidSummonsP2, raidSummonsP3                               = 4, 6
+	// Os golpes de área (Onda, Chuva e Marca) são dados: game.MonsterDef.Abilities do Ozrhal.
+	raidMarkRadius, raidMarkDelay, raidMarkMult = game.RaidMarkRadius, game.RaidMarkDelay, game.RaidMarkMult
+	raidSummonsP2, raidSummonsP3                = 4, 6
 
 	summonIDBase = monsterIDBase + 1<<20 // invocações (não colidem com os monstros fixos)
 )
@@ -42,9 +40,9 @@ const (
 // Golpes do raid nos CombatEvent: o cliente mostra o dano sem animar o chefe batendo
 // (o visual sai do Telegraph).
 const (
-	RaidHitWave uint32 = 9001 + iota
-	RaidHitRain
-	RaidHitMark
+	RaidHitWave = game.HitRaidWave
+	RaidHitRain = game.HitRaidRain
+	RaidHitMark = game.HitRaidMark
 )
 
 // BossData é o renascimento de um raid boss salvo no banco.
@@ -70,44 +68,41 @@ type raidKey struct {
 }
 
 type raidState struct {
-	phase                int
-	fighting             bool
-	fightStart, lastHit  float64 // z.now
-	fightWall            time.Time
-	nextWave, nextRain   float64
-	nextMark             float64
-	enraged, final       bool
-	summons              []uint32
-	damage               map[raidKey]float64
-	byPlayer             map[uint32]float64
-	names                map[raidKey]string // nome para o anúncio (grupo de X, clã Y)
-	total                float64
-	spawnAt, killedAt    time.Time // morto: renasce em spawnAt (relógio)
-	warned               bool
-	gen                  int // muda a cada reinício e morte (avisos antigos são descartados)
-	lastStatusPhase      int
-	lastStatusEnraged    bool
-	lastStatusFinal      bool
-	lastStatusFighting   bool
+	phase               int
+	fighting            bool
+	fightStart, lastHit float64 // z.now
+	fightWall           time.Time
+	nextWave, nextRain  float64
+	nextMark            float64
+	enraged, final      bool
+	summons             []uint32
+	damage              map[raidKey]float64
+	byPlayer            map[uint32]float64
+	names               map[raidKey]string // nome para o anúncio (grupo de X, clã Y)
+	total               float64
+	spawnAt, killedAt   time.Time // morto: renasce em spawnAt (relógio)
+	warned              bool
+	lastStatusPhase     int
+	lastStatusEnraged   bool
+	lastStatusFinal     bool
+	lastStatusFighting  bool
 }
 
 func newRaidState() *raidState {
 	return &raidState{phase: 1, damage: map[raidKey]float64{}, byPlayer: map[uint32]float64{}, names: map[raidKey]string{}}
 }
 
-// telegraph é um aviso no chão de um golpe do chefe.
-type telegraph struct {
-	id     uint32
-	kind   pb.TelegraphKind
-	pos    Vec2
-	radius float64
-	at     float64 // quando o golpe cai (z.now)
-	src    uint32
-	follow uint32 // Marca da Morte: segue o marcado
-	gen    int
-	mult   float64
-	hitID  uint32
-	effect *game.EffectDef
+// clock: o relógio de cada golpe do Ozrhal (id da habilidade na def).
+func (r *raidState) clock(id string) *float64 {
+	switch id {
+	case "wave":
+		return &r.nextWave
+	case "rain":
+		return &r.nextRain
+	case "mark":
+		return &r.nextMark
+	}
+	return nil
 }
 
 // initRaid prepara o estado do raid boss e aplica o renascimento salvo.
@@ -165,7 +160,7 @@ func (z *Zone) thinkRaid(m *entity) bool {
 		return true
 	}
 	z.raidPhases(m)
-	z.raidAbilities(m)
+	z.thinkAbilities(m)
 	if !r.final && z.now-r.fightStart >= raidFinalAfter {
 		r.final = true
 		m.stats.PAtk *= raidFinalMult
@@ -181,9 +176,7 @@ func (z *Zone) raidEngage(m *entity) {
 	r.fighting = true
 	r.fightStart, r.lastHit = z.now, z.now
 	r.fightWall = z.cfg.Clock()
-	r.nextWave = z.now + 8
-	r.nextRain = z.now + 6
-	r.nextMark = z.now + 6
+	z.startAbilities(m)
 	z.raidSay(m, fmt.Sprintf("%s se ergue do trono!", m.name))
 	z.raidStatusIfChanged(m)
 }
@@ -194,13 +187,13 @@ func (z *Zone) raidPhases(m *entity) {
 	frac := m.hp / m.stats.MaxHP
 	if r.phase < 2 && frac <= raidPhase2At {
 		r.phase = 2
-		r.nextRain = z.now + 3
+		z.phaseAbilities(m, 2)
 		z.summon(m, raidSummonsP2)
 		z.raidSay(m, fmt.Sprintf("%s: \"Levantem-se, meus guardas!\"", m.name))
 	}
 	if r.phase < 3 && frac <= raidPhase3At {
 		r.phase = 3
-		r.nextMark = z.now + 4
+		z.phaseAbilities(m, 3)
 		z.summon(m, raidSummonsP3)
 		z.raidSay(m, fmt.Sprintf("%s: \"A morte marca os que me desafiam!\"", m.name))
 	}
@@ -208,128 +201,6 @@ func (z *Zone) raidPhases(m *entity) {
 		r.enraged = true
 		m.stats.AtkInterval = m.mon.def.Interval / raidEnrageSpeed
 		z.raidSay(m, fmt.Sprintf("%s entra em fúria!", m.name))
-	}
-}
-
-// raidAbilities agenda os golpes de área de cada fase.
-func (z *Zone) raidAbilities(m *entity) {
-	r := m.mon.raid
-	if z.now >= r.nextWave {
-		r.nextWave = z.now + raidWaveEvery
-		z.addTelegraph(m, pb.TelegraphKind_TELEGRAPH_KIND_WAVE, m.pos, raidWaveRadius, raidWaveDelay, 0, raidWaveMult, RaidHitWave,
-			&game.EffectDef{Kind: game.EffectSlow, Duration: 3, Value: 0.4})
-	}
-	if r.phase >= 2 && z.now >= r.nextRain {
-		r.nextRain = z.now + raidRainEvery
-		for _, t := range z.raidTargets(m, raidRainCount, 0) {
-			z.addTelegraph(m, pb.TelegraphKind_TELEGRAPH_KIND_RAIN, t.pos, raidRainRadius, raidRainDelay, 0, raidRainMult, RaidHitRain,
-				&game.EffectDef{Kind: game.EffectStun, Duration: 1})
-		}
-	}
-	if r.phase >= 3 && z.now >= r.nextMark {
-		r.nextMark = z.now + raidMarkEvery
-		// Nunca o tanque (quem o chefe está batendo), se houver mais alguém.
-		targets := z.raidTargets(m, 1, m.act.target)
-		if len(targets) == 0 {
-			targets = z.raidTargets(m, 1, 0)
-		}
-		for _, t := range targets {
-			z.applyEffect(m, t, &game.EffectDef{Kind: game.EffectDeathMark, Duration: raidMarkDelay})
-			z.addTelegraph(m, pb.TelegraphKind_TELEGRAPH_KIND_MARK, t.pos, raidMarkRadius, raidMarkDelay, t.id, raidMarkMult, RaidHitMark, nil)
-			z.system(t, "Você foi marcado pela morte! Afaste-se do seu grupo antes que a marca exploda.")
-		}
-	}
-}
-
-// raidTargets sorteia até n jogadores na luta (no ódio, vivos e no covil), sem skip.
-func (z *Zone) raidTargets(m *entity, n int, skip uint32) []*entity {
-	ids := make([]uint32, 0, len(m.mon.hate))
-	for id := range m.mon.hate {
-		p := z.players[id]
-		if id == skip || p == nil || p.dead || dist(p.pos, m.mon.home) > leashOf(m)+raidWaveRadius {
-			continue
-		}
-		ids = append(ids, id)
-	}
-	slices.Sort(ids) // sorteio estável (o mapa não tem ordem)
-	z.rng.Shuffle(len(ids), func(i, j int) { ids[i], ids[j] = ids[j], ids[i] })
-	out := make([]*entity, 0, n)
-	for _, id := range ids[:min(n, len(ids))] {
-		out = append(out, z.players[id])
-	}
-	return out
-}
-
-func (z *Zone) addTelegraph(m *entity, kind pb.TelegraphKind, at Vec2, radius, delay float64, follow uint32, mult float64, hitID uint32, ef *game.EffectDef) {
-	z.telegraphSeq++
-	t := &telegraph{
-		id: z.telegraphSeq, kind: kind, pos: at, radius: radius, at: z.now + delay,
-		src: m.id, follow: follow, gen: m.mon.raid.gen, mult: mult, hitID: hitID, effect: ef,
-	}
-	z.telegraphs = append(z.telegraphs, t)
-	z.frame.telegraphs = append(z.frame.telegraphs, z.telegraphPB(t, uint32(delay*1000)))
-}
-
-func (z *Zone) telegraphPB(t *telegraph, ms uint32) *pb.Telegraph {
-	return &pb.Telegraph{
-		Id: t.id, Kind: t.kind, X: float32(t.pos.X), Z: float32(t.pos.Z), Radius: float32(t.radius),
-		DurationMs: ms, SourceId: t.src, FollowId: t.follow,
-	}
-}
-
-// updateTelegraphs: os avisos que venceram resolvem o golpe; os de um chefe que
-// reiniciou ou morreu são cancelados.
-func (z *Zone) updateTelegraphs() {
-	if len(z.telegraphs) == 0 {
-		return
-	}
-	keep := z.telegraphs[:0]
-	for _, t := range z.telegraphs {
-		src := z.monsters[t.src]
-		if src == nil || src.dead || src.mon.raid == nil || src.mon.raid.gen != t.gen {
-			ev := z.telegraphPB(t, 0)
-			ev.Cancelled = true
-			z.frame.telegraphs = append(z.frame.telegraphs, ev)
-			continue
-		}
-		if t.follow != 0 {
-			if f := z.players[t.follow]; f != nil && !f.dead {
-				t.pos = f.pos
-			}
-		}
-		if z.now < t.at {
-			keep = append(keep, t)
-			continue
-		}
-		z.resolveTelegraph(src, t)
-	}
-	clear(z.telegraphs[len(keep):])
-	z.telegraphs = keep
-}
-
-// resolveTelegraph: o golpe cai em todos os jogadores dentro do círculo (a Marca não
-// acerta o próprio marcado: o perigo é para quem está perto dele).
-func (z *Zone) resolveTelegraph(src *entity, t *telegraph) {
-	ev := z.telegraphPB(t, 0)
-	ev.Resolved = true
-	z.frame.telegraphs = append(z.frame.telegraphs, ev)
-	ids := make([]uint32, 0, len(z.players))
-	for id, p := range z.players {
-		if p.dead || id == t.follow || z.inSafe(p.pos) || dist(p.pos, t.pos) > t.radius {
-			continue
-		}
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
-	magic := src.stats.Magic
-	for _, id := range ids {
-		p := z.players[id]
-		in := z.hitInput(src, p, magic, t.mult, 0)
-		in.NoMiss = true
-		z.applyHit(src, p, t.hitID, game.RollHit(z.rng, in), magic)
-		if t.effect != nil && !p.dead {
-			z.applyEffect(src, p, t.effect)
-		}
 	}
 }
 
@@ -399,7 +270,7 @@ func (z *Zone) raidReset(m *entity) {
 func (z *Zone) raidClear(m *entity) {
 	r := m.mon.raid
 	z.dismissSummons(m)
-	r.gen++
+	m.mon.stopAbilities() // cancela os avisos pendentes
 	r.phase, r.fighting, r.fightStart, r.lastHit = 1, false, 0, 0
 	r.fightWall = time.Time{}
 	r.enraged, r.final = false, false

@@ -549,9 +549,19 @@ enum TelegraphKind {
   TELEGRAPH_KIND_WAVE = 1; // Onda de Ossos: em volta do chefe
   TELEGRAPH_KIND_RAIN = 2; // Chuva de Ossos: em cima de um jogador
   TELEGRAPH_KIND_MARK = 3; // Marca da Morte: segue o marcado e explode em volta dele
+  TELEGRAPH_KIND_STRIKE = 4; // habilidade de monstro comum ou chefe de campo (pancada no chão)
 }
 
-// Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro do círculo.
+// Forma do aviso. x, z é a origem: o centro (círculo e anel) ou o ponto de onde sai o
+// cone ou a linha, na direção angle.
+enum TelegraphShape {
+  TELEGRAPH_SHAPE_CIRCLE = 0; // raio radius
+  TELEGRAPH_SHAPE_CONE = 1; // raio radius e abertura total arc
+  TELEGRAPH_SHAPE_LINE = 2; // retângulo de length × width saindo de x, z
+  TELEGRAPH_SHAPE_DONUT = 3; // anel entre inner_radius e radius (o buraco é seguro)
+}
+
+// Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro da forma.
 message Telegraph {
   uint32 id = 1;
   TelegraphKind kind = 2;
@@ -562,7 +572,13 @@ message Telegraph {
   uint32 source_id = 7;
   uint32 follow_id = 8; // segue esta entidade (Marca da Morte)
   bool resolved = 9; // o golpe caiu agora (em x, z)
-  bool cancelled = 10; // o chefe reiniciou ou morreu antes
+  bool cancelled = 10; // o monstro desistiu da luta ou morreu antes
+  TelegraphShape shape = 11;
+  float angle = 12; // direção do cone e da linha (rad, em Y: 0 = +Z, π/2 = +X)
+  float arc = 13; // cone: abertura total (rad)
+  float length = 14; // linha: comprimento (m)
+  float width = 15; // linha: largura (m)
+  float inner_radius = 16; // anel: raio do buraco seguro (m)
 }
 
 enum PvpState {
