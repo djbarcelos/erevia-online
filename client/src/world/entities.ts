@@ -42,6 +42,16 @@ import type { Bounds, Collision } from "./world-data";
 const CORRECTION_RATE = 12;
 /** Tempo máximo esperando o servidor confirmar um destino previsto. */
 const PENDING_TIMEOUT_MS = 1000;
+/**
+ * Jogador local: diferença entre o servidor e a previsão abaixo da qual não se corrige
+ * nada (é só imprecisão da latência medida), e acima da qual se volta a seguir o servidor.
+ */
+const LOCAL_DEADZONE = 0.4;
+const LOCAL_SNAP = 4;
+/** Quão rápido uma correção da previsão some da tela (1/s): desliza em vez de pular. */
+const LOCAL_SMOOTH_RATE = 10;
+/** Quanto tempo de previsão guardar para comparar com snapshots atrasados (ms). */
+const LOCAL_HISTORY_MS = 2000;
 /** Velocidade de referência da animação de corrida (m/s). */
 const RUN_ANIM_SPEED = 5;
 /** Nomes e barras só aparecem até esta distância do jogador (o alvo sempre aparece). */
@@ -165,6 +175,19 @@ export class EntityManager {
   private views = new Map<number, View>();
   /** Destino previsto esperando o servidor confirmar (stop = soltou o WASD/joystick). */
   private localPending: { x: number; z: number; at: number; stop?: boolean } | null = null;
+  /**
+   * O cliente dirige o próprio movimento (WASD, joystick, clique em linha reta): a posição
+   * prevista não é sobrescrita pelos snapshots, que chegam velhos. Eles só a corrigem
+   * quando discordam de onde estávamos há um ping. Desligado = segue o servidor (caminho
+   * em volta de obstáculos, aproximação de ataque, auto-caça), como os outros personagens.
+   */
+  private localDriven = false;
+  /** Posições previstas recentes do jogador local, para comparar com snapshots atrasados. */
+  private localHistory: { t: number; x: number; z: number }[] = [];
+  /** Diferença desenhada − prevista que ainda está sumindo (correções suaves). */
+  private drawOffset = { x: 0, z: 0 };
+  /** Atraso de um snapshot em relação à previsão: ping de ida e volta + meio tick (ms). */
+  private lookbackMs = 150;
   private mats = new Map<string, StandardMaterial>();
   private ringMat: StandardMaterial;
   /** Último evento de skill com área no alvo (para animar uma vez só). */
@@ -333,6 +356,7 @@ export class EntityManager {
   add(e: Entity): void {
     if (this.views.has(e.id)) return;
     const isLocal = e.id === this.localId;
+    if (isLocal) this.resetLocalPrediction();
     const scale = e.scale > 0 ? e.scale : 1;
 
     const root = new TransformNode(`e${e.id}`, this.scene);
@@ -524,14 +548,15 @@ export class EntityManager {
       v.root.position.set(s.x, 0, s.z);
       v.server.x = v.target.x = s.x;
       v.server.z = v.target.z = s.z;
-      if (s.id === this.localId) this.localPending = null;
+      if (s.id === this.localId) this.resetLocalPrediction();
       this.fx.blinkFlash(from, v.root.position.clone(), new Color3(0.7, 0.5, 1));
       if (s.speed > 0) v.speed = s.speed;
       return;
     }
+    if (s.speed > 0) v.speed = s.speed;
+    if (s.id === this.localId && this.localDriven && this.reconcileLocal(v, s)) return;
     v.server.x = s.x;
     v.server.z = s.z;
-    if (s.speed > 0) v.speed = s.speed;
 
     // Jogador local: enquanto o servidor não confirma o destino que já previmos,
     // não deixa um snapshot antigo "puxar" o personagem de volta.
@@ -557,6 +582,101 @@ export class EntityManager {
     v.target.z = s.targetZ;
   }
 
+  /**
+   * Snapshot do jogador local enquanto o cliente dirige. Devolve false quando o servidor
+   * assumiu o movimento (alvo que não é o nosso, ou diferença grande): aí o snapshot é
+   * aplicado do jeito normal e o modo cliente desliga.
+   */
+  private reconcileLocal(v: View, s: EntityState): boolean {
+    const now = performance.now();
+    const near = (ax: number, az: number, bx: number, bz: number) => Math.abs(ax - bx) < 0.05 && Math.abs(az - bz) < 0.05;
+    const serverStopped = near(s.targetX, s.targetZ, s.x, s.z);
+    const pend = this.localPending;
+    let ours: boolean;
+    if (pend && now - pend.at <= PENDING_TIMEOUT_MS) {
+      // Esperando o servidor: snapshots antigos ainda mostram o destino anterior.
+      ours = true;
+      if (pend.stop ? serverStopped : near(s.targetX, s.targetZ, pend.x, pend.z)) this.localPending = null;
+    } else {
+      this.localPending = null;
+      const weStopped = near(v.target.x, v.target.z, v.server.x, v.server.z);
+      ours = near(s.targetX, s.targetZ, v.target.x, v.target.z) || (serverStopped && weStopped);
+    }
+    if (!ours) {
+      this.localDriven = false;
+      return false;
+    }
+    // O snapshot mostra onde o servidor estava; a previsão estava lá há um ping.
+    const past = this.localPredictionAt(now - this.lookbackMs);
+    const ex = s.x - past.x;
+    const ez = s.z - past.z;
+    const err = Math.hypot(ex, ez);
+    if (err > LOCAL_SNAP) {
+      this.localDriven = false;
+      return false;
+    }
+    if (err > LOCAL_DEADZONE) {
+      // Move a previsão (e o histórico, para não corrigir de novo no próximo snapshot);
+      // a diferença entra no drawOffset e some aos poucos da tela.
+      const stopped = near(v.target.x, v.target.z, v.server.x, v.server.z);
+      v.server.x += ex;
+      v.server.z += ez;
+      if (stopped) {
+        v.target.x = v.server.x;
+        v.target.z = v.server.z;
+        if (this.localPending) {
+          this.localPending.x = v.server.x;
+          this.localPending.z = v.server.z;
+        }
+      }
+      for (const h of this.localHistory) {
+        h.x += ex;
+        h.z += ez;
+      }
+      this.drawOffset.x -= ex;
+      this.drawOffset.z -= ez;
+    }
+    return true;
+  }
+
+  /** Posição prevista do jogador local no instante t (interpolada no histórico). */
+  private localPredictionAt(t: number): { x: number; z: number } {
+    const h = this.localHistory;
+    if (!h.length) return this.local?.server ?? { x: 0, z: 0 };
+    if (t <= h[0].t) return h[0];
+    for (let i = h.length - 1; i >= 0; i--) {
+      if (h[i].t <= t) {
+        const a = h[i];
+        const b = h[i + 1];
+        if (!b) return a;
+        const k = (t - a.t) / Math.max(1e-6, b.t - a.t);
+        return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k };
+      }
+    }
+    return h[0];
+  }
+
+  /** Começa a dirigir pelo cliente (sem pulo: a diferença para o desenho vira drawOffset). */
+  private driveLocal(v: View): void {
+    if (this.localDriven) return;
+    this.localDriven = true;
+    this.drawOffset.x = v.root.position.x - v.server.x;
+    this.drawOffset.z = v.root.position.z - v.server.z;
+  }
+
+  /** Teleporte, morte, renascer, entrar: volta a seguir o servidor do zero. */
+  private resetLocalPrediction(): void {
+    this.localPending = null;
+    this.localDriven = false;
+    this.localHistory.length = 0;
+    this.drawOffset.x = this.drawOffset.z = 0;
+  }
+
+  /** Ping de ida e volta (ms) e ticks por segundo do servidor. */
+  setLatency(rttMs: number, tickRate: number): void {
+    if (rttMs > 0) this.lookbackMs = rttMs + (tickRate > 0 ? 500 / tickRate : 25);
+  }
+
   applyHp(u: HpUpdate): void {
     const v = this.views.get(u.id);
     if (!v) return;
@@ -574,12 +694,18 @@ export class EntityManager {
     const cz = clamp(z, this.bounds.minZ, this.bounds.maxZ);
     // Só prevê em linha reta se não houver obstáculo; senão espera o caminho do servidor
     // (que contorna casas e muralhas) chegar no próximo snapshot.
-    if (this.collision.segmentClear(v.server.x, v.server.z, cx, cz)) {
+    // Atordoado ou enraizado o servidor não anda: prever faria o personagem sair e voltar.
+    const now = performance.now();
+    const held = [Effect.STUN, Effect.ROOT].some((k) => (v.effects.get(k)?.until ?? 0) > now);
+    if (!held && this.collision.segmentClear(v.server.x, v.server.z, cx, cz)) {
+      this.driveLocal(v);
       v.target.x = cx;
       v.target.z = cz;
       this.localPending = { x: cx, z: cz, at: performance.now() };
     } else {
+      // O servidor vai contornar o obstáculo: seguimos o caminho dele.
       this.localPending = null;
+      this.localDriven = false;
     }
     return { x: cx, z: cz };
   }
@@ -862,6 +988,7 @@ export class EntityManager {
     v.dead = true;
     v.hp = 0;
     v.target = { ...v.server };
+    if (id === this.localId) this.resetLocalPrediction();
     this.showDead(v, true);
     this.refreshHpBar(v);
   }
@@ -875,7 +1002,7 @@ export class EntityManager {
     v.server = { x: r.x, z: r.z };
     v.target = { x: r.x, z: r.z };
     v.root.position.set(r.x, 0, r.z);
-    if (r.id === this.localId) this.localPending = null;
+    if (r.id === this.localId) this.resetLocalPrediction();
     this.showDead(v, false);
     this.refreshHpBar(v);
   }
@@ -919,10 +1046,21 @@ export class EntityManager {
         }
       }
 
-      // Aproxima suavemente a posição desenhada da posição extrapolada.
       const pos = v.root.position;
-      pos.x += (v.server.x - pos.x) * blend;
-      pos.z += (v.server.z - pos.z) * blend;
+      if (v.id === this.localId && this.localDriven && !v.dead) {
+        // Cliente dirigindo: desenha a previsão (a câmera vai junto, sem trancos) mais o
+        // resto de alguma correção, que some suavemente.
+        const k = Math.exp(-LOCAL_SMOOTH_RATE * dt);
+        this.drawOffset.x *= k;
+        this.drawOffset.z *= k;
+        pos.x = v.server.x + this.drawOffset.x;
+        pos.z = v.server.z + this.drawOffset.z;
+      } else {
+        // Aproxima suavemente a posição desenhada da posição extrapolada.
+        pos.x += (v.server.x - pos.x) * blend;
+        pos.z += (v.server.z - pos.z) * blend;
+      }
+      if (v.id === this.localId) this.recordLocal(v);
 
       const moving = dist > 0.05 && !v.dead;
       if (moving) v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
@@ -936,6 +1074,14 @@ export class EntityManager {
         v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active);
       }
     }
+  }
+
+  /** Guarda a posição prevista do jogador local (para a reconciliação). */
+  private recordLocal(v: View): void {
+    const now = performance.now();
+    const h = this.localHistory;
+    h.push({ t: now, x: v.server.x, z: v.server.z });
+    while (h.length > 2 && h[0].t < now - LOCAL_HISTORY_MS) h.shift();
   }
 
   /** Liga/desliga a sombra do personagem (só quem está perto projeta). */
@@ -956,6 +1102,7 @@ export class EntityManager {
   stopLocal(): void {
     const v = this.local;
     if (!v || v.dead) return;
+    this.driveLocal(v);
     v.target.x = v.server.x;
     v.target.z = v.server.z;
     this.localPending = { x: v.server.x, z: v.server.z, at: performance.now(), stop: true };

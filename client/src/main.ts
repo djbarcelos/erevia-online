@@ -875,6 +875,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   // A câmera segue o jogador local.
   world.scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(world.engine.getDeltaTime() / 1000, 0.1);
+    entities.setLatency(conn.ping, welcome.tickRate);
     entities.update(dt);
     const pos = entities.localPosition();
     if (pos) {
