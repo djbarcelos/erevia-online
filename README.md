@@ -50,6 +50,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - Se o mesmo personagem entrar em outro lugar, a sessão antiga cai com um aviso.
 - O servidor decide tudo: movimento, limites do mapa, limite anti-spam e anti-flood. Clientes lentos são desconectados.
 - **Painel de desempenho:** tecla **F3** (ou `?debug=1` na URL) mostra tempo de frame, draw calls, malhas ativas e o tempo gasto em animação e na interface.
+- **Medição de FPS:** `?bench=1` na URL, ao entrar no mundo, leva a câmera por cada região, de dia e de noite, e no fim mostra uma tabela (FPS, tempo de frame, p95, CPU, draw calls, malhas e onde vai o tempo de CPU) com o botão **Copiar**. Leva uns 2 minutos; o personagem não sai do lugar. Serve para comparar antes e depois de cada mudança no cliente, no PC e no celular.
 
 ## Requisitos
 Go 1.26+, Node 22+ e Docker.
