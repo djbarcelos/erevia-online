@@ -248,7 +248,8 @@ type Zone struct {
 	rankingBackend RankingBackend
 	ranking        *rankingCache // último cálculo do ranking (nil = ainda não chegou)
 
-	gone map[uint32]bool // personagens de contas apagadas (ver account.go)
+	gone       map[uint32]bool // personagens de contas apagadas (ver account.go)
+	invariants invariantGuard  // checagens do estado (ver invariants.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -739,6 +740,7 @@ func (z *Zone) update(dt float64) {
 			z.save(nil, false)
 		}
 	}
+	z.checkInvariantsDue() // cada jogador 1×/s, espalhado entre os ticks
 	z.saveDue()
 
 	z.flushSnapshot()
@@ -844,6 +846,7 @@ func (z *Zone) sendSelfStats(p *entity) {
 }
 
 func (z *Zone) savedState(p *entity) SavedState {
+	z.checkInvariants(p) // nunca salva um estado quebrado sem corrigir (ou avisar)
 	s := SavedState{
 		ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: p.mpInt(),
 		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),

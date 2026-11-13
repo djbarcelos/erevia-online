@@ -16,11 +16,13 @@ func atLevel(z *Zone, p *entity, level int) {
 	p.hp, p.mp = p.stats.MaxHP, p.stats.MaxMP
 }
 
-// learn dá ranks sem validar (para testar a mecânica de uma skill isolada).
+// learn dá ranks sem validar (para testar a mecânica de uma skill isolada); por isso
+// desliga a invariante dos pontos.
 func learn(z *Zone, p *entity, ranks map[uint32]int) {
 	for id, r := range ranks {
 		p.pl.ranks[id] = r
 	}
+	z.invariants.disable("points")
 	z.refreshStats(p)
 }
 
