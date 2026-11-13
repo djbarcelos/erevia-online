@@ -463,3 +463,78 @@
 .st-hint {
   margin: 8px 12px 12px;
 }
+
+/* ---------- Barbeiro: prévia 3D + editor do visual ---------- */
+
+.shop-panel.barber-panel {
+  width: 620px;
+  left: max(12px, calc(50% - 310px));
+}
+
+.barber-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  gap: 14px;
+}
+
+.barber-stage {
+  position: relative;
+  min-height: 320px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: radial-gradient(ellipse at 50% 70%, rgba(214, 180, 110, 0.12), rgba(0, 0, 0, 0.35));
+}
+
+.barber-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+}
+
+.barber-editor {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.barber-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.barber-foot .shop-hint {
+  flex: 1;
+  text-align: right;
+}
+
+.barber-foot .shop-hint.bad {
+  color: var(--bad, #e2674a);
+}
+
+@media (max-width: 767px), (max-height: 520px) {
+  .shop-panel.barber-panel {
+    width: auto;
+    left: 8px;
+    max-height: 80dvh;
+  }
+
+  .barber-body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .barber-stage {
+    min-height: 200px;
+  }
+
+  .barber-editor {
+    overflow: visible;
+  }
+}

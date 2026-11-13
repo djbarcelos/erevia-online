@@ -8,12 +8,15 @@ import {
   Material,
   Node,
   PBRMaterial,
+  RawTexture,
   StandardMaterial,
+  Texture,
   Quaternion,
   Scene,
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
+import { bodyPalettes, colorKey, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook } from "./body-look";
 
 /**
  * Personagens e monstros KayKit (CC0). Todos usam o mesmo esqueleto ("Rig_Medium"),
@@ -107,6 +110,8 @@ export interface CharacterInstance {
   resetPose(): void;
   /** Troca o que está nas mãos (null/"" = mão vazia). grade 3–4 e encantamento +4 fazem a arma brilhar. */
   setWeapons(right: string | null, left: string | null, grade?: number, enchant?: number): void;
+  /** Troca o visual do corpo (pele, cabelo, roupa, rosto e chapéu). */
+  setLook(look: BodyLook): void;
   /** Malhas atuais (corpo + armas), para sombra e visibilidade. */
   meshes(): AbstractMesh[];
   dispose(): void;
@@ -127,6 +132,56 @@ export class CharacterModels {
 
   /** Materiais com brilho, por material original + raridade (compartilhados, nunca descartados). */
   private glowMats = new Map<string, Material>();
+  /** Materiais com a textura repintada, por classe + cores; descartados quando ninguém usa. */
+  private paintMats = new Map<string, { mat: Promise<Material | null>; refs: number }>();
+
+  /** Pega (criando se preciso) o material repintado; devolva com releasePaint. */
+  private acquirePaint(model: string, base: Material, look: BodyLook): Promise<Material | null> {
+    const key = colorKey(model, look);
+    let e = this.paintMats.get(key);
+    if (!e) {
+      e = { mat: this.paintMaterial(base, model, look), refs: 0 };
+      this.paintMats.set(key, e);
+    }
+    e.refs++;
+    return e.mat;
+  }
+
+  private releasePaint(model: string, look: BodyLook): void {
+    const key = colorKey(model, look);
+    const e = this.paintMats.get(key);
+    if (!e || --e.refs > 0) return;
+    this.paintMats.delete(key);
+    void e.mat.then((m) => {
+      if (!m) return;
+      const tex = m instanceof PBRMaterial ? m.albedoTexture : m instanceof StandardMaterial ? m.diffuseTexture : null;
+      tex?.dispose();
+      m.dispose();
+    });
+  }
+
+  /** Cópia do material com as faixas de pele, cabelo e roupa repintadas. */
+  private async paintMaterial(base: Material, model: string, look: BodyLook): Promise<Material | null> {
+    const pal = await bodyPalettes();
+    const src = base instanceof PBRMaterial ? base.albedoTexture : base instanceof StandardMaterial ? base.diffuseTexture : null;
+    if (!pal || !(src instanceof Texture)) return null;
+    await new Promise<void>((ok) => (src.isReady() ? ok() : src.onLoadObservable.addOnce(() => ok())));
+    const { width, height } = src.getSize();
+    const pixels = await src.readPixels()?.catch(() => null);
+    if (!pixels || !width) return null;
+    const data = new Uint8Array(pixels.buffer, pixels.byteOffset, width * height * 4).slice();
+    paintTexture(data, width, height, model, look, pal);
+    const scene = base.getScene();
+    const tex = RawTexture.CreateRGBATexture(data, width, height, scene, true, src.invertY, Texture.TRILINEAR_SAMPLINGMODE);
+    tex.name = `${src.name}-${colorKey(model, look)}`;
+    tex.gammaSpace = src.gammaSpace;
+    tex.wrapU = src.wrapU;
+    tex.wrapV = src.wrapV;
+    const mat = base.clone(`${base.name}-${colorKey(model, look)}`);
+    if (mat instanceof PBRMaterial) mat.albedoTexture = tex;
+    else if (mat instanceof StandardMaterial) mat.diffuseTexture = tex;
+    return mat;
+  }
 
   /** Baixa modelos, armas e animações em paralelo. Arquivos que faltarem são ignorados. */
   static async load(scene: Scene): Promise<CharacterModels> {
@@ -152,7 +207,7 @@ export class CharacterModels {
         const w = weaponByFile.get(file);
         if (w) weapons[slot] = w;
       }
-      models.set(id, { body, weapons, scale: measureScale(body) });
+      models.set(id, { body, weapons, scale: measureScale(body, id) });
     }
 
     // Os grupos de animação servem de molde; não tocam sozinhos.
@@ -202,7 +257,7 @@ export class CharacterModels {
    * Cria uma cópia animável do modelo (ou null se ele não existir).
    * `weapons` troca o que vai em cada mão (null = mão vazia); sem ele, usa as armas padrão.
    */
-  instantiate(model: string, id: string, weapons?: Partial<Record<Slot, string | null>>): CharacterInstance | null {
+  instantiate(model: string, id: string, weapons?: Partial<Record<Slot, string | null>>, look?: BodyLook): CharacterInstance | null {
     const assets = this.models.get(model);
     const set = ANIM_SETS[model];
     if (!assets || !set) return null;
@@ -254,6 +309,36 @@ export class CharacterModels {
     };
     for (const [slot, container] of Object.entries(handItems) as [Slot, AssetContainer][]) attach(slot, container, 0);
 
+    // Visual do corpo: só os heróis têm várias cabeças e o chapéu separado.
+    const heads = new Map<string, AbstractMesh>();
+    for (const [n, node] of byName) if (n.startsWith("Head_") && node instanceof AbstractMesh) heads.set(n.slice(5), node);
+    const hat = byName.get("Hat");
+    // Só as malhas com esqueleto (as armas presas nas mãos não entram).
+    const bodyMeshes = gltfRoot.getChildMeshes(false).filter((m) => !!m.skeleton && !!m.material);
+    const baseMat = bodyMeshes[0]?.material ?? null;
+    let painted: BodyLook | null = null; // cores em uso (material repintado)
+    let disposed = false;
+    const applyLook = (l: BodyLook) => {
+      l = normalLook(model, l);
+      if (heads.size) {
+        const want = heads.has(l.head) ? l.head : model;
+        for (const [hid, mesh] of heads) mesh.setEnabled(hid === want);
+      }
+      if (hat instanceof TransformNode) hat.setEnabled(!l.hideHat);
+      if (!baseMat || (painted && colorKey(model, painted) === colorKey(model, l))) return;
+      if (painted) this.releasePaint(model, painted);
+      painted = null;
+      for (const m of bodyMeshes) m.material = baseMat;
+      if (!needsRepaint(l)) return;
+      painted = l;
+      void this.acquirePaint(model, baseMat, l).then((mat) => {
+        if (!mat || disposed || painted !== l) return;
+        for (const m of bodyMeshes) m.material = mat;
+      });
+    };
+    if (look) applyLook(look);
+    else if (heads.size) applyLook(ORIGINAL_LOOK);
+
     // Animações (só as do conjunto do modelo), reaplicadas pelo nome dos ossos.
     const anims = new Map<AnimRole, AnimationGroup>();
     const cloned = new Map<string, AnimationGroup>();
@@ -295,8 +380,14 @@ export class CharacterModels {
         attach("handslot.r", right ? this.weaponFiles.get(right) : null, grade, enchant);
         attach("handslot.l", left ? this.weaponFiles.get(left) : null, grade, enchant);
       },
+      setLook: (l) => {
+        if (!disposed) applyLook(l);
+      },
       meshes: () => root.getChildMeshes(false),
       dispose: () => {
+        disposed = true;
+        if (painted) this.releasePaint(model, painted);
+        painted = null;
         for (const a of cloned.values()) a.dispose();
         for (const s of entries.skeletons) s.dispose();
         // Nunca descartar materiais/texturas aqui: são compartilhados por todas as cópias
@@ -307,12 +398,13 @@ export class CharacterModels {
   }
 }
 
-/** Escala que deixa o modelo com TARGET_HEIGHT de altura. */
-function measureScale(container: AssetContainer): number {
+/** Escala que deixa o modelo com TARGET_HEIGHT de altura (com a cabeça da própria classe). */
+function measureScale(container: AssetContainer, model: string): number {
   let minY = Infinity;
   let maxY = -Infinity;
   for (const m of container.meshes) {
     if (!m.getTotalVertices()) continue;
+    if (m.name.startsWith("Head_") && m.name !== `Head_${model}`) continue;
     m.computeWorldMatrix(true);
     const b = m.getBoundingInfo().boundingBox;
     minY = Math.min(minY, b.minimumWorld.y);

@@ -11,10 +11,11 @@ import type { Progress, SelfStats, StatBlock } from "../../gen/erevia/v1/game_pb
 import type { ItemStore } from "../items";
 import { bar, button, el, fmt, toast, tooltip } from "../kit";
 import { createPreview } from "../preview3d";
+import type { BodyLook } from "../../world/body-look";
 
 export interface CharacterDeps {
   store: ItemStore;
-  me(): { myClass: string; myLevel: number; name: string; emblem: string };
+  me(): { myClass: string; myLevel: number; name: string; emblem: string; body?: BodyLook };
   stats(): SelfStats | null;
   progress(): Progress | null;
   onStats(fn: () => void): () => void;
@@ -257,7 +258,7 @@ export function buildCharacter(d: CharacterDeps): HTMLElement {
     // Modelo com o equipamento atual
     const w = d.store.equip[0]?.info;
     const o = d.store.equip[1]?.info;
-    const look = { right: w?.model || null, left: o?.model || w?.offModel || null, emblem: m.emblem };
+    const look = { right: w?.model || null, left: o?.model || w?.offModel || null, emblem: m.emblem, body: m.body };
     const key = JSON.stringify(look);
     if (key !== lastLook) {
       lastLook = key;

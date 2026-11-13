@@ -966,3 +966,67 @@ select.input {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- Editor do visual do corpo (criação e barbeiro) ---------- */
+.body-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.body-editor .body-swatches {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 5px;
+}
+
+.body-editor .swatch {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.6);
+  min-width: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.body-editor .swatch.shade {
+  background: linear-gradient(var(--t), var(--b));
+}
+
+/* Original: a cor da própria classe (não muda a textura). */
+.body-editor .swatch.original {
+  background:
+    linear-gradient(135deg, transparent 44%, rgba(255, 255, 255, 0.55) 46% 54%, transparent 56%),
+    rgba(0, 0, 0, 0.35);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.body-editor .swatch[aria-checked="true"] {
+  outline: 2px solid var(--gold-hi);
+  outline-offset: 2px;
+  box-shadow: 0 0 10px var(--c, var(--gold-hi));
+}
+
+.body-editor .body-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.body-editor .body-shade-name {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.body-editor .body-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.body-editor .body-actions .btn {
+  flex: 1;
+}
+
+.body-editor [hidden] {
+  display: none;
+}

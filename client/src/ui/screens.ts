@@ -14,6 +14,8 @@ import { skillIcon } from "./icons";
 import { art, button, el, isCompact, tabs, toast } from "./kit";
 import { CLASS_BAR_NAMES, CLASS_EXTRA, DEFAULT_LOOK } from "./looks";
 import { createPreview, type Appearance, type Preview } from "./preview3d";
+import { bodyEditor } from "./body-editor";
+import { normalLook, ORIGINAL_LOOK, setBodyPalettes, toBodyLook, type BodyLook } from "../world/body-look";
 
 const overlay = document.getElementById("overlay")!;
 const content = el("div", "entry-content");
@@ -69,9 +71,9 @@ const LOGIN_ERRORS: Record<string, string> = {
 };
 
 const NEWS = [
+  { tag: "Novo", title: "Visual do personagem", text: "Rosto, cabelo, pele, roupa e chapéu na criação. Mude depois com Teodoro, o Barbeiro da praça." },
   { tag: "Novo", title: "13 encaixes de equipamento", text: "Pernas, luvas, botas, capa, colar, dois brincos e dois anéis. Joias na Mercadora, armaduras no Ferreiro." },
   { tag: "Novo", title: "Escolha sua arma", text: "Na criação, escolha a arma inicial, o escudo e a cor do emblema que pinta seu nome." },
-  { tag: "Atualização", title: "Árvore de skills e atributos", text: "12 skills por classe e pontos livres de atributo a cada nível." },
 ];
 
 export function showLogin(providers: Providers, loginError: string | null, onLoggedIn: () => void): void {
@@ -192,10 +194,14 @@ const START_SKILLS: Record<ClassId, { fx: string; name: string; meta: string }[]
   ],
 };
 
-/** Primeira opção de cada lista e a cor padrão da classe. */
-function defaultChoice(opts: CreationOptions, cls: ClassId): LookChoice {
+/** Primeira opção de cada lista e a cor padrão da classe; o visual do corpo vem de `body`. */
+function defaultChoice(opts: CreationOptions, cls: ClassId, body: BodyLook = ORIGINAL_LOOK): LookChoice {
   const o = opts.classes[cls];
-  return { weapon: o.weapons[0]?.id ?? "", offhand: o.offhands[0]?.id ?? "", emblem: o.emblem };
+  return { weapon: o.weapons[0]?.id ?? "", offhand: o.offhands[0]?.id ?? "", emblem: o.emblem, ...normalLook(cls, body, opts) };
+}
+
+function bodyOf(c: LookChoice): BodyLook {
+  return toBodyLook(c);
 }
 
 /** O que o palco 3D mostra para uma escolha da criação. */
@@ -203,19 +209,21 @@ function choiceLook(opts: CreationOptions, cls: ClassId, c: LookChoice): Appeara
   const o = opts.classes[cls];
   const w = o.weapons.find((x) => x.id === c.weapon);
   const off = o.offhands.find((x) => x.id === c.offhand);
-  return { right: w?.model || null, left: off?.model || w?.offModel || null, emblem: c.emblem };
+  return { right: w?.model || null, left: off?.model || w?.offModel || null, emblem: c.emblem, body: bodyOf(c) };
 }
 
 /** Aparência de um personagem salvo: as armas que estão nas mãos dele agora. */
 function rosterLook(c: CharacterInfo): Appearance {
   const def = DEFAULT_LOOK[c.class];
   const emblem = c.emblem ?? def.emblem;
-  if (!c.look) return { ...def, emblem };
-  return { right: c.look.right || null, left: c.look.left || null, emblem };
+  const body = toBodyLook(c.appearance);
+  if (!c.look) return { ...def, emblem, body };
+  return { right: c.look.right || null, left: c.look.left || null, emblem, body };
 }
 
 export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogout: () => void): Promise<void> {
   const [me, data, opts] = await Promise.all([api.me(), api.characters(), api.creation()]);
+  setBodyPalettes(opts);
   let roster = data.characters;
   const max = data.max;
 
@@ -313,7 +321,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
       b.title = `Dificuldade ${["", "fácil", "média", "difícil"][x.diff]}`;
       b.onclick = () => {
         cls = c.id;
-        choice = defaultChoice(opts, cls);
+        choice = defaultChoice(opts, cls, bodyOf(choice)); // mantém o visual escolhido
         renderClasses();
         renderLook();
         refreshPreview();
@@ -386,17 +394,23 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     }
     const poses = el("div", "pose-row");
     for (const p of POSES) poses.append(button(p.label, "btn btn-sm", () => preview?.play(p.role)));
+    const body = bodyEditor(opts, cls, bodyOf(choice), (l) => {
+      choice = { ...choice, ...l };
+      preview?.setBody(l);
+    });
     lookPanel.replaceChildren(
       el("h2", "title panel-title", "Aparência"),
       ...rows,
       el("div", "opt-block", el("span", "label", "Cor do emblema"), sw),
+      el("h3", "title panel-subtitle", "Visual"),
+      body.root,
       el("div", "opt-block", el("span", "label", "Ver pose"), poses),
       el(
         "p",
         "hint-box small",
         o.offhands.length > 1
-          ? "A arma escolhida é a sua arma inicial. Sem escudo na mão, ele vai para a bolsa. A cor do emblema pinta seu nome e o anel no chão."
-          : "A arma escolhida é a sua arma inicial. A cor do emblema pinta seu nome e o anel no chão.",
+          ? "A arma escolhida é a sua arma inicial. Sem escudo na mão, ele vai para a bolsa. A cor do emblema pinta seu nome e o anel no chão. O visual pode ser mudado depois no Barbeiro da cidade."
+          : "A arma escolhida é a sua arma inicial. A cor do emblema pinta seu nome e o anel no chão. O visual pode ser mudado depois no Barbeiro da cidade.",
       ),
     );
   };

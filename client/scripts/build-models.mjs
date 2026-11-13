@@ -61,12 +61,12 @@ const size = (f) => `${(statSync(f).size / 1024).toFixed(0)} KB`;
  * mesma skin e o mesmo material: no glTF a transformação do nó de uma malha com skin é
  * ignorada (os vértices já estão no espaço do bind pose), então basta concatenar.
  */
-function joinSkinned(doc) {
+function joinSkinned(doc, skip = () => false) {
   const groups = new Map();
   for (const node of doc.getRoot().listNodes()) {
     const mesh = node.getMesh();
     const skin = node.getSkin();
-    if (!mesh || !skin) continue;
+    if (!mesh || !skin || skip(node)) continue;
     for (const prim of mesh.listPrimitives()) {
       if (prim.listTargets().length) continue;
       const attrs = prim.listSemantics().sort().map((s) => `${s}:${prim.getAttribute(s).getComponentType()}`).join(',');
@@ -99,8 +99,82 @@ async function buildCharacter(srcFile, id) {
   report.push(`${id}.glb ${size(dst)} (${n} peças → ${meshes} malhas)`);
 }
 
+/**
+ * Heróis: a cabeça e o chapéu ficam em malhas separadas (a aparência troca a cabeça e
+ * esconde o chapéu), e o arquivo leva as 5 cabeças do pacote — todas no mesmo esqueleto e
+ * com o mesmo desenho de paleta (pele, cabelo e olhos nas 3 primeiras faixas), então
+ * qualquer uma funciona com a textura de qualquer classe.
+ */
+const HEROES = { knight: 'Knight', barbarian: 'Barbarian', mage: 'Mage', rogue: 'Rogue' };
+const HEADS = { knight: 'Knight', barbarian: 'Barbarian', mage: 'Mage', rogue: 'Rogue', ranger: 'Ranger' };
+const HAT_PARTS = ['_Helmet', '_HelmetVisor', '_BearHat', '_Hat'];
+const isHead = (node) => node.getName().endsWith('_Head');
+const isHat = (node) => HAT_PARTS.some((p) => node.getName().endsWith(p));
+
+async function buildHero(id, name) {
+  const doc = await io.read(join(adventurers, 'Characters/gltf', `${name}.glb`));
+  const root = doc.getRoot();
+  // Corpo, braços, pernas e capa numa malha; cabeça e chapéu fora.
+  const n = joinSkinned(doc, (node) => isHead(node) || isHat(node));
+  const hats = root.listNodes().filter((node) => node.getMesh() && isHat(node));
+  if (hats.length) {
+    const prims = hats.flatMap((h) => h.getMesh().listPrimitives());
+    const merged = prims.length > 1 ? joinPrimitives(prims) : prims[0];
+    hats[0].setName('Hat').setMesh(doc.createMesh('Hat').addPrimitive(merged));
+    for (const h of hats.slice(1)) h.dispose();
+  }
+  const own = root.listNodes().find((node) => node.getMesh() && isHead(node));
+  if (!own) throw new Error(`${name}: sem cabeça`);
+  const skin = own.getSkin();
+  const material = own.getMesh().listPrimitives()[0].getMaterial();
+  own.setName(`Head_${id}`);
+  own.getMesh().setName(`Head_${id}`);
+  const parent = own.getParentNode();
+  const jointIndex = new Map(skin.listJoints().map((j, i) => [j.getName(), i]));
+  const ibm = skin.getInverseBindMatrices();
+
+  for (const [headId, srcName] of Object.entries(HEADS)) {
+    if (headId === id) continue;
+    const src = await io.read(join(adventurers, 'Characters/gltf', `${srcName}.glb`));
+    const head = src.getRoot().listNodes().find((node) => node.getMesh() && isHead(node));
+    const srcSkin = head.getSkin();
+    const srcJoints = srcSkin.listJoints().map((j) => j.getName());
+    // Mesmo esqueleto: confere se a pose de ligação dos ossos usados bate.
+    const srcIbm = srcSkin.getInverseBindMatrices();
+    const remap = srcJoints.map((jn, i) => {
+      const t = jointIndex.get(jn);
+      if (t === undefined) throw new Error(`${srcName}: osso ${jn} não existe em ${name}`);
+      const a = srcIbm.getElement(i, []);
+      const b = ibm.getElement(t, []);
+      if (a.some((v, k) => Math.abs(v - b[k]) > 1e-3)) throw new Error(`${srcName}: pose do osso ${jn} difere de ${name}`);
+      return t;
+    });
+    const mesh = doc.createMesh(`Head_${headId}`);
+    for (const p of head.getMesh().listPrimitives()) {
+      const prim = doc.createPrimitive().setMode(p.getMode()).setMaterial(material);
+      for (const sem of p.listSemantics()) {
+        const a = p.getAttribute(sem);
+        let arr = a.getArray().slice();
+        if (sem.startsWith('JOINTS_')) arr = arr.map((j) => remap[j]);
+        prim.setAttribute(sem, doc.createAccessor().setType(a.getType()).setArray(arr).setNormalized(a.getNormalized()).setBuffer(root.listBuffers()[0]));
+      }
+      const idx = p.getIndices();
+      if (idx) prim.setIndices(doc.createAccessor().setType(idx.getType()).setArray(idx.getArray().slice()).setBuffer(root.listBuffers()[0]));
+      mesh.addPrimitive(prim);
+    }
+    const node = doc.createNode(`Head_${headId}`).setMesh(mesh).setSkin(skin);
+    parent.addChild(node);
+  }
+  await doc.transform(prune());
+  const dst = join(out, `${id}.glb`);
+  await io.write(dst, doc);
+  const meshes = root.listNodes().filter((x) => x.getMesh()).map((x) => x.getName());
+  report.push(`${id}.glb ${size(dst)} (${n} peças → ${meshes.join(', ')})`);
+}
+
 for (const [id, name] of Object.entries(CHARACTERS)) {
-  await buildCharacter(join(adventurers, 'Characters/gltf', `${name}.glb`), id);
+  if (HEROES[id]) await buildHero(id, name);
+  else await buildCharacter(join(adventurers, 'Characters/gltf', `${name}.glb`), id);
 }
 
 for (const [id, name] of Object.entries(MONSTERS)) {

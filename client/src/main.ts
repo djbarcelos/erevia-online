@@ -32,6 +32,8 @@ import { setupPerfPanel } from "./ui/perf";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { TeleportWindow } from "./ui/teleport";
+import { BarberWindow } from "./ui/barber";
+import { toBodyLook } from "./world/body-look";
 import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
@@ -175,7 +177,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     statsListeners.add(fn);
     return () => statsListeners.delete(fn);
   };
-  const me = () => ({ myClass: character.class, myLevel: lastStats?.level ?? character.level ?? 1, name: character.name, emblem });
+  const me = () => ({
+    myClass: character.class,
+    myLevel: lastStats?.level ?? character.level ?? 1,
+    name: character.name,
+    emblem,
+    body: entities.lookOf(welcome.yourId) ?? toBodyLook(character.appearance),
+  });
 
   // ---------- PvP (karma, PKs, vitórias, flag) ----------
   let pvp: SelfPvp = welcome.pvp ?? create(SelfPvpSchema, {});
@@ -552,6 +560,19 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hud.element,
   );
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma }, hud.element);
+  const barberWin = new BarberWindow(
+    store,
+    {
+      change: (npc, look) => conn.changeLook(npc, look),
+      me: () => {
+        const m = me();
+        const w = store.equip[0]?.info;
+        const o = store.equip[1]?.info;
+        return { myClass: m.myClass, body: m.body, look: { right: w?.model || null, left: o?.model || w?.offModel || null, emblem: m.emblem } };
+      },
+    },
+    hud.element,
+  );
   // Enquanto canaliza, um brilho azul sobe do personagem.
   const channelFx = window.setInterval(() => {
     const root = entities.rootOf(welcome.yourId);
@@ -590,7 +611,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       shop.close();
       teleportWin.close();
       storageWin.close();
-      if (npc?.role === NpcRole.TELEPORT) teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests);
+      barberWin.close();
+      if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
+      else if (npc?.role === NpcRole.TELEPORT) teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests);
       else if (npc?.role === NpcRole.STORAGE) {
         storageWin.open(id, `${info.title} · ${info.name}`);
         conn.storageGold(id, 0); // pede o conteúdo
@@ -779,6 +802,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (hud.channeling) conn.cancelChannel();
       else if (teleportWin.isOpen) teleportWin.close();
       else if (storageWin.isOpen) storageWin.close();
+      else if (barberWin.isOpen) barberWin.close();
       else if (shop.isOpen) shop.close();
       else if (wm.closeTop()) return;
       else if (targetId) selectTarget(0);
@@ -877,6 +901,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       const d = entities.distanceTo(storageWin.npcId);
       if (d === null || d > SHOP_KEEP_DIST) storageWin.close();
     }
+    if (barberWin.isOpen) {
+      const d = entities.distanceTo(barberWin.npcId);
+      if (d === null || d > SHOP_KEEP_DIST) barberWin.close();
+    }
   });
 
   // Efeitos (buffs) e status da auto-caça
@@ -957,6 +985,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       shop.dispose();
       teleportWin.dispose();
       storageWin.dispose();
+      barberWin.dispose();
       window.clearInterval(channelFx);
       itemTip.root.remove();
     },

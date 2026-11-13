@@ -22,20 +22,24 @@ import {
 } from "@babylonjs/core";
 import type { ClassId } from "../api";
 import { AnimController } from "../world/anim";
+import { ORIGINAL_LOOK, type BodyLook } from "../world/body-look";
 import { CharacterModels, type AnimRole, type CharacterInstance } from "../world/models";
 
-/** Aparência mostrada no palco: o que vai em cada mão e a cor do emblema. */
+/** Aparência mostrada no palco: o que vai em cada mão, a cor do emblema e o visual do corpo. */
 export interface Appearance {
   /** Arquivo da arma da mão direita/esquerda (em /models/weapons); null = mão vazia. */
   right: string | null;
   left: string | null;
   emblem: string;
+  body?: BodyLook;
 }
 
 export interface Preview {
   /** Troca a classe e a aparência (recria o modelo). */
   show(cls: ClassId, look: Appearance): Promise<void>;
   setEmblem(color: string): void;
+  /** Troca só o visual do corpo (sem recriar o modelo). */
+  setBody(look: BodyLook): void;
   play(role: AnimRole): void;
   /** Gira o personagem um pouco (botões ◀ ▶). */
   spin(delta: number): void;
@@ -194,7 +198,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number
     const m = await models;
     if (my !== seq || scene.isDisposed) return;
     inst?.dispose();
-    inst = m.instantiate(cls, `pv${my}`, { "handslot.r": look.right, "handslot.l": look.left });
+    inst = m.instantiate(cls, `pv${my}`, { "handslot.r": look.right, "handslot.l": look.left }, look.body ?? ORIGINAL_LOOK);
     if (!inst) return;
     inst.root.parent = holder;
     for (const mesh of inst.root.getChildMeshes()) {
@@ -208,6 +212,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number
   return {
     show,
     setEmblem,
+    setBody: (l) => inst?.setLook(l),
     play: (role) => anim?.play(role),
     spin: (d) => (targetSpin += d),
     ready: models.then(() => undefined),

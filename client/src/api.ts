@@ -1,5 +1,7 @@
 /** Cliente da API HTTP do servidor (mesma origem; a sessão vai no cookie). */
 
+import type { BodyLook, BodyPalettes } from "./world/body-look";
+
 export type ClassId = "knight" | "barbarian" | "mage" | "rogue";
 
 export interface CharacterInfo {
@@ -11,10 +13,12 @@ export interface CharacterInfo {
   emblem?: string;
   /** Modelos 3D das armas que estão nas mãos agora e a raridade da principal. */
   look?: { right: string; left: string; grade: number };
+  /** Visual do corpo (pele, cabelo, roupa, rosto e chapéu). */
+  appearance?: BodyLook;
 }
 
-/** O que o jogador escolhe na criação (ids de item do kit inicial; "" = mão vazia). */
-export interface LookChoice {
+/** O que o jogador escolhe na criação (ids de item do kit inicial; "" = mão vazia) e o visual do corpo. */
+export interface LookChoice extends BodyLook {
   weapon: string;
   offhand: string;
   emblem: string;
@@ -27,8 +31,8 @@ export interface CreationOption {
   offModel?: string;
 }
 
-/** Opções de aparência de cada classe, vindas do servidor (a primeira é a padrão). */
-export interface CreationOptions {
+/** Opções de aparência de cada classe, vindas do servidor (a primeira é a padrão), e as paletas do visual. */
+export interface CreationOptions extends BodyPalettes {
   classes: Record<ClassId, { weapons: CreationOption[]; offhands: CreationOption[]; emblem: string }>;
   emblems: string[];
 }

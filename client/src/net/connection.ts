@@ -63,6 +63,11 @@ export class Connection {
     this.send({ case: "clanCmd", value: { kind, name: opts.name ?? "", targetId: opts.targetId ?? 0, rank: opts.rank ?? ClanRank.MEMBER, text: opts.text ?? "" } });
   }
 
+  /** Barbeiro: mudar o visual do corpo (custa moedas). */
+  changeLook(npcId: number, look: { skin: number; hair: number; outfit: number; head: string; hideHat: boolean }): void {
+    this.send({ case: "changeLook", value: { npcId, look } });
+  }
+
   /** Pedra de Teleporte: viajar para um destino. */
   teleport(npcId: number, destId: number): void {
     this.send({ case: "teleport", value: { npcId, destId } });

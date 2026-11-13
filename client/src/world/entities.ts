@@ -31,6 +31,7 @@ import {
   type SkillInfo,
 } from "../gen/erevia/v1/game_pb";
 import { AnimController } from "./anim";
+import { toBodyLook, type BodyLook } from "./body-look";
 import type { Fx, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
 import type { Collision } from "./world-data";
@@ -119,6 +120,8 @@ interface View extends EntityInfo {
   weaponEnchant: number;
   /** Jogadores: cor do emblema (nome e anel no chão). */
   emblem: string;
+  /** Visual do corpo (heróis: jogadores e o barbeiro). */
+  look: BodyLook;
   /** Cor do nome sem estado PvP (emblema, local, tipo). */
   baseColor: string;
   clanText: TextBlock;
@@ -201,6 +204,11 @@ export class EntityManager {
     return this.views.get(id);
   }
 
+  /** Visual do corpo de alguém (heróis). */
+  lookOf(id: number): BodyLook | undefined {
+    return this.views.get(id)?.look;
+  }
+
   isNpc(id: number): boolean {
     return this.views.get(id)?.kind === EntityKind.NPC;
   }
@@ -267,7 +275,7 @@ export class EntityManager {
     return this.views.get(id)?.head;
   }
 
-  /** A arma de alguém mudou. */
+  /** A arma ou o visual de alguém mudou. */
   setAppearance(a: Appearance): void {
     const v = this.views.get(a.id);
     if (!v) return;
@@ -275,7 +283,9 @@ export class EntityManager {
     v.offhand = a.offhand;
     v.grade = a.weaponGrade;
     v.weaponEnchant = a.weaponEnchant;
+    if (a.look) v.look = toBodyLook(a.look);
     if (!v.model3d) return;
+    v.model3d.setLook(v.look);
     this.setShadow(v, false); // as malhas mudam; a sombra volta no próximo quadro
     v.model3d.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
     v.meshes = v.model3d.meshes();
@@ -400,7 +410,7 @@ export class EntityManager {
 
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
-      model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem,
+      model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
       weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, baseColor, clanText, pkRing: null,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
@@ -1029,7 +1039,7 @@ export class EntityManager {
 
   private attachModel(v: View): void {
     if (v.model3d || !this.models) return;
-    const inst = this.models.instantiate(v.model, String(v.id));
+    const inst = this.models.instantiate(v.model, String(v.id), undefined, v.look);
     if (!inst) return;
     if (v.kind === EntityKind.PLAYER) inst.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
     inst.root.parent = v.visual;
