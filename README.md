@@ -37,6 +37,8 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Tutorial dos primeiros 15 minutos** (8 missões em sequência): sair da cidade, derrotar Esqueletos Lacaios, usar skills, tomar uma poção, comprar na praça, chegar ao nível 4, viajar com uma Pedra de Teleporte e enfrentar os Campos dos Ossos. Cada uma dá XP, moedas e/ou itens; se a bolsa estiver cheia, a recompensa fica no chão, reservada para você.
 - O painel **Missões** fica à esquerda, abaixo do grupo, e mostra o progresso (passe o mouse para ver a história e a recompensa). Só personagens novos (abaixo do nível 5 e sem histórico) recebem o tutorial.
 - As missões são dados em `server/internal/game/quests.go` (objetivos: sair da cidade, matar monstros, usar skills, tomar poções, comprar, chegar a um nível, viajar). O servidor controla o progresso e salva no personagem (`characters.quests`).
+- **Onde fica cada objetivo:** cada passo pendente vai com um lugar (x, z, raio e tipo: área de caça, NPC, portão, Pedra de Teleporte ou loja), calculado pelo servidor só quando o QuestLog é enviado (ao mudar o passo e ao subir de nível, nunca por tick): matar → a área de spawn do monstro mais adequada ao nível e mais perto (no anel, o ponto na direção do jogador, longe do covil do raid); chegar a um nível → a melhor área de caça para o nível atual; falar, escolher o caminho ou comprar → o NPC (a loja mais perto que vende o item); sair da cidade → o portão mais perto; viajar → a Pedra de Teleporte da praça; usar skill e tomar poção → sem lugar. Uma missão de história pode fixar o lugar nos dados (`QuestStep.Place`). Código em `server/internal/game/questplace.go` e `server/internal/zone/questplace.go`.
+- **Missão rastreada:** clicar numa missão do painel a rastreia (uma por vez; sem escolha, a primeira ativa; a escolha fica no navegador). O minimapa e o mapa do mundo mostram a área de caça como um círculo dourado tracejado, o NPC, a loja, a Pedra de Teleporte ou o portão com um ícone e uma linha tracejada de você até lá (no minimapa, o ícone fica preso na borda quando o alvo está longe; no mapa, o painel lateral tem a missão rastreada e o clique centraliza nela). Fora de vista, uma **seta na borda da tela** aponta para o alvo com a distância em metros. Quando o passo termina, o alvo avança sozinho. Configurações → Jogo → **Marcadores de missão** desliga tudo. Custo: só os canvas 2D que já existiam (o minimapa a ~15×/s) e um elemento DOM para a seta, mexido no máximo 5×/s; nenhuma malha 3D (`client/src/ui/quest-nav.ts`).
 
 ### Ranking, conquistas e títulos (tecla H)
 - A janela **Glória** (H ou o troféu no menu) tem duas abas. **Ranking:** top 50 de nível (desempate pela XP), de vitórias PvP e de clãs (soma dos níveis dos membros, com a média), mais a sua posição e a do seu clã. Um worker calcula no banco a cada 5 min (contas banidas ficam de fora) e a zona guarda em memória; a janela pede quando abre e guarda a resposta por 2 min. A zona nunca consulta o banco.
@@ -112,6 +114,11 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Telemetria e correio ao apagar:** os `game_events` da conta ficam anônimos (sem `account_id` e `character_id`), para as estatísticas agregadas continuarem. Um lote de eventos que chega depois da exclusão (ex.: o fim de sessão de quem foi derrubado) também entra anônimo: `InsertEvents` trava as contas do lote (`FOR KEY SHARE`) e zera as que não existem mais. As cartas enviadas ficam com quem recebeu, assinadas "Personagem apagado". O `gm_log` (moderação) é mantido.
 - **Backups:** diário guardado 6 dias e semanal guardado 27 dias, então dados apagados podem ficar até 27 dias nas cópias. Se restaurar uma cópia, apague de novo as contas excluídas depois dela.
 
+## Novidades (changelog)
+- **Fonte:** [`CHANGELOG.md`](CHANGELOG.md), uma versão por dia (`## AAAA-MM-DD · Título`) com `### Novidades`, `### Melhorias` e `### Correções`, em linguagem de jogador. O formato está comentado no topo do arquivo.
+- **No jogo:** a janela **O que há de novo** abre sozinha uma vez quando a versão mais nova é diferente da última vista (guardada no navegador; sem storage, ela não abre). Reabre em Configurações → Sobre e no login. A página pública fica em [`/novidades`](client/novidades.html).
+- **Publicar uma versão:** `cd client && npm run changelog:draft` (PRs mergeados desde a última versão, via `gh`; ou `-- AAAA-MM-DD`), reescrever o rascunho para o jogador e colar no topo do `CHANGELOG.md`, rodar `npm run changelog` e versionar o `client/public/novidades.json` junto. O `npm run build` (e o Docker) também gera o json, e um erro de formato derruba o build.
+
 ## Requisitos
 Go 1.26+, Node 22+ e Docker.
 
@@ -150,11 +157,14 @@ server/
   internal/pb/               código Go gerado (não editar)
 client/
   privacidade.html, termos.html  páginas legais (estilo em src/styles/legal.css)
+  novidades.html             página pública /novidades (lê public/novidades.json)
   src/ui/                    telas (login, personagens, conta) e chat
   src/world/                 cena, entidades, animações, efeitos, entrada
   scripts/build-models.mjs   personagens/monstros/animações a partir dos zips KayKit
   scripts/build-scenery.mjs  kits de cenário (um .glb por pacote)
   scripts/build-world.mjs    layout do mapa + colisores → public/world.json e server/internal/world/
+  scripts/build-changelog.mjs  CHANGELOG.md → public/novidades.json (roda no npm run build)
+  scripts/changelog-draft.mjs  rascunho do changelog com os PRs mergeados (via gh)
   src/net/                   conexão com o servidor
   src/gen/                   código TS gerado (não editar)
 infra/docker-compose.yml     Postgres local

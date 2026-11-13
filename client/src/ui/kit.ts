@@ -94,6 +94,8 @@ export interface Settings {
   /** Tremor leve da câmera nos seus críticos e nos golpes do chefe em você (desligável por conforto). */
   cameraShake: boolean;
   showHelm: boolean;
+  /** Missão rastreada no minimapa, no mapa e na seta da borda da tela. */
+  questMarkers: boolean;
   language: "pt-BR" | "en" | "es";
   autoRadius: number;
   autoSkills: boolean;
@@ -158,6 +160,7 @@ const DEFAULT_SETTINGS: Settings = {
   showDamage: true,
   cameraShake: true,
   showHelm: true,
+  questMarkers: true,
   language: "pt-BR",
   autoRadius: 25,
   autoSkills: true,

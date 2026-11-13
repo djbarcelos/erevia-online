@@ -13,8 +13,14 @@ export default defineConfig({
     target: "es2022",
     chunkSizeWarningLimit: 8000,
     rollupOptions: {
-      // Jogo (index.html), o protótipo visual das telas (prototipo.html) e as páginas legais.
-      input: { main: "index.html", prototipo: "prototipo.html", privacidade: "privacidade.html", termos: "termos.html" },
+      // Jogo (index.html), o protótipo visual das telas (prototipo.html), as páginas legais e as novidades.
+      input: {
+        main: "index.html",
+        prototipo: "prototipo.html",
+        privacidade: "privacidade.html",
+        termos: "termos.html",
+        novidades: "novidades.html",
+      },
     },
   },
 });

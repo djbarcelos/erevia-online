@@ -132,7 +132,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
 	z.systemAfterFlush(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
 	z.track(p, "level", "", int64(p.level), nil)
-	z.questLevel(p)
+	z.questLevelUp(p) // também reenvia o lugar dos objetivos que dependem do nível
 	z.achValue(p, game.AchLevel, "", p.level)
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
 }
