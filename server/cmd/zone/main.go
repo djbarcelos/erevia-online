@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -95,11 +96,36 @@ func run(log *slog.Logger) error {
 	for _, b := range bosses {
 		zcfg.Bosses = append(zcfg.Bosses, zone.BossData{ID: b.ID, RespawnAt: b.RespawnAt, KilledAt: b.KilledAt, TopName: b.TopName})
 	}
+	lctx, lcancel = context.WithTimeout(ctx, 30*time.Second)
+	events, err := st.LoadServerEvents(lctx)
+	lcancel()
+	if err != nil {
+		return fmt.Errorf("load server events: %w", err)
+	}
+	for _, e := range events {
+		zcfg.Events = append(zcfg.Events, zone.EventData{ID: e.ID, Until: e.Until})
+	}
+	// Eventos: chance de invasão por noite e dias de XP em dobro (vazio ou "nenhum" = só GM).
+	if v := os.Getenv("INVASION_CHANCE"); v != "" {
+		if c, err := strconv.ParseFloat(v, 64); err == nil && c >= 0 && c <= 1 {
+			zcfg.InvasionChance = c
+		} else {
+			log.Error("INVASION_CHANCE inválida (0 a 1), usando o padrão", "value", v)
+		}
+	}
+	if v, ok := os.LookupEnv("XP2_DAYS"); ok {
+		if days, err := zone.ParseWeekdays(v); err == nil {
+			zcfg.XP2Days = days
+		} else {
+			log.Error("XP2_DAYS inválida, usando o padrão", "err", err)
+		}
+	}
 	zcfg.DevCommands = devLogin                         // /raid no chat: só em desenvolvimento
 	zcfg.Version = env("RAILWAY_GIT_COMMIT_SHA", "dev") // a Railway define o commit do deploy
 	z := zone.New(zcfg, log.With("zone", "starter"), saves)
 	z.SetClanBackend(clanStore{st})
 	z.SetBossBackend(bossStore{st})
+	z.SetEventBackend(serverEventStore{st})
 	z.SetModBackend(modStore{st})
 	z.SetSocialBackend(socialStore{st})
 	z.SetEventSink(eventStore{st})
@@ -435,6 +461,13 @@ type bossStore struct{ st *store.Store }
 
 func (b bossStore) SaveBoss(ctx context.Context, d zone.BossData) error {
 	return b.st.SaveBoss(ctx, store.Boss{ID: d.ID, RespawnAt: d.RespawnAt, KilledAt: d.KilledAt, TopName: d.TopName})
+}
+
+// serverEventStore liga o worker dos eventos de GM (XP em dobro) ao banco.
+type serverEventStore struct{ st *store.Store }
+
+func (e serverEventStore) SaveEvent(ctx context.Context, d zone.EventData) error {
+	return e.st.SaveServerEvent(ctx, store.ServerEvent{ID: d.ID, Until: d.Until})
 }
 
 func env(key, def string) string {
