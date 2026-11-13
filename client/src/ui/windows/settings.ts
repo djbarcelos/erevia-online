@@ -14,6 +14,7 @@ import {
   tabs,
   toast,
   toggle,
+  type Quality,
   type Settings,
 } from "../kit";
 
@@ -34,6 +35,17 @@ function row(label: string, control: HTMLElement, hint?: string): HTMLElement {
 
 function group(title: string, ...rows: HTMLElement[]): HTMLElement {
   return el("section", "set-group", el("h3", "set-group-title", title), ...rows);
+}
+
+/** O que cada preset liga (o mesmo de world/render.ts: PRESETS). */
+const QUALITY_HINTS: Record<Quality, string> = {
+  baixa: "Render a 80%, sombras simples, sem brilho (bloom) nem SSAO. Para celulares.",
+  media: "Brilho nas chamas e efeitos, vinheta e sombras boas.",
+  alta: "Tudo da média, mais oclusão de ambiente (SSAO), FXAA e sombras suaves.",
+};
+
+function qualityHint(q: Quality, picked: boolean): string {
+  return `${QUALITY_HINTS[q]}${picked ? "" : " (escolhida pelo aparelho)"} Aplica na hora.`;
 }
 
 const set = <K extends keyof Settings>(k: K) => (v: Settings[K]) => settings.set(k, v);
@@ -78,21 +90,29 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "set-page",
         group(
           "Qualidade",
-          row(
-            "Predefinição",
-            segmented(
-              [
-                { id: "baixa", label: "Baixa" },
-                { id: "media", label: "Média" },
-                { id: "alta", label: "Alta" },
-                { id: "ultra", label: "Ultra" },
-              ],
-              s.quality,
-              set("quality"),
-            ),
-            "Ajusta sombras, distância e efeitos de uma vez.",
-          ),
-          row("Sombras", toggle(s.shadows, set("shadows"), "Sombras")),
+          (() => {
+            const hint = el("small", null, qualityHint(s.quality, s.qualityPicked));
+            const r = row(
+              "Predefinição",
+              segmented(
+                [
+                  { id: "baixa", label: "Baixa" },
+                  { id: "media", label: "Média" },
+                  { id: "alta", label: "Alta" },
+                ],
+                s.quality,
+                (v: Quality) => {
+                  // Escolha do jogador: deixa de seguir o aparelho. Aplica na hora (world/render.ts).
+                  settings.set("qualityPicked", true);
+                  settings.set("quality", v);
+                  hint.textContent = qualityHint(v, true);
+                },
+              ),
+            );
+            r.querySelector(".set-label")?.append(hint);
+            return r;
+          })(),
+          row("Sombras", toggle(s.shadows, set("shadows"), "Sombras"), "Desligar economiza bastante no celular."),
           row("Distância de visão", slider(s.viewDistance, 30, 150, 10, set("viewDistance"), (v) => `${v} m`)),
           row(
             "Limite de FPS",
@@ -116,12 +136,13 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "set-page",
         group(
           "Volume",
+          row("Sem som", toggle(s.muted, set("muted"), "Sem som"), "Desliga tudo; os volumes ficam guardados."),
           row("Geral", slider(s.vMaster, 0, 100, 1, set("vMaster"), pct)),
-          row("Música", slider(s.vMusic, 0, 100, 1, set("vMusic"), pct)),
-          row("Efeitos", slider(s.vSfx, 0, 100, 1, set("vSfx"), pct)),
-          row("Ambiente", slider(s.vAmbient, 0, 100, 1, set("vAmbient"), pct)),
+          row("Música", slider(s.vMusic, 0, 100, 1, set("vMusic"), pct), "Muda com a região do mapa."),
+          row("Efeitos", slider(s.vSfx, 0, 100, 1, set("vSfx"), pct), "Golpes, skills, passos e interface."),
+          row("Ambiente", slider(s.vAmbient, 0, 100, 1, set("vAmbient"), pct), "Floresta, cidade e noite."),
         ),
-        el("p", "hint-box small", "O protótipo ainda não tem som; os controles mostram como a tela vai ficar."),
+        el("p", "hint-box small", "No celular, o som começa no primeiro toque na tela."),
       ),
     controls: () => {
       const keys = el("div", "keybinds");
@@ -278,7 +299,7 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
           el(
             "p",
             "small muted credits",
-            "Personagens, monstros, armas, animações e cenário: KayKit (Kay Lousberg), licença CC0. Interface, ícones e código: equipe Erevia.",
+            "Personagens, monstros, armas, animações e cenário: KayKit (Kay Lousberg), licença CC0. Sons e músicas: Kenney, lentikula, artisticdude, rubberduck, RandomMind, cynicmusic, Samza, yd e outros, licença CC0. Interface, ícones e código: equipe Erevia.",
           ),
         ),
       ),

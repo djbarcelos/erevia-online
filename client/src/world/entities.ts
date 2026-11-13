@@ -31,6 +31,7 @@ import {
   type SkillCast,
   type SkillInfo,
 } from "../gen/erevia/v1/game_pb";
+import { gameAudio } from "../audio";
 import { AnimController } from "./anim";
 import { toBodyLook, type BodyLook } from "./body-look";
 import type { Fx, FxBody, FxHandle } from "./fx";
@@ -38,6 +39,7 @@ import type { CharacterInstance, CharacterModels } from "./models";
 import { GOLEM_BODY, GOLEM_MODEL } from "./golem";
 import { buildTeleportStone } from "./teleport-stone";
 import type { Bounds, Collision } from "./world-data";
+import { specInfo } from "../ui/specs";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -113,6 +115,8 @@ export interface EntityInfo {
   pvpState: PvpState;
   /** Jogadores: nome do clã ("" = sem clã). */
   clanName: string;
+  /** Jogadores: especialização (id em Welcome.specs; "" = ainda não escolheu). */
+  spec: string;
 }
 
 /**
@@ -338,6 +342,7 @@ export class EntityManager {
     v.pvpState = s.pvpState;
     v.clanName = s.clanName;
     v.title = s.title;
+    v.spec = s.spec;
     this.refreshName(v);
     // O clã do jogador local mudou: os aliados de clã mudam de cor também.
     if (s.id === this.localId) for (const o of this.views.values()) if (o !== v) this.refreshName(o);
@@ -517,7 +522,7 @@ export class EntityManager {
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
       model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
-      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, baseColor, clanText, titleText, pkRing: null,
+      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, baseColor, clanText, titleText, pkRing: null,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
@@ -853,6 +858,7 @@ export class EntityManager {
     if (ev.skillId >= RAID_HIT_BASE) {
       this.at(Math.max(now, dst.impactUntil), dst.id, () => {
         if (ev.damage > 0) this.fx.damageNumber(dst.head, String(ev.damage), "#d68cff", ev.crit);
+        gameAudio.hit("raid", ev.crit, false, dst.root.position, ev.targetId === this.localId);
         dst.anim?.play("hit");
       });
       return;
@@ -888,16 +894,17 @@ export class EntityManager {
       const bolt = BOLT_COLOR[sk?.fx ?? ""];
       // O projétil sai da mão no instante da soltura, do lugar onde cada um estiver.
       const launch = (fn: (from: Vector3, to: Vector3) => void) =>
-        this.at(release, dst.id, () =>
-          fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0))),
-        );
-      if (sk?.fx === "fireball") {
+        this.at(release, dst.id, () => {
+          gameAudio.launch(sk?.fx, src.root.position, ev.sourceId === this.localId || ev.targetId === this.localId);
+          fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0)));
+        });
+      if (sk?.fx === "fireball" || sk?.fx === "me_lance") {
         launch((a, b) => this.fx.fireball(a, b, travel));
         impact = release + travel * 1000;
       } else if (sk?.fx === "m_rain" || sk?.fx === "m_inferno") {
         launch(() => this.fx.emberRain(dst.root.position.clone(), sk.splash));
         impact = release + 650;
-      } else if (sk?.fx === "m_meteor") {
+      } else if (sk?.fx === "m_meteor" || sk?.fx === "me_cata") {
         launch(() => this.fx.meteor(dst.root.position.clone(), sk.splash, ev.sourceId === this.localId));
         impact = release + 760;
       } else if (bolt) {
@@ -989,8 +996,10 @@ export class EntityManager {
     const onMe = ev.targetId === this.localId;
     if (ev.miss) {
       this.fx.damageNumber(dst.head, "Errou", "#b9b4c2", false);
+      if (!quiet) gameAudio.miss(dst.root.position, mine || onMe);
       return;
     }
+    if (!quiet) gameAudio.hit(sk?.fx, ev.crit, !sk && !!src && isCaster(src.model), dst.root.position, mine || onMe);
     // Impacto (a Bola de Fogo e a magia básica já explodiram ao chegar).
     const at = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
     const from = src ? src.root.position.add(new Vector3(0, 1 * src.scale, 0)) : at;
@@ -1004,6 +1013,12 @@ export class EntityManager {
       case "m_arcane":
       case "r_mark":
       case "b_whirl": // 2 golpes por alvo: o giro já mostra o corte (sem faísca dobrada)
+      case "bb_carnage": // 3 golpes: idem
+      case "me_lance":
+      case "me_cata":
+      case "mo_rot":
+      case "mo_drain":
+      case "mo_abyss":
         break;
       case "r_flask":
       case "r_plague":
@@ -1013,16 +1028,21 @@ export class EntityManager {
       case "k_horizon":
       case "b_exec":
       case "b_seismic":
+      case "kh_dawn":
+      case "bb_red":
         this.fx.brutalStrike(from, at, mine);
         this.fx.slam(dst.root.position, 1.8, new Color3(1, 0.85, 0.4), mine);
         break;
       case "k_charge":
+      case "bw_charge":
         this.fx.shieldBash(at, mine);
         break;
       case "r_twin":
       case "r_para":
       case "r_fatal":
       case "r_shadow":
+      case "rc_blades":
+      case "rc_sentence":
         this.fx.backstab(from, at, ev.crit);
         break;
       case "shield_bash":
@@ -1075,10 +1095,13 @@ export class EntityManager {
       const color = BOLT_COLOR[sk.fx] ?? new Color3(0.8, 0.8, 1);
       // O efeito no alvo (veneno, marca…) só aparece quando o projétil chega.
       dst.impactUntil = Math.max(dst.impactUntil, release + travel * 1000);
+      const local = ev.sourceId === this.localId || ev.targetId === this.localId;
       this.at(release, dst.id, () => {
         const a = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
         const b = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
+        gameAudio.cast(sk.fx, src.root.position, local);
         this.fx.bolt(a, b, travel, color, () => {
+          gameAudio.hit(sk.fx, false, false, dst.root.position, local);
           if (sk.fx === "r_flask" || sk.fx === "r_plague") this.fx.poisonSplash(dst.root.position.clone(), sk.splash || 1.5, color);
         });
       });
@@ -1095,6 +1118,7 @@ export class EntityManager {
 
   /** Visual de uma skill em si mesmo ou em área. */
   private castFx(src: View, sk: SkillInfo, mine: boolean): void {
+    gameAudio.cast(sk.fx, src.root.position, mine);
     switch (sk.fx) {
       case "ice_nova":
       case "m_zero":
@@ -1113,7 +1137,11 @@ export class EntityManager {
         this.fx.shout(src, new Color3(1, 0.3, 0.2), sk.range);
         break;
       case "k_cry":
+      case "bw_cry":
         this.fx.shout(src, new Color3(1, 0.65, 0.25), 10);
+        break;
+      case "kb_defy":
+        this.fx.shout(src, new Color3(0.45, 0.65, 1), sk.range);
         break;
       case "b_roar":
         this.fx.shout(src, new Color3(0.7, 0.4, 0.9), sk.range);
@@ -1121,15 +1149,21 @@ export class EntityManager {
         break;
       case "k_spin":
       case "b_whirl":
+      case "bb_carnage":
         this.fx.whirl(src, sk.range, mine);
         break;
       case "b_quake":
       case "b_stomp":
       case "b_stone":
+      case "bw_banner":
         this.fx.slam(src.root.position, sk.range, new Color3(1, 0.7, 0.35), mine);
         break;
       case "k_bulwark":
+      case "kb_last":
         this.fx.slam(src.root.position, sk.range, new Color3(0.45, 0.65, 1), mine);
+        break;
+      case "kh_sun":
+        this.fx.slam(src.root.position, sk.range, new Color3(1, 0.85, 0.45), mine);
         break;
       case "r_miasma":
         this.fx.poisonSplash(src.root.position.clone(), sk.range, new Color3(0.45, 0.9, 0.3));
@@ -1249,6 +1283,7 @@ export class EntityManager {
       v.hp = 0;
       this.showDead(v, true);
       this.refreshHpBar(v);
+      gameAudio.death(v.model, v.kind === EntityKind.MONSTER, v.boss, v.root.position, id === this.localId);
     });
   }
 
@@ -1289,6 +1324,7 @@ export class EntityManager {
     this.refreshLabel(v);
     this.refreshHpBar(v);
     this.fx.levelUp(v.root);
+    gameAudio.levelUp(v.root.position, l.id === this.localId);
   }
 
   /** Chamado a cada frame. */
@@ -1529,9 +1565,11 @@ export class EntityManager {
     v.clanText.text = v.clanName ? `‹${v.clanName}›` : "";
     v.clanText.isVisible = !!v.clanName;
     // Os setters do TextBlock ignoram o mesmo valor: sem redesenho se nada mudou.
+    // Linha de baixo: a especialização e o título (texto fixo, só muda num PlayerStatus).
     if (v.titleText) {
-      v.titleText.text = v.title ? `«${v.title}»` : "";
-      v.titleText.isVisible = !!v.title;
+      const line = [specInfo(v.spec)?.name ?? "", v.title ? `«${v.title}»` : ""].filter(Boolean).join(" · ");
+      v.titleText.text = line;
+      v.titleText.isVisible = !!line;
     }
     const red = v.pvpState === PvpState.CHAOTIC;
     if (red && !v.pkRing) {
@@ -1578,6 +1616,12 @@ const BOLT_COLOR: Record<string, Color3> = {
   r_flask: new Color3(0.45, 0.95, 0.3),
   r_plague: new Color3(0.35, 0.6, 0.2),
   m_arcane: new Color3(0.7, 0.45, 1),
+  mo_rot: new Color3(0.5, 0.75, 0.3),
+  mo_drain: new Color3(0.65, 0.4, 0.9),
+  mo_abyss: new Color3(0.75, 0.35, 1),
+  rh_knife: new Color3(0.85, 0.9, 0.95),
+  rh_net: new Color3(0.7, 0.85, 0.45),
+  rh_rain: new Color3(0.85, 0.9, 0.95),
 };
 
 const SKILL_NUMBER_COLOR: Record<string, string> = {
@@ -1601,6 +1645,18 @@ const SKILL_NUMBER_COLOR: Record<string, string> = {
   m_arcane: "#d8b4ff",
   r_fatal: "#ffd28a",
   r_shadow: "#e0b4ff",
+  kh_dawn: "#ffe9a0",
+  bb_red: "#ff7a6a",
+  bb_carnage: "#ff9a8a",
+  me_lance: "#ffb14a",
+  me_cata: "#ffd08a",
+  mo_rot: "#c8a8ff",
+  mo_drain: "#d8b4ff",
+  mo_abyss: "#d8b4ff",
+  rc_blades: "#ffc0d0",
+  rc_sentence: "#ffd28a",
+  rh_knife: "#e8f0ff",
+  rh_rain: "#e8ffa0",
 };
 
 /** Modelos que atacam com magia à distância. */

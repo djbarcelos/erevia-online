@@ -1,4 +1,5 @@
 import { api, ApiError, type CharacterInfo } from "./api";
+import { gameAudio } from "./audio";
 import { Color3, Vector3 } from "@babylonjs/core";
 import { create } from "@bufbuild/protobuf";
 import {
@@ -16,6 +17,7 @@ import {
   PartyStateSchema,
   SelfPvpSchema,
   SkillTarget,
+  SpecCmdKind,
   type AchievementInfo,
   type ClanState,
   type FriendList,
@@ -43,6 +45,8 @@ import { runBench, wantBench } from "./ui/bench";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { TeleportWindow } from "./ui/teleport";
+import { SpecWindow } from "./ui/spec";
+import { setSpecs } from "./ui/specs";
 import { BarberWindow } from "./ui/barber";
 import { toBodyLook } from "./world/body-look";
 import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
@@ -81,6 +85,8 @@ const canvas = $<HTMLCanvasElement>("game");
 applyEnvClasses();
 settings.on(applyEnvClasses);
 addEventListener("resize", applyEnvClasses);
+// Som: liga no primeiro toque/clique e segue Configurações → Áudio.
+gameAudio.init();
 
 void boot();
 
@@ -187,6 +193,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
   const collision = new Collision(worldData);
   const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision);
+  setSpecs(welcome.specs);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
   for (const e of welcome.entities) entities.add(e);
 
@@ -484,6 +491,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // ---------- Mapa e regiões ----------
   const { regions, bosses } = buildRegions(welcome.zones, welcome.safeRadius);
+  dayNight.setRegions(regions);
   const mapSource = {
     world: worldData,
     mapCanvas: renderMapCanvas(worldData),
@@ -662,6 +670,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hud.element,
   );
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma }, hud.element);
+  const specWin = new SpecWindow(
+    store,
+    { choose: (npc, spec) => conn.specCmd(SpecCmdKind.SPEC_CMD_CHOOSE, npc, spec), myClass: () => character.class, skills: () => welcome.skills },
+    hud.element,
+  );
   const barberWin = new BarberWindow(
     store,
     {
@@ -710,12 +723,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (!info || d === null || !root) return;
     if (d <= SHOP_OPEN_DIST) {
       pendingShop = 0;
+      gameAudio.ui("open");
       const npc = npcInfo.get(id);
       shop.close();
       teleportWin.close();
       storageWin.close();
       barberWin.close();
+      specWin.close();
       if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
+      // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
+      else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
       else if (npc?.role === NpcRole.TELEPORT) teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests);
       else if (npc?.role === NpcRole.STORAGE) {
         storageWin.open(id, `${info.title} · ${info.name}`);
@@ -935,6 +952,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const wm = new WindowManager(defs);
   wm.onChange = () => {
     for (const id of defs.keys()) hud.setWindowOpen(id, wm.isOpen(id));
+    gameAudio.windowCount([...defs.keys()].filter((id) => wm.isOpen(id)).length);
   };
 
   // ---------- Teclado ----------
@@ -954,6 +972,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (invites.open) invites.answer(false);
       else if (hud.channeling) conn.cancelChannel();
       else if (teleportWin.isOpen) teleportWin.close();
+      else if (specWin.isOpen) specWin.close();
       else if (storageWin.isOpen) storageWin.close();
       else if (tradeWin.isOpen) conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL);
       else if (barberWin.isOpen) barberWin.close();
@@ -1025,6 +1044,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     isEnemy: (id, force) => entities.isEnemy(id) || entities.canAttack(id, force || forcedId === id),
   });
   const stopTouchCamera = setupTouchCamera(canvas, world.camera);
+  const stopAudio = gameAudio.attachWorld({
+    scene: world.scene,
+    regions,
+    phase: () => clock.phase(),
+    listener: () => entities.localPosition(),
+    dead: () => entities.localDead,
+    camera: world.camera,
+    gold: () => store.gold,
+    onInventory: (fn) => store.onChange(fn),
+  });
 
   // A câmera segue o jogador local (ou o ponto da medição de FPS, ?bench=1).
   let benchFocus: Vector3 | null = null;
@@ -1157,12 +1186,14 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       window.clearInterval(stickTimer);
       stopPerf();
       stopTouchCamera();
+      stopAudio();
       wm.closeAll();
       wm.layer.remove();
       hud.dispose();
       invites.dispose();
       shop.dispose();
       teleportWin.dispose();
+      specWin.dispose();
       storageWin.dispose();
       tradeWin.dispose();
       barberWin.dispose();
@@ -1257,6 +1288,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
                 fx.pickup(at, color);
                 if (head) fx.damageNumber(head, `+${itemLabel(info, g.count)}`, color.toHexString(), false);
                 hud.lootLine(itemLabel(info, g.count));
+                if (info.kind !== ItemKind.GOLD) gameAudio.ui("pickup"); // moedas: o som vem da bolsa
               }
             }
             loot.remove(ids);
@@ -1268,6 +1300,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           hud.itemCooldown(c.group, c.readyInMs, c.totalMs);
           // Recarga cheia = acabou de beber: efeito no personagem.
           const root = entities.rootOf(welcome.yourId);
+          if (c.readyInMs >= c.totalMs - 250) gameAudio.ui("potion");
           if (root && c.readyInMs >= c.totalMs - 250) fx.potion(root, c.group === 2 ? new Color3(0.35, 0.6, 1) : new Color3(1, 0.35, 0.3));
           break;
         }
@@ -1297,6 +1330,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           const r = msg.msg.value;
           const root = entities.rootOf(welcome.yourId);
           const at = root?.position.add(new Vector3(0, 1.2, 0));
+          gameAudio.ui(r.ok ? "enchant" : "fail");
           if (r.ok) {
             toast(`Sucesso! +${r.level} ${r.itemName}`);
             if (at) fx.pickup(at, new Color3(1, 0.8, 0.3));
@@ -1350,6 +1384,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           titleId = a.titleId;
           if (a.unlocked) toast(`Conquista desbloqueada: ${a.unlocked}!`);
           for (const fn of achListeners) fn();
+          break;
+        }
+        case "specChoice": {
+          const c = msg.msg.value;
+          const info = entities.info(c.npcId);
+          specWin.open(info ? `${info.title} · ${info.name}` : "Mestra dos Caminhos", c);
           break;
         }
         case "playerStatus":
