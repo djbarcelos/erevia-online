@@ -1,0 +1,143 @@
+/* ---------- Glória: ranking e conquistas (tecla H) ---------- */
+
+.glory-win {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.glory-body {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.glory-body > p {
+  margin: 0;
+}
+
+.rk-mine,
+.ach-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: rgba(232, 207, 138, 0.06);
+  border: 1px solid rgba(232, 207, 138, 0.18);
+}
+
+.ach-head .btn {
+  margin-left: auto;
+}
+
+.rk-list,
+.ach-list {
+  display: grid;
+  gap: 4px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.rk-row {
+  --cc: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 3px solid var(--cc);
+}
+
+.rk-row.me {
+  background: rgba(232, 207, 138, 0.12);
+}
+
+.rk-pos {
+  width: 28px;
+  flex: none;
+  text-align: right;
+  font-weight: 700;
+  color: var(--gold-hi);
+}
+
+.rk-body,
+.ach-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.rk-body small,
+.ach-body small {
+  color: var(--dim);
+}
+
+/* Mesma cor do título no nome dos personagens (NAME_COLORS.title). */
+.rk-title,
+.ach-body .ach-title,
+.ach-cur {
+  color: #cdb8f2;
+  font-weight: 400;
+}
+
+.rk-val {
+  display: grid;
+  justify-items: end;
+  min-width: 56px;
+  font-size: 0.85rem;
+}
+
+.rk-val small {
+  color: var(--dim);
+  font-size: 0.7rem;
+}
+
+.ach-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  opacity: 0.7;
+}
+
+.ach-row.done {
+  opacity: 1;
+}
+
+.ach-row.using {
+  background: rgba(205, 184, 242, 0.1);
+}
+
+.ach-mark {
+  width: 20px;
+  flex: none;
+  text-align: center;
+  font-size: 1.1rem;
+  color: var(--dim);
+}
+
+.ach-row.done .ach-mark {
+  color: var(--gold-hi);
+}
+
+.ach-side {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  flex: none;
+}
+
+.ach-side .ach-bar {
+  width: 120px;
+}
+
+.ach-using {
+  font-size: 0.8rem;
+  color: #cdb8f2;
+}

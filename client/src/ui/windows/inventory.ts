@@ -47,6 +47,9 @@ export interface InventoryDeps {
   /** Armazém aberto: guardar um item da bolsa (toSlot 255 = onde couber). */
   storageOpen(): boolean;
   deposit(bagSlot: number, toSlot: number): void;
+  /** Troca aberta: oferecer um item da bolsa. */
+  tradeOpen(): boolean;
+  offer(bagSlot: number): void;
 }
 
 const isEnchantScroll = (i: ItemInfo) => i.scroll === ScrollKind.ENCHANT_WEAPON || i.scroll === ScrollKind.ENCHANT_ARMOR;
@@ -202,6 +205,7 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
       if (isEnchantScroll(s.info)) list.push({ label: "Encantar um item…", run: () => startPicking(l.slot) });
       if (isPotion(s.info)) list.push({ label: "Pôr na barra de atalhos", run: () => d.toHotbar(s.info.id) });
       if (d.storageOpen()) list.push({ label: "Guardar no armazém", run: () => d.deposit(l.slot, 255) });
+      if (d.tradeOpen()) list.push({ label: "Oferecer na troca", run: () => d.offer(l.slot) });
       if (d.shopOpen() && s.info.sellPrice > 0) list.push({ label: `Vender (${fmt.format(s.info.sellPrice * s.count)} moedas)`, run: () => d.sell(l.slot) });
       list.push({ label: "Destruir…", danger: true, run: () => confirmDestroy(l, s) });
     }
@@ -278,10 +282,10 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
         icon: uniqueIds(itemIcon(s.info)),
         onOver(t) {
           over?.classList.remove("drop-ok", "drop-bad");
-          over = t?.closest<HTMLElement>("[data-bag], [data-equip], [data-hotbar], [data-drop='sell'], [data-storage], [data-drop='storage']") ?? null;
+          over = t?.closest<HTMLElement>("[data-bag], [data-equip], [data-hotbar], [data-drop='sell'], [data-storage], [data-drop='storage'], [data-drop='trade']") ?? null;
           if (!over) return;
           let ok = true;
-          if (over.dataset.storage !== undefined || over.dataset.drop === "storage") ok = l.place === PLACE_BAG;
+          if (over.dataset.storage !== undefined || over.dataset.drop === "storage" || over.dataset.drop === "trade") ok = l.place === PLACE_BAG;
           if (over.dataset.hotbar !== undefined) ok = isPotion(s.info);
           else if (over.dataset.equip !== undefined) ok = fitsSlot(s.info, Number(over.dataset.equip));
           else if (over.dataset.drop === "sell") ok = l.place === PLACE_BAG && s.info.sellPrice > 0;
@@ -293,6 +297,11 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
           if (hb) {
             if (isPotion(s.info)) d.toHotbar(s.info.id, Number(hb.dataset.hotbar));
             else toast("Só poções vão na barra de atalhos.", "warn");
+            return;
+          }
+          if (t?.closest("[data-drop='trade']")) {
+            if (l.place !== PLACE_BAG) toast("Desequipe o item antes de oferecer.", "warn");
+            else d.offer(l.slot);
             return;
           }
           const st = t?.closest<HTMLElement>("[data-storage], [data-drop='storage']");

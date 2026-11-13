@@ -53,12 +53,14 @@ func (z *Zone) enchant(p *entity, scrollSlot, place, slot int) {
 		target.enchant = before + 1
 		res.Ok, res.Level = true, uint32(target.enchant)
 		z.system(p, fmt.Sprintf("Sucesso! %s.", game.EnchantedName(def, target.enchant)))
+		z.achValue(p, game.AchEnchant, "", target.enchant)
 	} else if sc.Blessed {
 		target.enchant = 0
 		z.system(p, fmt.Sprintf("O encantamento falhou. A bênção salvou o item, mas %s voltou a +0.", def.Name))
 	} else {
 		*target = stack{}
 		res.Broke = true
+		z.trackItem(p, false, def.ID, 1, "enchant_break")
 		z.system(p, fmt.Sprintf("O encantamento falhou e %s quebrou.", game.EnchantedName(def, before)))
 	}
 	z.log.Info("enchant", "id", p.id, "item", def.ID, "from", before, "ok", res.Ok, "broke", res.Broke)

@@ -100,6 +100,21 @@ type playerState struct {
 	clan       *clan
 	clanLeftAt time.Time     // saiu de um clã (espera para entrar em outro)
 	channel    *channelState // canalizando teleporte ou pergaminho
+
+	// Moderação.
+	gm         bool
+	mutedUntil time.Time // relógio de parede (zero = pode falar)
+	userAgent  string
+	nextBug    float64 // próximo /bug aceito (tempo de simulação)
+
+	quests   questLog
+	trade    *trade    // troca aberta (nil = nenhuma)
+	joinedAt time.Time // telemetria: início da sessão
+
+	social socialState // amigos, emote e leitura do correio
+	// Conquistas, título escolhido e quando pode pedir o ranking de novo.
+	ach         achievements
+	rankingNext float64
 }
 
 // rank da skill (0 = não aprendida).

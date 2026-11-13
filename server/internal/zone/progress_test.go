@@ -65,7 +65,7 @@ func TestNewCharacterStartsWithStarterSkillsAndDefaultHotbar(t *testing.T) {
 			w = m.GetWelcome()
 		}
 	}
-	if w == nil || len(w.Skills) != 12 || len(w.Branches) != 3 || w.Progress.FreeSkillPoints != 0 || w.Progress.FreeAttrPoints != 0 {
+	if w == nil || len(w.Skills) != 15 || len(w.Branches) != 3 || w.Progress.FreeSkillPoints != 0 || w.Progress.FreeAttrPoints != 0 {
 		t.Fatalf("welcome progression wrong")
 	}
 	for _, s := range w.Skills {

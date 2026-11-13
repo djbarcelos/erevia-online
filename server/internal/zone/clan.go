@@ -262,6 +262,7 @@ func (z *Zone) clanCreate(p *entity, name string) {
 		}
 		// As moedas saem já (e voltam se o banco recusar o nome).
 		p.pl.inv.gold -= req.cost
+		z.trackGold(p, "clan", -req.cost)
 		z.clanCreating[p.id] = req
 		z.inventoryChanged(p, false)
 	}
@@ -307,6 +308,7 @@ func (z *Zone) onClanCreated(e clanCreatedEvent) {
 func (z *Zone) refundGold(id uint32, amount int64) {
 	if p := z.players[id]; p != nil {
 		p.pl.inv.gold += amount
+		z.trackGold(p, "clan_refund", amount)
 		z.inventoryChanged(p, false)
 		return
 	}

@@ -35,7 +35,7 @@ const (
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
 		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
-		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat"
+		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title"
 )
 
 var (
@@ -74,16 +74,22 @@ type Character struct {
 	Hotbar    []string          `json:"-"`
 	Emblem    string            `json:"emblem"` // sempre preenchido (padrão da classe se vazio no banco)
 	// Look: o que o personagem tem nas mãos agora (para a tela de seleção).
-	Look       CharacterLook `json:"look"`
+	Look CharacterLook `json:"look"`
 	// Appearance: visual do corpo (pele, cabelo, roupa, rosto e chapéu).
 	Appearance game.Appearance `json:"appearance"`
-	Karma      int           `json:"-"`
-	PKs        int           `json:"-"`
-	PvPKills   int           `json:"-"`
-	ClanLeftAt *time.Time    `json:"-"`
-	// Armazém da conta (só em CharacterForAccount).
-	Storage  StorageState `json:"-"`
-	kitGiven bool
+	Karma      int             `json:"-"`
+	PKs        int             `json:"-"`
+	PvPKills   int             `json:"-"`
+	ClanLeftAt *time.Time      `json:"-"`
+	// Armazém da conta e moderação (só em CharacterForAccount).
+	Storage    StorageState    `json:"-"`
+	GM         bool            `json:"-"`
+	MutedUntil *time.Time      `json:"-"`
+	Quests     game.QuestState `json:"-"`
+	// Conquistas e o título em uso (id da conquista; "" = nenhum).
+	Achievements game.AchievementState `json:"-"`
+	Title        string                `json:"-"`
+	kitGiven     bool
 }
 
 // StorageState é o armazém de uma conta: moedas e itens (Equipped é sempre false).
@@ -117,7 +123,11 @@ type CharacterState struct {
 	PKs         int
 	PvPKills    int
 	Appearance  game.Appearance
-	Seq         int64 // salvamento mais velho que o gravado é ignorado
+	Quests      game.QuestState
+	// Conquistas e título vão junto com o personagem (mesma linha, mesma transação).
+	Achievements game.AchievementState
+	Title        string
+	Seq          int64 // salvamento mais velho que o gravado é ignorado
 	// Storage (opcional): o armazém da conta mudou e vai junto, na mesma transação.
 	Storage *StorageState
 }
@@ -371,6 +381,10 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 			return err
 		}
 		c.Look = lookOf(c.Items)
+		if err := tx.QueryRow(ctx, `SELECT gm, muted_until FROM accounts WHERE id = $1`, accountID).
+			Scan(&c.GM, &c.MutedUntil); err != nil {
+			return err
+		}
 		c.Storage, err = loadStorage(ctx, tx, accountID)
 		return err
 	})
@@ -462,17 +476,27 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 			if err != nil {
 				return err
 			}
+			quests, err := json.Marshal(c.Quests)
+			if err != nil {
+				return err
+			}
+			achievements, err := json.Marshal(c.Achievements)
+			if err != nil {
+				return err
+			}
 			a := c.Attrs
 			batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, gold = $8,
 				save_seq = GREATEST(save_seq, $9::bigint), last_seen_at = now(),
 				attr_str = $10, attr_dex = $11, attr_con = $12, attr_int = $13, attr_wis = $14, attr_spi = $15,
 				skill_ranks = $16, hotbar = $17, karma = $18, pk_count = $19, pvp_kills = $20,
-				skin = $21, hair = $22, outfit = $23, head = $24, hide_hat = $25
+				skin = $21, hair = $22, outfit = $23, head = $24, hide_hat = $25, quests = $26,
+				achievements = $27, title = $28
 				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
 				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq,
 				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar,
 				max(c.Karma, 0), max(c.PKs, 0), max(c.PvPKills, 0),
-				c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit, c.Appearance.Head, c.Appearance.HideHat)
+				c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit, c.Appearance.Head, c.Appearance.HideHat, quests,
+				achievements, c.Title)
 		}
 		br := tx.SendBatch(ctx, batch)
 		var ids []int64
@@ -556,14 +580,25 @@ func nullIfFull(v int) *int {
 func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var c Character
 	var x, z float32
-	var ranks, hotbar []byte
+	var ranks, hotbar, quests, achievements []byte
 	var a [6]int16
 	var skin, hair, outfit int16
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
 		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
-		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat)
+		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat, &quests,
+		&achievements, &c.Title)
 	if err != nil {
 		return c, err
+	}
+	if len(achievements) > 0 {
+		if err := json.Unmarshal(achievements, &c.Achievements); err != nil {
+			return c, fmt.Errorf("achievements: %w", err)
+		}
+	}
+	if len(quests) > 0 {
+		if err := json.Unmarshal(quests, &c.Quests); err != nil {
+			return c, fmt.Errorf("quests: %w", err)
+		}
 	}
 	c.Emblem = game.EmblemOr(c.Class, c.Emblem)
 	c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit = int(skin), int(hair), int(outfit)

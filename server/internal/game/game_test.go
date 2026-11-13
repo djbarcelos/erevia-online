@@ -33,8 +33,8 @@ func TestEveryClassHasTwoStarterSkills(t *testing.T) {
 func TestSkillTreeShape(t *testing.T) {
 	for id, c := range Classes {
 		tree := ClassTree(id)
-		if len(tree) != 12 {
-			t.Fatalf("%s: %d skills in the tree, want 12", id, len(tree))
+		if len(tree) != 15 {
+			t.Fatalf("%s: %d skills in the tree, want 15 (3 ramos × 5 degraus)", id, len(tree))
 		}
 		seen := map[[2]int]bool{}
 		for _, s := range tree {
@@ -102,6 +102,66 @@ func TestValidateRanks(t *testing.T) {
 	}
 	if ValidateRanks("knight", 20, map[uint32]int{SkillJudgment: 2}) == nil {
 		t.Error("rank above max accepted")
+	}
+	// 5º degrau: nível 20 e o degrau de cima (Muralha Viva, que pede Provocar, que pede…).
+	chain := map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1, SkillLivingWall: 1, SkillBulwark: 1}
+	if ValidateRanks("knight", 19, chain) == nil {
+		t.Error("tier 5 needs level 20")
+	}
+	if err := ValidateRanks("knight", 20, chain); err != nil {
+		t.Errorf("tier 5 at level 20 with the branch learned should work: %v", err)
+	}
+	if ValidateRanks("knight", 30, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1, SkillBulwark: 1}) == nil {
+		t.Error("tier 5 needs the tier 4 skill of the branch")
+	}
+	chain[SkillBulwark] = 3
+	if ValidateRanks("knight", 20, chain) != nil {
+		t.Error("rank 3 of the tier 5 should work")
+	}
+	chain[SkillBulwark] = 4
+	if ValidateRanks("knight", 30, chain) == nil {
+		t.Error("tier 5 above rank 3 accepted")
+	}
+}
+
+func TestFifthTierSkills(t *testing.T) {
+	if TierLevels[4] != 20 {
+		t.Fatalf("5º degrau no nível %d, want 20", TierLevels[4])
+	}
+	for id := range Classes {
+		var fifth []*SkillDef
+		total := 0
+		for _, s := range ClassTree(id) {
+			total += s.MaxRank
+			if s.Tier == 4 {
+				fifth = append(fifth, s)
+			}
+		}
+		if len(fifth) != 3 {
+			t.Fatalf("%s: %d skills no 5º degrau, want 3", id, len(fifth))
+		}
+		for _, s := range fifth {
+			if s.LevelReq() != 20 || s.IsPassive() || s.MaxRank != 3 {
+				t.Errorf("%s: nível %d, passiva %v, rank máx %d", s.Name, s.LevelReq(), s.IsPassive(), s.MaxRank)
+			}
+			if p := s.Parent(); p == nil || p.Tier != 3 || p.Branch != s.Branch {
+				t.Errorf("%s: o pai deveria ser o 4º degrau do mesmo ramo", s.Name)
+			}
+			// Cada skill nova faz alguma coisa (dano ou efeito) e cresce com o rank.
+			if s.Mult.At(1) <= 0 && s.OnTarget == nil && s.OnSelf == nil {
+				t.Errorf("%s: não faz nada", s.Name)
+			}
+			if s.Text(1) == s.Text(3) {
+				t.Errorf("%s: o texto do rank 3 deveria mudar", s.Name)
+			}
+			if s.MP.At(1) <= 0 || s.CD.At(1) <= 0 {
+				t.Errorf("%s: sem custo ou recarga", s.Name)
+			}
+		}
+		// No nível 30 ainda não dá para aprender tudo: escolher continua valendo.
+		if SkillPointsTotal(MaxLevel) >= total {
+			t.Errorf("%s: %d pontos no nível máximo para %d ranks", id, SkillPointsTotal(MaxLevel), total)
+		}
 	}
 }
 
@@ -198,12 +258,33 @@ func TestXPCurve(t *testing.T) {
 	if LevelForXP(math.MaxInt64/2) != MaxLevel {
 		t.Error("huge xp should cap at max level")
 	}
-	// Ritmo: matar monstros do próprio nível sobe de nível com ~5–40 abates.
+	// Ritmo: matar monstros do próprio nível sobe de nível com ~5–40 abates (esqueletos até
+	// o 19; do 20 ao 30 só há golens, que valem mais e demoram mais para cair).
 	for l := 1; l < MaxLevel; l++ {
-		kills := float64(XPToNext(l)) / float64(MonsterXP(Monsters["skeleton_warrior"], l, l))
+		m := Monsters["skeleton_warrior"]
+		if l >= 20 {
+			m = Monsters["stone_golem"]
+		}
+		kills := float64(XPToNext(l)) / float64(MonsterXP(m, l, l))
 		if kills < 4 || kills > 45 {
 			t.Errorf("level %d needs %.0f kills", l, kills)
 		}
+	}
+	// Até o 19 a curva não mudou (a XP salva continua no mesmo nível); do 20 em diante cada
+	// nível pede mais, e o fim (20→30) pesa mais que o começo inteiro (1→20).
+	if MaxLevel != 30 {
+		t.Fatalf("MaxLevel = %d", MaxLevel)
+	}
+	if XPToNext(19) != int64(math.Round(80*math.Pow(19, 2.2))) || XPLevelStart(20) != 335517 {
+		t.Errorf("curva até o 20 mudou: %d, início do 20 = %d", XPToNext(19), XPLevelStart(20))
+	}
+	for l := 2; l < MaxLevel; l++ {
+		if XPToNext(l) <= XPToNext(l-1) {
+			t.Errorf("XPToNext(%d) = %d não cresce", l, XPToNext(l))
+		}
+	}
+	if late, early := XPLevelStart(30)-XPLevelStart(20), XPLevelStart(20); late < 3*early || late > 6*early {
+		t.Errorf("20→30 pede %d de XP, 1→20 pede %d", late, early)
 	}
 }
 
@@ -279,7 +360,7 @@ func TestStoneGolemIsSlowTankInSouthValley(t *testing.T) {
 	if g.Speed >= w.Speed || g.AtkInterval <= w.AtkInterval {
 		t.Errorf("golem deveria ser lento: speed %.1f, intervalo %.1f", g.Speed, g.AtkInterval)
 	}
-	// Só no Vale das Pedras Vivas (sul, além do quadrado original), níveis 20–25,
+	// Só no Vale das Pedras Vivas (sul, além do quadrado original), níveis 20–30,
 	// mais fortes quanto mais fundo.
 	var n int
 	shallow, deep := SpawnPoint{Z: -1e9}, SpawnPoint{Z: 1e9}
@@ -288,7 +369,7 @@ func TestStoneGolemIsSlowTankInSouthValley(t *testing.T) {
 			continue
 		}
 		n++
-		if math.Hypot(sp.X, sp.Z+270) > 52 || sp.Z > -150 || sp.Level < 20 || sp.Level > 25 {
+		if math.Hypot(sp.X, sp.Z+270) > 52 || sp.Z > -150 || sp.Level < 20 || sp.Level > 30 {
 			t.Errorf("golem fora do vale: (%.1f, %.1f) nv %d", sp.X, sp.Z, sp.Level)
 		}
 		if sp.Z > shallow.Z {
@@ -300,6 +381,9 @@ func TestStoneGolemIsSlowTankInSouthValley(t *testing.T) {
 	}
 	if n != 12 {
 		t.Errorf("esperava 12 golens, veio %d", n)
+	}
+	if deep.Level < 27 {
+		t.Errorf("o fundo do vale deveria ser caça de 25–30 (o mais fundo veio nv %d)", deep.Level)
 	}
 	if deep.Level <= shallow.Level {
 		t.Errorf("o golem mais fundo (nv %d) deveria ser mais forte que o da entrada (nv %d)", deep.Level, shallow.Level)

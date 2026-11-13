@@ -1,6 +1,7 @@
 /**
- * Árvore de skills (tecla K): 3 ramos × 4 degraus da classe, com os dados do servidor
- * (ranks, textos de cada rank, nível de cada degrau). Clique soma 1 ponto (fica pendente);
+ * Árvore de skills (tecla K): 3 ramos × 5 degraus da classe (níveis 1, 5, 10, 15 e 20), com
+ * os dados do servidor (ranks, textos de cada rank, nível de cada degrau). O número de
+ * degraus vem das skills, então um degrau novo no servidor aparece sozinho. Clique soma 1 ponto (fica pendente);
  * botão direito desfaz o pendente; "Confirmar" manda LearnSkills (o servidor confere tudo).
  * Skills ativas aprendidas vão para a barra arrastando (ou pelo botão, no celular).
  */
@@ -22,10 +23,11 @@ export interface SkillsDeps {
   toHotbar(skillId: number, index?: number): void;
 }
 
-const TIERS = 4;
-
 export function buildSkills(d: SkillsDeps): HTMLElement {
   const byId = new Map(d.skills.map((s) => [s.id, s]));
+  const tiers = d.skills.reduce((n, s) => Math.max(n, s.tier + 1), 0);
+  // Nível que libera cada degrau (o mesmo para as 3 skills dele).
+  const tierLevels = Array.from({ length: tiers }, (_, t) => d.skills.find((s) => s.tier === t)?.levelReq ?? 1);
   const saved = (): Map<number, number> => new Map((d.progress()?.ranks ?? []).map((r) => [r.skillId, r.rank]));
   let pending = saved();
   let selected: SkillInfo | null = null;
@@ -182,7 +184,7 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
           "how small muted",
           el("li", null, "Cada nível dá 1 ponto de skill."),
           el("li", null, "Clique numa skill para gastar 1 ponto; botão direito desfaz um ponto ainda não confirmado."),
-          el("li", null, "Os degraus liberam nos níveis 1, 5, 10 e 15, e cada um exige a skill de cima no mesmo ramo."),
+          el("li", null, `Os degraus liberam nos níveis ${listPt(tierLevels)}, e cada um exige a skill de cima no mesmo ramo.`),
           el("li", null, "Arraste skills ativas para a barra de atalhos."),
         ),
       );
@@ -226,8 +228,8 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
       col.style.setProperty("--bc", b.color);
       tree.append(col);
     });
-    for (let tier = 0; tier < TIERS; tier++) {
-      const lvl = d.skills.find((s) => s.tier === tier)?.levelReq ?? 1;
+    for (let tier = 0; tier < tiers; tier++) {
+      const lvl = tierLevels[tier];
       tree.append(el("div", `tg-level${d.level() < lvl ? " locked" : ""}`, el("span", null, `Nv ${lvl}`)));
       for (let br = 0; br < 3; br++) {
         const s = d.skills.find((x) => x.branch === br && x.tier === tier);
@@ -263,4 +265,9 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
   });
   root.addEventListener("win-close", off);
   return root;
+}
+
+/** "1, 5, 10, 15 e 20". */
+function listPt(n: number[]): string {
+  return n.length < 2 ? n.join("") : `${n.slice(0, -1).join(", ")} e ${n[n.length - 1]}`;
 }

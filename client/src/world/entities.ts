@@ -14,6 +14,7 @@ import { AdvancedDynamicTexture, Rectangle, StackPanel, TextBlock } from "@babyl
 import { classInfo } from "../classes";
 import {
   Effect,
+  EmoteKind,
   EntityKind,
   PvpState,
   SkillTarget,
@@ -104,7 +105,7 @@ export interface EntityInfo {
   hp: number;
   maxHp: number;
   dead: boolean;
-  /** NPC: função ("Mercadora"). */
+  /** NPC: função ("Mercadora"); jogador: título escolhido (conquista, "" = nenhum). */
   title: string;
   /** Chefe (marcador e quadro do alvo diferentes). */
   boss?: boolean;
@@ -131,6 +132,7 @@ export const NAME_COLORS = {
   chaotic: "#ff5a4a",
   party: "#7fd0ff",
   clan: "#e8cf8a",
+  title: "#cdb8f2",
 } as const;
 
 /** O que o mapa precisa saber de cada entidade. */
@@ -162,6 +164,11 @@ interface View extends EntityInfo {
   /** Cor do nome sem estado PvP (emblema, local, tipo). */
   baseColor: string;
   clanText: TextBlock;
+  /**
+   * Jogadores: título sob o nome (null nos outros). Texto fixo: só muda quando chega um
+   * PlayerStatus com outro título, nada por quadro.
+   */
+  titleText: TextBlock | null;
   /** Anel vermelho nos pés de quem tem karma (criado na hora). */
   pkRing: Mesh | null;
   boss: boolean;
@@ -330,6 +337,7 @@ export class EntityManager {
     if (!v) return;
     v.pvpState = s.pvpState;
     v.clanName = s.clanName;
+    v.title = s.title;
     this.refreshName(v);
     // O clã do jogador local mudou: os aliados de clã mudam de cor também.
     if (s.id === this.localId) for (const o of this.views.values()) if (o !== v) this.refreshName(o);
@@ -468,6 +476,18 @@ export class EntityManager {
     nameText.outlineWidth = 3;
     nameText.outlineColor = "rgba(0,0,0,0.85)";
     stack.addControl(nameText);
+    let titleText: TextBlock | null = null;
+    if (e.kind === EntityKind.PLAYER) {
+      titleText = new TextBlock();
+      titleText.resizeToFit = true;
+      titleText.fontSize = 11;
+      titleText.fontStyle = "italic";
+      titleText.color = NAME_COLORS.title;
+      titleText.outlineWidth = 3;
+      titleText.outlineColor = "rgba(0,0,0,0.85)";
+      titleText.isVisible = false;
+      stack.addControl(titleText);
+    }
     const clanText = new TextBlock();
     clanText.resizeToFit = true;
     clanText.fontSize = 11;
@@ -497,7 +517,7 @@ export class EntityManager {
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
       model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
-      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, baseColor, clanText, pkRing: null,
+      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, baseColor, clanText, titleText, pkRing: null,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
@@ -874,7 +894,7 @@ export class EntityManager {
       if (sk?.fx === "fireball") {
         launch((a, b) => this.fx.fireball(a, b, travel));
         impact = release + travel * 1000;
-      } else if (sk?.fx === "m_rain") {
+      } else if (sk?.fx === "m_rain" || sk?.fx === "m_inferno") {
         launch(() => this.fx.emberRain(dst.root.position.clone(), sk.splash));
         impact = release + 650;
       } else if (sk?.fx === "m_meteor") {
@@ -977,17 +997,22 @@ export class EntityManager {
     switch (quiet ? "quiet" : sk?.fx) {
       case "quiet":
       case "m_rain":
+      case "m_inferno":
       case "m_meteor":
       case "m_lance":
       case "m_prison":
+      case "m_arcane":
       case "r_mark":
+      case "b_whirl": // 2 golpes por alvo: o giro já mostra o corte (sem faísca dobrada)
         break;
       case "r_flask":
       case "r_plague":
         this.fx.poisonSplash(dst.root.position.clone(), sk?.splash || 1.5, sk?.fx === "r_plague" ? new Color3(0.35, 0.55, 0.2) : new Color3(0.45, 0.9, 0.3));
         break;
       case "k_judg":
+      case "k_horizon":
       case "b_exec":
+      case "b_seismic":
         this.fx.brutalStrike(from, at, mine);
         this.fx.slam(dst.root.position, 1.8, new Color3(1, 0.85, 0.4), mine);
         break;
@@ -996,6 +1021,8 @@ export class EntityManager {
         break;
       case "r_twin":
       case "r_para":
+      case "r_fatal":
+      case "r_shadow":
         this.fx.backstab(from, at, ev.crit);
         break;
       case "shield_bash":
@@ -1008,6 +1035,7 @@ export class EntityManager {
         this.fx.backstab(from, at, ev.crit);
         break;
       case "ice_nova":
+      case "m_zero":
         this.fx.frostHit(at);
         break;
       case "fireball":
@@ -1069,6 +1097,7 @@ export class EntityManager {
   private castFx(src: View, sk: SkillInfo, mine: boolean): void {
     switch (sk.fx) {
       case "ice_nova":
+      case "m_zero":
         this.fx.iceNova(src.root.position, sk.range);
         break;
       case "fortress":
@@ -1091,11 +1120,19 @@ export class EntityManager {
         if (mine) this.fx.shake(6);
         break;
       case "k_spin":
+      case "b_whirl":
         this.fx.whirl(src, sk.range, mine);
         break;
       case "b_quake":
       case "b_stomp":
+      case "b_stone":
         this.fx.slam(src.root.position, sk.range, new Color3(1, 0.7, 0.35), mine);
+        break;
+      case "k_bulwark":
+        this.fx.slam(src.root.position, sk.range, new Color3(0.45, 0.65, 1), mine);
+        break;
+      case "r_miasma":
+        this.fx.poisonSplash(src.root.position.clone(), sk.range, new Color3(0.45, 0.9, 0.3));
         break;
       case "r_smoke":
         this.fx.smokeCloud(src.root.position.clone(), sk.range, (sk.effectMs || 6000) / 1000);
@@ -1233,6 +1270,16 @@ export class EntityManager {
     this.refreshHpBar(v);
   }
 
+  /** Emote de um jogador: acenar toca uma vez; sentar e dançar ficam até ele andar ou atacar. */
+  emote(id: number, kind: EmoteKind): void {
+    const v = this.views.get(id);
+    if (!v?.anim || v.shownDead) return;
+    if (kind === EmoteKind.WAVE) v.anim.play("wave");
+    else if (kind === EmoteKind.SIT) v.anim.play("sit", { loop: true });
+    else if (kind === EmoteKind.DANCE) v.anim.play("dance", { loop: true });
+    else v.anim.endEmote();
+  }
+
   onLevelUp(l: LevelUp): void {
     const v = this.views.get(l.id);
     if (!v) return;
@@ -1303,6 +1350,8 @@ export class EntityManager {
           const near = !cam || Vector3.DistanceSquared(cam, pos) < ANIM_DISTANCE * ANIM_DISTANCE;
           active = near && (!planes || v.meshes.some((m) => m.isInFrustum(planes)));
         }
+        // Andar acaba com o emote na hora (o aviso do servidor chega depois).
+        if (moving && v.anim.emoting) v.anim.endEmote();
         v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active);
       }
     }
@@ -1479,6 +1528,11 @@ export class EntityManager {
             : v.baseColor;
     v.clanText.text = v.clanName ? `‹${v.clanName}›` : "";
     v.clanText.isVisible = !!v.clanName;
+    // Os setters do TextBlock ignoram o mesmo valor: sem redesenho se nada mudou.
+    if (v.titleText) {
+      v.titleText.text = v.title ? `«${v.title}»` : "";
+      v.titleText.isVisible = !!v.title;
+    }
     const red = v.pvpState === PvpState.CHAOTIC;
     if (red && !v.pkRing) {
       const ring = MeshBuilder.CreateTorus(`pk${v.id}`, { diameter: 1.25, thickness: 0.05, tessellation: 32 }, this.scene);
@@ -1523,6 +1577,7 @@ const BOLT_COLOR: Record<string, Color3> = {
   r_mark: new Color3(1, 0.2, 0.2),
   r_flask: new Color3(0.45, 0.95, 0.3),
   r_plague: new Color3(0.35, 0.6, 0.2),
+  m_arcane: new Color3(0.7, 0.45, 1),
 };
 
 const SKILL_NUMBER_COLOR: Record<string, string> = {
@@ -1538,6 +1593,14 @@ const SKILL_NUMBER_COLOR: Record<string, string> = {
   shield_bash: "#cfe0ff",
   brutal_strike: "#ff9a6a",
   backstab: "#e0b4ff",
+  k_horizon: "#ffe9a0",
+  b_seismic: "#ff7a5a",
+  b_whirl: "#ff9a8a",
+  m_inferno: "#ffb14a",
+  m_zero: "#9fe0ff",
+  m_arcane: "#d8b4ff",
+  r_fatal: "#ffd28a",
+  r_shadow: "#e0b4ff",
 };
 
 /** Modelos que atacam com magia à distância. */

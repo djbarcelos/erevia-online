@@ -36,8 +36,8 @@ function mount(kind: string, ...nodes: Node[]): void {
 
 type Screen = "screen-loading" | null;
 
-/** Mostra a tela de carregando, ou esconde tudo (null = entrou no jogo). */
-export function showScreen(screen: Screen): void {
+/** Mostra a tela de carregando (com um texto opcional), ou esconde tudo (null = entrou no jogo). */
+export function showScreen(screen: Screen, text = "Carregando…"): void {
   if (screen === null) {
     preview?.dispose();
     preview = null;
@@ -47,7 +47,7 @@ export function showScreen(screen: Screen): void {
     content.replaceChildren();
     return;
   }
-  mount("loading", el("div", "entry-loading", el("h1", "logo-word", "EREVIA"), el("span", "spinner"), el("p", "muted", "Carregando…")));
+  mount("loading", el("div", "entry-loading", el("h1", "logo-word", "EREVIA"), el("span", "spinner"), el("p", "muted", text)));
 }
 
 export function showMessage(title: string, text: string, buttonText: string, onClick: () => void): void {

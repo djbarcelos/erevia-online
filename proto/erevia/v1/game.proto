@@ -33,7 +33,64 @@ message ClientMessage {
     StorageMove storage_move = 23;
     StorageGold storage_gold = 24;
     ChangeLook change_look = 25;
+    TradeCmd trade_cmd = 26;
+    Craft craft = 27;
+    ClientStats client_stats = 28;
+    FriendCmd friend_cmd = 29;
+    MailCmd mail_cmd = 30;
+    RankingRequest ranking_request = 31;
+    AchievementCmd achievement_cmd = 32;
   }
+}
+
+// ---------- Ranking, conquistas e títulos ----------
+
+// Pede o ranking (as três listas de uma vez). O servidor responde com Ranking.
+message RankingRequest {}
+
+enum AchievementCmdKind {
+  ACHIEVEMENT_CMD_UNSPECIFIED = 0;
+  ACHIEVEMENT_CMD_SET_TITLE = 1; // id = conquista cujo título usar ("" = sem título)
+}
+
+message AchievementCmd {
+  AchievementCmdKind kind = 1;
+  string id = 2;
+}
+
+// Amostra de desempenho do cliente (a cada ~60 s; o FPS é medido 1×/s, nunca por quadro).
+message ClientStats {
+  float fps_avg = 1;
+  float fps_low = 2; // média dos 10% piores segundos
+  string device = 3; // "mobile"/"desktop" + sistema (curto)
+  uint32 seconds = 4; // segundos cobertos pela amostra
+}
+
+// Criar um item com uma receita do Ferreiro (materiais + moedas).
+message Craft {
+  uint32 npc_id = 1;
+  string recipe_id = 2;
+}
+
+// ---------- Troca entre jogadores ----------
+
+enum TradeCmdKind {
+  TRADE_CMD_UNSPECIFIED = 0;
+  TRADE_CMD_REQUEST = 1; // convidar target_id para trocar (vira um Invite para ele)
+  TRADE_CMD_ADD_ITEM = 2; // oferecer o item do espaço slot da bolsa (count 0 = a pilha toda)
+  TRADE_CMD_REMOVE_ITEM = 3; // tirar da oferta o item do espaço slot da bolsa
+  TRADE_CMD_SET_GOLD = 4; // moedas oferecidas (gold)
+  TRADE_CMD_LOCK = 5; // travar a própria oferta
+  TRADE_CMD_CONFIRM = 6; // confirmar (só com as duas ofertas travadas)
+  TRADE_CMD_CANCEL = 7;
+}
+
+message TradeCmd {
+  TradeCmdKind kind = 1;
+  uint32 target_id = 2;
+  uint32 slot = 3;
+  uint32 count = 4;
+  int64 gold = 5;
 }
 
 // Visual do corpo. O valor zero é o visual original da classe.
@@ -272,7 +329,110 @@ message ServerMessage {
     Storage storage = 24;
     Announce announce = 25;
     BossStatus boss_status = 26;
+    QuestLog quest_log = 27;
+    TradeState trade = 28;
+    SocialUpdate social = 29;
+    Emote emote = 30;
+    Ranking ranking = 31;
+    Achievements achievements = 32;
   }
+}
+
+// Ranking calculado no banco a cada poucos minutos (o servidor guarda em memória).
+message Ranking {
+  repeated RankEntry level = 1; // top 50 por nível (desempate: XP)
+  repeated RankEntry pvp = 2; // top 50 por vitórias PvP
+  repeated ClanRankEntry clans = 3; // top 50 clãs pela soma dos níveis dos membros
+  int64 updated_at_ms = 4; // quando foi calculado (Unix, ms; 0 = ainda não calculado)
+  uint32 refresh_ms = 5; // intervalo entre os cálculos
+  // Posição do próprio personagem (e do clã dele) no último cálculo (0 = fora do ranking).
+  uint32 my_level_pos = 6;
+  uint32 my_pvp_pos = 7;
+  uint32 my_clan_pos = 8;
+}
+
+message RankEntry {
+  uint32 pos = 1;
+  uint64 character_id = 2;
+  string name = 3;
+  string class = 4;
+  uint32 level = 5;
+  uint32 pvp_kills = 6;
+  string clan_name = 7;
+  string title = 8;
+}
+
+message ClanRankEntry {
+  uint32 pos = 1;
+  uint64 id = 2;
+  string name = 3;
+  uint32 members = 4;
+  uint32 level_sum = 5;
+  float level_avg = 6;
+  string leader = 7;
+}
+
+// Conquistas do próprio personagem. Ao entrar vai o catálogo inteiro (full); depois, só
+// o que mudou (progresso, desbloqueio ou título escolhido).
+message Achievements {
+  bool full = 1;
+  repeated AchievementInfo list = 2; // full: todas; senão, só as que mudaram (id, count, unlocked)
+  string title_id = 3; // conquista cujo título está em uso ("" = nenhum)
+  string unlocked = 4; // nome da conquista que acabou de ser desbloqueada ("" = nenhuma)
+}
+
+message AchievementInfo {
+  string id = 1;
+  string name = 2;
+  string text = 3; // o que fazer
+  string title = 4; // título que ela dá
+  bool unlocked = 5;
+  uint32 count = 6; // progresso (conquistas de contagem)
+  uint32 need = 7;
+  int64 unlocked_at_ms = 8;
+}
+
+// Janela de troca: enviada aos dois a cada mudança; open = false fecha a janela.
+message TradeState {
+  bool open = 1;
+  uint32 partner_id = 2;
+  string partner_name = 3;
+  TradeOffer mine = 4;
+  TradeOffer theirs = 5;
+}
+
+message TradeOffer {
+  repeated TradeItem items = 1;
+  int64 gold = 2;
+  bool locked = 3;
+  bool confirmed = 4;
+}
+
+message TradeItem {
+  uint32 slot = 1; // espaço na bolsa de quem oferece
+  string item_id = 2;
+  uint32 count = 3;
+  uint32 enchant = 4;
+}
+
+// Missões ativas do próprio personagem: ao entrar e sempre que o progresso muda.
+message QuestLog {
+  repeated QuestInfo quests = 1;
+  string completed = 2; // título da missão que acabou de ser concluída ("" = nenhuma)
+}
+
+message QuestInfo {
+  string id = 1;
+  string title = 2;
+  string text = 3;
+  repeated QuestStepInfo steps = 4;
+  string reward = 5; // resumo da recompensa ("120 XP · 30 moedas")
+}
+
+message QuestStepInfo {
+  string text = 1;
+  uint32 count = 2;
+  uint32 need = 3;
 }
 
 // ---------- Raid boss ----------
@@ -341,6 +501,7 @@ message PlayerStatus {
   uint32 id = 1;
   PvpState pvp_state = 2;
   string clan_name = 3;
+  string title = 4; // título escolhido (de uma conquista; "" = nenhum)
 }
 
 // PvP do próprio personagem.
@@ -355,6 +516,7 @@ enum InviteKind {
   INVITE_KIND_UNSPECIFIED = 0;
   INVITE_KIND_PARTY = 1;
   INVITE_KIND_CLAN = 2;
+  INVITE_KIND_TRADE = 3;
 }
 
 // Alguém convidou você. Expira em expires_ms.
@@ -689,6 +851,20 @@ message NpcInfo {
   repeated string stock = 2; // ids dos itens à venda
   NpcRole role = 3;
   repeated TeleportDest dests = 4; // pedras de teleporte: destinos
+  repeated RecipeInfo recipes = 5; // Ferreiro: o que dá para criar
+}
+
+message RecipeInfo {
+  string id = 1;
+  string result_id = 2;
+  uint32 count = 3;
+  repeated RecipeMaterial materials = 4;
+  int64 gold = 5;
+}
+
+message RecipeMaterial {
+  string item_id = 1;
+  uint32 count = 2;
 }
 
 enum ItemKind {
@@ -790,7 +966,7 @@ message Entity {
   string weapon = 16; // modelo da arma (jogadores)
   string offhand = 17; // modelo da outra mão
   uint32 weapon_grade = 18;
-  string title = 19; // NPC: função (ex.: "Mercadora")
+  string title = 19; // NPC: função (ex.: "Mercadora"); jogador: título escolhido (conquista)
   string emblem = 20; // jogadores: cor do emblema (#rrggbb), pinta o nome e o anel no chão
   PvpState pvp_state = 21;
   string clan_name = 22;
@@ -933,4 +1109,90 @@ message SkillRankInfo {
   uint32 effect_ms = 4;
   float effect_value = 5;
   string text = 6; // o que faz neste rank, para a dica
+}
+
+// ---------- Amigos, correio e emotes ----------
+
+enum FriendCmdKind {
+  FRIEND_CMD_UNSPECIFIED = 0;
+  FRIEND_CMD_ADD = 1; // name (pode estar offline) ou target_id (botão do quadro do alvo)
+  FRIEND_CMD_REMOVE = 2; // name ou target_id (id do personagem)
+  FRIEND_CMD_LIST = 3; // pede a lista com as posições de agora (janela aberta)
+}
+
+message FriendCmd {
+  FriendCmdKind kind = 1;
+  string name = 2;
+  uint32 target_id = 3;
+}
+
+enum MailCmdKind {
+  MAIL_CMD_UNSPECIFIED = 0;
+  MAIL_CMD_SEND = 1; // to + subject (opcional) + body
+  MAIL_CMD_LIST = 2; // caixa de entrada
+  MAIL_CMD_READ = 3; // mail_id: marcar como lida
+  MAIL_CMD_DELETE = 4; // mail_id
+}
+
+message MailCmd {
+  MailCmdKind kind = 1;
+  string to = 2;
+  string subject = 3;
+  string body = 4;
+  uint64 mail_id = 5;
+}
+
+// Um amigo (amizade de mão única: quem você segue). Online: posição atual (o cliente acha a região).
+message Friend {
+  uint32 character_id = 1;
+  string name = 2;
+  string class = 3;
+  uint32 level = 4;
+  bool online = 5;
+  float x = 6;
+  float z = 7;
+}
+
+message FriendList {
+  repeated Friend friends = 1;
+  uint32 max = 2;
+}
+
+message Mail {
+  uint64 id = 1;
+  string from_name = 2;
+  string subject = 3;
+  string body = 4;
+  int64 sent_at_ms = 5;
+  bool read = 6;
+}
+
+// Caixa de entrada. listed = false: só os contadores (aviso de carta nova ou ao entrar).
+message MailBox {
+  repeated Mail mails = 1;
+  uint32 unread = 2;
+  uint32 total = 3;
+  uint32 max = 4;
+  bool listed = 5;
+  uint32 body_max = 6; // tamanho máximo do texto (caracteres)
+  uint32 subject_max = 7;
+}
+
+// Amigos e/ou correio (só o que mudou vem preenchido).
+message SocialUpdate {
+  FriendList friends = 1;
+  MailBox mail = 2;
+}
+
+enum EmoteKind {
+  EMOTE_KIND_NONE = 0; // acabou (andou, atacou ou morreu)
+  EMOTE_KIND_WAVE = 1; // acenar (uma vez)
+  EMOTE_KIND_SIT = 2; // sentar (até se mexer)
+  EMOTE_KIND_DANCE = 3; // dançar (até se mexer)
+}
+
+// Emote de um jogador, para quem está perto.
+message Emote {
+  uint32 id = 1;
+  EmoteKind kind = 2;
 }
