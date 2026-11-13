@@ -68,6 +68,10 @@ func dialAs(t *testing.T, ctx context.Context, url string, account int64) (*webs
 	h.Set("Cookie", "acc="+strconv.FormatInt(account, 10))
 	c, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{HTTPHeader: h})
 	if err == nil {
+		// O navegador não limita o tamanho das mensagens; a biblioteca limita a 32 KB por
+		// padrão, e o Welcome (catálogo de skills com os textos de cada rank, itens…) já
+		// passa disso com o 5º degrau da árvore.
+		c.SetReadLimit(1 << 20)
 		t.Cleanup(func() { c.CloseNow() })
 	}
 	return c, err
@@ -143,8 +147,8 @@ func TestTwoPlayersMoveAndChat(t *testing.T) {
 			self = e
 		}
 	}
-	// A árvore inteira da classe (12 skills), com as 2 iniciais aprendidas, e a barra padrão.
-	if len(welcomeA.Skills) != 12 || len(welcomeA.Branches) != 3 {
+	// A árvore inteira da classe (15 skills), com as 2 iniciais aprendidas, e a barra padrão.
+	if len(welcomeA.Skills) != 15 || len(welcomeA.Branches) != 3 {
 		t.Fatalf("welcome should carry the class tree, got %d skills / %d branches", len(welcomeA.Skills), len(welcomeA.Branches))
 	}
 	if welcomeA.Progress == nil || len(welcomeA.Progress.Ranks) != 2 || len(welcomeA.Progress.PerPoint) != 6 {
