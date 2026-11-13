@@ -6,10 +6,26 @@
  */
 
 import type { ClassId } from "../../api";
-import { ItemKind, type ItemInfo, type SelfStats } from "../../gen/erevia/v1/game_pb";
+import { ItemKind, ScrollKind, type ItemInfo, type SelfStats } from "../../gen/erevia/v1/game_pb";
 import { uniqueIds } from "../art";
 import { beginDrag } from "../dragdrop";
-import { buildItemTip, EQUIP_SLOTS, equippable, fitsSlot, itemIcon, PLACE_BAG, PLACE_EQUIP, SLOT, type ItemStore, type Stack } from "../items";
+import {
+  buildItemTip,
+  canEnchantWith,
+  enchantChance,
+  enchantedName,
+  enchantMax,
+  enchantSafe,
+  EQUIP_SLOTS,
+  equippable,
+  fitsSlot,
+  itemIcon,
+  PLACE_BAG,
+  PLACE_EQUIP,
+  SLOT,
+  type ItemStore,
+  type Stack,
+} from "../items";
 import { art, button, closeSheet, contextMenu, el, fmt, isTouch, openSheet, tabs, toast, tooltip, type MenuItem } from "../kit";
 import { createPreview } from "../preview3d";
 
@@ -26,7 +42,11 @@ export interface InventoryDeps {
   /** Vender (só com a loja aberta). */
   sell(slot: number): boolean;
   shopOpen(): boolean;
+  /** Usa o pergaminho de encantar (na bolsa) num item. */
+  enchant(scrollSlot: number, place: number, slot: number): void;
 }
+
+const isEnchantScroll = (i: ItemInfo) => i.scroll === ScrollKind.ENCHANT_WEAPON || i.scroll === ScrollKind.ENCHANT_ARMOR;
 
 /** Os 13 encaixes (números do servidor): corpo à esquerda, joias à direita, mãos embaixo. */
 const LEFT = [SLOT.head, SLOT.chest, SLOT.legs, SLOT.hands, SLOT.feet, SLOT.cape];
@@ -128,6 +148,45 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
   const get = (l: Loc): Stack | null => (l.place === PLACE_EQUIP ? store.equip[l.slot] : store.bag[l.slot]) ?? null;
   const isPotion = (i: ItemInfo) => !!(i.healHp || i.healMp);
 
+  // ---------- Encantar: escolher o pergaminho e depois o item ----------
+  let picking = -1; // espaço da bolsa do pergaminho escolhido (-1 = nenhum)
+  const stopPicking = () => {
+    picking = -1;
+    root.classList.remove("picking");
+  };
+  const startPicking = (scrollSlot: number) => {
+    picking = scrollSlot;
+    root.classList.add("picking");
+    toast("Agora clique no item que quer encantar (botão direito cancela).");
+  };
+  /** Confirmação com a chance e o risco antes de gastar o pergaminho. */
+  const confirmEnchant = (l: Loc, x: number, y: number) => {
+    const scroll = store.bag[picking];
+    const s = get(l);
+    if (!scroll || !s) return stopPicking();
+    if (!canEnchantWith(scroll.info, s.info)) {
+      toast(scroll.info.scroll === ScrollKind.ENCHANT_WEAPON ? "Este pergaminho só encanta armas." : "Este pergaminho não encanta armas nem itens que empilham.", "warn");
+      return;
+    }
+    if (s.enchant >= enchantMax()) {
+      toast(`${s.info.name} já está no máximo (+${enchantMax()}).`, "warn");
+      return stopPicking();
+    }
+    const next = s.enchant + 1;
+    const chance = Math.round(enchantChance(next) * 100);
+    const risk = next <= enchantSafe() ? "seguro" : scroll.info.blessed ? "se falhar, volta a +0" : "se falhar, o item quebra";
+    const scrollSlot = picking;
+    stopPicking();
+    contextMenu(
+      [
+        { label: `Encantar ${enchantedName(s.info, s.enchant)} → +${next} (${chance}% · ${risk})`, danger: next > enchantSafe() && !scroll.info.blessed, run: () => d.enchant(scrollSlot, l.place, l.slot) },
+        { label: "Cancelar", run: () => undefined },
+      ],
+      x + 12,
+      y + 12,
+    );
+  };
+
   const actions = (l: Loc): MenuItem[] => {
     const s = get(l);
     if (!s) return [];
@@ -136,6 +195,8 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
     else {
       if (equippable(s.info)) list.push({ label: "Equipar", run: () => d.use(l.place, l.slot) });
       if (s.info.kind === ItemKind.POTION) list.push({ label: "Usar", run: () => d.use(l.place, l.slot) });
+      if (s.info.scroll === ScrollKind.RETURN) list.push({ label: "Ler (voltar à cidade)", run: () => d.use(l.place, l.slot) });
+      if (isEnchantScroll(s.info)) list.push({ label: "Encantar um item…", run: () => startPicking(l.slot) });
       if (isPotion(s.info)) list.push({ label: "Pôr na barra de atalhos", run: () => d.toHotbar(s.info.id) });
       if (d.shopOpen() && s.info.sellPrice > 0) list.push({ label: `Vender (${fmt.format(s.info.sellPrice * s.count)} moedas)`, run: () => d.sell(l.slot) });
       list.push({ label: "Destruir…", danger: true, run: () => confirmDestroy(l, s) });
@@ -168,7 +229,7 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
       });
       acts.append(b);
     }
-    openSheet(el("div", "item-sheet", el("div", "is-head", slotIcon, buildItemTip(s.info, { ...d.me(), count: s.count })), acts));
+    openSheet(el("div", "item-sheet", el("div", "is-head", slotIcon, buildItemTip(s.info, { ...d.me(), count: s.count, enchant: s.enchant })), acts));
   };
 
   const locOf = (t: HTMLElement | null): Loc | null => {
@@ -183,16 +244,25 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
       const s = get(l);
       if (!s) return null;
       const hintText = l.place === PLACE_EQUIP ? "Duplo clique para desequipar" : equippable(s.info) ? "Duplo clique para equipar" : s.info.kind === ItemKind.POTION ? "Duplo clique para usar" : "";
-      return buildItemTip(s.info, { ...d.me(), count: s.count, price: d.shopOpen() ? "sell" : undefined, hint: hintText });
+      const hint = isEnchantScroll(s.info) ? "Duplo clique e depois clique no item" : hintText;
+      return buildItemTip(s.info, { ...d.me(), count: s.count, enchant: s.enchant, price: d.shopOpen() ? "sell" : undefined, hint });
     });
     b.addEventListener("dblclick", () => {
-      if (get(l)) d.use(l.place, l.slot);
+      const s = get(l);
+      if (!s || picking >= 0) return;
+      if (l.place === PLACE_BAG && isEnchantScroll(s.info)) startPicking(l.slot);
+      else d.use(l.place, l.slot);
     });
-    b.addEventListener("click", () => {
+    b.addEventListener("click", (e) => {
+      if (picking >= 0) {
+        if (!(l.place === PLACE_BAG && l.slot === picking)) confirmEnchant(l, e.clientX, e.clientY);
+        return;
+      }
       if (isTouch() && get(l)) details(l);
     });
     b.addEventListener("contextmenu", (e) => {
       e.preventDefault();
+      if (picking >= 0) return stopPicking();
       const a = actions(l);
       if (a.length) contextMenu(a, e.clientX, e.clientY);
     });
@@ -244,7 +314,7 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
 
   // ---------- Desenho ----------
   const paint = (b: HTMLButtonElement, s: Stack | null) => {
-    b.querySelectorAll(".art, .qty").forEach((x) => x.remove());
+    b.querySelectorAll(".art, .qty, .ench").forEach((x) => x.remove());
     if (!s) {
       b.removeAttribute("data-grade");
       b.setAttribute("aria-label", b.dataset.hint ? `${b.dataset.hint} vazio` : "Vazio");
@@ -253,7 +323,8 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
     b.dataset.grade = String(s.info.grade);
     b.append(art(uniqueIds(itemIcon(s.info))));
     if (s.count > 1) b.append(el("span", "qty", String(s.count)));
-    b.setAttribute("aria-label", s.count > 1 ? `${s.count}× ${s.info.name}` : s.info.name);
+    if (s.enchant > 0) b.append(el("span", `ench${s.enchant >= 7 ? " hi" : s.enchant >= 4 ? " mid" : ""}`, `+${s.enchant}`));
+    b.setAttribute("aria-label", s.count > 1 ? `${s.count}× ${s.info.name}` : enchantedName(s.info, s.enchant));
   };
 
   function render() {

@@ -29,7 +29,7 @@ import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens
 import { EntityManager } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
-import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG } from "./ui/items";
+import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { TeleportWindow } from "./ui/teleport";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
@@ -246,6 +246,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // ---------- Itens ----------
   const store = new ItemStore(welcome.itemCatalog);
+  setEnchantRules(welcome.enchant);
   store.setInventory(welcome.inventory);
   const itemTip = new ItemTip(document.body);
   const npcStock = new Map(welcome.npcs.map((n) => [n.id, n.stock]));
@@ -614,6 +615,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           conn.sell(shop.npcId, slot, s.count);
           return true;
         },
+        enchant: (scroll, place, slot) => conn.enchant(scroll, place, slot),
         shopOpen: () => shop.isOpen,
       }),
     onClose: () => shop.isOpen && shop.close(),
@@ -1027,6 +1029,19 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "invite":
           invites.push(msg.msg.value);
           break;
+        case "enchantResult": {
+          const r = msg.msg.value;
+          const root = entities.rootOf(welcome.yourId);
+          const at = root?.position.add(new Vector3(0, 1.2, 0));
+          if (r.ok) {
+            toast(`Sucesso! +${r.level} ${r.itemName}`);
+            if (at) fx.pickup(at, new Color3(1, 0.8, 0.3));
+          } else {
+            toast(r.broke ? `O encantamento falhou: ${r.itemName} quebrou.` : `Falhou: ${r.itemName} voltou a +0.`, "bad");
+            if (at) fx.castGlow(at, new Color3(0.35, 0.3, 0.3));
+          }
+          break;
+        }
         case "channelBar": {
           const b = msg.msg.value;
           hud.setChannel(b.label, b.kind === ChannelKind.NONE ? 0 : b.totalMs);

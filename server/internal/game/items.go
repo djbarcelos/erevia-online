@@ -227,6 +227,13 @@ func scroll(id, name string, kind ScrollKind, price int64, desc string) *ItemDef
 	return d
 }
 
+// blessed: pergaminho abençoado (raridade boa, falhar não quebra).
+func blessed(d *ItemDef) *ItemDef {
+	d.Blessed = true
+	d.Grade = GradeRare
+	return d
+}
+
 func potion(id, name string, group int, hp, mp float64, price int64, icon, desc string) *ItemDef {
 	d := stackable(id, name, KindPotion, price, icon, desc)
 	d.Cooldown, d.HealHP, d.HealMP = group, hp, mp
@@ -395,6 +402,14 @@ var Items = func() map[string]*ItemDef {
 		// Pergaminhos.
 		scroll("scroll_return", "Pergaminho de Retorno", ScrollReturn, 120,
 			"Lido por 5 s, leva você de volta à cidade. Levar dano ou andar interrompe. Não funciona com karma."),
+		scroll("scroll_ench_weapon", "Pergaminho de Encantar Arma", ScrollEnchantWeapon, 1500,
+			"Sobe a arma em +1. Até +3 é seguro; acima disso pode falhar, e a arma quebra."),
+		scroll("scroll_ench_armor", "Pergaminho de Encantar Armadura", ScrollEnchantArmor, 600,
+			"Sobe armadura, elmo, escudo, roupa ou joia em +1. Até +3 é seguro; acima disso pode falhar, e o item quebra."),
+		blessed(scroll("scroll_ench_weapon_b", "Pergaminho Abençoado de Arma", ScrollEnchantWeapon, 6000,
+			"Sobe a arma em +1. Se falhar, a arma não quebra: volta a +0.")),
+		blessed(scroll("scroll_ench_armor_b", "Pergaminho Abençoado de Armadura", ScrollEnchantArmor, 2500,
+			"Sobe a peça em +1. Se falhar, ela não quebra: volta a +0.")),
 
 		// Materiais (só para vender).
 		stackable("bone_old", "Osso Velho", KindMaterial, 10, "bone", "Um osso qualquer. Alguém na cidade compra."),
@@ -470,6 +485,7 @@ var (
 		"shield_badge", "shield_buckler", "shield_tower", "shield_good",
 		"armor_common", "armor_good", "helm_common", "helm_good", "legs_common", "legs_good",
 		"gloves_common", "gloves_good", "boots_common", "boots_good", "cape_common", "cape_good",
+		"scroll_ench_weapon", "scroll_ench_armor",
 	}
 )
 

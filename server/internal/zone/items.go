@@ -48,6 +48,8 @@ func (z *Zone) onItem(e itemEvent) {
 		}
 	case *pb.CancelChannel:
 		z.cancelChannel(p, "Viagem cancelada.")
+	case *pb.Enchant:
+		z.enchant(p, int(m.ScrollSlot), int(m.Place), int(m.Slot))
 	}
 }
 
@@ -139,6 +141,8 @@ func (z *Zone) useItem(p *entity, place, slot int) {
 		z.drink(p, slot, def)
 	case def.Kind == game.KindScroll && def.Scroll == game.ScrollReturn:
 		z.startReturn(p, def)
+	case def.Kind == game.KindScroll:
+		z.system(p, "Escolha o item que quer encantar (clique nele depois do pergaminho).")
 	}
 }
 

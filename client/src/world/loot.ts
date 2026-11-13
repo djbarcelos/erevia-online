@@ -137,7 +137,7 @@ export class GroundLoot {
         beam.position.y = 1.5;
         beam.isPickable = false;
       }
-      const label = new TextBlock(`loot-label${it.id}`, itemLabel(info, it.count));
+      const label = new TextBlock(`loot-label${it.id}`, it.enchant > 0 ? `+${it.enchant} ${info.name}` : itemLabel(info, it.count));
       label.resizeToFit = true;
       label.fontSize = 12;
       label.fontWeight = "600";

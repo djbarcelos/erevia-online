@@ -29,9 +29,14 @@ type MonsterDef struct {
 
 var (
 	lootMinion  = []LootEntry{{"bone_old", 0.4, 1, 2}, {"skull_cracked", 0.08, 1, 1}, {"potion_hp_s", 0.06, 1, 1}}
-	lootFighter = []LootEntry{{"bone_old", 0.35, 1, 3}, {"skull_cracked", 0.15, 1, 1}, {"potion_hp_s", 0.08, 1, 2}, {"potion_mp_s", 0.05, 1, 1}}
-	lootMage    = []LootEntry{{"bone_old", 0.35, 1, 2}, {"skull_cracked", 0.15, 1, 1}, {"shadow_essence", 0.12, 1, 1}, {"potion_mp_s", 0.1, 1, 2}}
-	lootBoss    = []LootEntry{{"broken_crown", 1, 1, 1}, {"shadow_essence", 1, 2, 4}, {"potion_hp_l", 1, 2, 3}, {"potion_mp_l", 1, 1, 2}}
+	lootFighter = []LootEntry{{"bone_old", 0.35, 1, 3}, {"skull_cracked", 0.15, 1, 1}, {"potion_hp_s", 0.08, 1, 2}, {"potion_mp_s", 0.05, 1, 1},
+		{"scroll_ench_armor", 0.012, 1, 1}, {"scroll_ench_weapon", 0.006, 1, 1}}
+	lootMage = []LootEntry{{"bone_old", 0.35, 1, 2}, {"skull_cracked", 0.15, 1, 1}, {"shadow_essence", 0.12, 1, 1}, {"potion_mp_s", 0.1, 1, 2},
+		{"scroll_ench_armor", 0.015, 1, 1}, {"scroll_ench_weapon", 0.008, 1, 1},
+		{"scroll_ench_armor_b", 0.003, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+	lootBoss = []LootEntry{{"broken_crown", 1, 1, 1}, {"shadow_essence", 1, 2, 4}, {"potion_hp_l", 1, 2, 3}, {"potion_mp_l", 1, 1, 2},
+		{"scroll_ench_weapon", 0.5, 1, 1}, {"scroll_ench_armor", 0.6, 1, 2},
+		{"scroll_ench_weapon_b", 0.15, 1, 1}, {"scroll_ench_armor_b", 0.2, 1, 1}}
 )
 
 var Monsters = map[string]*MonsterDef{

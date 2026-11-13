@@ -1,4 +1,4 @@
-import { ItemKind, type Inventory, type ItemInfo } from "../gen/erevia/v1/game_pb";
+import { ItemKind, ScrollKind, type EnchantRules, type Inventory, type ItemInfo } from "../gen/erevia/v1/game_pb";
 import { classInfo } from "../classes";
 import { formatSeconds, render, STROKE, type Theme } from "./icons";
 
@@ -36,6 +36,55 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, 
 export interface Stack {
   info: ItemInfo;
   count: number;
+  /** +N de encantamento (0 = sem). */
+  enchant: number;
+}
+
+// ---------- Encantamento (regras vindas do servidor no Welcome) ----------
+
+let enchantRules: EnchantRules | undefined;
+
+export function setEnchantRules(r: EnchantRules | undefined): void {
+  enchantRules = r;
+}
+
+/** Chance (0–1) de chegar a +target. */
+export function enchantChance(target: number): number {
+  return enchantRules?.chance[target] ?? 0;
+}
+
+export const enchantSafe = (): number => enchantRules?.safe ?? 3;
+export const enchantMax = (): number => enchantRules?.max ?? 10;
+
+/** O que o encantamento soma (mesma conta do servidor: acima do seguro, cada nível vale o dobro). */
+export function enchantBonus(info: ItemInfo, level: number): { pAtk: number; mAtk: number; pDef: number; mDef: number } {
+  const out = { pAtk: 0, mAtk: 0, pDef: 0, mDef: 0 };
+  if (!enchantRules || level <= 0) return out;
+  const per = (enchantRules.weaponBonus[info.grade] ?? 0) * (level + Math.max(0, level - enchantRules.safe));
+  if (info.kind === ItemKind.WEAPON) {
+    const b = info.bonus;
+    if ((b?.mAtk ?? 0) > 0) out.mAtk = per;
+    if ((b?.pAtk ?? 0) > 0 || (b?.mAtk ?? 0) <= 0) out.pAtk = per;
+  } else if (info.kind === ItemKind.NECKLACE || info.kind === ItemKind.EARRING || info.kind === ItemKind.RING) {
+    out.mDef = Math.round(per / 2);
+  } else {
+    out.pDef = Math.round(per / 2);
+    out.mDef = Math.round(per / 2);
+  }
+  return out;
+}
+
+/** O pergaminho encanta este item? */
+export function canEnchantWith(scroll: ItemInfo, target: ItemInfo): boolean {
+  if (target.stack > 1 || !equippable(target)) return false;
+  if (scroll.scroll === ScrollKind.ENCHANT_WEAPON) return target.kind === ItemKind.WEAPON;
+  if (scroll.scroll === ScrollKind.ENCHANT_ARMOR) return target.kind !== ItemKind.WEAPON;
+  return false;
+}
+
+/** "+5 Espada de Aço" (sem encantamento, só o nome). */
+export function enchantedName(info: ItemInfo, level: number): string {
+  return level > 0 ? `+${level} ${info.name}` : info.name;
 }
 
 /**
@@ -65,7 +114,7 @@ export class ItemStore {
     for (const it of inv.items) {
       const info = this.catalog.get(it.itemId);
       if (!info) continue;
-      const s = { info, count: it.count };
+      const s = { info, count: it.count, enchant: it.enchant };
       if (it.place === PLACE_EQUIP) {
         if (it.slot < EQUIP_SLOT_COUNT) this.equip[it.slot] = s;
       } else this.bag[it.slot] = s;
@@ -227,6 +276,8 @@ export interface TipContext {
   hint?: string;
   /** Mostrar ao lado (à direita) do elemento, em vez de acima. */
   side?: boolean;
+  /** +N de encantamento do item. */
+  enchant?: number;
 }
 
 /** Conteúdo da dica de um item (usado pela dica flutuante e pelas janelas novas). */
@@ -236,7 +287,8 @@ export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
     const icon = el("div", "tip-icon");
     icon.innerHTML = itemIcon(info);
     const title = el("div", "tip-title");
-    const name = el("strong", "", info.name);
+    const ench = ctx.enchant ?? 0;
+    const name = el("strong", "", enchantedName(info, ench));
     name.style.color = GRADE_COLOR[info.grade] ?? GRADE_COLOR[1];
     const kind = [(info.kind === ItemKind.WEAPON && WEAPON_LABEL[info.weaponType]) || KIND_LABEL[info.kind] || "Item"];
     if (info.slot >= 0) kind.push(GRADE_NAME[info.grade] ?? "");
@@ -271,6 +323,20 @@ export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
       if (b.speed) stat("Vel. de movimento", sign(b.speed, `${num(b.speed)} m/s`));
       if (b.hpRegen) stat("Regeneração de vida", sign(b.hpRegen, `${num(b.hpRegen)}/s`));
       if (b.mpRegen) stat("Regeneração de mana", sign(b.mpRegen, `${num(b.mpRegen)}/s`), "mana");
+    }
+    if (ench > 0) {
+      const e = enchantBonus(info, ench);
+      const parts = [
+        e.pAtk && `Ataque físico +${e.pAtk}`,
+        e.mAtk && `Ataque mágico +${e.mAtk}`,
+        e.pDef && `Defesa física +${e.pDef}`,
+        e.mDef && `Defesa mágica +${e.mDef}`,
+      ].filter(Boolean);
+      stat(`Encantamento +${ench}`, parts.join(" · "), "ench");
+    }
+    if (info.scroll === ScrollKind.ENCHANT_WEAPON || info.scroll === ScrollKind.ENCHANT_ARMOR) {
+      stat("Seguro até", `+${enchantSafe()}`);
+      stat(`Chance de +${enchantSafe() + 1}`, `${Math.round(enchantChance(enchantSafe() + 1) * 100)}%`);
     }
     if (info.healHp) stat("Cura", `${info.healHp} de vida`);
     if (info.healMp) stat("Restaura", `${info.healMp} de mana`, "mana");

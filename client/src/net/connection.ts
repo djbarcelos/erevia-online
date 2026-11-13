@@ -68,6 +68,11 @@ export class Connection {
     this.send({ case: "teleport", value: { npcId, destId } });
   }
 
+  /** Pergaminho de encantar (na bolsa) num item da bolsa (place 0) ou equipado (1). */
+  enchant(scrollSlot: number, place: number, slot: number): void {
+    this.send({ case: "enchant", value: { scrollSlot, place, slot } });
+  }
+
   cancelChannel(): void {
     this.send({ case: "cancelChannel", value: {} });
   }

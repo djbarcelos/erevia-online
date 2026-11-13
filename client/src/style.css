@@ -404,3 +404,8 @@
   margin: 4px 12px;
   color: var(--bad, #ff6b5b);
 }
+
+/* Dica do item: linha do encantamento */
+.tip-stats li.ench b {
+  color: #ffd36b;
+}

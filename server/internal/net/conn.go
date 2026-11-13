@@ -202,6 +202,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.ItemAction(ctx, id, m.Teleport)
 		case *pb.ClientMessage_CancelChannel:
 			s.zone.ItemAction(ctx, id, m.CancelChannel)
+		case *pb.ClientMessage_Enchant:
+			s.zone.ItemAction(ctx, id, m.Enchant)
 		case *pb.ClientMessage_PartyCmd:
 			s.zone.Social(ctx, id, m.PartyCmd)
 		case *pb.ClientMessage_ClanCmd:
