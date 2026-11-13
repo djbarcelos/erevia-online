@@ -88,6 +88,21 @@
               <td>Mostrar a todos quem venceu o chefe</td>
             </tr>
             <tr>
+              <td>Lista de amigos do jogo e cartas do correio entre personagens (remetente, assunto e texto)</td>
+              <td>Criados por você ao jogar</td>
+              <td>Entregar as cartas e mostrar quem está online</td>
+            </tr>
+            <tr>
+              <td>Eventos de jogo (telemetria): moedas e itens que entram e saem, monstros abatidos, mortes, níveis, duração das sessões e o FPS médio com o tipo de aparelho, cada um com o personagem, o nível e a posição no mapa</td>
+              <td>Gerados pelo jogo enquanto você joga</td>
+              <td>Equilibrar a economia e a dificuldade, achar falhas e melhorar o desempenho</td>
+            </tr>
+            <tr>
+              <td>Relatos de problema (<code>/bug</code>): o texto, o personagem, a posição, a versão e o navegador; registros das ações dos moderadores (quem fez, o quê e em quem)</td>
+              <td>Enviados por você ou gerados pela moderação</td>
+              <td>Corrigir falhas e manter a comunidade segura</td>
+            </tr>
+            <tr>
               <td>Registros técnicos do servidor (data e hora, número interno da conta, erros de conexão, que podem incluir o endereço IP)</td>
               <td>Gerados pelo servidor e pela hospedagem</td>
               <td>Segurança, prevenção de abuso e correção de falhas</td>
@@ -106,8 +121,9 @@
       </p>
       <p>
         <strong>O que não guardamos:</strong> e-mail, senha (o login é sempre pelo Google ou pelo Discord), foto de perfil,
-        lista de amigos ou servidores do Discord, dados de pagamento (o jogo é gratuito) e o conteúdo do chat. As mensagens do
-        chat são entregues na hora a quem está online e não ficam gravadas no banco de dados.
+        a sua lista de amigos ou de servidores do Discord, dados de pagamento (o jogo é gratuito) e o conteúdo do chat. As
+        mensagens do chat são entregues na hora a quem está online e não ficam gravadas no banco de dados (as cartas do correio,
+        sim, até serem apagadas).
       </p>
       <p>
         <strong>O que outros jogadores veem:</strong> o nome, a classe, o nível, a aparência e o equipamento visível dos seus
@@ -155,7 +171,7 @@
       <ul>
         <li><strong>Conta e dados do jogo:</strong> enquanto a conta existir. Hoje não há exclusão automática de contas inativas.</li>
         <li><strong>Sessão:</strong> deixa de valer em 30 dias; o registro dela (só o hash) é apagado quando você sai ou apaga a conta.</li>
-        <li><strong>Ao apagar a conta:</strong> tudo é apagado do banco de dados principal na hora (veja a seção 7).</li>
+        <li><strong>Ao apagar a conta:</strong> tudo é apagado do banco de dados principal na hora (veja a seção 7). Os eventos de jogo (telemetria) ficam só como estatística, <strong>sem</strong> a conta e os personagens, e não dá mais para ligá-los a você. Os registros de moderação são mantidos, para a segurança da comunidade.</li>
         <li>
           <strong>Cópias de segurança (backups):</strong> fazemos uma cópia diária, guardada por 6 dias, e uma semanal, guardada
           por 27 dias. Por isso, dados apagados <strong>podem permanecer nas cópias de segurança por até 27 dias</strong>, até
@@ -185,7 +201,8 @@
         Na tela de personagens, abra <strong>Conta</strong> e use <strong>Apagar a conta</strong>. Depois de digitar
         <strong>APAGAR</strong> para confirmar, apagamos na hora: a conta, a ligação com o Google ou o Discord, as sessões, todos
         os personagens, itens, moedas e o armazém, e a participação em clãs. Se você lidera um clã, a liderança passa para o
-        membro de cargo mais alto (ou o clã é desfeito, se ficar vazio). Quem estiver jogando com a conta é desconectado. Não dá
+        membro de cargo mais alto (ou o clã é desfeito, se ficar vazio). As cartas que você enviou continuam com quem recebeu,
+        mas assinadas como "Personagem apagado", e os eventos de jogo perdem a ligação com você. Quem estiver jogando com a conta é desconectado. Não dá
         para desfazer. Entrar de novo depois com o mesmo login cria uma conta nova e vazia.
       </p>
       <h3>Outros pedidos</h3>

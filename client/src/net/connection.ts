@@ -8,6 +8,7 @@ import {
   PartyCmdKind,
   ServerMessageSchema,
   type FriendCmdKind,
+  type SpecCmdKind,
   type MailCmdKind,
   type ServerMessage,
   type TradeCmdKind,
@@ -181,6 +182,11 @@ export class Connection {
   /** Pede o ranking (a janela Glória, quando abre e o que tem guardado está velho). */
   rankingRequest(): void {
     this.send({ case: "rankingRequest", value: {} });
+  }
+
+  /** Mestra dos Caminhos: falar (anda A Encruzilhada e abre a escolha) ou escolher o caminho. */
+  specCmd(kind: SpecCmdKind, npcId: number, spec = ""): void {
+    this.send({ case: "specCmd", value: { kind, npcId, spec } });
   }
 
   /** Escolhe o título (id da conquista; "" tira). */

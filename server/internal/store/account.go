@@ -75,6 +75,11 @@ func (s *Store) deleteAccount(ctx context.Context, accountID int64) (DeletedAcco
 			if _, err := tx.Exec(ctx, `UPDATE world_bosses SET top_name = '' WHERE lower(top_name) = ANY($1)`, names); err != nil {
 				return err
 			}
+			// Cartas enviadas ficam com quem recebeu (from_id vira NULL pela chave), mas sem
+			// o nome do personagem apagado.
+			if _, err := tx.Exec(ctx, `UPDATE mail SET from_name = 'Personagem apagado' WHERE from_id = ANY($1)`, out.Characters); err != nil {
+				return err
+			}
 		}
 
 		// Erros do cliente (client_errors, sem chave estrangeira): ficam, mas sem dono.
@@ -88,6 +93,16 @@ func (s *Store) deleteAccount(ctx context.Context, accountID int64) (DeletedAcco
 		}
 		if tag.RowsAffected() == 0 {
 			return ErrNotFound
+		}
+		// Telemetria (game_events) não tem chave estrangeira: os eventos ficam, para as
+		// estatísticas agregadas, mas sem a conta e os personagens. Roda DEPOIS do DELETE:
+		// um lote que InsertEvents estava gravando trava a linha da conta (FOR KEY SHARE),
+		// então o DELETE espera esse lote terminar, e este UPDATE (com um snapshot novo)
+		// também pega os eventos dele.
+		if _, err := tx.Exec(ctx,
+			`UPDATE game_events SET account_id = NULL, character_id = NULL
+			 WHERE account_id = $1 OR character_id = ANY($2)`, accountID, out.Characters); err != nil {
+			return err
 		}
 		return nil
 	})

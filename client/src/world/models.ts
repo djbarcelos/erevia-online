@@ -19,6 +19,7 @@ import {
 } from "@babylonjs/core";
 import { reportClientError } from "../net/errors";
 import { createGolem, GOLEM_MODEL } from "./golem";
+import { setPaletteKind } from "./palette-material";
 import { bodyPalettes, colorKey, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook } from "./body-look";
 
 /**
@@ -233,6 +234,11 @@ export class CharacterModels {
       Promise.all(modelIds.map((id) => tryLoad(`${id}.glb`).then((c) => [id, c] as const))),
     ]);
     const weaponByFile = new Map(weaponList);
+    // Material de paleta: personagens, monstros e armas com a borda e o degradê mais fortes
+    // que o cenário. As cópias (repintura, brilho) herdam o tipo.
+    for (const c of [...bodies.map(([, b]) => b), ...weaponList.map(([, w]) => w)]) {
+      for (const m of c?.materials ?? []) setPaletteKind(m, "char");
+    }
 
     const models = new Map<string, ModelAssets>();
     for (const [id, body] of bodies) {

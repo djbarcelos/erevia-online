@@ -48,6 +48,8 @@ type API struct {
 	onAccountDeleted func(store.DeletedAccount)
 	// errLimit: lotes de erros do cliente por IP e por conta (POST /api/client-errors).
 	errLimit *rateLimiter
+	// admin: portal de administração (admin.go).
+	admin *adminState
 }
 
 // OnAccountDeleted registra quem é avisado depois que uma conta é apagada (antes de servir).
@@ -77,6 +79,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/characters", a.handleCreateCharacter)
 	mux.HandleFunc("GET /api/creation", a.handleCreation)
 	mux.HandleFunc("POST /api/client-errors", a.handleClientErrors)
+	a.registerAdmin(mux)
 }
 
 // Authenticate devolve a conta da sessão no cookie (também usado pelo WebSocket).
