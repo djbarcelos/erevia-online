@@ -330,10 +330,11 @@ export class CharacterModels {
     };
     const firstHead = headOf(look ?? ORIGINAL_LOOK);
     const srcHead = assets.heads.get(firstHead);
-    // Malhas com esqueleto precisam ser clonadas (não instanciadas).
+    // Malhas com esqueleto precisam ser clonadas (não instanciadas). Os nós "Head_*" sem
+    // malha (o glTF cria um por malha com pele, vazio) também ficam de fora.
     const entries = assets.body.instantiateModelsToScene((n) => `${n}#${id}`, false, {
       doNotInstantiate: true,
-      predicate: (e: unknown) => !(e instanceof AbstractMesh && e.name.startsWith("Head_") && e !== srcHead),
+      predicate: (e: unknown) => !(e instanceof TransformNode && e.name.startsWith("Head_") && e !== srcHead),
     });
     const gltfRoot = entries.rootNodes[0] as TransformNode;
 
@@ -375,7 +376,7 @@ export class CharacterModels {
     const hat = byName.get("Hat");
     // Só as malhas com esqueleto (as armas presas nas mãos não entram).
     const bodyMeshes = gltfRoot.getChildMeshes(false).filter((m) => !!m.skeleton && !!m.material);
-    let head = { id: firstHead, mesh: byName.get(`Head_${firstHead}`) as AbstractMesh | undefined };
+    let head = { id: firstHead, mesh: bodyMeshes.find((m) => m.name.split("#")[0] === `Head_${firstHead}`) };
     const baseMat = bodyMeshes.find((m) => m !== head.mesh)?.material ?? bodyMeshes[0]?.material ?? null;
     let painted: BodyLook | null = null; // cores em uso (material repintado)
     let disposed = false;
