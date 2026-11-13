@@ -25,6 +25,8 @@ export interface SettingsOpts {
   logout(): void;
   /** Dados para as abas Conta e Sobre. */
   info(): { account: string; character: string; level: number; ping: number; online: number };
+  /** Abre a janela "O que há de novo". */
+  news(): void;
 }
 
 const pct = (v: number) => `${v}%`;
@@ -267,6 +269,7 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "div",
         "set-page about",
         el("div", "about-logo", el("span", "logo-word small-logo", "EREVIA"), el("span", "muted small", "Fase 3 · interface nova")),
+        group("Novidades", row("O que há de novo", button("Abrir", "btn btn-sm", opts.news), "O que mudou nas últimas versões do jogo.")),
         group(
           "Conexão",
           row("Ping", el("span", opts.info().ping < 80 ? "ok" : "warn", `${opts.info().ping} ms`)),
