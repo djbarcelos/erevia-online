@@ -241,6 +241,7 @@ type Zone struct {
 	socialJobs     chan socialJob
 	socialBackend  SocialBackend
 	mailSent       map[uint32][]time.Time // cartas enviadas na última hora, por remetente
+
 	rankingBackend RankingBackend
 	ranking        *rankingCache // último cálculo do ranking (nil = ainda não chegou)
 
