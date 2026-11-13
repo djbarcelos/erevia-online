@@ -314,10 +314,7 @@ func (inv *inventory) bonus() game.Stats {
 	var b game.Stats
 	for _, s := range inv.equip {
 		if !s.empty() {
-			b = b.AddBonus(s.def.Bonus)
-			if s.enchant > 0 {
-				b = b.AddBonus(game.EnchantBonus(s.def, s.enchant))
-			}
+			b = game.AddItemBonus(b, s.def, s.enchant)
 		}
 	}
 	return b
