@@ -15,12 +15,13 @@ package zone
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"hash/fnv"
+	"log/slog"
 	"math"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strings"
@@ -109,6 +110,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.Social(ctx, id, m.RankingRequest)
 	case *pb.ClientMessage_AchievementCmd:
 		z.Social(ctx, id, m.AchievementCmd)
+	case *pb.ClientMessage_SpecCmd:
+		z.ProgressAction(ctx, id, m.SpecCmd)
 	case *pb.ClientMessage_TradeCmd:
 		z.Trade(ctx, id, m.TradeCmd)
 	default:
@@ -310,7 +313,7 @@ var (
 		return out
 	}()
 	fuzzLevels = []int{5, 6, 10, 15, 20, 30}
-	fuzzGold   = []int64{0, 1, 149, 5000, 123456, 1_000_000_000}
+	fuzzGold   = []int64{0, 1, 149, 5000, 123456, maxGold / 10} // abaixo do teto de checkGold
 	fuzzCounts = []int{1, 2, 15, 50, 999}
 	fuzzEnch   = []int{0, 3, 4, 9, 10}
 )
@@ -333,6 +336,10 @@ func newFuzzHarness(t *testing.T, r *fuzzReader) *fuzzHarness {
 		cfg.MaxMovesPerSec, cfg.ChatPerSec, cfg.ChatBurst = 1e6, 1e6, 1e6
 	}
 	cfg.DevCommands = flags&8 != 0
+	// Sem invasão nem XP em dobro sorteadas pelo relógio: a invasão traz monstros e
+	// recompensa em moedas (fontes que esta contabilidade não modela; o GM ainda pode
+	// começar uma com /evento, e com GM a contabilidade não vale).
+	cfg.InvasionChance, cfg.XP2Days = 0, nil
 	lg := &fuzzLog{}
 	h := &fuzzHarness{t: t, log: lg, z: New(cfg, slog.New(lg), nil)}
 	h.spots = fuzzSpots(h.z)
@@ -377,12 +384,20 @@ func newFuzzHarness(t *testing.T, r *fuzzReader) *fuzzHarness {
 			}
 		}
 		karma := []int{0, 0, 0, 5, 100}[r.pick(5)]
+		// Especialização: nenhuma, uma da classe ou uma de outra classe (o banco não confere).
+		spec := ""
+		if k := r.pick(4); k > 0 {
+			spec = game.SpecList[r.pick(len(game.SpecList))].ID
+			if cs := game.ClassSpecs(class); k < 3 && len(cs) > 0 {
+				spec = cs[r.pick(len(cs))].ID
+			}
+		}
 		h.peers[i] = &fuzzPeer{}
 		h.z.handle(joinEvent{info: JoinInfo{
 			ID: h.ids[i], Name: h.names[i], Class: class, X: pos.X, Z: pos.Z,
 			XP: game.XPLevelStart(level), Gold: fuzzGold[r.pick(len(fuzzGold))], Items: items,
 			AccountID: h.accts[i], Karma: karma, Storage: st, GM: h.gm && i == 0,
-			Peer: h.peers[i],
+			Spec: spec, Peer: h.peers[i],
 		}})
 	}
 	h.pump()
@@ -418,11 +433,29 @@ func (h *fuzzHarness) pump() {
 	}
 }
 
+// guard roda fn e transforma um panic (de um handler, que os testes chamam sem o recover
+// de handleSafe, ou um invariantPanic de checkInvariants, que atravessa os recovers) numa
+// falha com a sequência que levou a ele.
+func (h *fuzzHarness) guard(what string, fn func()) {
+	h.t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(invariantPanic); ok {
+				h.fail("%s: %v", what, r)
+			}
+			h.fail("%s: panic: %v\n%s", what, r, debug.Stack())
+		}
+	}()
+	fn()
+}
+
 func (h *fuzzHarness) ticks(n int) {
 	for range n {
 		start := time.Now()
-		h.z.update(1 / float64(h.z.cfg.TickRate))
-		h.pump()
+		h.guard("tick", func() {
+			h.z.update(1 / float64(h.z.cfg.TickRate))
+			h.pump()
+		})
 		if d := time.Since(start); d > fuzzSlowMessage {
 			h.fail("um tick levou %v (limite %v)", d, fuzzSlowMessage)
 		}
@@ -445,8 +478,10 @@ func (h *fuzzHarness) send(i int, msg *pb.ClientMessage) {
 	}
 	h.trace = append(h.trace, fmt.Sprintf("%s [%d bytes]: %s", h.names[i], len(data), fuzzShort(wire)))
 	start := time.Now()
-	fuzzDeliver(h.z, h.ids[i], wire)
-	h.pump()
+	h.guard("mensagem", func() {
+		fuzzDeliver(h.z, h.ids[i], wire)
+		h.pump()
+	})
 	if d := time.Since(start); d > fuzzSlowMessage {
 		h.fail("uma mensagem levou %v na zona (limite %v): trava o tick de todos", d, fuzzSlowMessage)
 	}
@@ -477,11 +512,19 @@ type fuzzLedger struct {
 	gold  int64          // moedas na bolsa, no armazém e no chão
 	value int64          // gold + o que a loja pagaria por todos os itens
 	units map[string]int // unidades por item
+	done  []string       // missões concluídas pelos dois (uma entrada por jogador e missão)
 }
 
 func (h *fuzzHarness) ledger() fuzzLedger {
 	z := h.z
 	l := fuzzLedger{units: map[string]int{}}
+	for _, id := range h.ids {
+		if p := z.players[id]; p != nil {
+			for q := range p.pl.quests.done {
+				l.done = append(l.done, fmt.Sprintf("%d:%s", id, q))
+			}
+		}
+	}
 	addItem := func(def *game.ItemDef, n int) {
 		if def == nil || n <= 0 {
 			return
@@ -539,9 +582,12 @@ func (h *fuzzHarness) ledger() fuzzLedger {
 }
 
 // checkEconomy confere o passo entre before e after. Fontes legítimas na zona de teste
-// (sem monstros e sem missões, porque os personagens começam no nível 5 ou mais):
+// (sem monstros nem invasão; o tutorial não vem porque os personagens começam no nível 5
+// ou mais):
 //   - Buy: só o item comprado pode aumentar, e o ouro cai pelo menos o preço cheio;
 //   - Craft: só o resultado da receita, no máximo Count, com o ouro e os materiais pagos;
+//   - missão concluída no passo (ex.: A Encruzilhada, da especialização, ou chegar a um
+//     lugar): no máximo as moedas e os itens da recompensa dela;
 //   - Sell troca item por ouro pelo preço de venda, então o "valor" não muda.
 //
 // Fora isso, nenhuma unidade de item aparece e o valor total (ouro + preço de venda dos
@@ -552,6 +598,23 @@ func (h *fuzzHarness) checkEconomy(before, after fuzzLedger, msg *pb.ClientMessa
 		return
 	}
 	allowValue := int64(0)
+	reward := map[string]int{} // unidades de recompensa de missão liberadas neste passo
+	for _, k := range after.done {
+		if slices.Contains(before.done, k) {
+			continue
+		}
+		q := game.Quests[k[strings.IndexByte(k, ':')+1:]]
+		if q == nil {
+			continue
+		}
+		allowValue += q.Reward.Gold
+		for _, it := range q.Reward.Items {
+			reward[it.ID] += it.Count
+			if def := game.Items[it.ID]; def != nil {
+				allowValue += def.SellPrice() * int64(it.Count)
+			}
+		}
+	}
 	for id, n := range after.units {
 		grew := n - before.units[id]
 		if grew <= 0 {
@@ -559,6 +622,8 @@ func (h *fuzzHarness) checkEconomy(before, after fuzzLedger, msg *pb.ClientMessa
 		}
 		def := game.Items[id]
 		switch {
+		case grew <= reward[id]:
+			// recompensa de missão (o valor já entrou em allowValue)
 		case msg.GetBuy() != nil && msg.GetBuy().ItemId == id:
 			if paid := before.gold - after.gold; paid < def.Price*int64(grew) {
 				h.fail("compra de %d× %s pagou %d moedas (preço %d cada)", grew, id, paid, def.Price)
@@ -591,52 +656,26 @@ func (h *fuzzHarness) checkEconomy(before, after fuzzLedger, msg *pb.ClientMessa
 
 // checkState confere o estado de cada jogador depois de cada passo.
 //
-// TODO(tunnel#112): quando checkInvariants entrar na main, chamar ela aqui no lugar das
-// checagens de posição, vida, mana e inventário abaixo (a contabilidade de ouro e itens
-// de checkEconomy é do fuzz e continua).
+// Vida, mana, ouro, itens, progressão, posição, PvP, grupo, clã e troca são as regras de
+// checkInvariants (invariants.go), que em teste dá panic (invariantPanic) e aqui vira
+// falha. O resto é do fuzz: destino e caminho, armazém, chão, mensagens legíveis e log.
 func (h *fuzzHarness) checkState() {
 	h.t.Helper()
 	z := h.z
 	b := z.bounds()
-	finite := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 	inMap := func(v Vec2) bool { return finite(v.X) && finite(v.Z) && b.Contains(world.Point{X: v.X, Z: v.Z}) }
 	for i, id := range h.ids {
 		p := z.players[id]
 		if p == nil {
 			continue // saiu (ex.: expulso); quem saiu entra na contabilidade por z.recent
 		}
-		if !inMap(p.pos) {
-			h.fail("%s fora do mapa: pos=%v (limites %+v)", h.names[i], p.pos, b)
-		}
+		h.guard("checkInvariants("+h.names[i]+")", func() { z.checkInvariants(p) })
 		if !inMap(p.dest) {
 			h.fail("%s com destino fora do mapa: dest=%v", h.names[i], p.dest)
 		}
 		for _, pt := range p.path {
 			if !inMap(pt) {
 				h.fail("%s com caminho fora do mapa: %v", h.names[i], pt)
-			}
-		}
-		if !finite(p.stats.MaxHP) || p.stats.MaxHP <= 0 || !finite(p.hp) || p.hp < 0 || p.hp > p.stats.MaxHP {
-			h.fail("%s com vida %v de %v", h.names[i], p.hp, p.stats.MaxHP)
-		}
-		if !finite(p.stats.MaxMP) || p.stats.MaxMP < 0 || !finite(p.mp) || p.mp < 0 || p.mp > p.stats.MaxMP {
-			h.fail("%s com mana %v de %v", h.names[i], p.mp, p.stats.MaxMP)
-		}
-		inv := &p.pl.inv
-		if inv.gold < 0 {
-			h.fail("%s com ouro negativo: %d", h.names[i], inv.gold)
-		}
-		for s, st := range inv.bag {
-			if st.def != nil && (st.count < 0 || st.count > st.def.Stack || st.enchant < 0 || st.enchant > game.MaxEnchant) {
-				h.fail("%s: bolsa[%d] inválida: %s×%d +%d", h.names[i], s, st.def.ID, st.count, st.enchant)
-			}
-		}
-		for s, st := range inv.equip {
-			if st.empty() {
-				continue
-			}
-			if st.count != 1 || !st.def.Fits(s) || st.enchant < 0 || st.enchant > game.MaxEnchant {
-				h.fail("%s: equipamento[%d] inválido: %s×%d +%d", h.names[i], s, st.def.ID, st.count, st.enchant)
 			}
 		}
 		if h.peers[i].bad != nil {
@@ -661,6 +700,8 @@ func (h *fuzzHarness) checkState() {
 	h.log.mu.Lock()
 	errs := slices.Clone(h.log.errs)
 	h.log.mu.Unlock()
+	// Um panic num sistema do tick é recuperado por runSystem/guardPlayer (errors.go) e
+	// só aparece aqui, no log "panic recovered" (que também vira server_error).
 	if len(errs) > 0 {
 		h.fail("a zona logou erro: %s", strings.Join(errs, "; "))
 	}
@@ -711,7 +752,7 @@ func fuzzSpotFor(msg *pb.ClientMessage) byte {
 		return 0
 	}
 	id := uint32(inner.Get(nf).Uint())
-	if n := id - npcIDBase; id >= npcIDBase && n < uint32(len(townNPCs)+len(teleportStones)+1) {
+	if n := id - npcIDBase; id >= npcIDBase && n <= fuzzMasterID-npcIDBase {
 		return byte(n)
 	}
 	return 0
@@ -726,17 +767,20 @@ func fuzzFixedSetup(spot byte) []byte {
 		return []byte{idx(fuzzItemIDs, id), byte(slices.Index(fuzzCounts, count)), byte(slices.Index(fuzzEnch, ench))}
 	}
 	b := []byte{0b00000101, spot}
-	b = append(b, idx(fuzzClasses, "knight"), 2, 4)
+	b = append(b, idx(fuzzClasses, "knight"), byte(slices.Index(fuzzLevels, 20)), 4)
 	b = append(b, item("scroll_ench_weapon", 2, 0)...)
 	b = append(b, item("potion_hp_s", 15, 0)...)
 	b = append(b, item("bone_old", 50, 0)...)
 	b = append(b, item("skull_cracked", 15, 0)...)
 	b = append(b, 1, 3, 1)
 	b = append(b, item("scroll_return", 2, 0)...)
-	b = append(b, 0, 5)
-	b = append(b, idx(fuzzClasses, "mage"), 3, 1, 0, 0, 3, 3)
+	b = append(b, 0, 0, 5) // karma, especialização, ouro
+	b = append(b, idx(fuzzClasses, "mage"), 3, 1, 0, 0, 3, 0, 3)
 	return b
 }
+
+// fuzzMasterID: a Mestra dos Caminhos, o último NPC (ver spawnNPCs).
+var fuzzMasterID = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1)
 
 // fuzzValidMessages: uma mensagem válida de cada tipo do oneof (o corpus inicial).
 func fuzzValidMessages() []*pb.ClientMessage {
@@ -777,6 +821,9 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_MailCmd{MailCmd: &pb.MailCmd{Kind: pb.MailCmdKind(1), To: "Beto", Subject: "oi", Body: "tudo bem?"}}},
 		{Msg: &pb.ClientMessage_RankingRequest{RankingRequest: &pb.RankingRequest{}}},
 		{Msg: &pb.ClientMessage_AchievementCmd{AchievementCmd: &pb.AchievementCmd{Kind: pb.AchievementCmdKind(1), Id: fuzzAchIDs[0]}}},
+		// Mestra dos Caminhos: falar (anda a missão da especialização) e escolher o caminho.
+		{Msg: &pb.ClientMessage_SpecCmd{SpecCmd: &pb.SpecCmd{Kind: pb.SpecCmdKind_SPEC_CMD_TALK, NpcId: fuzzMasterID}}},
+		{Msg: &pb.ClientMessage_SpecCmd{SpecCmd: &pb.SpecCmd{Kind: pb.SpecCmdKind_SPEC_CMD_CHOOSE, NpcId: fuzzMasterID, Spec: "herald"}}},
 	}
 	return out
 }
@@ -1095,6 +1142,8 @@ func (g *fuzzGen) named(fd protoreflect.FieldDescriptor) (protoreflect.Value, bo
 			return str(fuzzRecipeIDs[r.pick(len(fuzzRecipeIDs))])
 		case "id": // AchievementCmd
 			return str(fuzzAchIDs[r.pick(len(fuzzAchIDs))])
+		case "spec":
+			return str(game.SpecList[r.pick(len(game.SpecList))].ID)
 		case "name", "to":
 			return str(g.h.names[r.byte()&1])
 		}

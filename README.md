@@ -152,7 +152,7 @@ Um cliente pode mandar qualquer byte pelo WebSocket; nenhuma mensagem pode derru
 | `FuzzZoneSemantic` (`internal/zone`) | Sequências de 30 mensagens de todos os tipos do oneof, montadas por reflexão com valores extremos (slots 0/255/2³²−1, quantidades 0 e máximas, ids que não existem ou de outra entidade, NaN/±Inf, textos enormes ou com controle, comandos de chat), com ticks entre elas |
 | `FuzzConnBytes` (`internal/net`) | Bytes pelo WebSocket de verdade (readJoin/readPump) até a zona rodando o próprio loop; cada entrada espera a resposta da zona |
 
-Depois de cada mensagem os alvos da zona conferem: ouro + valor de venda dos itens (bolsa, equipamento, armazém e chão) nunca sobe, e nenhuma unidade de item aparece fora de compra ou criação pagas; posição, destino e caminho dentro do mapa; vida e mana entre 0 e o máximo; inventário e armazém válidos; nenhuma mensagem que o cliente não consiga ler; nenhum erro no log da zona (falha de serialização ou panic recuperado); nenhuma mensagem ou tick acima de 2 s.
+Depois de cada mensagem os alvos da zona conferem: `checkInvariants` (vida, mana, ouro, itens, posição, progressão, PvP, grupo, clã e troca; em teste dá panic); ouro + valor de venda dos itens (bolsa, equipamento, armazém e chão) nunca sobe, e nenhuma unidade de item aparece fora de compra, criação ou recompensa de missão; destino, caminho e itens no chão dentro do mapa; armazém válido; nenhuma mensagem que o cliente não consiga ler; nenhum erro no log (falha de serialização ou panic recuperado por `handleSafe`/`runSystem`; os alvos da zona chamam `handle` direto, sem o recover); nenhuma mensagem ou tick acima de 2 s.
 
 ```bash
 cd server

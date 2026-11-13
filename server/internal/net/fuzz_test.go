@@ -33,10 +33,45 @@ type fuzzConnEnv struct {
 	url  string
 	conn *websocket.Conn
 	seq  int
+	errs *fuzzErrLog
+}
+
+// fuzzErrLog guarda as linhas de erro do servidor e da zona. Um panic na zona agora é
+// recuperado (handleSafe/runSystem: o jogador leva Kicked e a zona segue), e no readPump
+// também; ele só aparece aqui, como "panic recovered" (o server_error da telemetria).
+type fuzzErrLog struct {
+	mu   sync.Mutex
+	errs []string
+}
+
+func (l *fuzzErrLog) Enabled(_ context.Context, lv slog.Level) bool { return lv >= slog.LevelError }
+func (l *fuzzErrLog) Handle(_ context.Context, r slog.Record) error {
+	var b strings.Builder
+	b.WriteString(r.Message)
+	r.Attrs(func(a slog.Attr) bool {
+		fmt.Fprintf(&b, " %s=%v", a.Key, a.Value)
+		return true
+	})
+	l.mu.Lock()
+	l.errs = append(l.errs, b.String())
+	l.mu.Unlock()
+	return nil
+}
+func (l *fuzzErrLog) WithAttrs([]slog.Attr) slog.Handler { return l }
+func (l *fuzzErrLog) WithGroup(string) slog.Handler      { return l }
+
+// take devolve e esvazia o que foi anotado.
+func (l *fuzzErrLog) take() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := l.errs
+	l.errs = nil
+	return out
 }
 
 var fuzzEnv = sync.OnceValue(func() *fuzzConnEnv {
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	errs := &fuzzErrLog{}
+	log := slog.New(errs)
 	cfg := zone.DefaultConfig()
 	cfg.Spawns = nil
 	cfg.SafeRadius = 0
@@ -49,7 +84,7 @@ var fuzzEnv = sync.OnceValue(func() *fuzzConnEnv {
 		2: {{ID: 20, Name: "Bob", Class: "knight", X: 3, Z: 2, Gold: 100, Items: game.StarterKit("knight"), AccountID: 2}},
 	}}
 	srv := httptest.NewServer(NewServer(z, backend, log, []string{"*"}))
-	return &fuzzConnEnv{url: "ws" + strings.TrimPrefix(srv.URL, "http")}
+	return &fuzzConnEnv{url: "ws" + strings.TrimPrefix(srv.URL, "http"), errs: errs}
 })
 
 func (e *fuzzConnEnv) dial(ctx context.Context, account int64) (*websocket.Conn, error) {
@@ -119,6 +154,13 @@ func FuzzConnBytes(f *testing.F) {
 		env := fuzzEnv()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		// Qualquer erro no log (panic recuperado na zona ou na conexão, mensagem que não
+		// serializa) reprova a entrada. O panic é anotado antes do Kicked que fecha a conexão.
+		defer func() {
+			if errs := env.errs.take(); len(errs) > 0 {
+				t.Fatalf("o servidor logou erro com a entrada %x:\n%s", data, strings.Join(errs, "\n"))
+			}
+		}()
 
 		if len(data)%8 == 0 {
 			c, err := env.dial(ctx, 2)
