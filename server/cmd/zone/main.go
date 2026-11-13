@@ -127,6 +127,7 @@ func run(log *slog.Logger) error {
 	z.SetClanBackend(clanStore{st})
 	z.SetBossBackend(bossStore{st})
 	z.SetModBackend(modStore{st})
+	z.SetSocialBackend(socialStore{st})
 	z.SetEventSink(eventStore{st})
 	zoneDone := make(chan struct{})
 	go func() { z.Run(ctx); close(zoneDone) }()
@@ -278,6 +279,77 @@ func (c clanStore) ApplyClanOp(ctx context.Context, op zone.ClanOp) error {
 		Kind: store.ClanOpKind(op.Kind), ClanID: op.ClanID, CharacterID: op.CharacterID,
 		Rank: op.Rank, Text: op.Text, LeftAt: op.LeftAt,
 	})
+}
+
+// socialStore liga amigos e correio da zona ao banco.
+type socialStore struct{ st *store.Store }
+
+// socialErr traduz os erros do banco para os da zona.
+func socialErr(err error) error {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		return zone.ErrNoSuchCharacter
+	case errors.Is(err, store.ErrSelf):
+		return zone.ErrSelf
+	case errors.Is(err, store.ErrFriendLimit):
+		return zone.ErrFriendListFull
+	case errors.Is(err, store.ErrMailboxFull):
+		return zone.ErrMailboxFull
+	case errors.Is(err, store.ErrMailRate):
+		return zone.ErrMailRate
+	}
+	return err
+}
+
+func friendData(f store.Friend) zone.FriendData {
+	return zone.FriendData{ID: uint32(f.ID), Name: f.Name, Class: f.Class, Level: f.Level}
+}
+
+func (s socialStore) Friends(ctx context.Context, id uint32) ([]zone.FriendData, error) {
+	list, err := s.st.Friends(ctx, int64(id))
+	out := make([]zone.FriendData, len(list))
+	for i, f := range list {
+		out[i] = friendData(f)
+	}
+	return out, err
+}
+
+func (s socialStore) AddFriend(ctx context.Context, id uint32, name string, max int) (zone.FriendData, error) {
+	f, err := s.st.AddFriend(ctx, int64(id), name, max)
+	return friendData(f), socialErr(err)
+}
+
+func (s socialStore) RemoveFriend(ctx context.Context, id, friend uint32) error {
+	return s.st.RemoveFriend(ctx, int64(id), int64(friend))
+}
+
+func (s socialStore) SendMail(ctx context.Context, m zone.MailOut) (zone.MailSent, error) {
+	r, err := s.st.SendMail(ctx, store.MailOut{
+		FromID: int64(m.FromID), FromName: m.FromName, ToName: m.ToName, Subject: m.Subject, Body: m.Body,
+		At: m.At, PerHour: m.PerHour, MaxBox: m.MaxBox,
+	})
+	return zone.MailSent{ToID: uint32(r.ToID), ToName: r.ToName, Unread: r.Unread, Total: r.Total}, socialErr(err)
+}
+
+func (s socialStore) MailSummary(ctx context.Context, id uint32) (int, int, error) {
+	return s.st.MailSummary(ctx, int64(id))
+}
+
+func (s socialStore) Inbox(ctx context.Context, id uint32) ([]zone.MailData, error) {
+	list, err := s.st.Inbox(ctx, int64(id))
+	out := make([]zone.MailData, len(list))
+	for i, m := range list {
+		out[i] = zone.MailData(m)
+	}
+	return out, err
+}
+
+func (s socialStore) MarkMailRead(ctx context.Context, id uint32, mailID int64) error {
+	return s.st.MarkMailRead(ctx, int64(id), mailID)
+}
+
+func (s socialStore) DeleteMail(ctx context.Context, id uint32, mailID int64, at time.Time) error {
+	return s.st.DeleteMail(ctx, int64(id), mailID, at)
 }
 
 // bossStore liga o worker de renascimento dos raid bosses ao banco.

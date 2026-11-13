@@ -43,6 +43,7 @@ const ACTIONS: { id: string; label: string }[] = [
   { id: "skills", label: "Árvore de skills" },
   { id: "party", label: "Grupo" },
   { id: "clan", label: "Clã" },
+  { id: "social", label: "Social (amigos e correio)" },
   { id: "character", label: "Personagem / atributos" },
   { id: "map", label: "Mapa do mundo" },
   { id: "settings", label: "Configurações / fechar janela" },

@@ -232,6 +232,9 @@ type Zone struct {
 	telegraphs     []*telegraph
 	telegraphSeq   uint32
 	summonSeq      uint32
+	socialJobs     chan socialJob
+	socialBackend  SocialBackend
+	mailSent       map[uint32][]time.Time // cartas enviadas na última hora, por remetente
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -260,6 +263,8 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		modJobs:        make(chan modJob, modJobQueue),
 		telemetry:      make(chan GameEvent, telemetryQueue),
 		bossJobs:       make(chan BossData, 16),
+		socialJobs:     make(chan socialJob, socialJobQueue),
+		mailSent:       map[uint32][]time.Time{},
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
 	}
@@ -287,8 +292,8 @@ func (z *Zone) Chat(ctx context.Context, id uint32, text, to string, channel pb.
 	z.post(ctx, chatEvent{id: id, text: text, to: to, channel: channel})
 }
 
-// Social repassa um pedido de grupo, clã ou resposta a convite (*pb.PartyCmd,
-// *pb.ClanCmd, *pb.InviteReply).
+// Social repassa um pedido de grupo, clã, resposta a convite, amigos ou correio
+// (*pb.PartyCmd, *pb.ClanCmd, *pb.InviteReply, *pb.FriendCmd, *pb.MailCmd).
 func (z *Zone) Social(ctx context.Context, id uint32, msg any) {
 	z.post(ctx, socialEvent{id: id, msg: msg})
 }
@@ -342,6 +347,7 @@ func (z *Zone) Run(ctx context.Context) {
 	go z.runModWorker(ctx)
 	go z.runTelemetryWorker(ctx)
 	go z.runBossWorker(ctx)
+	go z.runSocialWorker(ctx)
 
 	for {
 		select {
@@ -377,10 +383,12 @@ func (z *Zone) handle(e event) {
 		z.onChat(e)
 	case attackEvent:
 		if p := z.players[e.id]; p != nil && !p.dead && z.spendAction(p) {
+			z.endEmote(p)
 			z.requestAttack(p, e.target, e.force)
 		}
 	case skillEvent:
 		if p := z.players[e.id]; p != nil && z.spendAction(p) {
+			z.endEmote(p)
 			z.requestSkill(p, e.skill, e.target, e.force)
 		}
 	case respawnEvent:
@@ -403,6 +411,8 @@ func (z *Zone) handle(e event) {
 		if p := z.players[e.id]; p != nil {
 			z.onClientStats(p, e.msg)
 		}
+	case socialDone:
+		e.fn()
 	}
 }
 
@@ -550,6 +560,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	}
 
 	p.pl.joinedAt = z.cfg.Clock()
+	z.socialOnJoin(p)
 	z.track(p, "session", "start", 0, nil)
 	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
@@ -660,6 +671,7 @@ func (z *Zone) removePlayer(id uint32) {
 	z.partyLeave(p, "")
 	z.dropInvites(id)
 	z.clanOnLeave(p)
+	z.socialOnLeave(p)
 	st := z.savedState(p)
 	z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
 	z.save([]SavedState{st}, false)
@@ -681,6 +693,7 @@ func (z *Zone) update(dt float64) {
 		p.pl.moveTokens = math.Min(z.cfg.MaxMovesPerSec, p.pl.moveTokens+z.cfg.MaxMovesPerSec*dt)
 		p.pl.chatTokens = math.Min(z.cfg.ChatBurst, p.pl.chatTokens+z.cfg.ChatPerSec*dt)
 		z.step(p, dt)
+		z.checkEmote(p)
 	}
 	for _, m := range z.monsters {
 		if m.dead {

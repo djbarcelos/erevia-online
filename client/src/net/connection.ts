@@ -1,5 +1,16 @@
 import { create, fromBinary, toBinary, type MessageInitShape } from "@bufbuild/protobuf";
-import { ChatChannel, ClanCmdKind, ClanRank, ClientMessageSchema, PartyCmdKind, ServerMessageSchema, type ServerMessage, type TradeCmdKind } from "../gen/erevia/v1/game_pb";
+import {
+  ChatChannel,
+  ClanCmdKind,
+  ClanRank,
+  ClientMessageSchema,
+  PartyCmdKind,
+  ServerMessageSchema,
+  type FriendCmdKind,
+  type MailCmdKind,
+  type ServerMessage,
+  type TradeCmdKind,
+} from "../gen/erevia/v1/game_pb";
 
 const PING_INTERVAL_MS = 2000;
 
@@ -66,6 +77,16 @@ export class Connection {
   /** Clã: criar, convidar, sair, expulsar, cargo, líder, desfazer, aviso. */
   clanCmd(kind: ClanCmdKind, opts: { name?: string; targetId?: number; rank?: ClanRank; text?: string } = {}): void {
     this.send({ case: "clanCmd", value: { kind, name: opts.name ?? "", targetId: opts.targetId ?? 0, rank: opts.rank ?? ClanRank.MEMBER, text: opts.text ?? "" } });
+  }
+
+  /** Amigos: adicionar/remover (pelo nome ou pelo id) ou pedir a lista com as posições. */
+  friendCmd(kind: FriendCmdKind, opts: { name?: string; targetId?: number } = {}): void {
+    this.send({ case: "friendCmd", value: { kind, name: opts.name ?? "", targetId: opts.targetId ?? 0 } });
+  }
+
+  /** Correio: enviar, listar a caixa, marcar como lida ou apagar. */
+  mailCmd(kind: MailCmdKind, opts: { to?: string; subject?: string; body?: string; mailId?: bigint } = {}): void {
+    this.send({ case: "mailCmd", value: { kind, to: opts.to ?? "", subject: opts.subject ?? "", body: opts.body ?? "", mailId: opts.mailId ?? 0n } });
   }
 
   /** Barbeiro: mudar o visual do corpo (custa moedas). */

@@ -110,6 +110,8 @@ type playerState struct {
 	quests   questLog
 	trade    *trade    // troca aberta (nil = nenhuma)
 	joinedAt time.Time // telemetria: início da sessão
+
+	social socialState // amigos, emote e leitura do correio
 }
 
 // rank da skill (0 = não aprendida).

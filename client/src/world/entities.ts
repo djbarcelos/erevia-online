@@ -14,6 +14,7 @@ import { AdvancedDynamicTexture, Rectangle, StackPanel, TextBlock } from "@babyl
 import { classInfo } from "../classes";
 import {
   Effect,
+  EmoteKind,
   EntityKind,
   PvpState,
   SkillTarget,
@@ -1233,6 +1234,16 @@ export class EntityManager {
     this.refreshHpBar(v);
   }
 
+  /** Emote de um jogador: acenar toca uma vez; sentar e dançar ficam até ele andar ou atacar. */
+  emote(id: number, kind: EmoteKind): void {
+    const v = this.views.get(id);
+    if (!v?.anim || v.shownDead) return;
+    if (kind === EmoteKind.WAVE) v.anim.play("wave");
+    else if (kind === EmoteKind.SIT) v.anim.play("sit", { loop: true });
+    else if (kind === EmoteKind.DANCE) v.anim.play("dance", { loop: true });
+    else v.anim.endEmote();
+  }
+
   onLevelUp(l: LevelUp): void {
     const v = this.views.get(l.id);
     if (!v) return;
@@ -1303,6 +1314,8 @@ export class EntityManager {
           const near = !cam || Vector3.DistanceSquared(cam, pos) < ANIM_DISTANCE * ANIM_DISTANCE;
           active = near && (!planes || v.meshes.some((m) => m.isInFrustum(planes)));
         }
+        // Andar acaba com o emote na hora (o aviso do servidor chega depois).
+        if (moving && v.anim.emoting) v.anim.endEmote();
         v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active);
       }
     }

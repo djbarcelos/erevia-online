@@ -41,7 +41,8 @@ type invite struct {
 	clanID  int64 // convite de clã: para qual clã
 }
 
-// socialEvent carrega um pedido de grupo/clã/convite (*pb.PartyCmd, *pb.ClanCmd, *pb.InviteReply).
+// socialEvent carrega um pedido de grupo/clã/convite/amigos/correio (*pb.PartyCmd, *pb.ClanCmd,
+// *pb.InviteReply, *pb.FriendCmd, *pb.MailCmd).
 type socialEvent struct {
 	id  uint32
 	msg any
@@ -70,6 +71,10 @@ func (z *Zone) onSocial(e socialEvent) {
 		z.replyInvite(p, m.InviteId, m.Accept)
 	case *pb.ClanCmd:
 		z.onClanCmd(p, m)
+	case *pb.FriendCmd:
+		z.onFriendCmd(p, m)
+	case *pb.MailCmd:
+		z.onMailCmd(p, m)
 	}
 }
 

@@ -10,11 +10,16 @@ import {
   TradeCmdKind,
   ClanRank,
   ClanStateSchema,
+  FriendCmdKind,
+  MailCmdKind,
   PartyCmdKind,
   PartyStateSchema,
   SelfPvpSchema,
   SkillTarget,
   type ClanState,
+  type FriendList,
+  type Mail,
+  type MailBox,
   type PartyState,
   type Progress,
   type SelfPvp,
@@ -41,7 +46,7 @@ import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
 import { TradeWindow } from "./ui/trade";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
-import { buildRegions } from "./ui/regions";
+import { buildRegions, regionAt } from "./ui/regions";
 import { buildInventory } from "./ui/windows/inventory";
 import { buildWorldMap } from "./ui/windows/worldmap";
 import { buildSettings } from "./ui/windows/settings";
@@ -49,6 +54,7 @@ import { buildCharacter } from "./ui/windows/character";
 import { buildSkills } from "./ui/windows/skills";
 import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
+import { buildSocial, type SocialTab } from "./ui/windows/social";
 import { InvitePrompt } from "./ui/invite";
 import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
@@ -247,6 +253,19 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     !!clan.id && clan.myRank >= ClanRank.OFFICER && entities.isPlayer(id) && !entities.info(id)?.clanName && clan.members.length < clan.maxMembers;
   const inviteClan = (name: string) => conn.clanCmd(ClanCmdKind.CLAN_CMD_INVITE, { name });
 
+  // ---------- Amigos e correio (janela Social) ----------
+  let friends: FriendList | null = null;
+  /** Contadores do correio e a última caixa listada (só chega quando a janela pede). */
+  let mailBox: MailBox | null = null;
+  let mails: Mail[] | null = null;
+  let socialTab: SocialTab = "friends";
+  const socialListeners = new Set<() => void>();
+  const onSocial = (fn: () => void) => {
+    socialListeners.add(fn);
+    return () => socialListeners.delete(fn);
+  };
+  const isFriend = (id: number) => !!friends?.friends.some((f) => f.characterId === id);
+
   // ---------- Progressão: atributos, árvore de skills e barra (vêm do servidor) ----------
   let progress: Progress | null = welcome.progress ?? null;
   const progressListeners = new Set<() => void>();
@@ -330,7 +349,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   let forcedId = 0;
   const targetExtras = (id: number): TargetExtras | undefined =>
     entities.isPlayer(id) && id !== welcome.yourId
-      ? { ally: entities.isAlly(id), canParty: canInviteParty(id), canClan: canInviteClan(id) }
+      ? { ally: entities.isAlly(id), canParty: canInviteParty(id), canClan: canInviteClan(id), canFriend: !!friends && !isFriend(id) }
       : undefined;
   const refreshTarget = () => hud.setTarget(entities.info(targetId), targetExtras(targetId));
   const selectTarget = (id: number) => {
@@ -525,6 +544,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (action === "party") inviteParty(info.name);
       else if (action === "clan") inviteClan(info.name);
       else if (action === "trade") conn.tradeCmd(TradeCmdKind.TRADE_CMD_REQUEST, { targetId });
+      else if (action === "friend") conn.friendCmd(FriendCmdKind.FRIEND_CMD_ADD, { targetId });
     },
     onPartyMember: (id) => selectTarget(id),
     onCancelChannel: () => conn.cancelChannel(),
@@ -545,7 +565,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   migrateLocalHotbar();
   /** Pontos livres viram uma bolinha nos botões de Personagem e Skills. */
   const refreshBadges = () =>
-    hud.setBadges({ character: progress?.freeAttrPoints ?? 0, skills: progress?.freeSkillPoints ?? 0 });
+    hud.setBadges({ character: progress?.freeAttrPoints ?? 0, skills: progress?.freeSkillPoints ?? 0, social: mailBox?.unread ?? 0 });
   refreshBadges();
 
   const chat = new Chat(hud.chatRoot, character.name, (text, to, channel) => conn.chat(text, to, channel));
@@ -800,6 +820,31 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       }),
   });
   reg({
+    id: "social",
+    title: "Social",
+    hotkey: keys().social,
+    width: 560,
+    height: 640,
+    build: () =>
+      buildSocial({
+        friends: () => friends,
+        mailBox: () => mailBox,
+        mails: () => mails,
+        onChange: onSocial,
+        regionName: (x, z) => regionAt(regions, x, z).name,
+        tab: socialTab,
+        onTab: (t) => (socialTab = t),
+        addFriend: (name) => conn.friendCmd(FriendCmdKind.FRIEND_CMD_ADD, { name }),
+        removeFriend: (id) => conn.friendCmd(FriendCmdKind.FRIEND_CMD_REMOVE, { targetId: id }),
+        refreshFriends: () => conn.friendCmd(FriendCmdKind.FRIEND_CMD_LIST),
+        whisper: (name) => chat.whisperTo(name),
+        listMail: () => conn.mailCmd(MailCmdKind.MAIL_CMD_LIST),
+        readMail: (id) => conn.mailCmd(MailCmdKind.MAIL_CMD_READ, { mailId: id }),
+        deleteMail: (id) => conn.mailCmd(MailCmdKind.MAIL_CMD_DELETE, { mailId: id }),
+        sendMail: (to, subject, body) => conn.mailCmd(MailCmdKind.MAIL_CMD_SEND, { to, subject, body }),
+      }),
+  });
+  reg({
     id: "map",
     title: "Mapa do mundo",
     hotkey: keys().map,
@@ -886,6 +931,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       [k.skills]: () => wm.toggle("skills"),
       [k.party]: () => wm.toggle("party"),
       [k.clan]: () => wm.toggle("clan"),
+      [k.social]: () => wm.toggle("social"),
       [k.character]: () => wm.toggle("character"),
       [k.map]: () => wm.toggle("map"),
       [k.auto]: () => hud.setAuto(!hud.autoOn, true),
@@ -1207,6 +1253,24 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           clan = msg.msg.value;
           for (const fn of clanListeners) fn();
           if (targetId) refreshTarget();
+          break;
+        case "social": {
+          const u = msg.msg.value;
+          if (u.friends) friends = u.friends;
+          if (u.mail) {
+            const was = mailBox;
+            mailBox = u.mail;
+            if (u.mail.listed) mails = u.mail.mails;
+            // Carta nova com a caixa aberta: pede a lista atualizada.
+            else if (mails && wm.isOpen("social") && (u.mail.total !== was?.total || u.mail.unread !== was?.unread)) conn.mailCmd(MailCmdKind.MAIL_CMD_LIST);
+          }
+          refreshBadges();
+          for (const fn of socialListeners) fn();
+          if (targetId) refreshTarget();
+          break;
+        }
+        case "emote":
+          entities.emote(msg.msg.value.id, msg.msg.value.kind);
           break;
         case "playerStatus":
           entities.setStatus(msg.msg.value);
