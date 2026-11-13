@@ -50,11 +50,12 @@ func (z *Zone) revealIfHidden(e *entity) {
 // chargeLanding: ponto a chargeStop do alvo, do lado de quem salta, se o caminho estiver livre.
 func (z *Zone) chargeLanding(src, t *entity) (Vec2, bool) {
 	d := dist(src.pos, t.pos)
-	if d <= chargeStop+0.3 {
+	stop := chargeStop + t.bodyRadius() // encosta no corpo do alvo, não entra nele
+	if d <= stop+0.3 {
 		return src.pos, true
 	}
 	dir := Vec2{X: (src.pos.X - t.pos.X) / d, Z: (src.pos.Z - t.pos.Z) / d}
-	land := clampToZone(Vec2{X: t.pos.X + dir.X*chargeStop, Z: t.pos.Z + dir.Z*chargeStop}, z.bounds())
+	land := clampToZone(Vec2{X: t.pos.X + dir.X*stop, Z: t.pos.Z + dir.Z*stop}, z.bounds())
 	if !z.walkable(land) {
 		return Vec2{}, false
 	}
@@ -219,7 +220,7 @@ func (z *Zone) spreadPlague(dead *entity) {
 	}
 	def := &game.EffectDef{Kind: game.EffectPlague, Duration: game.Skills[game.SkillPlague].OnTarget.Duration.At(1), Value: ef.value}
 	for _, m := range z.monsters {
-		if m != dead && !m.dead && !m.mon.hidden && dist(m.pos, dead.pos) <= game.PlagueSpread {
+		if m != dead && !m.dead && !m.mon.hidden && dist(m.pos, dead.pos)-m.bodyRadius() <= game.PlagueSpread {
 			z.applyEffect(src, m, def)
 		}
 	}

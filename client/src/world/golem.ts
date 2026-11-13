@@ -30,6 +30,13 @@ import { heightToNormal } from "./teleport-stone";
 
 export const GOLEM_MODEL = "stone_golem";
 
+/**
+ * Corpo do golem para clique e alcance. `radius` é em metros no mundo e precisa bater com
+ * o BodyRadius do servidor (server/internal/game/monsters.go); o resto é em unidades do
+ * modelo (multiplicado pela escala da entidade).
+ */
+export const GOLEM_BODY = { radius: 1.0, width: 1.8, height: 2.65, head: 2.75 };
+
 const FPS = 30;
 const HIPS_Y = 1.1;
 const GLOW = new Color3(1, 0.55, 0.16);

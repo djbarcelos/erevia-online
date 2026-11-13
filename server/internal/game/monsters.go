@@ -20,7 +20,11 @@ type MonsterDef struct {
 	Aggressive bool
 	XPBase     float64
 	Scale      float64 // tamanho visual (1 = normal)
-	Boss       bool    // chefe (marcado no mapa)
+	// BodyRadius: raio do corpo (m). Golpes e skills contam da borda do corpo, não do
+	// centro: em monstros grandes o atacante para encostado, não dentro das pedras.
+	// 0 = corpo de tamanho normal (ninguém mudou de alcance).
+	BodyRadius float64
+	Boss       bool // chefe (marcado no mapa)
 	// Drops: moedas (por nível do monstro) e itens.
 	GoldChance       float64
 	GoldMin, GoldMax float64
@@ -57,7 +61,7 @@ var Monsters = map[string]*MonsterDef{
 		GoldChance: 0.7, GoldMin: 2.5, GoldMax: 4.5, Loot: lootMage},
 	// Lento e muito resistente; bate forte e devagar.
 	"stone_golem": {ID: "stone_golem", Name: "Golem de Pedra", Model: "stone_golem",
-		HP: 180, HPLvl: 40, Atk: 14, AtkLv: 2.6, Def: 26, DefLv: 4, Range: 2.6, Interval: 2.4, Speed: 2.8, Aggressive: true, XPBase: 40, Scale: 1.25,
+		HP: 180, HPLvl: 40, Atk: 14, AtkLv: 2.6, Def: 26, DefLv: 4, Range: 2.6, Interval: 2.4, Speed: 2.8, Aggressive: true, XPBase: 40, Scale: 1.25, BodyRadius: 1.0,
 		GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem},
 	"bone_lord": {ID: "bone_lord", Name: "Senhor dos Ossos", Model: "skeleton_warrior",
 		HP: 400, HPLvl: 60, Atk: 14, AtkLv: 3, Def: 20, DefLv: 4, Range: 2.8, Interval: 1.8, Speed: 4, Aggressive: true, XPBase: 120, Scale: 1.6, Boss: true,

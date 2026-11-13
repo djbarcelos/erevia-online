@@ -49,13 +49,15 @@ func (z *Zone) runAction(e *entity) {
 	if e.act.kind == actSkill {
 		rng = e.act.skill.Range
 	}
-	if d := dist(e.pos, t.pos); d > rng {
+	// O alcance conta da borda do corpo do alvo (monstros grandes, como o golem).
+	if d := dist(e.pos, t.pos); d-t.bodyRadius() > rng {
 		if e.has(game.EffectRoot, z.now) {
 			e.stopMoving() // preso: espera o alvo chegar perto
 			return
 		}
 		dir := Vec2{X: (e.pos.X - t.pos.X) / d, Z: (e.pos.Z - t.pos.Z) / d}
-		z.moveToward(e, Vec2{X: t.pos.X + dir.X*rng*approachFactor, Z: t.pos.Z + dir.Z*rng*approachFactor})
+		stop := rng*approachFactor + t.bodyRadius()
+		z.moveToward(e, Vec2{X: t.pos.X + dir.X*stop, Z: t.pos.Z + dir.Z*stop})
 		return
 	}
 	e.stopMoving()
@@ -259,7 +261,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		z.skillHit(src, target, s, rank)
 		if s.Splash > 0 {
 			for _, m := range z.monsters {
-				if m != target && !m.dead && !m.mon.hidden && dist(target.pos, m.pos) <= s.Splash {
+				if m != target && !m.dead && !m.mon.hidden && dist(target.pos, m.pos)-m.bodyRadius() <= s.Splash {
 					z.skillHit(src, m, s, rank)
 				}
 			}
@@ -273,7 +275,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		// Mostra a skill mesmo sem acertar ninguém.
 		z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID})
 		for _, m := range z.monsters {
-			if m.dead || m.mon.hidden || dist(src.pos, m.pos) > s.Range {
+			if m.dead || m.mon.hidden || dist(src.pos, m.pos)-m.bodyRadius() > s.Range {
 				continue
 			}
 			z.skillHit(src, m, s, rank)

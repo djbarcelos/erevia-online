@@ -34,6 +34,7 @@ import { AnimController } from "./anim";
 import { toBodyLook, type BodyLook } from "./body-look";
 import type { Fx, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
+import { GOLEM_BODY, GOLEM_MODEL } from "./golem";
 import { buildTeleportStone } from "./teleport-stone";
 import type { Bounds, Collision } from "./world-data";
 
@@ -85,6 +86,14 @@ export interface EntityInfo {
   /** Jogadores: nome do clã ("" = sem clã). */
   clanName: string;
 }
+
+/**
+ * Corpo dos modelos maiores que um personagem normal: área de clique, altura do nome e
+ * raio (m) que o servidor desconta do alcance dos golpes. Sem entrada = tamanho normal.
+ */
+const MODEL_BODY: Record<string, { radius: number; width: number; height: number; head: number }> = {
+  [GOLEM_MODEL]: GOLEM_BODY,
+};
 
 /** Modelo das Pedras de Teleporte (desenhadas aqui, sem arquivo 3D). */
 export const STONE_MODEL = "teleport_stone";
@@ -333,10 +342,14 @@ export class EntityManager {
     // Área de clique estável (invisível): o modelo animado não serve, porque o picking de
     // malha com esqueleto usa a pose parada e braços/pernas entram e saem do cursor.
     const isObject = e.kind === EntityKind.OBJECT;
+    const body = MODEL_BODY[e.model];
     if (!isObject) {
-      const hit = MeshBuilder.CreateCylinder(`hit${e.id}`, { height: 2.1 * scale, diameter: 1.2 * scale, tessellation: 10 }, this.scene);
+      // Monstros grandes (golem) ganham uma área do tamanho do corpo, senão o clique
+      // passa pelos ombros e braços sem selecionar.
+      const h = (body?.height ?? 2.1) * scale;
+      const hit = MeshBuilder.CreateCylinder(`hit${e.id}`, { height: h, diameter: (body?.width ?? 1.2) * scale, tessellation: 12 }, this.scene);
       hit.parent = root;
-      hit.position.y = 1.05 * scale;
+      hit.position.y = h / 2;
       hit.isVisible = false;
       hit.isPickable = true;
       hit.metadata = { entityId: e.id };
@@ -354,7 +367,7 @@ export class EntityManager {
 
     const head = new TransformNode(`head${e.id}`, this.scene);
     head.parent = root;
-    head.position.y = 2.25 * scale;
+    head.position.y = (body?.head ?? 2.25) * scale;
 
     // Nome (+ nível para monstros) e barra de vida acima da cabeça.
     const label = new Rectangle(`label${e.id}`);
@@ -807,6 +820,17 @@ export class EntityManager {
   }
 
   /** Distância (no chão) entre o jogador local e uma entidade. */
+  /**
+   * Distância até a borda do corpo (o que conta para o alcance dos golpes e skills no
+   * servidor): igual a distanceTo, menos o raio dos monstros grandes.
+   */
+  reachDistanceTo(id: number): number | null {
+    const d = this.distanceTo(id);
+    const v = this.views.get(id);
+    if (d === null || !v) return d;
+    return Math.max(0, d - (MODEL_BODY[v.model]?.radius ?? 0));
+  }
+
   distanceTo(id: number): number | null {
     const me = this.local;
     const v = this.views.get(id);

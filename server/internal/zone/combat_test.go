@@ -371,3 +371,42 @@ func TestDefaultZoneHasMonstersInRings(t *testing.T) {
 	// Uma simulação longa sem jogadores não quebra nada.
 	z.tickFor(30)
 }
+
+// O golem é grande: o golpe conta da borda do corpo, então o cavaleiro para encostado
+// nas pedras (não dentro delas) e acerta de onde um esqueleto já estaria longe demais.
+func TestBigMonsterIsHitFromTheEdgeOfItsBody(t *testing.T) {
+	z := newCombatZone(fixed("stone_golem", 20, 40, 0))
+	m := z.onlyMonster()
+	r := m.bodyRadius()
+	if r < 0.8 {
+		t.Fatalf("golem deveria ter corpo grande, raio %.2f", r)
+	}
+	m.mon.def = &game.MonsterDef{}
+	*m.mon.def = *game.Monsters["stone_golem"]
+	m.mon.def.Aggressive = false // só o jogador age neste teste
+
+	// Começa longe: anda até o golem e para fora do corpo.
+	p, _ := joinAt(z, 1, "knight", 28, 0, 0)
+	z.handle(attackEvent{id: p.id, target: m.id})
+	z.tickFor(4)
+	d := dist(p.pos, m.pos)
+	if d < r || d > r+p.stats.Range {
+		t.Fatalf("o cavaleiro deveria parar encostado no golem: distância %.2f (corpo %.2f, alcance %.2f)", d, r, p.stats.Range)
+	}
+	if m.hp >= m.stats.MaxHP {
+		t.Fatal("o cavaleiro deveria ter acertado o golem")
+	}
+
+	// Parado a alcance + corpo − folga: acerta sem precisar andar.
+	m.hp = m.stats.MaxHP
+	at := Vec2{X: m.pos.X - (p.stats.Range + r - 0.1), Z: m.pos.Z}
+	p.pos, p.dest = at, at
+	p.nextAttack = 0
+	z.tickFor(0.2)
+	if p.pos != at {
+		t.Fatalf("já estava no alcance (pela borda do corpo) e andou para %v", p.pos)
+	}
+	if m.hp >= m.stats.MaxHP {
+		t.Fatal("deveria acertar da borda do corpo")
+	}
+}

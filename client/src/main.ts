@@ -440,7 +440,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     nearestMonster: () => entities.nearestMonster(),
     targetId: () => targetId,
     isEnemy: (id) => entities.isEnemy(id),
-    distanceTo: (id) => entities.distanceTo(id),
+    distanceTo: (id) => entities.reachDistanceTo(id),
     attack: attackTarget,
     hotbarSkills: () =>
       hud
@@ -504,7 +504,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (v) stepStick();
     },
     me,
-    targetDistance: () => (isAttackable(targetId) ? entities.distanceTo(targetId) : null),
+    targetDistance: () => (isAttackable(targetId) ? entities.reachDistanceTo(targetId) : null),
     map: mapSource,
     regions,
     stats: () => ({ fps: world.engine.getFps(), ping: conn.ping }),

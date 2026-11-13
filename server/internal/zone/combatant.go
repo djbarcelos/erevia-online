@@ -106,6 +106,14 @@ func (p *playerState) rank(id uint32) int { return p.ranks[id] }
 
 func (e *entity) alive() bool { return !e.dead }
 
+// bodyRadius: raio do corpo (m) para alcance de golpes e skills (0 = tamanho normal).
+func (e *entity) bodyRadius() float64 {
+	if e.mon != nil {
+		return e.mon.def.BodyRadius
+	}
+	return 0
+}
+
 func (e *entity) effect(kind game.EffectKind, now float64) (float64, bool) {
 	for _, ef := range e.effects {
 		if ef.kind == kind && ef.until > now {
