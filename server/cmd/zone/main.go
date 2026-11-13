@@ -75,6 +75,7 @@ func run(log *slog.Logger) error {
 				states[i] = store.CharacterState{
 					CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP,
 					Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
+					Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills,
 				}
 			}
 			// Tenta de novo se o banco falhar (o save_seq impede que uma tentativa atrasada
@@ -171,6 +172,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		ID: uint32(c.ID), Name: c.Name, Class: c.Class, X: c.X, Z: c.Z,
 		XP: c.XP, HP: c.HP, MP: c.MP, Gold: c.Gold, Items: c.Items,
 		Attrs: c.Attrs, Ranks: c.Ranks, Hotbar: c.Hotbar, Emblem: c.Emblem,
+		AccountID: c.AccountID, Karma: c.Karma, PKs: c.PKs, PvPKills: c.PvPKills,
 	}, nil
 }
 

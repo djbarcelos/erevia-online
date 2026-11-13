@@ -403,6 +403,7 @@ type ItemRecord struct {
 	Slot     int
 	ItemID   string
 	Count    int
+	Enchant  int // +N (0 = sem encantamento)
 }
 
 // StarterKit: o kit padrão da classe (aparência padrão).

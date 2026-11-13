@@ -24,7 +24,95 @@ message ClientMessage {
     AllocateAttrs allocate_attrs = 14;
     LearnSkills learn_skills = 15;
     SetHotbar set_hotbar = 16;
+    PartyCmd party_cmd = 17;
+    ClanCmd clan_cmd = 18;
+    InviteReply invite_reply = 19;
+    Teleport teleport = 20;
+    CancelChannel cancel_channel = 21;
+    Enchant enchant = 22;
+    StorageMove storage_move = 23;
+    StorageGold storage_gold = 24;
   }
+}
+
+// ---------- Fase 4: grupo, clã, teleporte, encantamento e armazém ----------
+
+enum PartyCmdKind {
+  PARTY_CMD_UNSPECIFIED = 0;
+  PARTY_CMD_INVITE = 1; // name = quem convidar (ou target_id)
+  PARTY_CMD_LEAVE = 2;
+  PARTY_CMD_KICK = 3; // target_id
+  PARTY_CMD_LEADER = 4; // target_id = novo líder
+}
+
+message PartyCmd {
+  PartyCmdKind kind = 1;
+  string name = 2;
+  uint32 target_id = 3;
+}
+
+enum ClanCmdKind {
+  CLAN_CMD_UNSPECIFIED = 0;
+  CLAN_CMD_CREATE = 1; // name = nome do clã
+  CLAN_CMD_INVITE = 2; // name = quem convidar (ou target_id)
+  CLAN_CMD_LEAVE = 3;
+  CLAN_CMD_KICK = 4; // target_id = id do personagem
+  CLAN_CMD_RANK = 5; // target_id + rank
+  CLAN_CMD_LEADER = 6; // target_id = novo líder
+  CLAN_CMD_DISBAND = 7;
+  CLAN_CMD_NOTICE = 8; // text = aviso do clã
+}
+
+message ClanCmd {
+  ClanCmdKind kind = 1;
+  string name = 2;
+  uint32 target_id = 3;
+  ClanRank rank = 4;
+  string text = 5;
+}
+
+enum ClanRank {
+  CLAN_RANK_MEMBER = 0;
+  CLAN_RANK_OFFICER = 1;
+  CLAN_RANK_LEADER = 2;
+}
+
+// Resposta a um convite (grupo ou clã).
+message InviteReply {
+  uint32 invite_id = 1;
+  bool accept = 2;
+}
+
+// Viajar a partir de uma Pedra de Teleporte.
+message Teleport {
+  uint32 npc_id = 1;
+  uint32 dest_id = 2;
+}
+
+// Interrompe a canalização atual (teleporte, pergaminho de retorno).
+message CancelChannel {}
+
+// Usa um pergaminho de encantar (scroll_slot, na bolsa) num item (place/slot).
+message Enchant {
+  uint32 scroll_slot = 1;
+  uint32 place = 2; // 0 = bolsa, 1 = equipado
+  uint32 slot = 3;
+}
+
+// Move itens entre a bolsa (place 0) e o armazém (place 2).
+message StorageMove {
+  uint32 npc_id = 1;
+  uint32 from_place = 2;
+  uint32 from_slot = 3;
+  uint32 to_place = 4;
+  uint32 to_slot = 5;
+  uint32 count = 6; // 0 = a pilha inteira
+}
+
+// Moedas: amount > 0 guarda, < 0 retira.
+message StorageGold {
+  uint32 npc_id = 1;
+  int64 amount = 2;
 }
 
 // Distribui pontos de atributo livres (soma aos já gastos). Tudo ou nada.
@@ -77,17 +165,20 @@ message Ping {
 message ChatSend {
   string text = 1;
   string to = 2;
+  ChatChannel channel = 3; // GRUPO ou CLÃ (vazio = geral/sussurro pelo "to")
 }
 
 // Seleciona o alvo e ataca automaticamente (anda até o alcance se precisar).
 message Attack {
   uint32 target_id = 1;
+  bool force = 2; // atacar um jogador que não é hostil (Ctrl + clique)
 }
 
 // Usa uma skill. target_id é ignorado em skills de si mesmo/área.
 message UseSkill {
   uint32 skill_id = 1;
   uint32 target_id = 2;
+  bool force = 3;
 }
 
 // Morto: voltar à cidade.
@@ -154,7 +245,145 @@ message ServerMessage {
     Appearance appearance = 14;
     Progress progress = 15;
     Hotbar hotbar = 16;
+    PlayerStatus player_status = 17;
+    SelfPvp self_pvp = 18;
+    Invite invite = 19;
+    PartyState party = 20;
+    ClanState clan = 21;
+    ChannelBar channel_bar = 22;
+    EnchantResult enchant_result = 23;
+    Storage storage = 24;
   }
+}
+
+enum PvpState {
+  PVP_STATE_NORMAL = 0;
+  PVP_STATE_FLAGGED = 1; // atacou um jogador há pouco (nome roxo)
+  PVP_STATE_CHAOTIC = 2; // tem karma (nome vermelho)
+}
+
+// Estado PvP e clã de um jogador mudou (para todos).
+message PlayerStatus {
+  uint32 id = 1;
+  PvpState pvp_state = 2;
+  string clan_name = 3;
+}
+
+// PvP do próprio personagem.
+message SelfPvp {
+  uint32 karma = 1;
+  uint32 pk_count = 2;
+  uint32 pvp_kills = 3;
+  uint32 flag_ms = 4; // tempo de flag restante (0 = sem flag)
+}
+
+enum InviteKind {
+  INVITE_KIND_UNSPECIFIED = 0;
+  INVITE_KIND_PARTY = 1;
+  INVITE_KIND_CLAN = 2;
+}
+
+// Alguém convidou você. Expira em expires_ms.
+message Invite {
+  uint32 id = 1;
+  InviteKind kind = 2;
+  string from_name = 3;
+  string extra = 4; // clã: nome do clã
+  uint32 expires_ms = 5;
+}
+
+message PartyMember {
+  uint32 id = 1;
+  string name = 2;
+  string class = 3;
+  uint32 level = 4;
+  uint32 hp = 5;
+  uint32 max_hp = 6;
+  uint32 mp = 7;
+  uint32 max_mp = 8;
+  float x = 9;
+  float z = 10;
+  bool dead = 11;
+}
+
+// Seu grupo (members vazio = sem grupo).
+message PartyState {
+  uint32 leader_id = 1;
+  repeated PartyMember members = 2;
+}
+
+message ClanMember {
+  uint32 character_id = 1;
+  string name = 2;
+  string class = 3;
+  uint32 level = 4;
+  ClanRank rank = 5;
+  bool online = 6;
+}
+
+// Seu clã (id 0 = sem clã).
+message ClanState {
+  uint64 id = 1;
+  string name = 2;
+  string notice = 3;
+  ClanRank my_rank = 4;
+  repeated ClanMember members = 5;
+  uint32 max_members = 6;
+  uint32 join_wait_ms = 7; // sem clã: falta este tempo para poder entrar em outro
+  uint32 create_level = 8; // requisitos para criar
+  uint32 create_cost = 9;
+}
+
+enum ChannelKind {
+  CHANNEL_KIND_NONE = 0; // terminou ou foi interrompida
+  CHANNEL_KIND_TELEPORT = 1;
+  CHANNEL_KIND_RETURN = 2; // pergaminho de retorno
+}
+
+// Barra de canalização (só para o dono).
+message ChannelBar {
+  ChannelKind kind = 1;
+  uint32 total_ms = 2;
+  string label = 3;
+}
+
+message EnchantResult {
+  bool ok = 1;
+  bool broke = 2; // falhou e o item quebrou
+  uint32 level = 3; // nível final
+  string item_name = 4;
+}
+
+// O armazém da conta (enviado ao abrir e a cada mudança).
+message Storage {
+  uint32 npc_id = 1;
+  uint64 gold = 2;
+  uint32 size = 3;
+  repeated ItemStack items = 4; // place = 2
+}
+
+// Regras do encantamento (o cliente mostra a chance e o bônus).
+message EnchantRules {
+  uint32 safe = 1;
+  uint32 max = 2;
+  repeated float chance = 3; // chance[n] = de chegar a +n
+  // Ataque por nível, por raridade (índice 1–4). Cada nível acima de `safe` vale o dobro;
+  // armaduras somam metade disso (arredondado) em P.Def e M.Def, joias só em M.Def.
+  repeated uint32 weapon_bonus = 4;
+}
+
+message TeleportDest {
+  uint32 id = 1;
+  string name = 2;
+  float x = 3;
+  float z = 4;
+  uint32 price = 5;
+}
+
+enum NpcRole {
+  NPC_ROLE_SHOP = 0;
+  NPC_ROLE_TELEPORT = 1;
+  NPC_ROLE_STORAGE = 2;
 }
 
 // Atributos e skills aprendidas do jogador.
@@ -218,6 +447,9 @@ message Welcome {
   Progress progress = 15;
   Hotbar hotbar = 16;
   repeated SkillBranch branches = 17; // os 3 ramos da árvore da classe (skills.branch aponta aqui)
+  SelfPvp pvp = 18;
+  ClanState clan = 19;
+  EnchantRules enchant = 20;
 }
 
 // Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
@@ -264,6 +496,8 @@ enum ChatChannel {
   CHAT_CHANNEL_GENERAL = 1;
   CHAT_CHANNEL_WHISPER = 2;
   CHAT_CHANNEL_SYSTEM = 3;
+  CHAT_CHANNEL_PARTY = 4;
+  CHAT_CHANNEL_CLAN = 5;
 }
 
 message ChatMessage {
@@ -304,6 +538,7 @@ message SelfStats {
   float hp_regen = 20; // por segundo, em combate (fora de combate: 5×)
   float mp_regen = 21;
   float crit_damage = 22;
+  string killed_by = 23; // morto: quem matou (jogador)
 }
 
 // Recarga de skill (só para o dono).
@@ -343,6 +578,7 @@ message Appearance {
   string weapon = 2;
   string offhand = 3;
   uint32 weapon_grade = 4;
+  uint32 weapon_enchant = 5;
 }
 
 // ---------- Tipos ----------
@@ -352,6 +588,7 @@ message ItemStack {
   uint32 slot = 2;
   string item_id = 3;
   uint32 count = 4;
+  uint32 enchant = 5; // +N
 }
 
 message GroundItem {
@@ -362,11 +599,14 @@ message GroundItem {
   float z = 5;
   uint32 owner_id = 6; // reservado para este jogador…
   uint32 reserved_ms = 7; // …por mais este tempo (0 = livre)
+  uint32 enchant = 8;
 }
 
 message NpcInfo {
   uint32 id = 1;
   repeated string stock = 2; // ids dos itens à venda
+  NpcRole role = 3;
+  repeated TeleportDest dests = 4; // pedras de teleporte: destinos
 }
 
 enum ItemKind {
@@ -385,6 +625,14 @@ enum ItemKind {
   ITEM_KIND_NECKLACE = 12;
   ITEM_KIND_EARRING = 13;
   ITEM_KIND_RING = 14;
+  ITEM_KIND_SCROLL = 15;
+}
+
+enum ScrollKind {
+  SCROLL_KIND_NONE = 0;
+  SCROLL_KIND_RETURN = 1;
+  SCROLL_KIND_ENCHANT_WEAPON = 2;
+  SCROLL_KIND_ENCHANT_ARMOR = 3;
 }
 
 message ItemBonus {
@@ -429,6 +677,8 @@ message ItemInfo {
   // 5 mãos, 6 pés, 7 capa, 8 colar, 9–10 brincos, 11–12 anéis). `slot` é o primeiro.
   repeated uint32 slots = 20;
   string weapon_type = 21; // armas: sword, axe, staff, daggers
+  ScrollKind scroll = 22;
+  bool blessed = 23; // pergaminho abençoado: falhar não quebra (volta a +0)
 }
 
 enum EntityKind {
@@ -460,6 +710,9 @@ message Entity {
   uint32 weapon_grade = 18;
   string title = 19; // NPC: função (ex.: "Mercadora")
   string emblem = 20; // jogadores: cor do emblema (#rrggbb), pinta o nome e o anel no chão
+  PvpState pvp_state = 21;
+  string clan_name = 22;
+  uint32 weapon_enchant = 23;
 }
 
 message EntityState {

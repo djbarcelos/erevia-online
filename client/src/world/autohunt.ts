@@ -58,6 +58,11 @@ export class AutoHunt {
     if (reason) this.d.onStop(reason);
   }
 
+  /** Um jogador atacou você: a auto-caça para (nunca luta contra jogadores). */
+  onPlayerAttack(): void {
+    if (this.on) this.stop("Auto-caça parou: um jogador atacou você!");
+  }
+
   /** Um monstro morreu (para contar abates do alvo da auto-caça). */
   onDeath(id: number): void {
     if (this.on && id === this.current) {

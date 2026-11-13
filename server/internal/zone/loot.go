@@ -25,6 +25,7 @@ type groundItem struct {
 	def           *game.ItemDef
 	count         int
 	pos           Vec2
+	enchant       int
 	owner         uint32
 	reservedUntil float64
 	expires       float64
@@ -38,26 +39,45 @@ func (z *Zone) dropLoot(m *entity, owner uint32) {
 	}
 	added := &pb.GroundItemsAdded{}
 	for _, d := range drops {
-		if len(z.ground) >= maxGround {
-			z.log.Warn("too many items on the ground, skipping drop", "item", d.Item.ID)
-			break
-		}
-		pos := m.pos
+		pos := m.pos // moeda sozinha cai em cima do corpo
 		if len(drops) > 1 || d.Item.Kind != game.KindGold {
-			a := z.rng.Float64() * 2 * math.Pi
-			r := 0.4 + z.rng.Float64()*(dropScatter-0.4)
-			if spot := (Vec2{X: m.pos.X + r*math.Cos(a), Z: m.pos.Z + r*math.Sin(a)}); z.walkable(spot) {
-				pos = spot
-			}
+			pos = z.scatter(m.pos)
 		}
-		g := &groundItem{
-			id: z.nextGroundID(), def: d.Item, count: d.Count, pos: pos,
-			owner: owner, reservedUntil: z.now + reservedFor, expires: z.now + groundLife,
+		if g := z.placeItem(pos, d.Item, d.Count, 0, owner, reservedFor); g != nil {
+			added.Items = append(added.Items, z.groundPB(g))
 		}
-		z.ground[g.id] = g
-		added.Items = append(added.Items, z.groundPB(g))
 	}
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundAdded{GroundAdded: added}}, 0)
+	if len(added.Items) > 0 {
+		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundAdded{GroundAdded: added}}, 0)
+	}
+}
+
+// scatter: um ponto livre perto de at (o saque não cai empilhado).
+func (z *Zone) scatter(at Vec2) Vec2 {
+	a := z.rng.Float64() * 2 * math.Pi
+	r := 0.4 + z.rng.Float64()*(dropScatter-0.4)
+	if spot := (Vec2{X: at.X + r*math.Cos(a), Z: at.Z + r*math.Sin(a)}); z.walkable(spot) {
+		return spot
+	}
+	return at
+}
+
+// dropItem joga um item no chão perto de at (quem chama avisa os clientes).
+func (z *Zone) dropItem(at Vec2, def *game.ItemDef, count, enchant int, owner uint32, reserve float64) *groundItem {
+	return z.placeItem(z.scatter(at), def, count, enchant, owner, reserve)
+}
+
+func (z *Zone) placeItem(pos Vec2, def *game.ItemDef, count, enchant int, owner uint32, reserve float64) *groundItem {
+	if len(z.ground) >= maxGround {
+		z.log.Warn("too many items on the ground, skipping drop", "item", def.ID)
+		return nil
+	}
+	g := &groundItem{
+		id: z.nextGroundID(), def: def, count: count, enchant: enchant, pos: pos,
+		owner: owner, reservedUntil: z.now + reserve, expires: z.now + groundLife,
+	}
+	z.ground[g.id] = g
+	return g
 }
 
 func (z *Zone) nextGroundID() uint32 {
@@ -72,7 +92,7 @@ func (z *Zone) nextGroundID() uint32 {
 
 func (z *Zone) groundPB(g *groundItem) *pb.GroundItem {
 	out := &pb.GroundItem{
-		Id: g.id, ItemId: g.def.ID, Count: uint32(g.count),
+		Id: g.id, ItemId: g.def.ID, Count: uint32(g.count), Enchant: uint32(g.enchant),
 		X: float32(g.pos.X), Z: float32(g.pos.Z),
 	}
 	if left := g.reservedUntil - z.now; g.owner != 0 && left > 0 {
@@ -137,16 +157,16 @@ func (z *Zone) runPickup(p *entity) {
 	if g.def.Kind == game.KindGold {
 		inv.gold += int64(g.count)
 	} else {
-		if !inv.canAdd(g.def, g.count) {
+		if (g.enchant > 0 && inv.firstFree() < 0) || (g.enchant == 0 && !inv.canAdd(g.def, g.count)) {
 			z.system(p, "Sua bolsa está cheia.")
 			return
 		}
-		inv.add(g.def, g.count)
+		inv.put(g.def, g.count, g.enchant)
 	}
 	delete(z.ground, g.id)
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundRemoved{GroundRemoved: &pb.GroundItemsRemoved{
 		Ids: []uint32{g.id}, PickedBy: p.id,
 	}}}, 0)
-	z.system(p, fmt.Sprintf("Você pegou %s.", itemLabel(g.def, g.count)))
+	z.system(p, fmt.Sprintf("Você pegou %s.", itemLabelEnchant(g.def, g.count, g.enchant)))
 	z.inventoryChanged(p, false)
 }

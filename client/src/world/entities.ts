@@ -15,6 +15,7 @@ import { classInfo } from "../classes";
 import {
   Effect,
   EntityKind,
+  PvpState,
   SkillTarget,
   type CombatEvent,
   type EffectEnd,
@@ -24,6 +25,7 @@ import {
   type EntityState,
   type HpUpdate,
   type LevelUp,
+  type PlayerStatus,
   type Revive,
   type SkillCast,
   type SkillInfo,
@@ -76,7 +78,19 @@ export interface EntityInfo {
   title: string;
   /** Chefe (marcador e quadro do alvo diferentes). */
   boss?: boolean;
+  /** Jogadores: normal, em combate (roxo) ou com karma (vermelho). */
+  pvpState: PvpState;
+  /** Jogadores: nome do clã ("" = sem clã). */
+  clanName: string;
 }
+
+/** Cores dos nomes por estado (o Babylon GUI não lê variáveis CSS). */
+export const NAME_COLORS = {
+  flagged: "#c77dff",
+  chaotic: "#ff5a4a",
+  party: "#7fd0ff",
+  clan: "#e8cf8a",
+} as const;
 
 /** O que o mapa precisa saber de cada entidade. */
 export interface MapMarker {
@@ -97,8 +111,14 @@ interface View extends EntityInfo {
   weapon: string;
   offhand: string;
   grade: number;
+  weaponEnchant: number;
   /** Jogadores: cor do emblema (nome e anel no chão). */
   emblem: string;
+  /** Cor do nome sem estado PvP (emblema, local, tipo). */
+  baseColor: string;
+  clanText: TextBlock;
+  /** Anel vermelho nos pés de quem tem karma (criado na hora). */
+  pkRing: Mesh | null;
   boss: boolean;
   scale: number;
   speed: number;
@@ -180,6 +200,58 @@ export class EntityManager {
     return this.views.get(id)?.kind === EntityKind.NPC;
   }
 
+  isPlayer(id: number): boolean {
+    return this.views.get(id)?.kind === EntityKind.PLAYER;
+  }
+
+  /** Colegas de grupo (nome azul-claro, aliados). */
+  private partyIds = new Set<number>();
+
+  setPartyIds(ids: Iterable<number>): void {
+    const before = this.partyIds;
+    this.partyIds = new Set(ids);
+    for (const id of new Set([...before, ...this.partyIds])) {
+      const v = this.views.get(id);
+      if (v) this.refreshName(v);
+    }
+  }
+
+  inParty(id: number): boolean {
+    return this.partyIds.has(id);
+  }
+
+  /** Aliado: do grupo ou do mesmo clã (nunca é atacado). */
+  isAlly(id: number): boolean {
+    if (id === this.localId || this.partyIds.has(id)) return true;
+    const v = this.views.get(id);
+    const me = this.local;
+    return !!v && !!me && v.kind === EntityKind.PLAYER && v.clanName !== "" && v.clanName === me.clanName;
+  }
+
+  /**
+   * Dá para atacar? Monstros vivos sempre; jogadores vivos que não são aliados, se já
+   * forem hostis (roxo/vermelho) ou com force (Ctrl). O servidor confere o resto
+   * (nível mínimo, cidade).
+   */
+  canAttack(id: number, force: boolean): boolean {
+    const v = this.views.get(id);
+    if (!v || v.dead) return false;
+    if (v.kind === EntityKind.MONSTER) return true;
+    if (v.kind !== EntityKind.PLAYER || this.isAlly(id)) return false;
+    return force || v.pvpState !== PvpState.NORMAL;
+  }
+
+  /** Estado PvP ou clã de um jogador mudou. */
+  setStatus(s: PlayerStatus): void {
+    const v = this.views.get(s.id);
+    if (!v) return;
+    v.pvpState = s.pvpState;
+    v.clanName = s.clanName;
+    this.refreshName(v);
+    // O clã do jogador local mudou: os aliados de clã mudam de cor também.
+    if (s.id === this.localId) for (const o of this.views.values()) if (o !== v) this.refreshName(o);
+  }
+
   /** Nó raiz (posição no chão) de uma entidade. */
   rootOf(id: number): TransformNode | undefined {
     return this.views.get(id)?.root;
@@ -197,9 +269,10 @@ export class EntityManager {
     v.weapon = a.weapon;
     v.offhand = a.offhand;
     v.grade = a.weaponGrade;
+    v.weaponEnchant = a.weaponEnchant;
     if (!v.model3d) return;
     this.setShadow(v, false); // as malhas mudam; a sombra volta no próximo quadro
-    v.model3d.setWeapons(v.weapon, v.offhand, v.grade);
+    v.model3d.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
     v.meshes = v.model3d.meshes();
     this.notPickable(v.meshes);
   }
@@ -278,7 +351,7 @@ export class EntityManager {
     nameText.resizeToFit = true;
     nameText.fontSize = 13;
     nameText.paddingLeft = nameText.paddingRight = "6px";
-    nameText.color = emblem
+    const baseColor = emblem
       ? lighten(emblem, 0.45)
       : isLocal
         ? "#f0d79a"
@@ -289,10 +362,19 @@ export class EntityManager {
           : e.kind === EntityKind.OBJECT
             ? "#bcd4ff"
             : "#e6ecff";
+    nameText.color = baseColor;
     // Contorno em vez de shadowBlur: o desfoque do canvas 2D é caro e a GUI redesenha muito.
     nameText.outlineWidth = 3;
     nameText.outlineColor = "rgba(0,0,0,0.85)";
     stack.addControl(nameText);
+    const clanText = new TextBlock();
+    clanText.resizeToFit = true;
+    clanText.fontSize = 11;
+    clanText.color = NAME_COLORS.clan;
+    clanText.outlineWidth = 3;
+    clanText.outlineColor = "rgba(0,0,0,0.85)";
+    clanText.isVisible = false;
+    stack.addControl(clanText);
     const hpBar = new Rectangle();
     hpBar.width = "64px";
     hpBar.height = "6px";
@@ -314,6 +396,7 @@ export class EntityManager {
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
       model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem,
+      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, baseColor, clanText, pkRing: null,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
@@ -323,6 +406,7 @@ export class EntityManager {
     // NPCs ficam parados, virados para o centro da praça.
     if (e.kind === EntityKind.NPC) visual.rotation.y = Math.atan2(-e.x, -e.z);
     this.refreshLabel(v);
+    this.refreshName(v);
     this.refreshHpBar(v);
 
     if (isObject) {
@@ -890,7 +974,7 @@ export class EntityManager {
     if (v.model3d || !this.models) return;
     const inst = this.models.instantiate(v.model, String(v.id));
     if (!inst) return;
-    if (v.kind === EntityKind.PLAYER) inst.setWeapons(v.weapon, v.offhand, v.grade);
+    if (v.kind === EntityKind.PLAYER) inst.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
     inst.root.parent = v.visual;
     inst.root.scaling.scaleInPlace(v.scale);
     const meshes = inst.meshes();
@@ -923,6 +1007,31 @@ export class EntityManager {
   }
 
   /** Material do anel no chão (brilho próprio, sem luz), um por cor + transparência. */
+  /** Cor do nome (estado PvP > grupo > emblema), linha do clã e anel do karma. */
+  private refreshName(v: View): void {
+    if (v.kind !== EntityKind.PLAYER) return;
+    v.nameText.color =
+      v.pvpState === PvpState.CHAOTIC
+        ? NAME_COLORS.chaotic
+        : v.pvpState === PvpState.FLAGGED
+          ? NAME_COLORS.flagged
+          : this.partyIds.has(v.id)
+            ? NAME_COLORS.party
+            : v.baseColor;
+    v.clanText.text = v.clanName ? `‹${v.clanName}›` : "";
+    v.clanText.isVisible = !!v.clanName;
+    const red = v.pvpState === PvpState.CHAOTIC;
+    if (red && !v.pkRing) {
+      const ring = MeshBuilder.CreateTorus(`pk${v.id}`, { diameter: 1.25, thickness: 0.05, tessellation: 32 }, this.scene);
+      ring.parent = v.root;
+      ring.position.y = 0.035;
+      ring.material = this.ringMaterial(NAME_COLORS.chaotic, 0.55);
+      ring.isPickable = false;
+      v.pkRing = ring;
+    }
+    v.pkRing?.setEnabled(red);
+  }
+
   private ringMaterial(hex: string, alpha: number): StandardMaterial {
     const key = `ring:${hex}:${alpha}`;
     let mat = this.mats.get(key);

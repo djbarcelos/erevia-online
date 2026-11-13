@@ -1767,3 +1767,51 @@ button.mm-frame:focus-visible .mm-open {
 .menu-burger.has-badge {
   box-shadow: 0 0 0 2px var(--gold-hi), 0 0 14px rgba(243, 217, 149, 0.6);
 }
+
+/* ---------- Fase 4: alvo jogador (PvP, clã, ações) ---------- */
+
+.hud-target.pc .t-name,
+.hud-target.pc .t-name b {
+  color: #e6ecff;
+}
+
+.hud-target.ally .t-name b {
+  color: var(--party);
+}
+
+.hud-target.flagged .t-name b {
+  color: #c77dff;
+}
+
+.hud-target.chaotic .t-name b {
+  color: #ff5a4a;
+}
+
+.hud-target.chaotic {
+  border-color: rgba(255, 90, 74, 0.55);
+}
+
+.t-clan {
+  margin-top: -3px;
+  font-size: 0.74rem;
+  color: #e8cf8a;
+}
+
+.t-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.t-actions .t-act {
+  --h: 26px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 0.72rem;
+}
+
+.t-actions .t-act.danger {
+  border-color: rgba(255, 90, 74, 0.6);
+  color: #ffb4a8;
+}

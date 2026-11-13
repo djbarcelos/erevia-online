@@ -1,12 +1,24 @@
 import { api, ApiError, type CharacterInfo } from "./api";
 import { Color3 } from "@babylonjs/core";
-import { EntityKind, ItemKind, SkillTarget, type Progress, type SelfStats, type ServerMessage, type SkillInfo, type Welcome } from "./gen/erevia/v1/game_pb";
+import { create } from "@bufbuild/protobuf";
+import {
+  EntityKind,
+  ItemKind,
+  SelfPvpSchema,
+  SkillTarget,
+  type Progress,
+  type SelfPvp,
+  type SelfStats,
+  type ServerMessage,
+  type SkillInfo,
+  type Welcome,
+} from "./gen/erevia/v1/game_pb";
 import { classInfo } from "./classes";
 import { Connection } from "./net/connection";
 import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
-import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type WindowId } from "./ui/hud";
+import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
@@ -151,6 +163,23 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   };
   const me = () => ({ myClass: character.class, myLevel: lastStats?.level ?? character.level ?? 1, name: character.name, emblem });
 
+  // ---------- PvP (karma, PKs, vitórias, flag) ----------
+  let pvp: SelfPvp = welcome.pvp ?? create(SelfPvpSchema, {});
+  let pvpAt = performance.now();
+  const pvpListeners = new Set<() => void>();
+  const onPvp = (fn: () => void) => {
+    pvpListeners.add(fn);
+    return () => pvpListeners.delete(fn);
+  };
+  /** Segundos de flag que ainda faltam. */
+  const flagLeft = () => Math.max(0, (pvp.flagMs - (performance.now() - pvpAt)) / 1000);
+
+  // ---------- Grupo e clã (convites pelo quadro do alvo) ----------
+  const canInviteParty = (_id: number) => false;
+  const canInviteClan = (_id: number) => false;
+  const inviteParty = (_name: string) => {};
+  const inviteClan = (_name: string) => {};
+
   // ---------- Progressão: atributos, árvore de skills e barra (vêm do servidor) ----------
   let progress: Progress | null = welcome.progress ?? null;
   const progressListeners = new Set<() => void>();
@@ -227,18 +256,38 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // ---------- Alvo e skills ----------
   let targetId = 0;
+  /** Jogador atacado com Ctrl (ou pelo botão Atacar): as skills nele também forçam. */
+  let forcedId = 0;
+  const targetExtras = (id: number): TargetExtras | undefined =>
+    entities.isPlayer(id) && id !== welcome.yourId
+      ? { ally: entities.isAlly(id), canParty: canInviteParty(id), canClan: canInviteClan(id) }
+      : undefined;
+  const refreshTarget = () => hud.setTarget(entities.info(targetId), targetExtras(targetId));
   const selectTarget = (id: number) => {
-    if (id !== targetId) hud.setQueued(0); // o servidor troca a ação ao mudar de alvo
+    if (id !== targetId) {
+      hud.setQueued(0); // o servidor troca a ação ao mudar de alvo
+      forcedId = 0;
+    }
     targetId = id;
     entities.setTarget(id);
-    hud.setTarget(entities.info(id));
+    refreshTarget();
   };
+  /** Atacar um monstro (auto-caça, botão de ataque, clique). */
   const attackTarget = (id: number) => {
     if (entities.localDead || !entities.isEnemy(id)) return;
     selectTarget(id);
     pendingShop = 0;
     conn.attack(id);
   };
+  /** Atacar um jogador: só se for hostil, ou com force (Ctrl / botão Atacar). */
+  const attackPlayer = (id: number, force: boolean) => {
+    if (entities.localDead || !entities.canAttack(id, force)) return;
+    selectTarget(id);
+    pendingShop = 0;
+    if (force) forcedId = id;
+    conn.attack(id, force);
+  };
+  const isAttackable = (id: number) => entities.isEnemy(id) || entities.canAttack(id, forcedId === id);
   const useSkill = (s: SkillInfo) => {
     if (entities.localDead || s.passive || rankOf(s.id) < 1) return;
     if (!hud.isReady(s.id)) return;
@@ -246,7 +295,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       chat.system("Mana insuficiente.");
       return;
     }
-    if (s.target === SkillTarget.ENEMY && !entities.isEnemy(targetId)) {
+    const onPlayer = s.target === SkillTarget.ENEMY && entities.isPlayer(targetId) && entities.canAttack(targetId, forcedId === targetId);
+    if (s.target === SkillTarget.ENEMY && !entities.isEnemy(targetId) && !onPlayer) {
       const n = entities.nearestMonster();
       if (!n || n.dist > 25) {
         chat.system("Selecione um monstro como alvo.");
@@ -254,7 +304,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       }
       selectTarget(n.id);
     }
-    conn.useSkill(s.id, targetId);
+    conn.useSkill(s.id, targetId, onPlayer && forcedId === targetId);
     // Skill de alvo pode precisar andar até o alcance: fica "na fila" até o servidor usar.
     if (s.target === SkillTarget.ENEMY) hud.setQueued(s.id);
     else hud.startLocalCooldown(s.id);
@@ -387,9 +437,18 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     openWindow: (id: WindowId) => wm.toggle(id),
     onAttack: () => {
       if (entities.isEnemy(targetId)) return attackTarget(targetId);
+      if (entities.isPlayer(targetId) && entities.canAttack(targetId, forcedId === targetId)) return attackPlayer(targetId, forcedId === targetId);
       const n = entities.nearestMonster();
       if (n && n.dist < 30) attackTarget(n.id);
       else toast("Nenhum monstro por perto.", "warn");
+    },
+    onTargetAction: (action) => {
+      const info = entities.info(targetId);
+      if (!info || !entities.isPlayer(targetId)) return;
+      if (action === "attack") attackPlayer(targetId, true);
+      else if (action === "whisper") chat.whisperTo(info.name);
+      else if (action === "party") inviteParty(info.name);
+      else if (action === "clan") inviteClan(info.name);
     },
     onCycleTarget: cycleTarget,
     onStick: (v) => {
@@ -397,7 +456,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (v) stepStick();
     },
     me,
-    targetDistance: () => (entities.isEnemy(targetId) ? entities.distanceTo(targetId) : null),
+    targetDistance: () => (isAttackable(targetId) ? entities.distanceTo(targetId) : null),
     map: mapSource,
     regions,
     stats: () => ({ fps: world.engine.getFps(), ping: conn.ping }),
@@ -514,6 +573,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         onStats,
         onProgress,
         allocate: (add) => conn.allocateAttrs(add),
+        pvp: () => ({ karma: pvp.karma, pks: pvp.pkCount, wins: pvp.pvpKills, flag: flagLeft() }),
+        onPvp,
       }),
   });
   reg({
@@ -632,7 +693,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (dest) conn.moveTo(dest.x, dest.z);
       return dest;
     },
-    onEntity: (id) => {
+    onEntity: (id, force) => {
       if (id === welcome.yourId) return;
       selectTarget(id);
       if (entities.isNpc(id)) {
@@ -641,6 +702,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       }
       pendingShop = 0;
       if (entities.isEnemy(id) && !entities.localDead) conn.attack(id);
+      // Jogador: clique simples só seleciona (a não ser que ele já seja hostil); Ctrl ataca.
+      else if (entities.isPlayer(id)) attackPlayer(id, force);
     },
     onLoot: (id) => {
       if (entities.localDead) return;
@@ -648,7 +711,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       pendingShop = 0;
       conn.pickUp(id);
     },
-    isEnemy: (id) => entities.isEnemy(id),
+    isEnemy: (id, force) => entities.isEnemy(id) || entities.canAttack(id, force || forcedId === id),
   });
   const stopTouchCamera = setupTouchCamera(canvas, world.camera);
 
@@ -681,7 +744,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const effectsTimer = window.setInterval(() => {
     hud.setEffects(entities.effectsOf(welcome.yourId), targetId ? entities.effectsOf(targetId) : []);
     if (auto.on) hud.setAutoStatus(auto.status());
-    hud.setAttacking(entities.isEnemy(targetId));
+    hud.setAttacking(isAttackable(targetId));
   }, 100);
   setupPerfPanel(world.scene, world.gui, $("hud"));
 
@@ -725,6 +788,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         conn.moveTo(x, z);
       },
       attack: (id: number) => attackTarget(id),
+      attackPlayer: (id: number, force: boolean) => attackPlayer(id, force),
+      select: (id: number) => selectTarget(id),
+      info: (id: number) => entities.info(id),
+      pvp: () => ({ ...pvp, flag: flagLeft() }),
     };
   }
 
@@ -756,7 +823,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           const snap = msg.msg.value;
           for (const s of snap.states) entities.applyState(s);
           for (const u of snap.hp) entities.applyHp(u);
-          for (const ev of snap.combat) entities.onCombat(ev);
+          for (const ev of snap.combat) {
+            entities.onCombat(ev);
+            // Um jogador atacou você: a auto-caça para (nunca revida sozinha).
+            if (ev.targetId === welcome.yourId && ev.sourceId !== welcome.yourId && entities.isPlayer(ev.sourceId)) auto.onPlayerAttack();
+          }
           for (const ev of snap.casts) entities.onSkillCast(ev);
           for (const ev of snap.effects) entities.onEffect(ev);
           for (const ev of snap.effectEnds) entities.onEffectEnd(ev);
@@ -769,7 +840,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
             entities.onLevelUp(l);
             if (l.id === welcome.yourId) hud.levelBanner(l.level);
           }
-          if (targetId) hud.setTarget(entities.info(targetId));
+          if (targetId) refreshTarget();
           break;
         }
         case "progress":
@@ -828,6 +899,18 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "appearance":
           entities.setAppearance(msg.msg.value);
           break;
+        case "playerStatus":
+          entities.setStatus(msg.msg.value);
+          if (msg.msg.value.id === targetId || msg.msg.value.id === welcome.yourId) refreshTarget();
+          break;
+        case "selfPvp": {
+          const was = pvp;
+          pvp = msg.msg.value;
+          pvpAt = performance.now();
+          if (pvp.karma > 0 && was.karma === 0) toast("Você tem karma: seu nome está vermelho.", "bad");
+          for (const fn of pvpListeners) fn();
+          break;
+        }
         case "skillCooldown":
           hud.cooldown(msg.msg.value.skillId, msg.msg.value.readyInMs);
           break;

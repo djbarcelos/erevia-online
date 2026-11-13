@@ -75,21 +75,29 @@ type JoinInfo struct {
 	Ranks  map[uint32]int
 	Hotbar []string
 	Emblem string // cor do emblema ("" = padrão da classe)
-	Peer   Peer
+	// Fase 4: conta (armazém) e PvP.
+	AccountID int64
+	Karma     int
+	PKs       int
+	PvPKills  int
+	Peer      Peer
 }
 
 // SavedState é enviado ao canal de persistência.
 type SavedState struct {
-	ID     uint32
-	X, Z   float64
-	Level  int
-	XP     int64
-	HP, MP int // -1 = cheio
-	Gold   int64
-	Items  []game.ItemRecord
-	Attrs  game.Attrs
-	Ranks  map[uint32]int
-	Hotbar []string
+	ID       uint32
+	X, Z     float64
+	Level    int
+	XP       int64
+	HP, MP   int // -1 = cheio
+	Gold     int64
+	Items    []game.ItemRecord
+	Attrs    game.Attrs
+	Ranks    map[uint32]int
+	Hotbar   []string
+	Karma    int
+	PKs      int
+	PvPKills int
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
 	Seq int64
 }
@@ -119,8 +127,14 @@ type chatEvent struct {
 	id       uint32
 	text, to string
 }
-type attackEvent struct{ id, target uint32 }
-type skillEvent struct{ id, skill, target uint32 }
+type attackEvent struct {
+	id, target uint32
+	force      bool
+}
+type skillEvent struct {
+	id, skill, target uint32
+	force             bool
+}
 type respawnEvent struct{ id uint32 }
 
 func (joinEvent) isEvent()    {}
@@ -208,11 +222,11 @@ func (z *Zone) Move(ctx context.Context, id uint32, x, z2 float64) {
 func (z *Zone) Chat(ctx context.Context, id uint32, text, to string) {
 	z.post(ctx, chatEvent{id: id, text: text, to: to})
 }
-func (z *Zone) Attack(ctx context.Context, id, target uint32) {
-	z.post(ctx, attackEvent{id: id, target: target})
+func (z *Zone) Attack(ctx context.Context, id, target uint32, force bool) {
+	z.post(ctx, attackEvent{id: id, target: target, force: force})
 }
-func (z *Zone) UseSkill(ctx context.Context, id, skill, target uint32) {
-	z.post(ctx, skillEvent{id: id, skill: skill, target: target})
+func (z *Zone) UseSkill(ctx context.Context, id, skill, target uint32, force bool) {
+	z.post(ctx, skillEvent{id: id, skill: skill, target: target, force: force})
 }
 func (z *Zone) Respawn(ctx context.Context, id uint32) { z.post(ctx, respawnEvent{id: id}) }
 
@@ -270,15 +284,11 @@ func (z *Zone) handle(e event) {
 		z.onChat(e)
 	case attackEvent:
 		if p := z.players[e.id]; p != nil && !p.dead && z.spendAction(p) {
-			if t := z.monsters[e.target]; t != nil && !t.dead && !t.mon.hidden {
-				if p.act.kind != actAttack || p.act.target != t.id {
-					p.act = action{kind: actAttack, target: t.id}
-				}
-			}
+			z.requestAttack(p, e.target, e.force)
 		}
 	case skillEvent:
 		if p := z.players[e.id]; p != nil && z.spendAction(p) {
-			z.requestSkill(p, e.skill, e.target)
+			z.requestSkill(p, e.skill, e.target, e.force)
 		}
 	case respawnEvent:
 		if p := z.players[e.id]; p != nil {
@@ -325,6 +335,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		st := r.state
 		info.X, info.Z, info.XP, info.HP, info.MP, info.Gold, info.Items = st.X, st.Z, st.XP, st.HP, st.MP, st.Gold, st.Items
 		info.Attrs, info.Ranks, info.Hotbar = st.Attrs, st.Ranks, st.Hotbar
+		info.Karma, info.PKs, info.PvPKills = st.Karma, st.PKs, st.PvPKills
 		delete(z.recent, info.ID)
 	}
 
@@ -346,8 +357,11 @@ func (z *Zone) onJoin(info JoinInfo) {
 			moveTokens: z.cfg.MaxMovesPerSec, chatTokens: z.cfg.ChatBurst,
 			inv:   inv,
 			attrs: attrs, ranks: ranks, hotbar: hotbar,
+			accountID: info.AccountID,
+			karma:     max(0, info.Karma), pks: max(0, info.PKs), pvpKills: max(0, info.PvPKills),
 		},
 	}
+	p.pl.sentPvp = z.pvpState(p)
 	p.hp, p.mp = math.MaxFloat64, math.MaxFloat64
 	z.refreshStats(p) // classe + atributos + equipamento + passivas; limita a vida/mana ao máximo
 	if info.HP > 0 && float64(info.HP) < p.stats.MaxHP {
@@ -409,6 +423,8 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Progress:     z.progressPB(p),
 		Hotbar:       &pb.Hotbar{Slots: p.pl.hotbar},
 		Branches:     branches,
+		Pvp:          z.selfPvpPB(p),
+		Enchant:      enchantRulesPB(),
 	}}})
 	z.sendSelfStats(p)
 	for id, ready := range p.pl.cooldowns {
@@ -489,12 +505,7 @@ func (z *Zone) removePlayer(id uint32) {
 	if z.byName[strings.ToLower(p.name)] == id {
 		delete(z.byName, strings.ToLower(p.name))
 	}
-	for _, m := range z.monsters {
-		delete(m.mon.hate, id)
-		if m.act.target == id {
-			m.clearAction()
-		}
-	}
+	z.forgetTarget(id)
 	st := z.savedState(p)
 	z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
 	z.save([]SavedState{st}, false)
@@ -528,6 +539,7 @@ func (z *Zone) update(dt float64) {
 
 	if z.tick%uint32(z.cfg.TickRate) == 0 { // 1×/s
 		z.expireGround()
+		z.expireFlags()
 		if len(z.pending) > 0 {
 			z.save(nil, false)
 		}
@@ -625,6 +637,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: int(math.Floor(p.mp)),
 		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),
 		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
+		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills,
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
@@ -725,6 +738,9 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		w, o, g := e.pl.inv.look()
 		out.Weapon, out.Offhand, out.WeaponGrade = w, o, uint32(g)
 		out.Emblem = e.pl.emblem
+		out.WeaponEnchant = uint32(e.pl.inv.weaponEnchant())
+		out.PvpState = z.pvpState(e)
+		out.ClanName = z.clanName(e)
 	}
 	if e.npc != nil {
 		out.Title = e.npc.title

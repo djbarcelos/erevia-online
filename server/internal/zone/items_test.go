@@ -53,13 +53,13 @@ func TestInventoryAddStacksAndFills(t *testing.T) {
 
 func TestInventoryMoveMergesAndSwaps(t *testing.T) {
 	var inv inventory
-	inv.bag[0] = stack{item("bone_old"), 990}
-	inv.bag[1] = stack{item("bone_old"), 20}
+	inv.bag[0] = stack{def: item("bone_old"), count: 990}
+	inv.bag[1] = stack{def: item("bone_old"), count: 20}
 	inv.moveInBag(1, 0)
 	if inv.bag[0].count != 999 || inv.bag[1].count != 11 {
 		t.Fatalf("merge = %d, %d", inv.bag[0].count, inv.bag[1].count)
 	}
-	inv.bag[2] = stack{item("skull_cracked"), 1}
+	inv.bag[2] = stack{def: item("skull_cracked"), count: 1}
 	inv.moveInBag(2, 1)
 	if inv.bag[1].def.ID != "skull_cracked" || inv.bag[2].def.ID != "bone_old" {
 		t.Fatal("different items should swap")
@@ -86,8 +86,8 @@ func TestEquipRules(t *testing.T) {
 	z := newTestZone(nil)
 	p, peer := joinKit(z, 1, "mage", 0, 0, 0)
 	inv := &p.pl.inv
-	inv.bag[5] = stack{item("sword_good"), 1}
-	inv.bag[6] = stack{item("staff_good"), 1}
+	inv.bag[5] = stack{def: item("sword_good"), count: 1}
+	inv.bag[6] = stack{def: item("staff_good"), count: 1}
 
 	z.useItem(p, placeBag, 5)
 	if !peer.systemContains("classe") || inv.equip[game.SlotWeapon].def.ID != "staff_common" {

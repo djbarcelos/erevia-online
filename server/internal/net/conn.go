@@ -41,6 +41,11 @@ type Character struct {
 	Ranks  map[uint32]int
 	Hotbar []string
 	Emblem string
+	// Fase 4
+	AccountID int64
+	Karma     int
+	PKs       int
+	PvPKills  int
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -108,7 +113,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.zone.Join(ctx, zone.JoinInfo{
 		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z,
 		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
-		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem, Peer: sess,
+		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem,
+		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)
@@ -167,9 +173,9 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 		case *pb.ClientMessage_ChatSend:
 			s.zone.Chat(ctx, id, m.ChatSend.Text, m.ChatSend.To)
 		case *pb.ClientMessage_Attack:
-			s.zone.Attack(ctx, id, m.Attack.TargetId)
+			s.zone.Attack(ctx, id, m.Attack.TargetId, m.Attack.Force)
 		case *pb.ClientMessage_UseSkill:
-			s.zone.UseSkill(ctx, id, m.UseSkill.SkillId, m.UseSkill.TargetId)
+			s.zone.UseSkill(ctx, id, m.UseSkill.SkillId, m.UseSkill.TargetId, m.UseSkill.Force)
 		case *pb.ClientMessage_Respawn:
 			s.zone.Respawn(ctx, id)
 		case *pb.ClientMessage_PickUp:

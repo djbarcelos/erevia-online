@@ -52,12 +52,13 @@ export class Connection {
     this.send({ case: "chatSend", value: { text, to } });
   }
 
-  attack(targetId: number): void {
-    this.send({ case: "attack", value: { targetId } });
+  /** force: atacar um jogador que não está em combate nem tem karma (Ctrl + clique). */
+  attack(targetId: number, force = false): void {
+    this.send({ case: "attack", value: { targetId, force } });
   }
 
-  useSkill(skillId: number, targetId: number): void {
-    this.send({ case: "useSkill", value: { skillId, targetId } });
+  useSkill(skillId: number, targetId: number, force = false): void {
+    this.send({ case: "useSkill", value: { skillId, targetId, force } });
   }
 
   respawn(): void {

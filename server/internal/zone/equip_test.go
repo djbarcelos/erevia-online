@@ -11,9 +11,9 @@ func TestRingsAndEarringsUseBothSlots(t *testing.T) {
 	z := newTestZone(nil)
 	p, peer := joinKit(z, 1, "rogue", 0, 0, 0)
 	inv := &p.pl.inv
-	inv.bag[10] = stack{item("ring_common"), 1}
-	inv.bag[11] = stack{item("ring_common"), 1}
-	inv.bag[12] = stack{item("ear_common"), 1}
+	inv.bag[10] = stack{def: item("ring_common"), count: 1}
+	inv.bag[11] = stack{def: item("ring_common"), count: 1}
+	inv.bag[12] = stack{def: item("ear_common"), count: 1}
 	mdef := p.stats.MDef
 
 	// Duplo clique: primeiro anel no encaixe 1, o segundo no 2.
@@ -28,7 +28,7 @@ func TestRingsAndEarringsUseBothSlots(t *testing.T) {
 
 	// Com os dois ocupados, um terceiro troca com o primeiro.
 	p.level = 6
-	inv.bag[13] = stack{item("ring_good"), 1}
+	inv.bag[13] = stack{def: item("ring_good"), count: 1}
 	z.useItem(p, placeBag, 13)
 	if inv.equip[game.SlotRing1].def.ID != "ring_good" || inv.bag[13].def.ID != "ring_common" {
 		t.Fatal("third ring should swap with ring 1")
@@ -69,7 +69,7 @@ func TestEverySlotEquipsAndSaves(t *testing.T) {
 	epics := []string{"helm_epic", "armor_epic", "legs_epic", "gloves_epic", "boots_epic", "cape_epic", "neck_epic",
 		"ear_epic", "ear_epic", "ring_epic", "ring_epic", "sword_epic", "shield_epic"}
 	for i, id := range epics {
-		inv.bag[10+i] = stack{item(id), 1}
+		inv.bag[10+i] = stack{def: item(id), count: 1}
 		z.useItem(p, placeBag, 10+i)
 	}
 	for sl := 0; sl < game.EquipSlots; sl++ {

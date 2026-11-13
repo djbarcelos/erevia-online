@@ -20,6 +20,9 @@ export interface CharacterDeps {
   onStats(fn: () => void): () => void;
   onProgress(fn: () => void): () => void;
   allocate(add: Attrs): void;
+  /** PvP: karma, PKs, vitórias e segundos de flag restantes. */
+  pvp(): { karma: number; pks: number; wins: number; flag: number };
+  onPvp(fn: () => void): () => void;
 }
 
 type AttrId = "str" | "dex" | "con" | "int" | "wis" | "spi";
@@ -163,6 +166,38 @@ export function buildCharacter(d: CharacterDeps): HTMLElement {
       dRows.set(r.key, { val, diff });
     }
   }
+  // ---------- PvP ----------
+  const pvpRows = {
+    karma: el("b", "d-val"),
+    pks: el("b", "d-val"),
+    wins: el("b", "d-val"),
+    flag: el("b", "d-val"),
+  };
+  derived.append(
+    el("h4", "d-group", "PvP"),
+    el("div", "d-row", el("span", "d-name", "Karma"), el("span", "d-diff"), pvpRows.karma),
+    el("div", "d-row", el("span", "d-name", "Jogadores mortos sem luta (PK)"), el("span", "d-diff"), pvpRows.pks),
+    el("div", "d-row", el("span", "d-name", "Vitórias em combate"), el("span", "d-diff"), pvpRows.wins),
+    el("div", "d-row", el("span", "d-name", "Em combate (nome roxo)"), el("span", "d-diff"), pvpRows.flag),
+  );
+  tooltip(
+    pvpRows.karma.parentElement!,
+    () =>
+      `<h4>Karma</h4><div class="desc">Matar quem não estava lutando dá karma e deixa seu nome vermelho.</div><div class="cmp">Com karma você perde o dobro de XP e pode deixar itens caírem ao morrer, pode ser atacado dentro da cidade e não usa teleporte. Caçar monstros reduz o karma.</div>`,
+  );
+  const renderPvp = () => {
+    const v = d.pvp();
+    pvpRows.karma.textContent = fmt.format(v.karma);
+    pvpRows.karma.style.color = v.karma > 0 ? "#ff5a4a" : "";
+    pvpRows.pks.textContent = String(v.pks);
+    pvpRows.wins.textContent = String(v.wins);
+    pvpRows.flag.textContent = v.flag > 0 ? `${Math.ceil(v.flag)} s` : "Não";
+    pvpRows.flag.style.color = v.flag > 0 ? "#c77dff" : "";
+  };
+  renderPvp();
+  const pvpTimer = window.setInterval(renderPvp, 1000);
+  const offPvp = d.onPvp(renderPvp);
+
   root.append(portrait, attrs, el("div", "attr-right", el("h3", "title", "Combate"), derived));
 
   function change(id: AttrId, delta: number) {
@@ -242,6 +277,8 @@ export function buildCharacter(d: CharacterDeps): HTMLElement {
     offStats();
     offStore();
     offProgress();
+    offPvp();
+    window.clearInterval(pvpTimer);
     pv.dispose();
   });
   return root;

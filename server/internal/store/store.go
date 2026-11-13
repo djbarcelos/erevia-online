@@ -34,7 +34,8 @@ const (
 	pgUniqueViolation    = "23505"
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
-		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem"
+		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
+		"karma, pk_count, pvp_kills, clan_left_at"
 )
 
 var (
@@ -73,8 +74,22 @@ type Character struct {
 	Hotbar    []string          `json:"-"`
 	Emblem    string            `json:"emblem"` // sempre preenchido (padrão da classe se vazio no banco)
 	// Look: o que o personagem tem nas mãos agora (para a tela de seleção).
-	Look     CharacterLook `json:"look"`
+	Look       CharacterLook `json:"look"`
+	Karma      int           `json:"-"`
+	PKs        int           `json:"-"`
+	PvPKills   int           `json:"-"`
+	ClanLeftAt *time.Time    `json:"-"`
+	// Armazém da conta (só em CharacterForAccount).
+	Storage  StorageState `json:"-"`
 	kitGiven bool
+}
+
+// StorageState é o armazém de uma conta: moedas e itens (Equipped é sempre false).
+type StorageState struct {
+	AccountID int64
+	Gold      int64
+	Items     []game.ItemRecord
+	Seq       int64 // como save_seq: um estado mais velho que o gravado é ignorado
 }
 
 // CharacterLook são os modelos 3D das armas equipadas e a raridade da principal.
@@ -96,7 +111,12 @@ type CharacterState struct {
 	Attrs       game.Attrs
 	Ranks       map[uint32]int
 	Hotbar      []string
+	Karma       int
+	PKs         int
+	PvPKills    int
 	Seq         int64 // salvamento mais velho que o gravado é ignorado
+	// Storage (opcional): o armazém da conta mudou e vai junto, na mesma transação.
+	Storage *StorageState
 }
 
 type Store struct {
@@ -341,8 +361,11 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 				return err
 			}
 		}
-		c.Items, err = loadItems(ctx, tx, c.ID)
+		if c.Items, err = loadItems(ctx, tx, c.ID); err != nil {
+			return err
+		}
 		c.Look = lookOf(c.Items)
+		c.Storage, err = loadStorage(ctx, tx, accountID)
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -368,17 +391,39 @@ func giveStarterKit(ctx context.Context, tx pgx.Tx, c *Character, kit []game.Ite
 
 func loadItems(ctx context.Context, tx pgx.Tx, characterID int64) ([]game.ItemRecord, error) {
 	rows, err := tx.Query(ctx,
-		`SELECT place, slot, item_id, count FROM character_items WHERE character_id = $1 ORDER BY place DESC, slot`, characterID)
+		`SELECT place, slot, item_id, count, enchant FROM character_items WHERE character_id = $1 ORDER BY place DESC, slot`, characterID)
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (game.ItemRecord, error) {
 		var r game.ItemRecord
-		var place, slot int16
-		err := row.Scan(&place, &slot, &r.ItemID, &r.Count)
-		r.Equipped, r.Slot = place == 1, int(slot)
+		var place, slot, enchant int16
+		err := row.Scan(&place, &slot, &r.ItemID, &r.Count, &enchant)
+		r.Equipped, r.Slot, r.Enchant = place == 1, int(slot), int(enchant)
 		return r, err
 	})
+}
+
+// loadStorage lê o armazém da conta.
+func loadStorage(ctx context.Context, tx pgx.Tx, accountID int64) (StorageState, error) {
+	st := StorageState{AccountID: accountID}
+	if err := tx.QueryRow(ctx, `SELECT stored_gold, storage_seq FROM accounts WHERE id = $1`, accountID).
+		Scan(&st.Gold, &st.Seq); err != nil {
+		return st, err
+	}
+	rows, err := tx.Query(ctx,
+		`SELECT slot, item_id, count, enchant FROM account_items WHERE account_id = $1 ORDER BY slot`, accountID)
+	if err != nil {
+		return st, err
+	}
+	st.Items, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (game.ItemRecord, error) {
+		var r game.ItemRecord
+		var slot, enchant int16
+		err := row.Scan(&slot, &r.ItemID, &r.Count, &enchant)
+		r.Slot, r.Enchant = int(slot), int(enchant)
+		return r, err
+	})
+	return st, err
 }
 
 func placeOf(r game.ItemRecord) int16 {
@@ -415,10 +460,11 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 			batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, gold = $8,
 				save_seq = GREATEST(save_seq, $9::bigint), last_seen_at = now(),
 				attr_str = $10, attr_dex = $11, attr_con = $12, attr_int = $13, attr_wis = $14, attr_spi = $15,
-				skill_ranks = $16, hotbar = $17
+				skill_ranks = $16, hotbar = $17, karma = $18, pk_count = $19, pvp_kills = $20
 				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
 				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq,
-				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar)
+				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar,
+				max(c.Karma, 0), max(c.PKs, 0), max(c.PvPKills, 0))
 		}
 		br := tx.SendBatch(ctx, batch)
 		var ids []int64
@@ -435,22 +481,61 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 			}
 			ids = append(ids, id)
 			for _, it := range c.Items {
-				rows = append(rows, []any{id, placeOf(it), int16(it.Slot), it.ItemID, int32(it.Count)})
+				rows = append(rows, []any{id, placeOf(it), int16(it.Slot), it.ItemID, int32(it.Count), int16(it.Enchant)})
 			}
 		}
 		if err := br.Close(); err != nil {
 			return err
 		}
-		if len(ids) == 0 {
-			return nil
+		if len(ids) > 0 {
+			if _, err := tx.Exec(ctx, `DELETE FROM character_items WHERE character_id = ANY($1)`, ids); err != nil {
+				return err
+			}
+			if _, err := tx.CopyFrom(ctx, pgx.Identifier{"character_items"},
+				[]string{"character_id", "place", "slot", "item_id", "count", "enchant"}, pgx.CopyFromRows(rows)); err != nil {
+				return err
+			}
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM character_items WHERE character_id = ANY($1)`, ids); err != nil {
+		return saveStorages(ctx, tx, states)
+	})
+}
+
+// saveStorages grava os armazéns que vieram junto (o mais novo de cada conta), na mesma
+// transação dos personagens: o item que saiu da bolsa e entrou no armazém nunca fica
+// salvo pela metade.
+func saveStorages(ctx context.Context, tx pgx.Tx, states []CharacterState) error {
+	latest := map[int64]*StorageState{}
+	for _, c := range states {
+		if st := c.Storage; st != nil {
+			if old, ok := latest[st.AccountID]; !ok || st.Seq >= old.Seq {
+				latest[st.AccountID] = st
+			}
+		}
+	}
+	for _, st := range latest {
+		var id int64
+		err := tx.QueryRow(ctx, `UPDATE accounts SET stored_gold = $2, storage_seq = GREATEST(storage_seq, $3::bigint)
+			WHERE id = $1 AND ($3::bigint = 0 OR storage_seq < $3::bigint) RETURNING id`,
+			st.AccountID, max(st.Gold, 0), st.Seq).Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue // já há um armazém mais novo gravado
+		}
+		if err != nil {
 			return err
 		}
-		_, err := tx.CopyFrom(ctx, pgx.Identifier{"character_items"},
-			[]string{"character_id", "place", "slot", "item_id", "count"}, pgx.CopyFromRows(rows))
-		return err
-	})
+		if _, err := tx.Exec(ctx, `DELETE FROM account_items WHERE account_id = $1`, id); err != nil {
+			return err
+		}
+		rows := make([][]any, 0, len(st.Items))
+		for _, it := range st.Items {
+			rows = append(rows, []any{id, int16(it.Slot), it.ItemID, int32(it.Count), int16(it.Enchant)})
+		}
+		if _, err := tx.CopyFrom(ctx, pgx.Identifier{"account_items"},
+			[]string{"account_id", "slot", "item_id", "count", "enchant"}, pgx.CopyFromRows(rows)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func nullIfFull(v int) *int {
@@ -466,7 +551,8 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var ranks, hotbar []byte
 	var a [6]int16
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
-		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem)
+		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
+		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt)
 	if err != nil {
 		return c, err
 	}

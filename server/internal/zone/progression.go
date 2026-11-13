@@ -36,25 +36,51 @@ func (z *Zone) kill(dead, killer *entity) {
 				xp = int64(math.Round(float64(xp) * game.NightXP))
 			}
 			z.grantXP(killer, xp)
+			z.burnKarma(killer, dead.level)
 		}
 		return
 	}
 
-	// Jogador: perde XP (sem cair de nível) e os monstros esquecem dele.
+	// Jogador. Para outro jogador: karma/vitória para quem matou e nenhuma XP perdida
+	// (a não ser por quem tem karma, que perde o dobro e pode deixar itens caírem).
+	var pk *entity
+	if killer != nil && killer.pl != nil && killer != dead {
+		pk = killer
+	}
+	byPlayer := z.pvpDeath(dead, pk)
+	chaotic := dead.pl.karma > 0
+	dead.pl.flagUntil = 0
+	if killer != nil && killer != dead {
+		dead.pl.killedBy = killer.name
+	}
 	before := dead.pl.xp
-	dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level)
-	dead.pl.statsDirty = true
-	for _, m := range z.monsters {
-		delete(m.mon.hate, dead.id)
-		if m.act.target == dead.id {
-			m.clearAction()
+	switch {
+	case chaotic:
+		for range pkXPLossFactor {
+			dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level)
 		}
+	case !byPlayer:
+		dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level)
 	}
-	msg := "Você morreu."
+	dead.pl.statsDirty = true
+	z.forgetTarget(dead.id)
+	if chaotic {
+		var owner uint32
+		if pk != nil {
+			owner = pk.id
+		}
+		z.dropPKItems(dead, owner)
+	}
+	z.pvpChanged(dead)
+
+	msg := "Você morreu"
+	if byPlayer {
+		msg += " para " + pk.name
+	}
 	if lost := before - dead.pl.xp; lost > 0 {
-		msg = fmt.Sprintf("Você morreu e perdeu %d de XP.", lost)
+		msg += fmt.Sprintf(" e perdeu %d de XP", lost)
 	}
-	z.system(dead, msg+" Clique em \"Voltar à cidade\".")
+	z.system(dead, msg+". Clique em \"Voltar à cidade\".")
 }
 
 // grantXP soma XP e sobe de nível quantas vezes for preciso.
@@ -93,6 +119,7 @@ func (z *Zone) respawnPlayer(p *entity) {
 	p.dest = p.pos
 	p.path = nil
 	p.dead = false
+	p.pl.killedBy = ""
 	p.hp, p.mp = p.stats.MaxHP, p.stats.MaxMP
 	p.lastCombat = -math.MaxFloat64 / 2
 	p.pl.statsDirty = true
@@ -122,5 +149,6 @@ func (z *Zone) selfStats(p *entity) *pb.SelfStats {
 		Accuracy: float32(p.accuracy(z.now)), Evasion: float32(p.stats.Evasion),
 		AtkSpeed: float32(1 / p.attackInterval(z.now)), CastSpeed: float32(p.stats.CastSpeed),
 		HpRegen: float32(p.stats.HPRegen), MpRegen: float32(p.stats.MPRegen), CritDamage: float32(p.stats.CritDamage),
+		KilledBy: p.pl.killedBy,
 	}
 }

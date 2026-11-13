@@ -21,6 +21,7 @@ type action struct {
 	kind   actionKind
 	target uint32
 	skill  *game.SkillDef
+	force  bool // atacar jogador "branco" (Ctrl + clique)
 }
 
 type activeEffect struct {
@@ -83,6 +84,17 @@ type playerState struct {
 	// Muralha Viva: quando pode disparar de novo. Sumir: o próximo golpe é crítico.
 	lastStandReady float64
 	ambushCrit     bool
+
+	// Fase 4: PvP, grupo e clã.
+	accountID int64
+	karma     int
+	pks       int // jogadores "brancos" mortos
+	pvpKills  int // vitórias contra quem estava em combate
+	flagUntil float64
+	sentPvp   pb.PvpState
+	killedBy  string // morto: nome de quem matou
+	party     *party
+	clan      *clan
 }
 
 // rank da skill (0 = não aprendida).

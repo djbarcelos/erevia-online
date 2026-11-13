@@ -70,6 +70,12 @@ export class Chat {
     }
   }
 
+  /** Prepara um sussurro para alguém (botão do quadro do alvo). */
+  whisperTo(name: string): void {
+    this.input.value = `/w ${name} `;
+    this.input.focus();
+  }
+
   system(text: string): void {
     this.line("system", [document.createTextNode(text)]);
   }

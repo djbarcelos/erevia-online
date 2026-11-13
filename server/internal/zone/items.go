@@ -51,7 +51,7 @@ func (z *Zone) inventoryChanged(p *entity, gearChanged bool) {
 		z.refreshStats(p)
 		w, o, g := p.pl.inv.look()
 		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Appearance{Appearance: &pb.Appearance{
-			Id: p.id, Weapon: w, Offhand: o, WeaponGrade: uint32(g),
+			Id: p.id, Weapon: w, Offhand: o, WeaponGrade: uint32(g), WeaponEnchant: uint32(p.pl.inv.weaponEnchant()),
 		}}}, 0)
 	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Inventory{Inventory: inventoryPB(&p.pl.inv)}})
@@ -187,6 +187,14 @@ func (z *Zone) sendAnyCooldown(p *entity, key uint32, seconds float64) {
 	z.sendCooldown(p, key, seconds)
 }
 
+// itemLabelEnchant: como itemLabel, com o "+N" de encantamento.
+func itemLabelEnchant(def *game.ItemDef, count, enchant int) string {
+	if enchant > 0 {
+		return game.EnchantedName(def, enchant)
+	}
+	return itemLabel(def, count)
+}
+
 // itemLabel: "Osso Velho" ou "3× Osso Velho" (moedas: "25 moedas").
 func itemLabel(def *game.ItemDef, count int) string {
 	if def.Kind == game.KindGold {
@@ -207,7 +215,7 @@ func inventoryPB(inv *inventory) *pb.Inventory {
 		if r.Equipped {
 			place = placeEquip
 		}
-		out.Items = append(out.Items, &pb.ItemStack{Place: place, Slot: uint32(r.Slot), ItemId: r.ItemID, Count: uint32(r.Count)})
+		out.Items = append(out.Items, &pb.ItemStack{Place: place, Slot: uint32(r.Slot), ItemId: r.ItemID, Count: uint32(r.Count), Enchant: uint32(r.Enchant)})
 	}
 	return out
 }

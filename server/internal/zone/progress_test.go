@@ -471,11 +471,16 @@ func TestWarCryBannerAndCourageHelpAllies(t *testing.T) {
 	k, _ := joinAt(z, 1, "knight", 30, 0, 0)
 	ally, _ := joinAt(z, 2, "mage", 33, 0, 0)
 	far, _ := joinAt(z, 3, "rogue", 60, 0, 0)
+	stranger, _ := joinAt(z, 4, "rogue", 31, 0, 0) // perto, mas fora do grupo
+	makeParty(z, k, ally, far)
 	atLevel(z, k, 20)
 	learn(z, k, map[uint32]int{game.SkillWarCry: 1, game.SkillCourage: 2, game.SkillBanner: 1})
 	z.castSkill(k, game.Skills[game.SkillWarCry], nil)
 	if !k.has(game.EffectWarCry, z.now) || !ally.has(game.EffectWarCry, z.now) || far.has(game.EffectWarCry, z.now) {
 		t.Fatal("war cry should reach allies within 10 m only")
+	}
+	if stranger.has(game.EffectWarCry, z.now) {
+		t.Fatal("war cry should not reach players outside the party or clan")
 	}
 	z.castSkill(k, game.Skills[game.SkillBanner], nil)
 	if len(z.objects) != 1 {
@@ -487,6 +492,9 @@ func TestWarCryBannerAndCourageHelpAllies(t *testing.T) {
 	}
 	if !ally.has(game.EffectCourage, z.now) {
 		t.Fatal("courage aura should reach allies")
+	}
+	if stranger.has(game.EffectBanner, z.now) || stranger.has(game.EffectCourage, z.now) {
+		t.Fatal("banner and courage should skip strangers")
 	}
 	ally.hp = 1
 	ally.lastCombat = z.now // em combate: só a regeneração base + coragem

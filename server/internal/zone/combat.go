@@ -35,6 +35,15 @@ func (z *Zone) runAction(e *entity) {
 		e.clearAction()
 		return
 	}
+	// Jogador contra jogador: as regras podem mudar no caminho (virou aliado, ficou
+	// invisível, a flag venceu). Só a cidade faz esperar em vez de desistir.
+	if e.pl != nil && t.pl != nil {
+		if ok, _, wait := z.canHit(e, t, e.act.force); !ok && !wait {
+			z.cancelQueuedSkill(e)
+			e.clearAction()
+			return
+		}
+	}
 
 	rng := e.stats.Range
 	if e.act.kind == actSkill {
@@ -51,8 +60,9 @@ func (z *Zone) runAction(e *entity) {
 	}
 	e.stopMoving()
 
-	// Sem combate dentro da cidade (quem está lá dentro só anda).
-	if z.inSafe(e.pos) || z.inSafe(t.pos) {
+	// Sem combate dentro da cidade (quem está lá dentro só anda), menos contra quem tem karma.
+	townHunt := e.pl != nil && t.pl != nil && z.hostile(e, t, e.act.force)
+	if (z.inSafe(e.pos) || z.inSafe(t.pos)) && !townHunt {
 		if e.act.kind == actSkill {
 			z.system(e, "Não é possível lutar dentro da cidade.")
 			z.cancelQueuedSkill(e)
@@ -69,7 +79,7 @@ func (z *Zone) runAction(e *entity) {
 		}
 	case actSkill:
 		s := e.act.skill
-		e.act = action{kind: actAttack, target: t.id} // depois da skill, segue no ataque automático
+		e.act = action{kind: actAttack, target: t.id, force: e.act.force} // depois da skill, segue no ataque automático
 		z.castSkill(e, s, t)
 	}
 }
@@ -91,6 +101,7 @@ func (z *Zone) hitInput(src, dst *entity, magic bool, mult, extraCrit float64) g
 
 func (z *Zone) basicAttack(src, dst *entity) {
 	z.revealIfHidden(src)
+	z.onPvPHit(src, dst)
 	magic := src.stats.Magic
 	hit := game.RollHit(z.rng, z.hitInput(src, dst, magic, 1, 0))
 	z.applyHit(src, dst, 0, hit, magic)
@@ -115,7 +126,7 @@ func skillCD(p *entity, s *game.SkillDef) float64 {
 }
 
 // requestSkill valida o pedido do jogador e executa (si mesmo/área) ou agenda (alvo).
-func (z *Zone) requestSkill(p *entity, skillID, targetID uint32) {
+func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 	if p.dead || p.stunned(z.now) {
 		return
 	}
@@ -145,12 +156,41 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32) {
 		}
 		z.castSkill(p, s, nil)
 	case game.TargetEnemy:
-		t := z.monsters[targetID]
-		if t == nil || t.dead || t.mon.hidden {
+		t := z.get(targetID)
+		if t != nil && t.pl != nil {
+			if ok, why, _ := z.canHit(p, t, force); !ok {
+				if why == "" {
+					why = "Selecione um alvo."
+				}
+				z.system(p, why)
+				return
+			}
+		} else if t == nil || t.mon == nil || t.dead || t.mon.hidden {
 			z.system(p, "Selecione um alvo.")
 			return
 		}
-		p.act = action{kind: actSkill, target: t.id, skill: s}
+		p.act = action{kind: actSkill, target: t.id, skill: s, force: force}
+	}
+}
+
+// requestAttack: clicar num monstro ataca; num jogador, só se as regras de PvP deixarem.
+func (z *Zone) requestAttack(p *entity, target uint32, force bool) {
+	t := z.get(target)
+	switch {
+	case t == nil || t == p || t.dead:
+		return
+	case t.pl != nil:
+		if ok, why, _ := z.canHit(p, t, force); !ok {
+			if why != "" {
+				z.system(p, why)
+			}
+			return
+		}
+	case t.mon == nil || t.mon.hidden:
+		return
+	}
+	if p.act.kind != actAttack || p.act.target != t.id || p.act.force != force {
+		p.act = action{kind: actAttack, target: t.id, force: force}
 	}
 }
 
@@ -195,7 +235,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		z.applyEffect(src, src, def)
 		if s.AllyRadius > 0 {
 			for _, p := range z.players {
-				if p != src && !p.dead && dist(p.pos, src.pos) <= s.AllyRadius {
+				if p != src && !p.dead && z.allies(src, p) && dist(p.pos, src.pos) <= s.AllyRadius {
 					z.applyEffect(src, p, def)
 				}
 			}
@@ -221,6 +261,11 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 					z.skillHit(src, m, s, rank)
 				}
 			}
+			for _, o := range z.players { // área nunca acerta quem não é hostil
+				if o != target && o != src && dist(target.pos, o.pos) <= s.Splash && z.hostile(src, o, false) {
+					z.skillHit(src, o, s, rank)
+				}
+			}
 		}
 	case game.TargetAreaSelf:
 		// Mostra a skill mesmo sem acertar ninguém.
@@ -230,6 +275,13 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 				continue
 			}
 			z.skillHit(src, m, s, rank)
+		}
+		if src.pl != nil {
+			for _, o := range z.players {
+				if o != src && dist(src.pos, o.pos) <= s.Range && z.hostile(src, o, false) {
+					z.skillHit(src, o, s, rank)
+				}
+			}
 		}
 	case game.TargetSelf:
 		z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID})
@@ -241,6 +293,7 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 	if dst.dead {
 		return
 	}
+	z.onPvPHit(src, dst)
 	landed := s.Mult.At(rank) <= 0 // sem dano: o efeito sempre pega
 	if mult := s.Mult.At(rank); mult > 0 {
 		if s.ExecuteBelow > 0 && dst.hp < dst.stats.MaxHP*s.ExecuteBelow {

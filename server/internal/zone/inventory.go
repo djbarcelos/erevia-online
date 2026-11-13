@@ -11,8 +11,9 @@ const (
 )
 
 type stack struct {
-	def   *game.ItemDef
-	count int
+	def     *game.ItemDef
+	count   int
+	enchant int // +N (só itens que não empilham)
 }
 
 func (s stack) empty() bool { return s.def == nil || s.count <= 0 }
@@ -37,14 +38,18 @@ func loadInventory(gold int64, records []game.ItemRecord) (inventory, int) {
 			continue
 		}
 		n := min(r.Count, def.Stack)
+		ench := 0
+		if def.Stack == 1 {
+			ench = min(max(r.Enchant, 0), game.MaxEnchant)
+		}
 		switch {
 		case r.Equipped && r.Slot >= 0 && r.Slot < game.EquipSlots && def.Fits(r.Slot) && inv.equip[r.Slot].empty():
-			inv.equip[r.Slot] = stack{def: def, count: 1}
+			inv.equip[r.Slot] = stack{def: def, count: 1, enchant: ench}
 		case !r.Equipped && r.Slot >= 0 && r.Slot < game.BagSize && inv.bag[r.Slot].empty():
-			inv.bag[r.Slot] = stack{def: def, count: n}
+			inv.bag[r.Slot] = stack{def: def, count: n, enchant: ench}
 		default:
 			// Posição repetida ou inválida: tenta guardar em outro espaço em vez de perder.
-			if inv.add(def, n) > 0 {
+			if inv.put(def, n, ench) > 0 {
 				skipped++
 			}
 		}
@@ -57,12 +62,12 @@ func (inv *inventory) records() []game.ItemRecord {
 	var out []game.ItemRecord
 	for i, s := range inv.equip {
 		if !s.empty() {
-			out = append(out, game.ItemRecord{Equipped: true, Slot: i, ItemID: s.def.ID, Count: s.count})
+			out = append(out, game.ItemRecord{Equipped: true, Slot: i, ItemID: s.def.ID, Count: s.count, Enchant: s.enchant})
 		}
 	}
 	for i, s := range inv.bag {
 		if !s.empty() {
-			out = append(out, game.ItemRecord{Slot: i, ItemID: s.def.ID, Count: s.count})
+			out = append(out, game.ItemRecord{Slot: i, ItemID: s.def.ID, Count: s.count, Enchant: s.enchant})
 		}
 	}
 	return out
@@ -112,6 +117,20 @@ func (inv *inventory) add(def *game.ItemDef, count int) int {
 		}
 	}
 	return count
+}
+
+// put guarda o item mantendo o encantamento (encantado = sempre um espaço vazio só dele).
+// Devolve quantas unidades não couberam.
+func (inv *inventory) put(def *game.ItemDef, count, enchant int) int {
+	if enchant <= 0 || def.Stack > 1 {
+		return inv.add(def, count)
+	}
+	free := inv.firstFree()
+	if free < 0 {
+		return count
+	}
+	inv.bag[free] = stack{def: def, count: 1, enchant: enchant}
+	return count - 1
 }
 
 // take tira unidades de um espaço da bolsa.
@@ -265,6 +284,9 @@ func (inv *inventory) bonus() game.Stats {
 	for _, s := range inv.equip {
 		if !s.empty() {
 			b = b.AddBonus(s.def.Bonus)
+			if s.enchant > 0 {
+				b = b.AddBonus(game.EnchantBonus(s.def, s.enchant))
+			}
 		}
 	}
 	return b
@@ -276,6 +298,14 @@ func (inv *inventory) weaponType() string {
 		return w.def.WeaponType
 	}
 	return ""
+}
+
+// weaponEnchant: +N da arma equipada (o brilho que os outros veem).
+func (inv *inventory) weaponEnchant() int {
+	if w := inv.equip[game.SlotWeapon]; !w.empty() {
+		return w.enchant
+	}
+	return 0
 }
 
 // look é o que os outros veem: modelos das armas e a raridade da principal.

@@ -22,12 +22,12 @@ const SWORD_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(SWORD_SVG)}")
 export interface InputHandlers {
   /** Clique no chão. Devolve o destino aceito (ou null se não puder andar). */
   onGround(x: number, z: number): { x: number; z: number } | null;
-  /** Clique numa entidade (monstro/jogador/NPC). */
-  onEntity(id: number): void;
+  /** Clique numa entidade (monstro/jogador/NPC). force = Ctrl (atacar jogador "branco"). */
+  onEntity(id: number, force: boolean): void;
   /** Clique num item no chão. */
   onLoot(id: number): void;
-  /** Se o cursor deve indicar "atacar" ao passar sobre a entidade. */
-  isEnemy(id: number): boolean;
+  /** Se o cursor deve indicar "atacar" ao passar sobre a entidade (force = Ctrl apertado). */
+  isEnemy(id: number, force: boolean): boolean;
 }
 
 /**
@@ -42,6 +42,7 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
   let lastHover = 0;
   let lastEnemyAt = 0;
   let cursor = "";
+  let ctrl = false; // Ctrl apertado: o cursor de ataque vale também para jogadores
   // O cursor é só nosso: o Babylon voltava ao padrão a cada movimento do mouse (a mira piscava).
   scene.doNotHandleCursors = true;
 
@@ -57,7 +58,7 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
     if (now - lastHover < HOVER_CHECK_MS) return;
     lastHover = now;
     const hit = pickThing();
-    if (hit?.entity !== undefined && h.isEnemy(hit.entity)) {
+    if (hit?.entity !== undefined && h.isEnemy(hit.entity, ctrl)) {
       lastEnemyAt = now;
       setCursor(SWORD_CURSOR);
     } else if (now - lastEnemyAt > HOVER_GRACE_MS) {
@@ -94,6 +95,7 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
   let tap: { x: number; y: number; t: number; id: number } | null = null;
   scene.onPointerObservable.add((info) => {
     const ev = info.event as PointerEvent;
+    ctrl = ev.ctrlKey || ev.metaKey;
     switch (info.type) {
       case PointerEventTypes.POINTERDOWN: {
         if (ev.button !== 0) return;
@@ -105,7 +107,7 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
         }
         const hit = pickThing();
         if (hit?.entity !== undefined) {
-          h.onEntity(hit.entity);
+          h.onEntity(hit.entity, ev.ctrlKey || ev.metaKey);
           return;
         }
         if (hit?.loot !== undefined) {
@@ -127,7 +129,7 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
           tap = null;
           if (!t || t.id !== ev.pointerId || performance.now() - t.t > 350 || Math.hypot(ev.clientX - t.x, ev.clientY - t.y) > 12) return;
           const hit = pickThing();
-          if (hit?.entity !== undefined) h.onEntity(hit.entity);
+          if (hit?.entity !== undefined) h.onEntity(hit.entity, false);
           else if (hit?.loot !== undefined) h.onLoot(hit.loot);
           else moveToCursor(true);
           return;
@@ -135,6 +137,12 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
         if (ev.button === 0) holdingGround = false;
         break;
     }
+  });
+
+  // Ctrl apertado com o mouse parado também troca o cursor sobre jogadores.
+  scene.onKeyboardObservable.add((k) => {
+    ctrl = k.event.ctrlKey || k.event.metaKey;
+    lastHover = 0;
   });
 
   // Marcador encolhe e some; o cursor acompanha monstros andando sob o mouse parado.

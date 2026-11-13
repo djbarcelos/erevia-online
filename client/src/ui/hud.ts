@@ -9,7 +9,7 @@
 
 import "../styles/hud.css";
 import "../styles/windows.css";
-import { Effect, EntityKind, SkillTarget, type ItemInfo, type SelfStats, type SkillInfo } from "../gen/erevia/v1/game_pb";
+import { Effect, EntityKind, PvpState, SkillTarget, type ItemInfo, type SelfStats, type SkillInfo } from "../gen/erevia/v1/game_pb";
 import { hourLabel, isNight } from "../world/daynight";
 import type { ActiveEffect, EntityInfo } from "../world/entities";
 import { ui, uniqueIds } from "./art";
@@ -31,6 +31,18 @@ export type HotbarEntry = string | null;
 
 export type WindowId = "character" | "inventory" | "skills" | "map" | "settings";
 
+/** Ações sobre um jogador selecionado (quadro do alvo). */
+export type TargetAction = "attack" | "party" | "clan" | "whisper";
+
+/** O que o quadro do alvo precisa saber de um jogador além do EntityInfo. */
+export interface TargetExtras {
+  ally: boolean;
+  /** Mostrar "Convidar ao grupo" (sem grupo ou líder, e ele fora do grupo). */
+  canParty: boolean;
+  /** Mostrar "Convidar ao clã" (você convida e ele não tem clã). */
+  canClan: boolean;
+}
+
 export interface HudCallbacks {
   onSkill(s: SkillInfo): void;
   /** Usar um item da bolsa pelo atalho. */
@@ -42,6 +54,8 @@ export interface HudCallbacks {
   openWindow(id: WindowId): void;
   /** Botão de ataque do toque: ataca o alvo ou o inimigo mais próximo. */
   onAttack(): void;
+  /** Botões do quadro do alvo quando ele é um jogador. */
+  onTargetAction(action: TargetAction): void;
   onCycleTarget(): void;
   /** Joystick (direção relativa à câmera) ou null ao soltar. */
   onStick(v: { x: number; y: number } | null): void;
@@ -128,6 +142,10 @@ export class Hud {
   private tName = el("div", "t-name");
   private tHp = bar("hp");
   private tEffects = el("div", "effects");
+  private tClan = el("div", "t-clan");
+  private tActions = el("div", "t-actions");
+  private tActionBtns = new Map<TargetAction, HTMLButtonElement>();
+  private deathSub = el("p", "muted", "Você perdeu um pouco de experiência.");
   private miniCanvas = el("canvas", "mm-canvas");
   private miniCtx = this.miniCanvas.getContext("2d")!;
   private miniRadius = 45;
@@ -176,7 +194,20 @@ export class Hud {
     const tClose = button("✕", "t-close");
     tClose.setAttribute("aria-label", "Fechar quadro do alvo");
     tClose.onclick = () => (this.target.hidden = true);
-    this.target.append(el("div", "t-head", this.tName, tClose), this.tHp.root, this.tEffects);
+    // Jogador selecionado: clã e botões (atacar, convidar, sussurrar).
+    for (const [action, label, title] of [
+      ["attack", "Atacar", "Atacar este jogador (no PC: Ctrl + clique)"],
+      ["party", "Grupo +", "Convidar para o seu grupo"],
+      ["clan", "Clã +", "Convidar para o seu clã"],
+      ["whisper", "Sussurrar", "Mandar uma mensagem particular"],
+    ] as const) {
+      const b = button(label, "btn btn-sm t-act", () => cb.onTargetAction(action));
+      b.title = title;
+      if (action === "attack") b.classList.add("danger");
+      this.tActionBtns.set(action, b);
+      this.tActions.append(b);
+    }
+    this.target.append(el("div", "t-head", this.tName, tClose), this.tClan, this.tHp.root, this.tEffects, this.tActions);
     this.target.hidden = true;
 
     // ---------- Minimapa ----------
@@ -243,7 +274,7 @@ export class Hud {
         "div",
         "death-box",
         el("h2", "death-title", "Você morreu"),
-        el("p", "muted", "Você perdeu um pouco de experiência."),
+        this.deathSub,
         el("div", "death-actions", button("Voltar à cidade", "btn btn-gold", () => cb.onRespawn())),
       ),
     );
@@ -438,6 +469,7 @@ export class Hud {
     } else this.xpBar.set(1, 1, `Nível ${s.level} · máximo`);
     const wasDead = !this.death.hidden;
     this.death.hidden = !s.dead;
+    if (s.dead) this.deathSub.textContent = s.killedBy ? `Morto por ${s.killedBy}.` : "Você perdeu um pouco de experiência.";
     if (s.dead && !wasDead && this.auto) this.setAuto(false, false);
   }
 
@@ -522,14 +554,28 @@ export class Hud {
     this.root.querySelector(".menu-burger")?.classList.toggle("has-badge", total > 0);
   }
 
-  setTarget(info: EntityInfo | undefined): void {
+  setTarget(info: EntityInfo | undefined, extras?: TargetExtras): void {
     if (!info) {
       this.target.hidden = true;
       return;
     }
     this.target.hidden = false;
     const npc = info.kind === EntityKind.NPC;
+    const pc = info.kind === EntityKind.PLAYER;
     this.target.classList.toggle("npc", npc);
+    this.target.classList.toggle("pc", pc);
+    this.target.classList.toggle("flagged", pc && info.pvpState === PvpState.FLAGGED);
+    this.target.classList.toggle("chaotic", pc && info.pvpState === PvpState.CHAOTIC);
+    this.target.classList.toggle("ally", pc && !!extras?.ally);
+    this.tClan.textContent = pc && info.clanName ? `‹${info.clanName}›` : "";
+    this.tClan.hidden = !this.tClan.textContent;
+    // Os botões são os mesmos (recriá-los a cada snapshot perderia cliques): só mostra/esconde.
+    this.tActions.hidden = !pc || !extras;
+    if (pc && extras) {
+      this.tActionBtns.get("attack")!.hidden = extras.ally || info.dead;
+      this.tActionBtns.get("party")!.hidden = !extras.canParty;
+      this.tActionBtns.get("clan")!.hidden = !extras.canClan;
+    }
     this.target.classList.toggle("dead", info.dead);
     this.target.classList.toggle("boss", !!info.boss);
     this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}`), info.boss ? el("em", null, "CHEFE") : "");

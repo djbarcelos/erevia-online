@@ -77,6 +77,15 @@ const ITEM_WEAPONS = [
 ];
 /** Brilho das armas raras (3) e épicas (4). */
 const GRADE_GLOW: Record<number, Color3> = { 3: new Color3(0.15, 0.35, 0.9), 4: new Color3(0.6, 0.2, 0.95) };
+/** Encantamento: +4 a +6 brilha dourado; +7 ou mais, dourado forte e pulsando. */
+const ENCHANT_GLOW = { light: new Color3(0.45, 0.33, 0.08), strong: new Color3(1, 0.72, 0.22) };
+
+/** Qual brilho a arma usa: o do encantamento vence o da raridade. */
+function glowKey(grade: number, enchant: number): string | null {
+  if (enchant >= 7) return "e2";
+  if (enchant >= 4) return "e1";
+  return GRADE_GLOW[grade] ? `g${grade}` : null;
+}
 
 /** Modelos de monstro (arquivos opcionais: se faltarem, o jogo usa cápsulas). */
 const MONSTER_MODELS = ["skeleton_minion", "skeleton_warrior", "skeleton_rogue", "skeleton_mage"];
@@ -96,8 +105,8 @@ export interface CharacterInstance {
    * quadril —, e sem isso o corpo ficava enterrado no chão depois de um golpe.
    */
   resetPose(): void;
-  /** Troca o que está nas mãos (null/"" = mão vazia). grade 3–4 faz a arma brilhar. */
-  setWeapons(right: string | null, left: string | null, grade?: number): void;
+  /** Troca o que está nas mãos (null/"" = mão vazia). grade 3–4 e encantamento +4 fazem a arma brilhar. */
+  setWeapons(right: string | null, left: string | null, grade?: number, enchant?: number): void;
   /** Malhas atuais (corpo + armas), para sombra e visibilidade. */
   meshes(): AbstractMesh[];
   dispose(): void;
@@ -157,15 +166,24 @@ export class CharacterModels {
     return new CharacterModels(models, templates, weaponByFile);
   }
 
-  /** Cópia do material com brilho na cor da raridade (uma por material + raridade). */
-  private glowMaterial(base: Material, grade: number): Material {
-    const key = `${base.uniqueId}:${grade}`;
+  /** Cópia do material com brilho (uma por material + tipo de brilho; "e2" pulsa). */
+  private glowMaterial(base: Material, glow: string): Material {
+    const key = `${base.uniqueId}:${glow}`;
     let mat = this.glowMats.get(key);
     if (!mat) {
-      mat = base.clone(`${base.name}-g${grade}`) ?? base;
-      const c = GRADE_GLOW[grade];
-      if (mat instanceof PBRMaterial) mat.emissiveColor = c;
-      else if (mat instanceof StandardMaterial) mat.emissiveColor = c;
+      mat = base.clone(`${base.name}-${glow}`) ?? base;
+      const c =
+        glow === "e2" ? ENCHANT_GLOW.strong.clone() : glow === "e1" ? ENCHANT_GLOW.light : GRADE_GLOW[Number(glow.slice(1))];
+      const target = mat instanceof PBRMaterial || mat instanceof StandardMaterial ? mat : null;
+      if (target) target.emissiveColor = c;
+      if (glow === "e2" && target) {
+        // Um pulso por material (todas as armas +7 pulsam juntas).
+        const scene = mat.getScene();
+        scene.onBeforeRenderObservable.add(() => {
+          const k = 0.55 + 0.45 * Math.sin(performance.now() / 260);
+          target.emissiveColor.copyFromFloats(ENCHANT_GLOW.strong.r * k, ENCHANT_GLOW.strong.g * k, ENCHANT_GLOW.strong.b * k);
+        });
+      }
       this.glowMats.set(key, mat);
     }
     return mat;
@@ -211,7 +229,7 @@ export class CharacterModels {
 
     // Armas presas nos encaixes das mãos (trocadas quando o equipamento muda).
     const held = new Map<Slot, TransformNode[]>();
-    const attach = (slot: Slot, container: AssetContainer | null | undefined, grade: number) => {
+    const attach = (slot: Slot, container: AssetContainer | null | undefined, grade: number, enchant = 0) => {
       for (const n of held.get(slot) ?? []) n.dispose(false, false);
       held.delete(slot);
       const hand = byName.get(slot);
@@ -225,9 +243,10 @@ export class CharacterModels {
         child.parent = hand as TransformNode;
         child.position = Vector3.Zero();
         nodes.push(child);
-        if (GRADE_GLOW[grade]) {
-          for (const m of child.getChildMeshes(false)) if (m.material) m.material = this.glowMaterial(m.material, grade);
-          if (child instanceof AbstractMesh && child.material) child.material = this.glowMaterial(child.material, grade);
+        const glow = glowKey(grade, enchant);
+        if (glow) {
+          for (const m of child.getChildMeshes(false)) if (m.material) m.material = this.glowMaterial(m.material, glow);
+          if (child instanceof AbstractMesh && child.material) child.material = this.glowMaterial(child.material, glow);
         }
       }
       wRoot.dispose();
@@ -272,9 +291,9 @@ export class CharacterModels {
           r.node.scaling.copyFrom(r.scale);
         }
       },
-      setWeapons: (right, left, grade = 0) => {
-        attach("handslot.r", right ? this.weaponFiles.get(right) : null, grade);
-        attach("handslot.l", left ? this.weaponFiles.get(left) : null, grade);
+      setWeapons: (right, left, grade = 0, enchant = 0) => {
+        attach("handslot.r", right ? this.weaponFiles.get(right) : null, grade, enchant);
+        attach("handslot.l", left ? this.weaponFiles.get(left) : null, grade, enchant);
       },
       meshes: () => root.getChildMeshes(false),
       dispose: () => {

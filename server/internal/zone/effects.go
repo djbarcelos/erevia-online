@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	objectIDBase = uint32(1) << 30 // ids de objetos (estandarte): entre personagens e monstros
+	objectIDBase = uint32(3) << 29 // ids de objetos (estandarte): depois dos itens no chão, antes dos monstros
 	auraEvery    = 0.5             // auras (estandarte, coragem) a cada meio segundo
 	auraLinger   = 1.25            // o efeito da aura dura um pouco mais que o pulso
 )
@@ -26,12 +26,7 @@ type objectState struct {
 
 // hide: os monstros esquecem quem ficou invisível e param de atacá-lo.
 func (z *Zone) hide(e *entity) {
-	for _, m := range z.monsters {
-		delete(m.mon.hate, e.id)
-		if m.act.target == e.id {
-			m.clearAction()
-		}
-	}
+	z.forgetTarget(e.id) // monstros e jogadores perdem o alvo
 	if e.pl != nil {
 		e.pl.ambushCrit = true
 		e.clearAction() // não sai atacando sozinho (isso revelaria na hora)
@@ -142,8 +137,9 @@ func (z *Zone) updateAuras() {
 			continue
 		}
 		b := o.obj.banner
+		owner := z.players[o.obj.owner]
 		for _, p := range z.players {
-			if !p.dead && dist(p.pos, o.pos) <= b.Radius {
+			if owner != nil && !p.dead && z.allies(owner, p) && dist(p.pos, o.pos) <= b.Radius {
 				z.applyAura(o, p, b.Effect, b.Value)
 			}
 		}
@@ -155,7 +151,7 @@ func (z *Zone) updateAuras() {
 		}
 		v := game.Skills[game.SkillCourage].PValue.At(r)
 		for _, p := range z.players {
-			if !p.dead && dist(p.pos, k.pos) <= game.CourageRadius {
+			if !p.dead && z.allies(k, p) && dist(p.pos, k.pos) <= game.CourageRadius {
 				z.applyAura(k, p, game.EffectCourage, v)
 			}
 		}
