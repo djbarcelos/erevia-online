@@ -99,6 +99,10 @@ const metal = "#d9dee8";
 const wood = "#8a5a32";
 
 const GLYPHS: Record<string, string> = {
+  scroll: `<path d="M18 14 H44 C48 14 50 17 50 20 V46 C50 50 47 52 44 52 H22 C18 52 16 49 16 46 V20" fill="#e8d9b0"/>
+    <path d="M16 20 C16 16 18 14 22 14 C26 14 27 17 27 20 V24 H16 Z" fill="#c9b07a"/>
+    <path d="M24 28 H42 M24 34 H42 M24 40 H36" stroke="#8a6a3a" stroke-width="2.2" ${STROKE}/>
+    <circle cx="42" cy="44" r="4.5" fill="#c0392b"/>`,
   sword: `<path d="M44 12 L52 12 L52 20 L28 44 L20 36 Z" fill="${metal}"/><path d="M47 15 L25 37" stroke="#9aa6b8" stroke-width="1.5"/>
     <path d="M16 34 L30 48" stroke="#c9a24a" stroke-width="5" ${STROKE}/><path d="M22 42 L12 52" stroke="${wood}" stroke-width="5" ${STROKE}/>`,
   axe: `<path d="M18 52 L42 18" stroke="${wood}" stroke-width="5" ${STROKE}/>

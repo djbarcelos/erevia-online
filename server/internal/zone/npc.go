@@ -14,7 +14,9 @@ const (
 
 type npcState struct {
 	title string
+	role  pb.NpcRole
 	stock []*game.ItemDef
+	stone int // pedra de teleporte: índice em teleportStones (role TELEPORT)
 }
 
 type npcDef struct {
@@ -45,14 +47,18 @@ func (z *Zone) spawnNPCs() {
 		}
 		z.npcs[n.id] = n
 	}
+	z.spawnStones(npcIDBase + uint32(len(townNPCs)))
 }
 
 func (z *Zone) npcList() []*pb.NpcInfo {
 	out := make([]*pb.NpcInfo, 0, len(z.npcs))
 	for _, n := range z.npcs {
-		info := &pb.NpcInfo{Id: n.id}
+		info := &pb.NpcInfo{Id: n.id, Role: n.npc.role}
 		for _, d := range n.npc.stock {
 			info.Stock = append(info.Stock, d.ID)
+		}
+		if n.npc.role == pb.NpcRole_NPC_ROLE_TELEPORT {
+			info.Dests = z.stoneDests(n.npc.stone)
 		}
 		out = append(out, info)
 	}
@@ -104,7 +110,7 @@ func (z *Zone) buy(p *entity, npcID uint32, itemID string, count int) {
 }
 
 func (z *Zone) sell(p *entity, npcID uint32, slot, count int) {
-	if z.shopNPC(p, npcID) == nil {
+	if n := z.shopNPC(p, npcID); n == nil || n.npc.role != pb.NpcRole_NPC_ROLE_SHOP {
 		return
 	}
 	inv := &p.pl.inv

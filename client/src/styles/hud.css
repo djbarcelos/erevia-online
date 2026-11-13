@@ -1930,3 +1930,54 @@ section.party {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ---------- Fase 4: canalização (teleporte, pergaminho) ---------- */
+
+.channel-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 150px;
+  transform: translateX(-50%);
+  width: min(320px, 80vw);
+  padding: 8px 12px 10px;
+  display: grid;
+  gap: 6px;
+  z-index: 20;
+}
+
+.channel-bar[hidden] {
+  display: none;
+}
+
+.ch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ch-label {
+  flex: 1;
+  color: #bfe3ff;
+  font-size: 0.82rem;
+}
+
+.ch-cancel {
+  border: 0;
+  background: none;
+  color: var(--dim);
+  padding: 0 4px;
+}
+
+.ch-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.ch-track i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #5fa8ff, #bfe3ff);
+}

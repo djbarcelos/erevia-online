@@ -133,6 +133,7 @@ func (z *Zone) requestPickup(p *entity, id uint32) {
 	if p.stunned(z.now) {
 		return
 	}
+	z.cancelChannel(p, "Viagem cancelada.")
 	p.act = action{kind: actPickup, target: id}
 }
 

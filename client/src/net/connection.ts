@@ -63,6 +63,15 @@ export class Connection {
     this.send({ case: "clanCmd", value: { kind, name: opts.name ?? "", targetId: opts.targetId ?? 0, rank: opts.rank ?? ClanRank.MEMBER, text: opts.text ?? "" } });
   }
 
+  /** Pedra de Teleporte: viajar para um destino. */
+  teleport(npcId: number, destId: number): void {
+    this.send({ case: "teleport", value: { npcId, destId } });
+  }
+
+  cancelChannel(): void {
+    this.send({ case: "cancelChannel", value: {} });
+  }
+
   inviteReply(inviteId: number, accept: boolean): void {
     this.send({ case: "inviteReply", value: { inviteId, accept } });
   }

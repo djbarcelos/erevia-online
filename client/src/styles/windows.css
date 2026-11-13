@@ -1991,3 +1991,15 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* Pedra de Teleporte no mapa do mundo */
+.qm.stone {
+  color: #9fd0ff;
+  border-color: #9fd0ff;
+  background: #0e1a2c;
+  text-shadow: 0 0 8px rgba(120, 180, 255, 0.8);
+}
+
+.wmap-note {
+  margin: 4px 0 0;
+}

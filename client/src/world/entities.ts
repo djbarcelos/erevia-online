@@ -84,6 +84,9 @@ export interface EntityInfo {
   clanName: string;
 }
 
+/** Modelo das Pedras de Teleporte (desenhadas aqui, sem arquivo 3D). */
+export const STONE_MODEL = "teleport_stone";
+
 /** Cores dos nomes por estado (o Babylon GUI não lê variáveis CSS). */
 export const NAME_COLORS = {
   flagged: "#c77dff",
@@ -415,12 +418,57 @@ export class EntityManager {
       this.buildBanner(v);
       return;
     }
+    if (e.model === STONE_MODEL) {
+      this.buildStone(v);
+      return;
+    }
     if (this.models) this.attachModel(v);
     if (!v.model3d) v.capsule = this.createCapsule(v);
     if (v.dead) this.showDead(v, true);
   }
 
   /** Estandarte: mastro, bandeira com a cor da ordem e o círculo da área (8 m). */
+  /** Pedra de Teleporte: pedra facetada, runa azul no chão e cristal flutuando. */
+  private buildStone(v: View): void {
+    const rock = MeshBuilder.CreateCylinder(`stone${v.id}`, { height: 2.4, diameterTop: 0.55, diameterBottom: 1.05, tessellation: 6 }, this.scene);
+    rock.parent = v.visual;
+    rock.position.y = 1.2;
+    rock.material = this.material("#6f7480");
+    const cap = MeshBuilder.CreateCylinder(`stonecap${v.id}`, { height: 0.25, diameterTop: 0.2, diameterBottom: 0.55, tessellation: 6 }, this.scene);
+    cap.parent = v.visual;
+    cap.position.y = 2.52;
+    cap.material = this.material("#5c606b");
+    const glow = new StandardMaterial(`stoneGlow${v.id}`, this.scene);
+    glow.emissiveColor = new Color3(0.45, 0.75, 1);
+    glow.disableLighting = true;
+    const rune = MeshBuilder.CreateTorus(`rune${v.id}`, { diameter: 2.6, thickness: 0.07, tessellation: 48 }, this.scene);
+    rune.parent = v.root;
+    rune.position.y = 0.04;
+    rune.material = glow;
+    const band = MeshBuilder.CreateTorus(`band${v.id}`, { diameter: 0.92, thickness: 0.05, tessellation: 6 }, this.scene);
+    band.parent = v.visual;
+    band.position.y = 0.9;
+    band.material = glow;
+    const crystal = MeshBuilder.CreatePolyhedron(`crystal${v.id}`, { type: 1, size: 0.22 }, this.scene);
+    crystal.parent = v.visual;
+    crystal.position.y = 3.15;
+    crystal.material = glow;
+    this.notPickable([rock, cap, rune, band, crystal]);
+    v.meshes = [rock, cap];
+    const t0 = performance.now() + v.id * 137;
+    const spin = this.scene.onBeforeRenderObservable.add(() => {
+      if (crystal.isDisposed()) {
+        this.scene.onBeforeRenderObservable.remove(spin);
+        return;
+      }
+      const t = (performance.now() - t0) / 1000;
+      crystal.rotation.y = t * 1.2;
+      crystal.position.y = 3.15 + Math.sin(t * 2) * 0.08;
+      const k = 0.7 + 0.3 * Math.sin(t * 2.4);
+      glow.emissiveColor.set(0.45 * k, 0.75 * k, 1 * k);
+    });
+  }
+
   private buildBanner(v: View): void {
     const pole = MeshBuilder.CreateCylinder(`pole${v.id}`, { height: 3.2, diameter: 0.12, tessellation: 8 }, this.scene);
     pole.parent = v.visual;
@@ -963,7 +1011,13 @@ export class EntityManager {
 
   private refreshLabel(v: View): void {
     v.nameText.text =
-      v.kind === EntityKind.MONSTER ? `${v.name}  Nv ${v.level}` : v.kind === EntityKind.NPC ? `${v.title} ${v.name}` : v.name;
+      v.kind === EntityKind.MONSTER
+        ? `${v.name}  Nv ${v.level}`
+        : v.model === STONE_MODEL
+          ? `${v.title} · ${v.name}`
+          : v.kind === EntityKind.NPC
+            ? `${v.title} ${v.name}`
+            : v.name;
   }
 
   private refreshHpBar(v: View): void {

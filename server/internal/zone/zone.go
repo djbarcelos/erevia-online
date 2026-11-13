@@ -478,6 +478,7 @@ func (z *Zone) onMove(e moveEvent) {
 		return
 	}
 	p.clearAction() // clicar no chão cancela o ataque
+	z.cancelChannel(p, "Você se moveu: viagem cancelada.")
 	if p.stunned(z.now) {
 		return
 	}
@@ -623,6 +624,9 @@ func (z *Zone) step(e *entity, dt float64) {
 	}
 	if e.dead {
 		return
+	}
+	if e.pl != nil {
+		z.updateChannel(e)
 	}
 	z.regen(e, dt)
 	z.runAction(e)

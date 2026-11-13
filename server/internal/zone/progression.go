@@ -39,6 +39,8 @@ func (z *Zone) kill(dead, killer *entity) {
 		return
 	}
 
+	z.cancelChannel(dead, "")
+
 	// Jogador. Para outro jogador: karma/vitória para quem matou e nenhuma XP perdida
 	// (a não ser por quem tem karma, que perde o dobro e pode deixar itens caírem).
 	var pk *entity

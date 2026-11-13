@@ -130,6 +130,7 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 	if p.dead || p.stunned(z.now) {
 		return
 	}
+	z.cancelChannel(p, "Viagem cancelada.")
 	s := game.Skills[skillID]
 	if s == nil || s.Class != p.pl.class || s.IsPassive() {
 		return
@@ -175,6 +176,7 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 
 // requestAttack: clicar num monstro ataca; num jogador, só se as regras de PvP deixarem.
 func (z *Zone) requestAttack(p *entity, target uint32, force bool) {
+	z.cancelChannel(p, "Viagem cancelada.")
 	t := z.get(target)
 	switch {
 	case t == nil || t == p || t.dead:
@@ -437,6 +439,9 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 	}
 	if dmg <= 0 {
 		return absorbed
+	}
+	if dst.pl != nil && dst.pl.channel != nil {
+		z.cancelChannel(dst, "Você levou dano: a viagem foi interrompida.")
 	}
 	if dst.has(game.EffectUndying, z.now) && dst.hp-dmg < 1 {
 		dmg = math.Max(0, dst.hp-1)

@@ -42,6 +42,12 @@ func (z *Zone) onItem(e itemEvent) {
 		z.buy(p, m.NpcId, m.ItemId, int(m.Count))
 	case *pb.Sell:
 		z.sell(p, m.NpcId, int(m.Slot), int(m.Count))
+	case *pb.Teleport:
+		if !p.dead {
+			z.startTeleport(p, m.NpcId, m.DestId)
+		}
+	case *pb.CancelChannel:
+		z.cancelChannel(p, "Viagem cancelada.")
 	}
 }
 
@@ -131,6 +137,8 @@ func (z *Zone) useItem(p *entity, place, slot int) {
 		z.inventoryChanged(p, true)
 	case def.Kind == game.KindPotion:
 		z.drink(p, slot, def)
+	case def.Kind == game.KindScroll && def.Scroll == game.ScrollReturn:
+		z.startReturn(p, def)
 	}
 }
 
@@ -154,9 +162,9 @@ func (z *Zone) drink(p *entity, slot int, def *game.ItemDef) {
 	p.pl.inv.take(slot, 1)
 	p.hp = math.Min(p.stats.MaxHP, p.hp+def.HealHP)
 	p.mp = math.Min(p.stats.MaxMP, p.mp+def.HealMP)
-	p.pl.cooldowns[key] = z.now + game.PotionCooldown
+	p.pl.cooldowns[key] = z.now + game.CooldownSeconds(def.Cooldown)
 	p.pl.statsDirty = true
-	z.sendItemCooldown(p, def.Cooldown, game.PotionCooldown)
+	z.sendItemCooldown(p, def.Cooldown, game.CooldownSeconds(def.Cooldown))
 	z.inventoryChanged(p, false)
 }
 
@@ -174,7 +182,7 @@ func (z *Zone) destroyItem(p *entity, slot, count int) {
 
 func (z *Zone) sendItemCooldown(p *entity, group int, seconds float64) {
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_ItemCooldown{ItemCooldown: &pb.ItemCooldown{
-		Group: uint32(group), ReadyInMs: uint32(math.Max(0, seconds) * 1000), TotalMs: uint32(game.PotionCooldown * 1000),
+		Group: uint32(group), ReadyInMs: uint32(math.Max(0, seconds) * 1000), TotalMs: uint32(game.CooldownSeconds(group) * 1000),
 	}}})
 }
 
@@ -236,12 +244,13 @@ func itemInfoPB(d *game.ItemDef) *pb.ItemInfo {
 		Stack:      uint32(min(d.Stack, game.MaxStack)), Price: uint32(d.Price), SellPrice: uint32(d.SellPrice()),
 		Icon: d.Icon, Description: d.Description, CooldownGroup: uint32(d.Cooldown),
 		HealHp: uint32(d.HealHP), HealMp: uint32(d.HealMP), Model: d.Model, OffModel: d.OffModel,
+		Scroll: pb.ScrollKind(d.Scroll), Blessed: d.Blessed,
 	}
 	for _, sl := range d.Slots() {
 		info.Slots = append(info.Slots, uint32(sl))
 	}
 	if d.Cooldown != game.CooldownNone {
-		info.CooldownMs = uint32(game.PotionCooldown * 1000)
+		info.CooldownMs = uint32(game.CooldownSeconds(d.Cooldown) * 1000)
 	}
 	return info
 }

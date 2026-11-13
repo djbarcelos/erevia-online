@@ -1,10 +1,12 @@
 import { api, ApiError, type CharacterInfo } from "./api";
-import { Color3 } from "@babylonjs/core";
+import { Color3, Vector3 } from "@babylonjs/core";
 import { create } from "@bufbuild/protobuf";
 import {
   EntityKind,
   ItemKind,
+  ChannelKind,
   ClanCmdKind,
+  NpcRole,
   ClanRank,
   ClanStateSchema,
   PartyCmdKind,
@@ -29,6 +31,7 @@ import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from 
 import { setupPerfPanel } from "./ui/perf";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
+import { TeleportWindow } from "./ui/teleport";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
 import { buildRegions } from "./ui/regions";
@@ -246,6 +249,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   store.setInventory(welcome.inventory);
   const itemTip = new ItemTip(document.body);
   const npcStock = new Map(welcome.npcs.map((n) => [n.id, n.stock]));
+  const npcInfo = new Map(welcome.npcs.map((n) => [n.id, n]));
   const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId);
   loot.add(welcome.groundItems);
 
@@ -447,6 +451,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       return true;
     },
     goToTown: () => {
+      // Pergaminho de Retorno, se tiver (e não estiver em recarga); senão, a pé.
+      if (pvp.karma === 0 && store.countOf("scroll_return") > 0 && useItemById("scroll_return") === "ok") return;
       const dest = entities.predictLocalMove(0, 0);
       if (dest) conn.moveTo(dest.x, dest.z);
     },
@@ -481,6 +487,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (action === "clan") inviteClan(info.name);
     },
     onPartyMember: (id) => selectTarget(id),
+    onCancelChannel: () => conn.cancelChannel(),
     onCycleTarget: cycleTarget,
     onStick: (v) => {
       stick = v;
@@ -525,6 +532,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   };
 
   // ---------- Loja ----------
+  const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma }, hud.element);
+  // Enquanto canaliza, um brilho azul sobe do personagem.
+  const channelFx = window.setInterval(() => {
+    const root = entities.rootOf(welcome.yourId);
+    if (hud.channeling && root) fx.castGlow(root.position.add(new Vector3(0, 1, 0)), new Color3(0.45, 0.75, 1));
+  }, 450);
   const SHOP_OPEN_DIST = 4.5;
   const SHOP_KEEP_DIST = 7;
   let pendingShop = 0;
@@ -554,7 +567,14 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (!info || d === null || !root) return;
     if (d <= SHOP_OPEN_DIST) {
       pendingShop = 0;
-      shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? []);
+      const npc = npcInfo.get(id);
+      if (npc?.role === NpcRole.TELEPORT) {
+        shop.close();
+        teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests);
+      } else {
+        teleportWin.close();
+        shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? []);
+      }
       return;
     }
     // Para a ~2 m do NPC, do lado de quem chega.
@@ -684,6 +704,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         map: mapSource,
         regions,
         bosses,
+        stones: welcome.npcs
+          .filter((n) => n.role === NpcRole.TELEPORT)
+          .map((n) => ({ id: n.id, name: entities.info(n.id)?.name ?? "", x: entities.rootOf(n.id)?.position.x ?? 0, z: entities.rootOf(n.id)?.position.z ?? 0 })),
         nameOf: (id) => entities.info(id)?.name ?? "",
         moveTo: (x, z) => {
           hud.setQueued(0);
@@ -730,6 +753,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (ev.code === k.settings) {
       ev.preventDefault();
       if (invites.open) invites.answer(false);
+      else if (hud.channeling) conn.cancelChannel();
+      else if (teleportWin.isOpen) teleportWin.close();
       else if (shop.isOpen) shop.close();
       else if (wm.closeTop()) return;
       else if (targetId) selectTarget(0);
@@ -820,6 +845,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       const d = entities.distanceTo(shop.npcId);
       if (d === null || d > SHOP_KEEP_DIST) shop.close();
     }
+    if (teleportWin.isOpen) {
+      const d = entities.distanceTo(teleportWin.npcId);
+      if (d === null || d > SHOP_KEEP_DIST) teleportWin.close();
+    }
   });
 
   // Efeitos (buffs) e status da auto-caça
@@ -864,6 +893,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       openShop: (id: number) => openShop(id),
       npcs: () => welcome.npcs.map((n) => n.id),
       useItem: (place: number, slot: number) => conn.useItem(place, slot),
+      useItemId: (id: string) => useItemById(id),
+      stones: () => welcome.npcs.filter((n) => n.role === NpcRole.TELEPORT).map((n) => ({ id: n.id, name: entities.info(n.id)?.name })),
       buy: (npc: number, id: string, n: number) => conn.buy(npc, id, n),
       moveTo: (x: number, z: number) => {
         entities.predictLocalMove(x, z);
@@ -896,6 +927,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       hud.dispose();
       invites.dispose();
       shop.dispose();
+      teleportWin.dispose();
+      window.clearInterval(channelFx);
       itemTip.root.remove();
     },
     apply(msg: ServerMessage) {
@@ -994,6 +1027,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "invite":
           invites.push(msg.msg.value);
           break;
+        case "channelBar": {
+          const b = msg.msg.value;
+          hud.setChannel(b.label, b.kind === ChannelKind.NONE ? 0 : b.totalMs);
+          break;
+        }
         case "clan":
           clan = msg.msg.value;
           for (const fn of clanListeners) fn();

@@ -25,6 +25,7 @@ const (
 	KindNecklace
 	KindEarring
 	KindRing
+	KindScroll // pergaminhos (retorno, encantar)
 )
 
 // Grade é a raridade de um item (cor do nome).
@@ -91,13 +92,24 @@ const (
 	CooldownNone = iota
 	CooldownHP
 	CooldownMP
+	CooldownReturn // Pergaminho de Retorno
 )
+
+// CooldownSeconds: recarga de cada grupo de consumível.
+func CooldownSeconds(group int) float64 {
+	if group == CooldownReturn {
+		return ReturnCooldown
+	}
+	return PotionCooldown
+}
 
 const (
 	BagSize        = 40
 	MaxStack       = 999
 	SellRate       = 0.4 // a loja paga 40% do preço
 	PotionCooldown = 10.0
+	ReturnCooldown = 30.0 // Pergaminho de Retorno
+	ReturnChannel  = 5.0  // segundos lendo o pergaminho
 	StarterGold    = 50
 	GoldID         = "gold"
 )
@@ -121,6 +133,8 @@ type ItemDef struct {
 	Cooldown    int // grupo de recarga (consumíveis)
 	HealHP      float64
 	HealMP      float64
+	Scroll      ScrollKind // pergaminhos: o que faz
+	Blessed     bool       // encantar: falhar não quebra (volta a +0)
 }
 
 // SellPrice é quanto a loja paga por uma unidade.
@@ -202,6 +216,15 @@ func gear(id, name string, kind ItemKind, classes []string, g Grade, lvl int, bo
 func stackable(id, name string, kind ItemKind, price int64, icon, desc string) *ItemDef {
 	return &ItemDef{ID: id, Name: name, Kind: kind, Grade: GradeCommon, Stack: MaxStack,
 		Price: price, Icon: icon, Description: desc}
+}
+
+func scroll(id, name string, kind ScrollKind, price int64, desc string) *ItemDef {
+	d := stackable(id, name, KindScroll, price, "scroll", desc)
+	d.Scroll = kind
+	if kind == ScrollReturn {
+		d.Cooldown = CooldownReturn
+	}
+	return d
 }
 
 func potion(id, name string, group int, hp, mp float64, price int64, icon, desc string) *ItemDef {
@@ -369,6 +392,10 @@ var Items = func() map[string]*ItemDef {
 		potion("potion_mp_s", "Poção de Mana Menor", CooldownMP, 0, 50, 25, "potion_mp", "Recupera 50 de mana na hora."),
 		potion("potion_mp_l", "Poção de Mana Maior", CooldownMP, 0, 160, 90, "potion_mp_big", "Recupera 160 de mana na hora."),
 
+		// Pergaminhos.
+		scroll("scroll_return", "Pergaminho de Retorno", ScrollReturn, 120,
+			"Lido por 5 s, leva você de volta à cidade. Levar dano ou andar interrompe. Não funciona com karma."),
+
 		// Materiais (só para vender).
 		stackable("bone_old", "Osso Velho", KindMaterial, 10, "bone", "Um osso qualquer. Alguém na cidade compra."),
 		stackable("skull_cracked", "Crânio Rachado", KindMaterial, 35, "skull", "Os alquimistas pagam bem por isso."),
@@ -433,7 +460,7 @@ func StarterKitFor(class string, look Look) []ItemRecord {
 // Lojas dos NPCs: ids de item à venda, na ordem da lista.
 var (
 	MerchantStock = []string{
-		"potion_hp_s", "potion_hp_l", "potion_mp_s", "potion_mp_l",
+		"potion_hp_s", "potion_hp_l", "potion_mp_s", "potion_mp_l", "scroll_return",
 		"neck_common", "neck_good", "ear_common", "ear_good", "ring_common", "ring_good",
 	}
 	SmithStock = []string{

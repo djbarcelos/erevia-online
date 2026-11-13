@@ -96,7 +96,8 @@ type playerState struct {
 	killedBy   string // morto: nome de quem matou
 	party      *party
 	clan       *clan
-	clanLeftAt time.Time // saiu de um clã (espera para entrar em outro)
+	clanLeftAt time.Time     // saiu de um clã (espera para entrar em outro)
+	channel    *channelState // canalizando teleporte ou pergaminho
 }
 
 // rank da skill (0 = não aprendida).

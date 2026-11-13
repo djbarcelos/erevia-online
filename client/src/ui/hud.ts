@@ -68,6 +68,8 @@ export interface HudCallbacks {
   onTargetAction(action: TargetAction): void;
   /** Clique num colega no painel do grupo (seleciona como alvo). */
   onPartyMember(id: number): void;
+  /** Botão de cancelar a canalização (teleporte, pergaminho). */
+  onCancelChannel(): void;
   onCycleTarget(): void;
   /** Joystick (direção relativa à câmera) ou null ao soltar. */
   onStick(v: { x: number; y: number } | null): void;
@@ -160,6 +162,9 @@ export class Hud {
   private tActions = el("div", "t-actions");
   private tActionBtns = new Map<TargetAction, HTMLButtonElement>();
   private deathSub = el("p", "muted", "Você perdeu um pouco de experiência.");
+  private channelEl = el("div", "channel-bar frame glass");
+  private channelLabel = el("span", "ch-label");
+  private channelFill = el("i");
   private partyEl = el("section", "party");
   private partyList = el("div", "party-list");
   private partyRows = new Map<number, { root: HTMLElement; name: HTMLElement; hp: ReturnType<typeof bar>; mp: ReturnType<typeof bar> }>();
@@ -303,6 +308,10 @@ export class Hud {
       ),
     );
     this.bannerEl.hidden = true;
+    const chCancel = button("✕", "ch-cancel", () => cb.onCancelChannel());
+    chCancel.title = "Cancelar (Esc)";
+    this.channelEl.append(el("div", "ch-row", this.channelLabel, chCancel), el("div", "ch-track", this.channelFill));
+    this.channelEl.hidden = true;
 
     // ---------- Toque ----------
     const joy = createJoystick((v) => cb.onStick(v));
@@ -340,7 +349,7 @@ export class Hud {
     cluster.append(this.attackBtn, pageBtn, targetBtn, this.potionBtn, this.autoTouch);
     const touch = el("div", "touch-ui", joy.root, cluster);
 
-    this.root.append(left, mini, this.target, topRight, this.chatRoot, bottom, this.xpBar.root, this.autoPill, this.loot, touch, this.bannerEl, this.death);
+    this.root.append(left, mini, this.target, topRight, this.chatRoot, bottom, this.xpBar.root, this.autoPill, this.loot, touch, this.bannerEl, this.channelEl, this.death);
     document.body.append(this.root);
 
     const applyEnv = () => {
@@ -576,6 +585,22 @@ export class Hud {
     }
     const total = Object.values(badges).reduce((a, b) => a + (b ?? 0), 0);
     this.root.querySelector(".menu-burger")?.classList.toggle("has-badge", total > 0);
+  }
+
+  /** Barra de canalização (teleporte/pergaminho); totalMs 0 = esconde. */
+  setChannel(label: string, totalMs: number): void {
+    this.channelEl.hidden = totalMs <= 0;
+    if (totalMs <= 0) return;
+    this.channelLabel.textContent = label;
+    this.channelFill.style.transition = "none";
+    this.channelFill.style.width = "0%";
+    void this.channelFill.offsetWidth; // reinicia a animação
+    this.channelFill.style.transition = `width ${totalMs}ms linear`;
+    this.channelFill.style.width = "100%";
+  }
+
+  get channeling(): boolean {
+    return !this.channelEl.hidden;
   }
 
   /** Painel do grupo: um por colega (você não aparece), com vida, mana e o líder. */

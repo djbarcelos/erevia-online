@@ -198,6 +198,10 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.ProgressAction(ctx, id, m.LearnSkills)
 		case *pb.ClientMessage_SetHotbar:
 			s.zone.ProgressAction(ctx, id, m.SetHotbar)
+		case *pb.ClientMessage_Teleport:
+			s.zone.ItemAction(ctx, id, m.Teleport)
+		case *pb.ClientMessage_CancelChannel:
+			s.zone.ItemAction(ctx, id, m.CancelChannel)
 		case *pb.ClientMessage_PartyCmd:
 			s.zone.Social(ctx, id, m.PartyCmd)
 		case *pb.ClientMessage_ClanCmd:

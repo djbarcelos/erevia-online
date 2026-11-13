@@ -160,6 +160,16 @@ func (inv *inventory) countOf(id string) int {
 	return n
 }
 
+// slotOf: primeiro espaço da bolsa com o item (-1 = não tem).
+func (inv *inventory) slotOf(id string) int {
+	for i, s := range inv.bag {
+		if !s.empty() && s.def.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
 func (inv *inventory) firstFree() int {
 	for i, s := range inv.bag {
 		if s.empty() {

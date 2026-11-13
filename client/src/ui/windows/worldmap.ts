@@ -17,6 +17,8 @@ export interface WorldMapDeps {
   map: MapSource;
   regions: Region[];
   bosses: BossPoint[];
+  /** Pedras de Teleporte (viajar só estando numa delas). */
+  stones: { id: number; name: string; x: number; z: number }[];
   /** Nome de uma entidade (NPCs e jogadores no mapa). */
   nameOf(id: number): string;
   /** Andar até um ponto (o servidor calcula o caminho). */
@@ -36,6 +38,7 @@ const LAYERS: { id: Layer; label: string; dot: string }[] = [
 let cached: { world: WorldData; canvas: HTMLCanvasElement } | null = null;
 
 export function buildWorldMap(d: WorldMapDeps): HTMLElement {
+  const stoneIds = new Set(d.stones.map((s) => s.id));
   const world = d.map.world;
   if (!cached || cached.world !== world) cached = { world, canvas: renderMapCanvas(world, 6) };
   const src = cached.canvas;
@@ -121,6 +124,17 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
   }
   side.append(el("h3", "wmap-title", "Erevia"), here, el("div", "wmap-sec", "Camadas"), layers, el("div", "wmap-sec", "Regiões"), zoneList);
   if (d.bosses.length) side.append(el("div", "wmap-sec", "Chefes"), bossList);
+  if (d.stones.length) {
+    const stoneList = el("div", "wmap-quests");
+    for (const st of d.stones) {
+      const b = el("button", "wmap-quest");
+      b.type = "button";
+      b.append(el("span", "qm stone", "✦"), el("span", null, el("b", null, st.name), el("small", null, "Pedra de Teleporte")));
+      b.onclick = () => flyTo(st.x, st.z, 3.5);
+      stoneList.append(b);
+    }
+    side.append(el("div", "wmap-sec", "Teleporte"), stoneList, el("p", "small muted wmap-note", "Clique numa pedra no mundo para viajar até outra."));
+  }
   root.append(view, side);
 
   // ---------- Câmera do mapa ----------
@@ -349,6 +363,20 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
           drawBossMarker(ctx, x, y, 9);
           if (scale > 2) label(d.nameOf(m.id), x, y - 17, 11, "#e6a6ff", 700);
         } else drawDot(ctx, x, y, m.target ? 5 : 3.5, m.target ? "#ffd36b" : MARKER_COLORS.monster);
+      } else if (m.kind === EntityKind.NPC && stoneIds.has(m.id)) {
+        if (!show.places) return;
+        // Pedra de Teleporte: brilho azul pulsando.
+        const pulse = 1 + Math.sin(performance.now() / 400) * 0.15;
+        const r = 12 * pulse;
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, "rgba(160,200,255,.95)");
+        g.addColorStop(1, "rgba(80,120,255,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        drawDot(ctx, x, y, 3.5, "#dfeeff");
+        if (scale > 1.6) label(d.nameOf(m.id), x, y - 15, 11, "#cfe0ff", 700);
       } else if (m.kind === EntityKind.NPC) {
         if (!show.places) return;
         drawDot(ctx, x, y, 5, MARKER_COLORS.npc);
