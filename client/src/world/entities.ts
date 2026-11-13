@@ -38,6 +38,7 @@ import type { Fx, FxBody, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
 import { GOLEM_BODY, GOLEM_MODEL } from "./golem";
 import { buildTeleportStone } from "./teleport-stone";
+import type { PickAreas } from "./pick";
 import type { Bounds, Collision } from "./world-data";
 import { specInfo } from "../ui/specs";
 import { GRADE_COLOR } from "../ui/items";
@@ -274,6 +275,8 @@ export class EntityManager {
     private fx: Fx,
     private shadows: ShadowGenerator,
     private collision: Collision,
+    /** Áreas de clique (cilindros testados em código, sem malha na cena). */
+    private picks: PickAreas,
   ) {
     this.ringMat = new StandardMaterial("localRing", scene);
     this.ringMat.emissiveColor = new Color3(0.95, 0.8, 0.4);
@@ -445,20 +448,15 @@ export class EntityManager {
     const visual = new TransformNode(`visual${e.id}`, this.scene);
     visual.parent = root;
 
-    // Área de clique estável (invisível): o modelo animado não serve, porque o picking de
-    // malha com esqueleto usa a pose parada e braços/pernas entram e saem do cursor.
+    // Área de clique estável: um cilindro nos pés, testado em código (world/pick.ts). O
+    // modelo animado não serve, porque o picking de malha com esqueleto usa a pose parada e
+    // braços/pernas entram e saem do cursor.
     const isObject = e.kind === EntityKind.OBJECT;
     const body = MODEL_BODY[e.model];
     if (!isObject) {
       // Monstros grandes (golem) ganham uma área do tamanho do corpo, senão o clique
       // passa pelos ombros e braços sem selecionar.
-      const h = (body?.height ?? 2.1) * scale;
-      const hit = MeshBuilder.CreateCylinder(`hit${e.id}`, { height: h, diameter: (body?.width ?? 1.2) * scale, tessellation: 12 }, this.scene);
-      hit.parent = root;
-      hit.position.y = h / 2;
-      hit.isVisible = false;
-      hit.isPickable = true;
-      hit.metadata = { entityId: e.id };
+      this.picks.addEntity(e.id, root, ((body?.width ?? 1.2) * scale) / 2, (body?.height ?? 2.1) * scale);
     }
 
     // Anel no chão: na cor do emblema para jogadores (o seu, mais forte), dourado sem emblema.
@@ -630,6 +628,7 @@ export class EntityManager {
     this.dropStage(id);
     v.label.dispose();
     this.views.delete(id);
+    this.picks.removeEntity(id);
     // Corpo de monstro: afunda e desbota antes de sumir.
     if (v.shownDead && v.kind === EntityKind.MONSTER) this.sinkAndDispose(v);
     else this.disposeView(v);
@@ -1663,7 +1662,7 @@ export class EntityManager {
     return body;
   }
 
-  /** O clique usa a área invisível do add(); as malhas visíveis ficam de fora. */
+  /** O clique usa o cilindro do add() (world/pick.ts); as malhas ficam fora do picking. */
   private notPickable(meshes: AbstractMesh[]): void {
     for (const m of meshes) m.isPickable = false;
   }
