@@ -421,6 +421,7 @@ func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64
 			z.grantXP(m, xp)
 		}
 		z.burnKarma(m, dead.level)
+		z.track(m, "kill", dead.mon.def.ID, int64(dead.level), nil)
 		z.questEvent(m, game.GoalKill, dead.mon.def.ID)
 	}
 }
@@ -460,6 +461,7 @@ func (z *Zone) splitGold(p *entity, amount int) int {
 	}
 	for _, m := range share {
 		m.pl.inv.gold += int64(each)
+		z.trackGold(m, "loot", int64(each))
 		z.system(m, fmt.Sprintf("+%d moedas (grupo).", each))
 		z.inventoryChanged(m, false)
 	}

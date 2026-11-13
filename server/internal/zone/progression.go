@@ -65,6 +65,14 @@ func (z *Zone) kill(dead, killer *entity) {
 	if killer != nil && killer != dead {
 		dead.pl.killedBy = killer.name
 	}
+	cause := ""
+	switch {
+	case killer != nil && killer.mon != nil:
+		cause = "monster:" + killer.mon.def.ID
+	case killer != nil && killer.pl != nil && killer != dead:
+		cause = "player"
+	}
+	z.track(dead, "death", cause, 0, nil)
 	before := dead.pl.xp
 	switch {
 	case chaotic:
@@ -118,6 +126,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	z.clanLevelUp(p)
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
 	z.systemAfterFlush(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
+	z.track(p, "level", "", int64(p.level), nil)
 	z.questLevel(p)
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
 }

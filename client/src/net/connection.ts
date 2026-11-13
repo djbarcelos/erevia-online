@@ -139,6 +139,11 @@ export class Connection {
     this.send({ case: "buy", value: { npcId, itemId, count } });
   }
 
+  /** Telemetria: amostra de FPS (a cada ~60 s). */
+  clientStats(fpsAvg: number, fpsLow: number, device: string, seconds: number): void {
+    this.send({ case: "clientStats", value: { fpsAvg, fpsLow, device, seconds } });
+  }
+
   /** Ferreiro: criar um item com a receita. */
   craft(npcId: number, recipeId: string): void {
     this.send({ case: "craft", value: { npcId, recipeId } });

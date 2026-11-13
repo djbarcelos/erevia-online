@@ -137,6 +137,7 @@ func (z *Zone) finishQuest(p *entity, def *game.QuestDef) {
 	z.system(p, fmt.Sprintf("Missão concluída: %s. Recompensa: %s.", def.Title, rewardText(r)))
 	if r.Gold > 0 {
 		p.pl.inv.gold += r.Gold
+		z.trackGold(p, "quest", r.Gold)
 	}
 	var dropped []*groundItem
 	for _, it := range r.Items {
@@ -144,6 +145,7 @@ func (z *Zone) finishQuest(p *entity, def *game.QuestDef) {
 		if d == nil {
 			continue
 		}
+		z.trackItem(p, true, d.ID, it.Count, "quest")
 		if left := p.pl.inv.add(d, it.Count); left > 0 {
 			if g := z.dropItem(p.pos, d, left, 0, p.id, questRewardReserve); g != nil {
 				dropped = append(dropped, g)

@@ -224,6 +224,9 @@ type Zone struct {
 	storages       map[int64]*storage // conta → armazém
 	modJobs        chan modJob
 	modBackend     ModBackend
+	telemetry      chan GameEvent
+	eventSink      EventSink
+	droppedEvents  int
 	bossBackend    BossBackend
 	bossJobs       chan BossData
 	telegraphs     []*telegraph
@@ -255,6 +258,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		clanJobs:       make(chan clanJob, clanJobQueue),
 		storages:       map[int64]*storage{},
 		modJobs:        make(chan modJob, modJobQueue),
+		telemetry:      make(chan GameEvent, telemetryQueue),
 		bossJobs:       make(chan BossData, 16),
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
@@ -296,6 +300,18 @@ func (z *Zone) UseSkill(ctx context.Context, id, skill, target uint32, force boo
 }
 func (z *Zone) Respawn(ctx context.Context, id uint32) { z.post(ctx, respawnEvent{id: id}) }
 
+// ClientStats repassa a amostra de desempenho do cliente (telemetria).
+func (z *Zone) ClientStats(ctx context.Context, id uint32, msg *pb.ClientStats) {
+	z.post(ctx, clientStatsEvent{id: id, msg: msg})
+}
+
+type clientStatsEvent struct {
+	id  uint32
+	msg *pb.ClientStats
+}
+
+func (clientStatsEvent) isEvent() {}
+
 // Trade repassa um comando de troca entre jogadores.
 func (z *Zone) Trade(ctx context.Context, id uint32, msg *pb.TradeCmd) {
 	z.post(ctx, tradeEvent{id: id, msg: msg})
@@ -324,6 +340,7 @@ func (z *Zone) Run(ctx context.Context) {
 	defer saveTicker.Stop()
 	go z.runClanWorker(ctx)
 	go z.runModWorker(ctx)
+	go z.runTelemetryWorker(ctx)
 	go z.runBossWorker(ctx)
 
 	for {
@@ -382,6 +399,10 @@ func (z *Zone) handle(e event) {
 		z.onModResult(e)
 	case tradeEvent:
 		z.onTrade(e)
+	case clientStatsEvent:
+		if p := z.players[e.id]; p != nil {
+			z.onClientStats(p, e.msg)
+		}
 	}
 }
 
@@ -528,6 +549,8 @@ func (z *Zone) onJoin(info JoinInfo) {
 		}
 	}
 
+	p.pl.joinedAt = z.cfg.Clock()
+	z.track(p, "session", "start", 0, nil)
 	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
 
@@ -630,6 +653,7 @@ func (z *Zone) removePlayer(id uint32) {
 		delete(z.byName, strings.ToLower(p.name))
 	}
 	z.forgetTarget(id)
+	z.track(p, "session", "end", int64(z.cfg.Clock().Sub(p.pl.joinedAt).Seconds()), nil)
 	if p.pl.trade != nil {
 		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
 	}

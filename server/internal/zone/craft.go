@@ -40,6 +40,11 @@ func (z *Zone) craft(p *entity, npcID uint32, recipeID string) {
 		return
 	}
 	p.pl.inv = inv
+	z.trackGold(p, "craft", -r.Gold)
+	for _, m := range r.Materials {
+		z.trackItem(p, false, m.ID, m.Count, "craft")
+	}
+	z.trackItem(p, true, res.ID, r.Count, "craft")
 	z.system(p, fmt.Sprintf("%s criou %s para você por %d moedas.", n.name, itemLabel(res, r.Count), r.Gold))
 	z.inventoryChanged(p, false) // também agenda o salvamento
 }

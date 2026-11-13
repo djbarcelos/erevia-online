@@ -151,6 +151,7 @@ func (z *Zone) updateChannel(p *entity) {
 			return
 		}
 		inv.gold -= ch.price
+		z.trackGold(p, "teleport", -ch.price)
 	case pb.ChannelKind_CHANNEL_KIND_RETURN:
 		slot := inv.slotOf(ch.itemID)
 		if slot < 0 {

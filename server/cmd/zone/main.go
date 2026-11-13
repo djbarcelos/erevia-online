@@ -127,6 +127,7 @@ func run(log *slog.Logger) error {
 	z.SetClanBackend(clanStore{st})
 	z.SetBossBackend(bossStore{st})
 	z.SetModBackend(modStore{st})
+	z.SetEventSink(eventStore{st})
 	zoneDone := make(chan struct{})
 	go func() { z.Run(ctx); close(zoneDone) }()
 
@@ -202,6 +203,17 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
 		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
 	}, nil
+}
+
+// eventStore liga a telemetria da zona ao banco.
+type eventStore struct{ st *store.Store }
+
+func (e eventStore) InsertEvents(ctx context.Context, events []zone.GameEvent) error {
+	rows := make([]store.GameEvent, len(events))
+	for i, ev := range events {
+		rows[i] = store.GameEvent(ev)
+	}
+	return e.st.InsertEvents(ctx, rows)
 }
 
 // modStore liga a moderação da zona ao banco.

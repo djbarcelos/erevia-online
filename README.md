@@ -153,3 +153,16 @@ UPDATE bug_reports SET resolved = true WHERE id = 1;
 -- Últimas ações de GM
 SELECT at, gm_name, command, target, detail FROM gm_log ORDER BY at DESC LIMIT 50;
 ```
+
+## Telemetria
+O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem travar a zona): ouro que entra e sai (e de onde), itens que entram e saem do jogo, abates, mortes, subidas de nível, sessões e o FPS dos jogadores (o cliente mede 1×/s e manda a média a cada 60 s, com o tipo de aparelho). O "painel" são views prontas; abra na aba **Data** do Postgres da Railway ou com `psql`:
+
+| View | Mostra |
+|---|---|
+| `v_gold_daily` | Ouro que entrou e saiu por dia e por origem (loot, venda, missão, loja, criação, teleporte…) |
+| `v_level_times` | Minutos médios para chegar a cada nível |
+| `v_deaths_by_region` | Mortes por região e por quem matou |
+| `v_quit_level` | Último nível de quem não joga há mais de 7 dias |
+| `v_fps` | FPS médio e dos piores momentos, por região e tipo de aparelho |
+| `v_items_daily` | Itens que entraram e saíram do jogo por dia (para caçar duplicação) |
+

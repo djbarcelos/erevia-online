@@ -227,6 +227,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.Social(ctx, id, m.ClanCmd)
 		case *pb.ClientMessage_InviteReply:
 			s.zone.Social(ctx, id, m.InviteReply)
+		case *pb.ClientMessage_ClientStats:
+			s.zone.ClientStats(ctx, id, m.ClientStats)
 		case *pb.ClientMessage_Craft:
 			s.zone.ItemAction(ctx, id, m.Craft)
 		case *pb.ClientMessage_TradeCmd:

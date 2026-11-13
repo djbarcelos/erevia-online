@@ -187,6 +187,7 @@ func (z *Zone) destroyItem(p *entity, slot, count int) {
 	s := inv.bag[slot]
 	count = min(max(count, 1), s.count)
 	inv.take(slot, count)
+	z.trackItem(p, false, s.def.ID, count, "destroy")
 	z.system(p, fmt.Sprintf("Você destruiu %s.", itemLabel(s.def, count)))
 	z.inventoryChanged(p, false)
 }

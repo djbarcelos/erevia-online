@@ -473,6 +473,7 @@ func (z *Zone) gmGive(gm *entity, args []string) {
 		z.system(t, fmt.Sprintf("Você recebeu %d moedas de um GM.", count))
 		z.system(gm, fmt.Sprintf("%s recebeu %d moedas.", t.name, count))
 		z.gmLog(gm, "give", t.name, fmt.Sprintf("gold %d", count))
+		z.trackGold(t, "gm", int64(count))
 		return
 	}
 	def := game.Items[id]
@@ -490,6 +491,7 @@ func (z *Zone) gmGive(gm *entity, args []string) {
 	z.system(t, "Você recebeu "+itemLabel(def, given)+" de um GM.")
 	z.system(gm, t.name+" recebeu "+itemLabel(def, given)+".")
 	z.gmLog(gm, "give", t.name, fmt.Sprintf("%s %d", def.ID, given))
+	z.trackItem(t, true, def.ID, given, "gm")
 }
 
 func (z *Zone) gmAnnounce(gm *entity, text string) {
