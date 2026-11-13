@@ -1,0 +1,63 @@
+# Testes a cada push e pull request. A Railway só publica a main quando tudo passa
+# (checkSuites em .railway/railway.ts).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Servidor (Go + Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: erevia
+          POSTGRES_PASSWORD: erevia
+          POSTGRES_DB: erevia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erevia"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: server
+    env:
+      # Sem esta variável os testes do store são pulados; aqui eles precisam rodar.
+      TEST_DATABASE_URL: postgres://erevia:erevia@localhost:5432/erevia?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - run: go vet ./...
+      - run: go test ./... -race -count=1
+
+  client:
+    name: Cliente (tipos + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
