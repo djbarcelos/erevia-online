@@ -257,7 +257,8 @@ type Zone struct {
 	rankingBackend RankingBackend
 	ranking        *rankingCache // último cálculo do ranking (nil = ainda não chegou)
 
-	gone map[uint32]bool // personagens de contas apagadas (ver account.go)
+	gone       map[uint32]bool // personagens de contas apagadas (ver account.go)
+	invariants invariantGuard  // checagens do estado (ver invariants.go)
 
 	errs zoneErrors // panics, tick lento e erros do banco (ver errors.go)
 
@@ -787,13 +788,14 @@ func (z *Zone) update(dt float64) {
 			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}
 	}
+	z.runSystem(sysInvariants, z.checkInvariantsDue) // cada jogador 1×/s, espalhado entre os ticks
 	z.runSystem(sysSaveDue, z.saveDue)
 
 	z.runSystem(sysSnapshot, z.flushSnapshot)
 	z.runSystem(sysAfterSnapshot, z.runAfterSnapshot)
 	z.runSystem(sysSelfStats, func() {
 		for _, p := range z.players {
-			if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || int(math.Floor(p.mp)) != p.pl.sentMP {
+			if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || p.mpInt() != p.pl.sentMP {
 				z.sendSelfStats(p)
 			}
 		}
@@ -889,13 +891,14 @@ func (z *Zone) flushSnapshot() {
 func (z *Zone) sendSelfStats(p *entity) {
 	p.pl.statsDirty = false
 	p.pl.sentSelfHP = p.hpInt()
-	p.pl.sentMP = int(math.Floor(p.mp))
+	p.pl.sentMP = p.mpInt()
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_SelfStats{SelfStats: z.selfStats(p)}})
 }
 
 func (z *Zone) savedState(p *entity) SavedState {
+	z.checkInvariants(p) // nunca salva um estado quebrado sem corrigir (ou avisar)
 	s := SavedState{
-		ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: int(math.Floor(p.mp)),
+		ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: p.mpInt(),
 		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),
 		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
@@ -908,7 +911,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 	if s.HP >= p.maxHPInt() {
 		s.HP = -1
 	}
-	if float64(s.MP) >= math.Floor(p.stats.MaxMP) {
+	if s.MP >= p.maxMPInt() {
 		s.MP = -1
 	}
 	return s

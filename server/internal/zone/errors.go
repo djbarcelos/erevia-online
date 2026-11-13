@@ -75,6 +75,7 @@ const (
 	sysLeaveTown
 	sysTrades
 	sysPendingSaves
+	sysInvariants
 	sysSaveDue
 	sysSnapshot
 	sysAfterSnapshot
@@ -87,7 +88,7 @@ const (
 
 var systemNames = [numSystems]string{
 	"daytime", "auras", "players", "monsters", "telegraphs", "ground", "flags", "invites",
-	"parties", "leave_town", "trades", "pending_saves", "save_due", "snapshot", "after_snapshot",
+	"parties", "leave_town", "trades", "pending_saves", "invariants", "save_due", "snapshot", "after_snapshot",
 	"self_stats", "save_all", "invasion", "xp2",
 }
 
@@ -129,6 +130,7 @@ func (z *Zone) recoverEvent(e event) {
 	if r == nil {
 		return
 	}
+	rethrowInvariant(r)
 	stack := debug.Stack()
 	id, msg, peer := eventInfo(e)
 	z.notePanic("msg", z.players[id], id, msg, r, stack, false)
@@ -330,6 +332,7 @@ func (z *Zone) endSystem(s system, start time.Time) {
 		st.streak = 0
 		return
 	}
+	rethrowInvariant(r)
 	st.streak++
 	st.off = st.streak >= panicDisableAfter
 	z.notePanic("tick:"+s.String(), nil, 0, "", r, debug.Stack(), st.off)
@@ -349,6 +352,7 @@ func (z *Zone) recoverPlayer(p *entity) {
 	if r == nil {
 		return
 	}
+	rethrowInvariant(r)
 	z.notePanic("tick:player", p, p.id, "", r, debug.Stack(), false)
 	if z.players[p.id] == p {
 		z.kickAfterPanic(p.id, nil) // apagar do mapa durante o range é permitido
@@ -372,6 +376,7 @@ func (z *Zone) recoverMonster(m *entity) {
 		}
 		return
 	}
+	rethrowInvariant(r)
 	if z.errs.monStreak == nil {
 		z.errs.monStreak = map[uint32]int{}
 		z.errs.parked = map[uint32]bool{}
@@ -664,4 +669,12 @@ func (z *Zone) runWorker(ctx context.Context, name string, fn func(context.Conte
 	}()
 	fn(ctx)
 	return false
+}
+
+// rethrowInvariant: no modo estrito (testes e DEBUG_INVARIANTS=1) a invariante quebrada
+// tem que derrubar de verdade; os recovers deixam esse panic passar.
+func rethrowInvariant(r any) {
+	if v, ok := r.(invariantPanic); ok {
+		panic(v)
+	}
 }
