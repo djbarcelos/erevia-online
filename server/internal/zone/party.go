@@ -407,6 +407,7 @@ func (z *Zone) shareMonsterXP(dead *entity, takers []*entity) {
 			z.grantXP(m, xp)
 		}
 		z.burnKarma(m, dead.level)
+		z.questEvent(m, game.GoalKill, dead.mon.def.ID)
 	}
 }
 

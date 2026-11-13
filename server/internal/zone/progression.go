@@ -106,6 +106,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	z.clanLevelUp(p)
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
 	z.systemAfterFlush(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
+	z.questLevel(p)
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
 }
 

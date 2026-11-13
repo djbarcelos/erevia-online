@@ -223,6 +223,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			}
 		}
 		src.mp -= cost
+		z.questEvent(src, game.GoalSkill, "")
 		cd := skillCD(src, s)
 		src.pl.cooldowns[s.ID] = z.now + cd
 		src.pl.statsDirty = true

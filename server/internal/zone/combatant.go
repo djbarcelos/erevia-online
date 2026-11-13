@@ -106,6 +106,8 @@ type playerState struct {
 	mutedUntil time.Time // relógio de parede (zero = pode falar)
 	userAgent  string
 	nextBug    float64 // próximo /bug aceito (tempo de simulação)
+
+	quests questLog
 }
 
 // rank da skill (0 = não aprendida).

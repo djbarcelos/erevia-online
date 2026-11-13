@@ -18,6 +18,7 @@ import {
   SkillTarget,
   type ItemInfo,
   type PartyState,
+  type QuestLog,
   type SelfStats,
   type SkillInfo,
 } from "../gen/erevia/v1/game_pb";
@@ -132,6 +133,11 @@ export function skillTipHtml(s: SkillInfo, keyHint = ""): string {
   return html;
 }
 
+/** Texto para dentro de HTML de dica (os textos das missões vêm do servidor). */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
 export class Hud {
   // "hud-screen": as regras de toque e de tela pequena em styles/hud.css partem desta classe.
   private root = el("div", "hud hud-screen");
@@ -168,6 +174,8 @@ export class Hud {
   private channelFill = el("i");
   private partyEl = el("section", "party");
   private partyList = el("div", "party-list");
+  private questsEl = el("section", "quests");
+  private questList = el("div", "quest-list");
   private partyRows = new Map<number, { root: HTMLElement; name: HTMLElement; hp: ReturnType<typeof bar>; mp: ReturnType<typeof bar> }>();
   private miniCanvas = el("canvas", "mm-canvas");
   private miniCtx = this.miniCanvas.getContext("2d")!;
@@ -218,7 +226,14 @@ export class Hud {
     pHead.onclick = () => this.partyEl.classList.toggle("collapsed");
     this.partyEl.append(pHead, this.partyList);
     this.partyEl.hidden = true;
-    const left = el("div", "hud-left", this.meEl, el("div", "hud-side", this.partyEl));
+    // ---------- Missões (abaixo do grupo; some sem missão ativa) ----------
+    const qHead = el("button", "side-head");
+    qHead.type = "button";
+    qHead.innerHTML = `${ui("scroll", 16)}<span>Missões</span><i>▾</i>`;
+    qHead.onclick = () => this.questsEl.classList.toggle("collapsed");
+    this.questsEl.append(qHead, this.questList);
+    this.questsEl.hidden = true;
+    const left = el("div", "hud-left", this.meEl, el("div", "hud-side", this.partyEl, this.questsEl));
 
     // ---------- Alvo ----------
     const tClose = button("✕", "t-close");
@@ -602,6 +617,24 @@ export class Hud {
 
   get channeling(): boolean {
     return !this.channelEl.hidden;
+  }
+
+  /** Painel de missões: redesenhado só quando o servidor manda um QuestLog (nada por quadro). */
+  setQuests(log: QuestLog): void {
+    this.questsEl.hidden = log.quests.length === 0;
+    this.questList.replaceChildren(
+      ...log.quests.map((q) => {
+        const box = el("div", "quest", el("b", null, q.title));
+        for (const s of q.steps) {
+          const row = el("div", "q-step", el("span", null, s.text), el("span", "q-count", `${s.count}/${s.need}`));
+          if (s.count >= s.need) row.classList.add("done");
+          box.append(row);
+        }
+        box.append(el("small", null, q.text));
+        tooltip(box, () => `<b>${escapeHtml(q.title)}</b><br>${escapeHtml(q.text)}<br><span class="muted">Recompensa: ${escapeHtml(q.reward)}</span>`);
+        return box;
+      }),
+    );
   }
 
   /** Painel do grupo: um por colega (você não aparece), com vida, mana e o líder. */

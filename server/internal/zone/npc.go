@@ -128,6 +128,7 @@ func (z *Zone) buy(p *entity, npcID uint32, itemID string, count int) {
 	inv.add(def, count)
 	z.system(p, fmt.Sprintf("Você comprou %s por %d moedas.", itemLabel(def, count), cost))
 	z.inventoryChanged(p, false)
+	z.questEvent(p, game.GoalBuy, def.ID)
 }
 
 func (z *Zone) sell(p *entity, npcID uint32, slot, count int) {

@@ -621,6 +621,16 @@ section.party {
   font-variant-numeric: tabular-nums;
 }
 
+.quest-list {
+  display: grid;
+  gap: 8px;
+}
+
+.q-step.done {
+  color: var(--dim);
+  text-decoration: line-through;
+}
+
 .quest small {
   color: var(--dim);
   font-size: 0.68rem;
