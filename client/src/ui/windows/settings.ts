@@ -116,12 +116,13 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "set-page",
         group(
           "Volume",
+          row("Sem som", toggle(s.muted, set("muted"), "Sem som"), "Desliga tudo; os volumes ficam guardados."),
           row("Geral", slider(s.vMaster, 0, 100, 1, set("vMaster"), pct)),
-          row("Música", slider(s.vMusic, 0, 100, 1, set("vMusic"), pct)),
-          row("Efeitos", slider(s.vSfx, 0, 100, 1, set("vSfx"), pct)),
-          row("Ambiente", slider(s.vAmbient, 0, 100, 1, set("vAmbient"), pct)),
+          row("Música", slider(s.vMusic, 0, 100, 1, set("vMusic"), pct), "Muda com a região do mapa."),
+          row("Efeitos", slider(s.vSfx, 0, 100, 1, set("vSfx"), pct), "Golpes, skills, passos e interface."),
+          row("Ambiente", slider(s.vAmbient, 0, 100, 1, set("vAmbient"), pct), "Floresta, cidade e noite."),
         ),
-        el("p", "hint-box small", "O protótipo ainda não tem som; os controles mostram como a tela vai ficar."),
+        el("p", "hint-box small", "No celular, o som começa no primeiro toque na tela."),
       ),
     controls: () => {
       const keys = el("div", "keybinds");
@@ -278,7 +279,7 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
           el(
             "p",
             "small muted credits",
-            "Personagens, monstros, armas, animações e cenário: KayKit (Kay Lousberg), licença CC0. Interface, ícones e código: equipe Erevia.",
+            "Personagens, monstros, armas, animações e cenário: KayKit (Kay Lousberg), licença CC0. Sons e músicas: Kenney, lentikula, artisticdude, rubberduck, RandomMind, cynicmusic, Samza, yd e outros, licença CC0. Interface, ícones e código: equipe Erevia.",
           ),
         ),
       ),

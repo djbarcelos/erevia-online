@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	mrand "math/rand/v2"
 	"strconv"
@@ -159,12 +160,17 @@ func Open(ctx context.Context, url string) (*Store, error) {
 }
 
 func migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	return migrateFS(ctx, pool, mustSub(migrations, "migrations"))
+}
+
+func migrateFS(ctx context.Context, pool *pgxpool.Pool, fsys fs.FS) error {
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
-	// Fora de ordem: a 00020 (apagar a conta) já rodou em produção antes das reservadas
-	// abaixo dela (00014, 00015…); sem isto o goose recusa subir as que ficaram para trás.
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, mustSub(migrations, "migrations"),
-		goose.WithAllowOutofOrder(true))
+	// Fora de ordem permitido: dois PCs trabalham em paralelo com faixas de números
+	// reservadas (PC 1: 00009–00019, PC 2: 00020–00029), então uma migração de número
+	// menor pode chegar à produção depois de uma maior. Sem isso o goose recusa
+	// ("missing (out-of-order) migration") e o servidor não sobe.
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithAllowOutofOrder(true))
 	if err != nil {
 		return fmt.Errorf("goose: %w", err)
 	}
