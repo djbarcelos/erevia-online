@@ -112,6 +112,28 @@ Como não vamos copiar a arte de nenhum jogo, a "referência" que a skill blende
 3. **Folha de cor:** as mesmas 4, com a paleta da raridade comum e da épica.
 4. O Daniel aprova as três folhas. A partir daí, cada asset passa pelas fases da skill, com renders comparados às folhas e o teste de 85 px em tons de cinza.
 
+### Primeira versão das folhas (bonecos de blocagem)
+
+Geradas por `tools/art/reference_sheets.py` com o Blender em modo headless (o comando está no topo do arquivo). São bonecos feitos de primitivas, só para validar proporção, silhueta e paleta, e não são os modelos finais.
+
+| Proporção (7 cabeças; frente, lado e costas) | Silhueta |
+|---|---|
+| ![Proporção](arte/1-proporcao.png) | ![Silhueta](arte/2-silhueta.png) |
+
+Silhueta no tamanho real do jogo (85 px, celular): ![85 px](arte/2-silhueta-85px.png)
+
+Cor, com equipamento comum em cima e épico embaixo:
+
+![Cor](arte/3-cor.png)
+
+**O que o teste mostrou**
+- ✅ Em 85 px, as 4 classes se distinguem só pelo contorno: o cavaleiro pelas ombreiras e pelo escudo, o bárbaro pelo tronco em V e pelo machado, o mago pelo manto e pelo chapéu, o ladino pelo capuz.
+- ⚠️ **No bárbaro e no ladino, o épico não se distingue do comum de longe:** muda só a cor. Por isso fica obrigatório que, do raro para cima, cada classe ganhe **uma forma nova na silhueta**:
+  - **bárbaro:** chifres no elmo ou crânio, ombreira de osso, lâmina do machado com um formato próprio;
+  - **ladino:** capa em tiras, ombreira assimétrica, lâminas mais longas e curvas;
+  - **cavaleiro:** crista e ombreiras maiores (como na folha);
+  - **mago:** gola alta e um cajado com uma forma no topo.
+
 ---
 
 ## 7. Onde a arte atual quebra o estilo (para substituir)
