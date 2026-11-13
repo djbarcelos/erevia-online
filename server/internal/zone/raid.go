@@ -359,8 +359,8 @@ func (z *Zone) summon(m *entity, n int) {
 			g.mon.hate[pid] = v
 		}
 		z.monsters[id] = g
-		m.mon.raid.summons = append(m.mon.raid.summons, id)
-		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(g)}}}, 0)
+		m.mon.raid.summons = append(m.mon.raid.summons, id) // Spawn pela AOI
+		z.aoiDirty = true
 	}
 }
 
@@ -376,11 +376,10 @@ func (z *Zone) dismissSummons(m *entity) {
 
 // removeMonster apaga um monstro de vez (invocações).
 func (z *Zone) removeMonster(g *entity) {
-	delete(z.monsters, g.id)
+	delete(z.monsters, g.id) // Despawn pela AOI
+	g.gone = true
+	z.aoiDirty = true
 	z.forgetTarget(g.id)
-	if !g.mon.hidden {
-		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: g.id}}}, 0)
-	}
 }
 
 // raidReset: o chefe desistiu da luta. Volta à fase 1, sem fúria, sem invocações e sem a
