@@ -47,6 +47,7 @@ type Config struct {
 	Bosses         []BossData       // renascimento dos raid bosses (carregado na partida)
 	DevCommands    bool             // comandos de teste no chat (/raid); só com DEV_LOGIN
 	Clock          func() time.Time // relógio do ciclo dia/noite (nil = time.Now)
+	Version        string           // versão do servidor (vai nos relatos de /bug)
 }
 
 func DefaultConfig() Config {
@@ -88,7 +89,15 @@ type JoinInfo struct {
 	ClanLeftAt time.Time
 	// Storage: o armazém da conta como está no banco (nil = vazio).
 	Storage *StorageData
-	Peer    Peer
+	// Moderação: GM da conta, silêncio no chat (zero = livre) e navegador (para o /bug).
+	GM         bool
+	MutedUntil time.Time
+	UserAgent  string
+	Quests     game.QuestState
+	// Conquistas desbloqueadas/progresso e a conquista do título em uso ("" = nenhum).
+	Achievements game.AchievementState
+	Title        string
+	Peer         Peer
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -107,6 +116,10 @@ type SavedState struct {
 	PKs      int
 	PvPKills int
 	Look     game.Appearance
+	Quests   game.QuestState
+	// Conquistas e título (id da conquista), salvos junto com o personagem.
+	Achievements game.AchievementState
+	Title        string
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -215,11 +228,27 @@ type Zone struct {
 	clanBackend    ClanBackend
 	localClanSeq   int64
 	storages       map[int64]*storage // conta → armazém
-	bossBackend    BossBackend
-	bossJobs       chan BossData
-	telegraphs     []*telegraph
-	telegraphSeq   uint32
-	summonSeq      uint32
+	stats          tickStats
+	aoiDirty       bool // alguém entrou, saiu ou renasceu: atualizar a AOI já neste tick
+
+	modJobs       chan modJob
+	modBackend    ModBackend
+	telemetry     chan GameEvent
+	eventSink     EventSink
+	droppedEvents int
+	bossBackend   BossBackend
+	bossJobs      chan BossData
+	telegraphs    []*telegraph
+	telegraphSeq  uint32
+	summonSeq     uint32
+	socialJobs    chan socialJob
+	socialBackend SocialBackend
+	mailSent      map[uint32][]time.Time // cartas enviadas na última hora, por remetente
+
+	rankingBackend RankingBackend
+	ranking        *rankingCache // último cálculo do ranking (nil = ainda não chegou)
+
+	gone map[uint32]bool // personagens de contas apagadas (ver account.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -245,7 +274,11 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		clanCreating:   map[uint32]*clanCreate{},
 		clanJobs:       make(chan clanJob, clanJobQueue),
 		storages:       map[int64]*storage{},
+		modJobs:        make(chan modJob, modJobQueue),
+		telemetry:      make(chan GameEvent, telemetryQueue),
 		bossJobs:       make(chan BossData, 16),
+		socialJobs:     make(chan socialJob, socialJobQueue),
+		mailSent:       map[uint32][]time.Time{},
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
 	}
@@ -273,8 +306,8 @@ func (z *Zone) Chat(ctx context.Context, id uint32, text, to string, channel pb.
 	z.post(ctx, chatEvent{id: id, text: text, to: to, channel: channel})
 }
 
-// Social repassa um pedido de grupo, clã ou resposta a convite (*pb.PartyCmd,
-// *pb.ClanCmd, *pb.InviteReply).
+// Social repassa um pedido de grupo, clã, resposta a convite, amigos ou correio
+// (*pb.PartyCmd, *pb.ClanCmd, *pb.InviteReply, *pb.FriendCmd, *pb.MailCmd).
 func (z *Zone) Social(ctx context.Context, id uint32, msg any) {
 	z.post(ctx, socialEvent{id: id, msg: msg})
 }
@@ -285,6 +318,23 @@ func (z *Zone) UseSkill(ctx context.Context, id, skill, target uint32, force boo
 	z.post(ctx, skillEvent{id: id, skill: skill, target: target, force: force})
 }
 func (z *Zone) Respawn(ctx context.Context, id uint32) { z.post(ctx, respawnEvent{id: id}) }
+
+// ClientStats repassa a amostra de desempenho do cliente (telemetria).
+func (z *Zone) ClientStats(ctx context.Context, id uint32, msg *pb.ClientStats) {
+	z.post(ctx, clientStatsEvent{id: id, msg: msg})
+}
+
+type clientStatsEvent struct {
+	id  uint32
+	msg *pb.ClientStats
+}
+
+func (clientStatsEvent) isEvent() {}
+
+// Trade repassa um comando de troca entre jogadores.
+func (z *Zone) Trade(ctx context.Context, id uint32, msg *pb.TradeCmd) {
+	z.post(ctx, tradeEvent{id: id, msg: msg})
+}
 
 // ItemAction repassa um pedido de item (*pb.PickUp, *pb.MoveItem, *pb.UseItem,
 // *pb.DestroyItem, *pb.Buy, *pb.Sell).
@@ -308,7 +358,11 @@ func (z *Zone) Run(ctx context.Context) {
 	saveTicker := time.NewTicker(z.cfg.SaveEvery)
 	defer saveTicker.Stop()
 	go z.runClanWorker(ctx)
+	go z.runModWorker(ctx)
+	go z.runTelemetryWorker(ctx)
 	go z.runBossWorker(ctx)
+	go z.runSocialWorker(ctx)
+	go z.runRankingWorker(ctx)
 
 	for {
 		select {
@@ -319,9 +373,13 @@ func (z *Zone) Run(ctx context.Context) {
 			}
 			return
 		case e := <-z.events:
+			z.stats.events++
 			z.handle(e)
 		case <-ticker.C:
+			start := time.Now()
 			z.update(dt.Seconds())
+			z.stats.add(time.Since(start))
+			z.flushTickStats(start)
 		case <-saveTicker.C:
 			z.saveAll(false)
 		}
@@ -344,10 +402,12 @@ func (z *Zone) handle(e event) {
 		z.onChat(e)
 	case attackEvent:
 		if p := z.players[e.id]; p != nil && !p.dead && z.spendAction(p) {
+			z.endEmote(p)
 			z.requestAttack(p, e.target, e.force)
 		}
 	case skillEvent:
 		if p := z.players[e.id]; p != nil && z.spendAction(p) {
+			z.endEmote(p)
 			z.requestSkill(p, e.skill, e.target, e.force)
 		}
 	case respawnEvent:
@@ -362,6 +422,21 @@ func (z *Zone) handle(e event) {
 		z.onSocial(e)
 	case clanCreatedEvent:
 		z.onClanCreated(e)
+	case modResultEvent:
+		z.onModResult(e)
+	case tradeEvent:
+		z.onTrade(e)
+	case rankingEvent:
+		z.setRanking(e.data)
+	case clientStatsEvent:
+		if p := z.players[e.id]; p != nil {
+			z.onClientStats(p, e.msg)
+		}
+	case socialDone:
+		e.fn()
+
+	case accountGoneEvent:
+		z.onAccountGone(e.d)
 	}
 }
 
@@ -385,6 +460,9 @@ func (z *Zone) get(id uint32) *entity {
 }
 
 func (z *Zone) onJoin(info JoinInfo) {
+	if z.refuseGone(info) {
+		return
+	}
 	// Mesmo personagem conectado em outro lugar: derruba a sessão antiga.
 	if old, ok := z.players[info.ID]; ok {
 		z.sendTo(old, &pb.ServerMessage{Msg: &pb.ServerMessage_Kicked{Kicked: &pb.Kicked{
@@ -401,6 +479,8 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Attrs, info.Ranks, info.Hotbar = st.Attrs, st.Ranks, st.Hotbar
 		info.Karma, info.PKs, info.PvPKills = st.Karma, st.PKs, st.PvPKills
 		info.Look = st.Look
+		info.Quests = st.Quests
+		info.Achievements, info.Title = st.Achievements, st.Title
 		delete(z.recent, info.ID)
 	}
 
@@ -425,6 +505,9 @@ func (z *Zone) onJoin(info JoinInfo) {
 			attrs: attrs, ranks: ranks, hotbar: hotbar,
 			accountID: info.AccountID,
 			karma:     max(0, info.Karma), pks: max(0, info.PKs), pvpKills: max(0, info.PvPKills),
+			gm: info.GM, mutedUntil: info.MutedUntil, userAgent: truncateRunes(info.UserAgent, maxUserAgent),
+			quests: loadQuests(info.Quests, level),
+			ach:    loadAchievements(info.Achievements, info.Title),
 		},
 	}
 	p.pl.sentPvp = z.pvpState(p)
@@ -443,21 +526,12 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.clanOnJoin(p, info.ClanLeftAt)
 	z.storageOnJoin(p, info.Storage)
 
-	// Avisa os outros que alguém chegou.
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(p)}}}, p.id)
-
-	// Diz ao novo jogador quem ele é, quem já está aqui (inclui ele mesmo) e suas skills.
-	entities := make([]*pb.Entity, 0, len(z.players)+len(z.monsters)+len(z.npcs))
-	for _, other := range z.players {
-		entities = append(entities, z.entityPB(other))
-	}
+	// Os outros ficam sabendo pela AOI (updateAOI, no fim do tick), só quem está perto.
+	z.aoiDirty = true
+	// O novo jogador recebe quem ele é e o que está no raio dele, mais NPCs e objetos.
+	entities := z.welcomeEntities(p)
 	for _, n := range z.npcs {
 		entities = append(entities, z.entityPB(n))
-	}
-	for _, m := range z.monsters {
-		if !m.mon.hidden {
-			entities = append(entities, z.entityPB(m))
-		}
 	}
 	for _, o := range z.objects {
 		entities = append(entities, z.entityPB(o))
@@ -497,12 +571,18 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Bosses:       z.bossList(),
 	}}})
 	z.sendSelfStats(p)
+	z.sendQuests(p, "")
+	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
+	z.achOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
 			z.sendAnyCooldown(p, id, ready-z.now)
 		}
 	}
 
+	p.pl.joinedAt = z.cfg.Clock()
+	z.socialOnJoin(p)
+	z.track(p, "session", "start", 0, nil)
 	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
 
@@ -544,6 +624,15 @@ func (z *Zone) onChat(e chatEvent) {
 	}
 	p.pl.chatTokens--
 
+	if isCommand(text, e.to, e.channel) {
+		z.command(p, text)
+		return
+	}
+	if left := z.mutedFor(p); left > 0 {
+		z.system(p, "Você está silenciado por mais "+minutesText(left)+".")
+		return
+	}
+
 	switch e.channel {
 	case pb.ChatChannel_CHAT_CHANNEL_PARTY:
 		z.partyChat(p, text)
@@ -554,10 +643,6 @@ func (z *Zone) onChat(e chatEvent) {
 	}
 
 	to := strings.TrimSpace(e.to)
-	if z.cfg.DevCommands && to == "" && strings.HasPrefix(text, "/raid") {
-		z.devRaid(p, strings.Fields(text)[1:])
-		return
-	}
 	if to == "" {
 		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
 			Channel: pb.ChatChannel_CHAT_CHANNEL_GENERAL, FromId: p.id, FromName: p.name, Text: text,
@@ -600,13 +685,20 @@ func (z *Zone) removePlayer(id uint32) {
 		delete(z.byName, strings.ToLower(p.name))
 	}
 	z.forgetTarget(id)
+	z.track(p, "session", "end", int64(z.cfg.Clock().Sub(p.pl.joinedAt).Seconds()), nil)
+	if p.pl.trade != nil {
+		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
+	}
 	z.partyLeave(p, "")
 	z.dropInvites(id)
 	z.clanOnLeave(p)
+	z.socialOnLeave(p)
 	st := z.savedState(p)
 	z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
 	z.save([]SavedState{st}, false)
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: id}}}, 0)
+	// Quem o conhecia recebe o Despawn pela AOI no fim do tick.
+	p.gone = true
+	z.aoiDirty = true
 	z.log.Info("player left", "id", id, "name", p.name, "online", len(z.players))
 }
 
@@ -624,6 +716,7 @@ func (z *Zone) update(dt float64) {
 		p.pl.moveTokens = math.Min(z.cfg.MaxMovesPerSec, p.pl.moveTokens+z.cfg.MaxMovesPerSec*dt)
 		p.pl.chatTokens = math.Min(z.cfg.ChatBurst, p.pl.chatTokens+z.cfg.ChatPerSec*dt)
 		z.step(p, dt)
+		z.checkEmote(p)
 	}
 	for _, m := range z.monsters {
 		if m.dead {
@@ -640,6 +733,8 @@ func (z *Zone) update(dt float64) {
 		z.expireFlags()
 		z.expireInvites()
 		z.syncParties()
+		z.checkLeaveTown()
+		z.checkTrades()
 		if len(z.pending) > 0 {
 			z.save(nil, false)
 		}
@@ -692,19 +787,25 @@ func (z *Zone) step(e *entity, dt float64) {
 func (z *Zone) flushSnapshot() {
 	snap := &pb.Snapshot{Tick: z.tick}
 	collect := func(e *entity) {
+		e.encState, e.encHP = e.encState[:0], e.encHP[:0]
 		if e.moved && !e.dead {
-			snap.States = append(snap.States, &pb.EntityState{
+			st := &pb.EntityState{
 				Id: e.id,
 				X:  float32(e.pos.X), Z: float32(e.pos.Z),
 				TargetX: float32(e.dest.X), TargetZ: float32(e.dest.Z),
 				Speed: float32(e.speed(z.now)), Teleport: e.teleport,
-			})
+			}
+			snap.States = append(snap.States, st)
+			e.encState = encField(snapFieldStates, st)
 		}
 		e.moved, e.teleport = false, false
 		if hp, max := e.hpInt(), e.maxHPInt(); hp != e.sentHP || max != e.sentMaxHP {
-			snap.Hp = append(snap.Hp, &pb.HpUpdate{Id: e.id, Hp: uint32(hp), MaxHp: uint32(max)})
+			h := &pb.HpUpdate{Id: e.id, Hp: uint32(hp), MaxHp: uint32(max)}
+			snap.Hp = append(snap.Hp, h)
+			e.encHP = encField(snapFieldHp, h)
 			e.sentHP, e.sentMaxHP = hp, max
 		}
+		e.encTick = z.tick
 	}
 	for _, p := range z.players {
 		collect(p)
@@ -724,11 +825,15 @@ func (z *Zone) flushSnapshot() {
 	snap.Telegraphs = z.frame.telegraphs
 	z.frame = frame{}
 
-	if len(snap.States)+len(snap.Hp)+len(snap.Combat)+len(snap.Effects)+len(snap.Deaths)+len(snap.Revives)+
-		len(snap.LevelUps)+len(snap.EffectEnds)+len(snap.Casts)+len(snap.Telegraphs) == 0 {
+	// Spawn/Despawn de quem entrou ou saiu do raio, e cada um recebe só o que conhece.
+	if z.tick%aoiEvery == 0 || z.aoiDirty {
+		z.aoiDirty = false
+		z.updateAOI()
+	}
+	if snapshotEmpty(snap) {
 		return
 	}
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Snapshot{Snapshot: snap}}, 0)
+	z.sendSnapshots(snap)
 }
 
 func (z *Zone) sendSelfStats(p *entity) {
@@ -744,7 +849,8 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),
 		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
-		Storage: z.storageSave(p),
+		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
+		Achievements: p.pl.ach.state(), Title: p.pl.ach.title,
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
@@ -851,6 +957,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		out.WeaponEnchant = uint32(e.pl.inv.weaponEnchant())
 		out.PvpState = z.pvpState(e)
 		out.ClanName = z.clanName(e)
+		out.Title = e.pl.ach.titleText()
 	}
 	if e.npc != nil {
 		out.Title = e.npc.title

@@ -1,6 +1,7 @@
 import "@babylonjs/loaders/glTF";
 import {
   AbstractMesh,
+  Animation,
   AnimationGroup,
   AssetContainer,
   Color3,
@@ -36,8 +37,10 @@ const ANIM_FILES = [
   "anims-special.glb",
 ];
 
-export type AnimRole = "idle" | "run" | "attack" | "skill" | "buff" | "hit" | "death";
-type AnimSet = Record<AnimRole, string>;
+/** Emotes (/acenar, /sentar, /dancar): só os heróis têm. */
+export type EmoteRole = "wave" | "sit" | "dance";
+export type AnimRole = "idle" | "run" | "attack" | "skill" | "buff" | "hit" | "death" | EmoteRole;
+type AnimSet = Record<Exclude<AnimRole, EmoteRole>, string> & Partial<Record<EmoteRole, string>>;
 
 const HERO_BASE = { idle: "Idle_A", run: "Running_A", buff: "Ranged_Magic_Raise", hit: "Hit_A", death: "Death_A" };
 const SKELETON_BASE = {
@@ -48,12 +51,20 @@ const SKELETON_BASE = {
   death: "Skeletons_Death",
 };
 
+/** Pose sentada montada na carga a partir de Idle_A e Death_A (ver buildSitPose). */
+const SIT_POSE = "Sit_Pose";
+/**
+ * Os arquivos não têm clipes de emote: acenar é o braço erguido da magia, dançar é a
+ * conjuração em loop e sentar é uma pose montada com clipes que existem.
+ */
+const EMOTES = { wave: "Ranged_Magic_Raise", dance: "Ranged_Magic_Spellcasting", sit: SIT_POSE };
+
 /** Quais animações cada modelo usa em cada papel. */
 const ANIM_SETS: Record<string, AnimSet> = {
-  knight: { ...HERO_BASE, attack: "Melee_1H_Attack_Chop", skill: "Melee_1H_Attack_Stab" },
-  barbarian: { ...HERO_BASE, attack: "Melee_1H_Attack_Chop", skill: "Melee_2H_Attack_Chop" },
-  mage: { ...HERO_BASE, attack: "Ranged_Magic_Shoot", skill: "Ranged_Magic_Spellcasting" },
-  rogue: { ...HERO_BASE, attack: "Melee_Dualwield_Attack_Stab", skill: "Melee_1H_Attack_Stab" },
+  knight: { ...HERO_BASE, ...EMOTES, attack: "Melee_1H_Attack_Chop", skill: "Melee_1H_Attack_Stab" },
+  barbarian: { ...HERO_BASE, ...EMOTES, attack: "Melee_1H_Attack_Chop", skill: "Melee_2H_Attack_Chop" },
+  mage: { ...HERO_BASE, ...EMOTES, attack: "Ranged_Magic_Shoot", skill: "Ranged_Magic_Spellcasting" },
+  rogue: { ...HERO_BASE, ...EMOTES, attack: "Melee_Dualwield_Attack_Stab", skill: "Melee_1H_Attack_Stab" },
   skeleton_minion: { ...SKELETON_BASE, attack: "Melee_1H_Attack_Chop", skill: "Melee_1H_Attack_Chop" },
   skeleton_warrior: { ...SKELETON_BASE, attack: "Melee_1H_Attack_Chop", skill: "Melee_2H_Attack_Chop" },
   skeleton_rogue: { ...SKELETON_BASE, attack: "Melee_Dualwield_Attack_Stab", skill: "Melee_1H_Attack_Stab" },
@@ -236,6 +247,9 @@ export class CharacterModels {
         templates.set(g.name, g);
       }
     }
+    const idle = templates.get("Idle_A");
+    const death = templates.get("Death_A");
+    if (idle && death) templates.set(SIT_POSE, buildSitPose(idle, death, scene));
     return new CharacterModels(models, templates, weaponByFile, scene);
   }
 
@@ -422,6 +436,48 @@ export class CharacterModels {
       },
     };
   }
+}
+
+/**
+ * Pose "sentado no chão" para o /sentar, montada uma vez a partir de dois clipes que
+ * existem: o quadril fica em pé (como no Idle_A), mas na altura do fim do Death_A (no
+ * chão); coxas, canelas e pés ficam com a orientação que têm no fim do Death_A (deitado de
+ * costas, joelhos para cima). Com o tronco em pé, isso vira sentado com os joelhos
+ * dobrados e os pés no chão. O resto do corpo é o Idle_A parado.
+ */
+function buildSitPose(idle: AnimationGroup, death: AnimationGroup, scene: Scene): AnimationGroup {
+  const key = (target: unknown, prop: string) => `${(target as Node).name}|${prop}`;
+  const deathEnd = new Map<string, Vector3 | Quaternion>();
+  for (const ta of death.targetedAnimations) {
+    deathEnd.set(key(ta.target, ta.animation.targetProperty), ta.animation.evaluate(ta.animation.getHighestFrame()));
+  }
+  const first = (a: Animation) => a.evaluate(a.getKeys()[0]?.frame ?? 0);
+  const hipsIdle = idle.targetedAnimations.find((ta) => (ta.target as Node).name === "hips" && ta.animation.targetProperty === "rotationQuaternion");
+  const hipsRest = hipsIdle ? (first(hipsIdle.animation) as Quaternion) : null;
+  const hipsDown = deathEnd.get("hips|rotationQuaternion") as Quaternion | undefined;
+  const hipsLow = deathEnd.get("hips|position") as Vector3 | undefined;
+
+  const g = new AnimationGroup(SIT_POSE, scene);
+  for (const ta of idle.targetedAnimations) {
+    const name = (ta.target as Node).name;
+    const prop = ta.animation.targetProperty;
+    let value = first(ta.animation) as Vector3 | Quaternion;
+    const down = deathEnd.get(key(ta.target, prop));
+    if (name === "hips" && prop === "position" && hipsLow) {
+      value = new Vector3((value as Vector3).x, hipsLow.y, (value as Vector3).z);
+    } else if (prop === "rotationQuaternion" && down && /^(upperleg|lowerleg|foot|toes)\./.test(name)) {
+      // A coxa é filha do quadril: mantém no mundo a orientação do Death_A com o quadril em pé.
+      value = name.startsWith("upperleg.") && hipsRest && hipsDown ? Quaternion.Inverse(hipsRest).multiply(hipsDown).multiply(down as Quaternion) : down;
+    }
+    const anim = new Animation(`${SIT_POSE}.${name}.${prop}`, prop, 60, ta.animation.dataType, Animation.ANIMATIONLOOPMODE_CYCLE);
+    anim.setKeys([
+      { frame: 0, value: value.clone() },
+      { frame: 60, value: value.clone() },
+    ]);
+    g.addTargetedAnimation(anim, ta.target);
+  }
+  g.stop();
+  return g;
 }
 
 /** Escala que deixa o modelo com TARGET_HEIGHT de altura (com a cabeça da própria classe). */

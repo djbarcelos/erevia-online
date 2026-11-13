@@ -36,8 +36,8 @@ function mount(kind: string, ...nodes: Node[]): void {
 
 type Screen = "screen-loading" | null;
 
-/** Mostra a tela de carregando, ou esconde tudo (null = entrou no jogo). */
-export function showScreen(screen: Screen): void {
+/** Mostra a tela de carregando (com um texto opcional), ou esconde tudo (null = entrou no jogo). */
+export function showScreen(screen: Screen, text = "Carregando…"): void {
   if (screen === null) {
     preview?.dispose();
     preview = null;
@@ -47,7 +47,7 @@ export function showScreen(screen: Screen): void {
     content.replaceChildren();
     return;
   }
-  mount("loading", el("div", "entry-loading", el("h1", "logo-word", "EREVIA"), el("span", "spinner"), el("p", "muted", "Carregando…")));
+  mount("loading", el("div", "entry-loading", el("h1", "logo-word", "EREVIA"), el("span", "spinner"), el("p", "muted", text)));
 }
 
 export function showMessage(title: string, text: string, buttonText: string, onClick: () => void): void {
@@ -137,7 +137,7 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
     card.append(el("label", "label", "Login de desenvolvimento (só local)"), form);
   }
   if (!providers.google && !providers.discord && !providers.dev) card.append(el("p", "muted", "Nenhum login configurado no servidor."));
-  card.append(error);
+  card.append(error, el("p", "login-legal small muted", "Ao entrar, você concorda com os ", legalLink("termos"), " e com a ", legalLink("privacidade"), "."));
 
   const news = el("aside", "login-news frame glass", el("h2", "title", "Novidades"));
   for (const n of NEWS) {
@@ -158,9 +158,34 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
     "login-layout scroll",
     el("div", "login-main", logo, card),
     news,
-    el("footer", "login-foot", el("span", null, "Modelos 3D: KayKit (CC0)"), el("span", null, "© 2026 Erevia")),
+    el(
+      "footer",
+      "login-foot",
+      legalLink("privacidade"),
+      legalLink("termos"),
+      el("span", null, "Modelos 3D: KayKit (CC0)"),
+      el("span", null, "© 2026 Erevia"),
+    ),
   );
   mount("login", layout);
+}
+
+// ---------------------------------------------------------------------------------------
+// Páginas legais (estáticas: client/privacidade.html e client/termos.html)
+// ---------------------------------------------------------------------------------------
+
+const LEGAL = {
+  privacidade: { href: "/privacidade.html", label: "Política de Privacidade" },
+  termos: { href: "/termos.html", label: "Termos de Uso" },
+} as const;
+
+/** Link para uma página legal (abre em outra aba para não perder a tela atual). */
+function legalLink(kind: keyof typeof LEGAL, text: string = LEGAL[kind].label): HTMLAnchorElement {
+  const a = el("a", "legal-link", text);
+  a.href = LEGAL[kind].href;
+  a.target = "_blank";
+  a.rel = "noopener";
+  return a;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -256,7 +281,20 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     (id) => setMode(id as typeof mode),
     "tabs mode-tabs",
   );
-  top.append(logout, modeTabs.root, el("span", "account small muted", me.displayName ? `Conectado como ${me.displayName}` : ""));
+  const account = button("", "btn btn-ghost btn-sm btn-account", () => openAccountDialog(me.displayName, roster.length, onLogout));
+  account.innerHTML = `${ui("user", 16)}<span>Conta</span>`;
+  account.setAttribute("aria-label", "Conta: privacidade, termos e apagar a conta");
+  top.append(
+    logout,
+    account,
+    modeTabs.root,
+    el(
+      "span",
+      "account small muted",
+      me.displayName ? `Conectado como ${me.displayName}` : "",
+      el("span", "account-legal", legalLink("privacidade", "Privacidade"), legalLink("termos", "Termos")),
+    ),
+  );
 
   // ---------- Seleção ----------
   const selectPanel = el("aside", "char-panel left frame glass select-panel");
@@ -514,4 +552,120 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
   spinR.onclick = () => preview?.spin(0.6);
   modeTabs.select(mode, false);
   setMode(mode);
+}
+
+// ---------------------------------------------------------------------------------------
+// Conta: privacidade, termos e apagar a conta
+// ---------------------------------------------------------------------------------------
+
+/** Palavra que o jogador digita para apagar a conta (o servidor confere de novo). */
+const DELETE_WORD = "APAGAR";
+
+/** Janela da conta sobre a tela de personagens. Apagar é para sempre e exige digitar APAGAR. */
+function openAccountDialog(displayName: string, characters: number, onDeleted: () => void): void {
+  document.querySelector(".account-modal")?.remove();
+  const scrim = el("div", "account-modal");
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") close();
+  };
+  const close = () => {
+    scrim.remove();
+    document.removeEventListener("keydown", onKey, true);
+  };
+  document.addEventListener("keydown", onKey, true);
+  scrim.onclick = (e) => {
+    if (e.target === scrim) close();
+  };
+
+  const x = button("✕", "btn btn-icon btn-ghost btn-sm account-x", close);
+  x.setAttribute("aria-label", "Fechar");
+
+  const confirm = el("input", "input account-confirm");
+  confirm.id = "account-confirm";
+  confirm.autocomplete = "off";
+  confirm.spellcheck = false;
+  confirm.placeholder = DELETE_WORD;
+  const label = el("label", "label", `Digite ${DELETE_WORD} para confirmar`);
+  label.htmlFor = confirm.id;
+  const error = el("p", "account-error bad small");
+  error.setAttribute("role", "alert");
+  const del = button("", "btn btn-danger btn-block");
+  del.innerHTML = `${ui("trash", 16)}<span>Apagar minha conta</span>`;
+  del.disabled = true;
+  const typed = () => confirm.value.trim() === DELETE_WORD;
+  confirm.oninput = () => {
+    del.disabled = !typed();
+    error.textContent = "";
+  };
+  const run = async () => {
+    if (!typed() || del.classList.contains("loading")) return;
+    del.disabled = true;
+    confirm.disabled = true;
+    del.classList.add("loading");
+    try {
+      await api.deleteAccount(DELETE_WORD);
+      forgetLocalData();
+      close();
+      showMessage(
+        "Conta apagada",
+        "Sua conta, os personagens, os itens e o armazém foram apagados para sempre. Obrigado por ter jogado Erevia.",
+        "Voltar ao início",
+        onDeleted,
+      );
+    } catch (err) {
+      error.textContent = err instanceof ApiError ? err.message : "Não foi possível apagar a conta. Tente de novo.";
+      confirm.disabled = false;
+      del.disabled = !typed();
+    } finally {
+      del.classList.remove("loading");
+    }
+  };
+  del.onclick = () => void run();
+  confirm.onkeydown = (e) => {
+    if (e.key === "Enter") void run();
+  };
+
+  const chars = characters === 1 ? "o seu personagem" : characters > 1 ? `os seus ${characters} personagens` : "";
+  const box = el(
+    "section",
+    "account-dialog frame",
+    x,
+    el("h2", "title", "Conta"),
+    displayName ? el("p", "muted small", `Conectado como ${displayName}`) : null,
+    el("nav", "account-links", legalLink("privacidade"), legalLink("termos")),
+    el(
+      "div",
+      "account-danger",
+      el("h3", "title", "Apagar a conta"),
+      el(
+        "p",
+        null,
+        `Apaga para sempre a conta${chars ? `, ${chars}` : ""}, os itens, as moedas, o armazém e a ligação com o seu login do Google ou do Discord. Não dá para desfazer.`,
+      ),
+      el(
+        "p",
+        "small muted",
+        "Se você lidera um clã, a liderança passa para o membro de cargo mais alto (ou o clã é desfeito, se ficar vazio). Quem estiver jogando com esta conta é desconectado. As cópias de segurança somem em até 27 dias.",
+      ),
+      label,
+      confirm,
+      error,
+      del,
+    ),
+  );
+  box.setAttribute("role", "dialog");
+  box.setAttribute("aria-modal", "true");
+  box.setAttribute("aria-label", "Conta");
+  scrim.append(box);
+  document.body.append(scrim);
+  if (!isCompact()) confirm.focus({ preventScroll: true });
+}
+
+/** Apaga o que o jogo guardou neste navegador (preferências e barras antigas, "erevia.*"). */
+function forgetLocalData(): void {
+  try {
+    for (const key of Object.keys(localStorage)) if (key.startsWith("erevia.")) localStorage.removeItem(key);
+  } catch {
+    // Navegador sem localStorage (modo privado restrito): nada a apagar.
+  }
 }

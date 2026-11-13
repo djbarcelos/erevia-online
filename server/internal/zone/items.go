@@ -56,6 +56,8 @@ func (z *Zone) onItem(e itemEvent) {
 		z.enchant(p, int(m.ScrollSlot), int(m.Place), int(m.Slot))
 	case *pb.ChangeLook:
 		z.changeLook(p, m.NpcId, m.Look)
+	case *pb.Craft:
+		z.craft(p, m.NpcId, m.RecipeId)
 	}
 }
 
@@ -67,6 +69,7 @@ func (z *Zone) inventoryChanged(p *entity, gearChanged bool) {
 	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Inventory{Inventory: inventoryPB(&p.pl.inv)}})
 	z.saveSoon(p)
+	z.tradeInventoryChanged(p)
 }
 
 func (z *Zone) saveSoon(p *entity) {
@@ -167,6 +170,7 @@ func (z *Zone) drink(p *entity, slot int, def *game.ItemDef) {
 		return
 	}
 	p.pl.inv.take(slot, 1)
+	z.questEvent(p, game.GoalPotion, def.ID)
 	p.hp = math.Min(p.stats.MaxHP, p.hp+def.HealHP)
 	p.mp = math.Min(p.stats.MaxMP, p.mp+def.HealMP)
 	p.pl.cooldowns[key] = z.now + game.CooldownSeconds(def.Cooldown)
@@ -183,6 +187,7 @@ func (z *Zone) destroyItem(p *entity, slot, count int) {
 	s := inv.bag[slot]
 	count = min(max(count, 1), s.count)
 	inv.take(slot, count)
+	z.trackItem(p, false, s.def.ID, count, "destroy")
 	z.system(p, fmt.Sprintf("Você destruiu %s.", itemLabel(s.def, count)))
 	z.inventoryChanged(p, false)
 }

@@ -18,6 +18,7 @@ import {
   SkillTarget,
   type ItemInfo,
   type PartyState,
+  type QuestLog,
   type SelfStats,
   type SkillInfo,
 } from "../gen/erevia/v1/game_pb";
@@ -40,10 +41,10 @@ export const HOTBAR_KEYS = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "D
 /** Um atalho: "skill:<id>" ou "item:<id do item>". */
 export type HotbarEntry = string | null;
 
-export type WindowId = "character" | "inventory" | "skills" | "party" | "clan" | "map" | "settings";
+export type WindowId = "character" | "inventory" | "skills" | "party" | "clan" | "social" | "glory" | "map" | "settings";
 
 /** Ações sobre um jogador selecionado (quadro do alvo). */
-export type TargetAction = "attack" | "party" | "clan" | "whisper";
+export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade" | "friend";
 
 /** O que o quadro do alvo precisa saber de um jogador além do EntityInfo. */
 export interface TargetExtras {
@@ -52,6 +53,8 @@ export interface TargetExtras {
   canParty: boolean;
   /** Mostrar "Convidar ao clã" (você convida e ele não tem clã). */
   canClan: boolean;
+  /** Mostrar "Amigo +" (ele ainda não está na sua lista). */
+  canFriend: boolean;
 }
 
 export interface HudCallbacks {
@@ -103,6 +106,8 @@ const MENU: { id: WindowId; icon: string; label: string; key: string }[] = [
   { id: "skills", icon: "book", label: "Skills", key: "skills" },
   { id: "party", icon: "users", label: "Grupo", key: "party" },
   { id: "clan", icon: "clan", label: "Clã", key: "clan" },
+  { id: "social", icon: "mail", label: "Social", key: "social" },
+  { id: "glory", icon: "trophy", label: "Glória", key: "glory" },
   { id: "map", icon: "map", label: "Mapa", key: "map" },
   { id: "settings", icon: "gear", label: "Configurações", key: "settings" },
 ];
@@ -130,6 +135,11 @@ export function skillTipHtml(s: SkillInfo, keyHint = ""): string {
   if (s.effect !== Effect.UNSPECIFIED) html += `<div class="${isDebuff(s.effect) ? "bad" : "ok"}">${s.effectOnSelf ? "Em você: " : "No alvo: "}${effectText(s.effect, s.effectValue, s.effectMs)}</div>`;
   if (keyHint) html += `<div class="cmp muted">${keyHint}</div>`;
   return html;
+}
+
+/** Texto para dentro de HTML de dica (os textos das missões vêm do servidor). */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
 export class Hud {
@@ -168,6 +178,8 @@ export class Hud {
   private channelFill = el("i");
   private partyEl = el("section", "party");
   private partyList = el("div", "party-list");
+  private questsEl = el("section", "quests");
+  private questList = el("div", "quest-list");
   private partyRows = new Map<number, { root: HTMLElement; name: HTMLElement; hp: ReturnType<typeof bar>; mp: ReturnType<typeof bar> }>();
   private miniCanvas = el("canvas", "mm-canvas");
   private miniCtx = this.miniCanvas.getContext("2d")!;
@@ -218,7 +230,14 @@ export class Hud {
     pHead.onclick = () => this.partyEl.classList.toggle("collapsed");
     this.partyEl.append(pHead, this.partyList);
     this.partyEl.hidden = true;
-    const left = el("div", "hud-left", this.meEl, el("div", "hud-side", this.partyEl));
+    // ---------- Missões (abaixo do grupo; some sem missão ativa) ----------
+    const qHead = el("button", "side-head");
+    qHead.type = "button";
+    qHead.innerHTML = `${ui("scroll", 16)}<span>Missões</span><i>▾</i>`;
+    qHead.onclick = () => this.questsEl.classList.toggle("collapsed");
+    this.questsEl.append(qHead, this.questList);
+    this.questsEl.hidden = true;
+    const left = el("div", "hud-left", this.meEl, el("div", "hud-side", this.partyEl, this.questsEl));
 
     // ---------- Alvo ----------
     const tClose = button("✕", "t-close");
@@ -230,6 +249,8 @@ export class Hud {
       ["party", "Grupo +", "Convidar para o seu grupo"],
       ["clan", "Clã +", "Convidar para o seu clã"],
       ["whisper", "Sussurrar", "Mandar uma mensagem particular"],
+      ["trade", "Trocar", "Propor uma troca de itens e moedas (chegue perto)"],
+      ["friend", "Amigo +", "Adicionar à sua lista de amigos (você vê quando ele está online)"],
     ] as const) {
       const b = button(label, "btn btn-sm t-act", () => cb.onTargetAction(action));
       b.title = title;
@@ -604,6 +625,24 @@ export class Hud {
     return !this.channelEl.hidden;
   }
 
+  /** Painel de missões: redesenhado só quando o servidor manda um QuestLog (nada por quadro). */
+  setQuests(log: QuestLog): void {
+    this.questsEl.hidden = log.quests.length === 0;
+    this.questList.replaceChildren(
+      ...log.quests.map((q) => {
+        const box = el("div", "quest", el("b", null, q.title));
+        for (const s of q.steps) {
+          const row = el("div", "q-step", el("span", null, s.text), el("span", "q-count", `${s.count}/${s.need}`));
+          if (s.count >= s.need) row.classList.add("done");
+          box.append(row);
+        }
+        box.append(el("small", null, q.text));
+        tooltip(box, () => `<b>${escapeHtml(q.title)}</b><br>${escapeHtml(q.text)}<br><span class="muted">Recompensa: ${escapeHtml(q.reward)}</span>`);
+        return box;
+      }),
+    );
+  }
+
   /** Painel do grupo: um por colega (você não aparece), com vida, mana e o líder. */
   setParty(state: PartyState, localId: number, near: (id: number) => boolean): void {
     const others = state.members.filter((m) => m.id !== localId);
@@ -663,6 +702,7 @@ export class Hud {
       this.tActionBtns.get("attack")!.hidden = extras.ally || info.dead;
       this.tActionBtns.get("party")!.hidden = !extras.canParty;
       this.tActionBtns.get("clan")!.hidden = !extras.canClan;
+      this.tActionBtns.get("friend")!.hidden = !extras.canFriend;
     }
     this.target.classList.toggle("dead", info.dead);
     this.target.classList.toggle("boss", !!info.boss);

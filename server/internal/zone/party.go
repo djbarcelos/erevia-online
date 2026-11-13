@@ -41,7 +41,8 @@ type invite struct {
 	clanID  int64 // convite de clã: para qual clã
 }
 
-// socialEvent carrega um pedido de grupo/clã/convite (*pb.PartyCmd, *pb.ClanCmd, *pb.InviteReply).
+// socialEvent carrega um pedido de grupo/clã/convite/amigos/correio (*pb.PartyCmd, *pb.ClanCmd,
+// *pb.InviteReply, *pb.FriendCmd, *pb.MailCmd).
 type socialEvent struct {
 	id  uint32
 	msg any
@@ -70,6 +71,14 @@ func (z *Zone) onSocial(e socialEvent) {
 		z.replyInvite(p, m.InviteId, m.Accept)
 	case *pb.ClanCmd:
 		z.onClanCmd(p, m)
+	case *pb.FriendCmd:
+		z.onFriendCmd(p, m)
+	case *pb.MailCmd:
+		z.onMailCmd(p, m)
+	case *pb.RankingRequest:
+		z.sendRanking(p)
+	case *pb.AchievementCmd:
+		z.onAchievementCmd(p, m)
 	}
 }
 
@@ -127,6 +136,8 @@ func (z *Zone) replyInvite(p *entity, id uint32, accept bool) {
 		z.partyJoin(from, p)
 	case pb.InviteKind_INVITE_KIND_CLAN:
 		z.clanJoin(from, p, inv.clanID)
+	case pb.InviteKind_INVITE_KIND_TRADE:
+		z.openTrade(from, p)
 	}
 }
 
@@ -419,6 +430,9 @@ func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64
 			z.grantXP(m, xp)
 		}
 		z.burnKarma(m, dead.level)
+		z.track(m, "kill", dead.mon.def.ID, int64(dead.level), nil)
+		z.questEvent(m, game.GoalKill, dead.mon.def.ID)
+		z.achEvent(m, game.AchKill, dead.mon.def.ID)
 	}
 }
 
@@ -457,6 +471,7 @@ func (z *Zone) splitGold(p *entity, amount int) int {
 	}
 	for _, m := range share {
 		m.pl.inv.gold += int64(each)
+		z.trackGold(m, "loot", int64(each))
 		z.system(m, fmt.Sprintf("+%d moedas (grupo).", each))
 		z.inventoryChanged(m, false)
 	}

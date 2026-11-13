@@ -121,7 +121,7 @@ func (z *Zone) broadcastStatus(p *entity) {
 }
 
 func (z *Zone) statusPB(p *entity) *pb.PlayerStatus {
-	return &pb.PlayerStatus{Id: p.id, PvpState: z.pvpState(p), ClanName: z.clanName(p)}
+	return &pb.PlayerStatus{Id: p.id, PvpState: z.pvpState(p), ClanName: z.clanName(p), Title: p.pl.ach.titleText()}
 }
 
 func (z *Zone) selfPvpPB(p *entity) *pb.SelfPvp {
@@ -159,6 +159,7 @@ func (z *Zone) pvpDeath(dead, killer *entity) bool {
 	case pb.PvpState_PVP_STATE_FLAGGED:
 		killer.pl.pvpKills++
 		z.system(killer, fmt.Sprintf("Você venceu %s em combate.", dead.name))
+		z.achValue(killer, game.AchPvPWin, "", killer.pl.pvpKills)
 	default:
 		z.system(killer, fmt.Sprintf("Você derrotou %s, que tinha karma.", dead.name))
 	}

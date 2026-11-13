@@ -35,12 +35,19 @@ type activeEffect struct {
 
 // entity é um jogador ou monstro na zona. Só a goroutine da zona mexe nele.
 type entity struct {
-	id    uint32
-	kind  pb.EntityKind
-	name  string
-	model string
-	level int
-	scale float64
+	// spawnSeq muda quando o monstro renasce: a AOI manda um Spawn novo a quem já o conhecia.
+	spawnSeq uint32
+	// gone: saiu do mundo (jogador saiu, invocação sumiu); a AOI manda o Despawn.
+	gone bool
+	// Estado e vida deste tick já codificados para o snapshot (só quando encTick == tick).
+	encTick         uint32
+	encState, encHP []byte
+	id              uint32
+	kind            pb.EntityKind
+	name            string
+	model           string
+	level           int
+	scale           float64
 
 	pos, dest Vec2
 	face      Vec2    // última direção em que andou (Piscar vai para lá)
@@ -100,6 +107,24 @@ type playerState struct {
 	clan       *clan
 	clanLeftAt time.Time     // saiu de um clã (espera para entrar em outro)
 	channel    *channelState // canalizando teleporte ou pergaminho
+
+	// AOI: jogadores e monstros que este cliente conhece (e o spawnSeq do Spawn que recebeu).
+	known map[uint32]knownEntity
+
+	// Moderação.
+	gm         bool
+	mutedUntil time.Time // relógio de parede (zero = pode falar)
+	userAgent  string
+	nextBug    float64 // próximo /bug aceito (tempo de simulação)
+
+	quests   questLog
+	trade    *trade    // troca aberta (nil = nenhuma)
+	joinedAt time.Time // telemetria: início da sessão
+
+	social socialState // amigos, emote e leitura do correio
+	// Conquistas, título escolhido e quando pode pedir o ranking de novo.
+	ach         achievements
+	rankingNext float64
 }
 
 // rank da skill (0 = não aprendida).

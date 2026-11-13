@@ -1175,3 +1175,126 @@
   margin: 0;
   min-height: 1.2em;
 }
+
+/* ======================= PRIVACIDADE, TERMOS E CONTA ======================= */
+
+.legal-link {
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+.legal-link:hover,
+.legal-link:focus-visible {
+  color: var(--gold-hi);
+  text-decoration-color: var(--gold);
+}
+
+.login-legal {
+  margin: 0;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.login-foot .legal-link {
+  color: var(--dim);
+}
+
+/* Só fora do celular (lá a área .account some e os links ficam na janela da conta). */
+@media (min-width: 768px) and (min-height: 521px) {
+  .char-top .account {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px 12px;
+  }
+}
+
+.account-legal {
+  display: inline-flex;
+  gap: 12px;
+}
+
+.account-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b));
+  background: rgba(5, 4, 8, 0.7);
+  overflow-y: auto;
+  animation: account-fade 0.18s var(--ease);
+}
+
+@keyframes account-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.account-dialog {
+  width: min(460px, 100%);
+  padding: 24px 22px;
+  display: grid;
+  gap: 12px;
+}
+
+.account-dialog > .title {
+  font-size: 1.3rem;
+}
+
+.account-dialog p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.account-x {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+}
+
+.account-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.account-danger {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 14px;
+  border: 1px solid rgba(255, 107, 91, 0.35);
+  border-radius: var(--radius);
+  background: rgba(106, 36, 32, 0.16);
+}
+
+.account-danger .title {
+  color: var(--bad);
+  font-size: 1rem;
+}
+
+.account-confirm {
+  font-family: var(--font-title);
+  letter-spacing: 0.2em;
+}
+
+.account-error:empty {
+  display: none;
+}
+
+/* Celular: a área da conta vira só o ícone (os links ficam na janela da conta). */
+@media (max-width: 767px), (max-height: 520px) {
+  .btn-account span {
+    display: none;
+  }
+
+  .btn-account {
+    width: var(--h);
+    padding: 0;
+  }
+}

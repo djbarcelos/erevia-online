@@ -17,6 +17,7 @@ type npcState struct {
 	role  pb.NpcRole
 	stock []*game.ItemDef
 	stone int // pedra de teleporte: índice em teleportStones (role TELEPORT)
+	crafts bool // Ferreiro: cria itens com as receitas
 	look  *game.Appearance // NPC com modelo de herói: o visual dele
 }
 
@@ -26,12 +27,13 @@ type npcDef struct {
 	stock              []string
 	role               pb.NpcRole
 	look               *game.Appearance
+	crafts             bool
 }
 
 // townNPCs: comerciantes da praça, ao lado das tendas e do suporte de armas.
 var townNPCs = []npcDef{
 	{name: "Lívia", title: "Mercadora", model: "npc_merchant", x: 4.6, z: -4.4, stock: game.MerchantStock},
-	{name: "Bruno", title: "Ferreiro", model: "npc_smith", x: -7.4, z: -4.4, stock: game.SmithStock},
+	{name: "Bruno", title: "Ferreiro", model: "npc_smith", x: -7.4, z: -4.4, stock: game.SmithStock, crafts: true},
 	// Barbeiro: ao norte do poço. Um herói com o próprio visual trocado, para mostrar o serviço.
 	{name: "Teodoro", title: "Barbeiro", model: "rogue", x: 0, z: 9.5, role: pb.NpcRole_NPC_ROLE_BARBER,
 		look: &game.Appearance{Skin: 4, Hair: 5, Outfit: 4, Head: "mage"}},
@@ -44,7 +46,7 @@ func (z *Zone) spawnNPCs() {
 			id: npcIDBase + uint32(i), kind: pb.EntityKind_ENTITY_KIND_NPC,
 			name: d.name, model: d.model, level: 1, scale: 1,
 			pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
-			npc: &npcState{title: d.title, role: d.role, look: d.look},
+			npc: &npcState{title: d.title, role: d.role, look: d.look, crafts: d.crafts},
 		}
 		for _, id := range d.stock {
 			if def := game.Items[id]; def != nil {
@@ -80,6 +82,9 @@ func (z *Zone) npcList() []*pb.NpcInfo {
 		}
 		if n.npc.role == pb.NpcRole_NPC_ROLE_TELEPORT {
 			info.Dests = z.stoneDests(n.npc.stone)
+		}
+		if n.npc.crafts {
+			info.Recipes = recipesPB()
 		}
 		out = append(out, info)
 	}
@@ -126,8 +131,11 @@ func (z *Zone) buy(p *entity, npcID uint32, itemID string, count int) {
 	}
 	inv.gold -= cost
 	inv.add(def, count)
+	z.trackGold(p, "buy", -cost)
+	z.trackItem(p, true, def.ID, count, "buy")
 	z.system(p, fmt.Sprintf("Você comprou %s por %d moedas.", itemLabel(def, count), cost))
 	z.inventoryChanged(p, false)
+	z.questEvent(p, game.GoalBuy, def.ID)
 }
 
 func (z *Zone) sell(p *entity, npcID uint32, slot, count int) {
@@ -147,6 +155,8 @@ func (z *Zone) sell(p *entity, npcID uint32, slot, count int) {
 	count = min(max(count, 1), s.count)
 	inv.take(slot, count)
 	inv.gold += price * int64(count)
+	z.trackGold(p, "sell", price*int64(count))
+	z.trackItem(p, false, s.def.ID, count, "sell")
 	z.system(p, fmt.Sprintf("Você vendeu %s por %d moedas.", itemLabel(s.def, count), price*int64(count)))
 	z.inventoryChanged(p, false)
 }

@@ -5,7 +5,8 @@ const MAX_LINES = 100;
 /**
  * Painel de chat. Enter abre/envia, Esc fecha.
  * Comandos: /w Nome texto (sussurro), /r texto (responde ao último sussurro),
- * /g texto (grupo), /convidar Nome (grupo).
+ * /g texto (grupo), /convidar Nome (grupo). Os outros (/amigo, /correio, os emotes
+ * /acenar, /sentar, /dancar, /bug e os de GM) vão para o servidor, que responde no chat.
  * Todo texto entra com textContent: nada vindo da rede vira HTML.
  */
 export class Chat {
@@ -138,7 +139,8 @@ export class Chat {
           return this.onPartyInvite(rest[0]);
         }
         default:
-          return this.system(`Comando desconhecido: ${cmd}`);
+          // /bug e os comandos de GM: quem decide é o servidor (responde no canal de sistema).
+          return this.onSend(raw, "");
       }
     }
     this.onSend(raw, "");

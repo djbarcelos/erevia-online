@@ -1,0 +1,221 @@
+<!doctype html>
+<!-- DADOS PROVISÓRIOS (13/11/2026): responsável, CNPJ, e-mail e foro são fictícios. Trocar pelos reais antes de abrir ao público (tunnel#84). -->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0810" />
+    <title>Política de Privacidade · Erevia</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/styles/legal.css" />
+  </head>
+  <body>
+    <header class="legal-top">
+      <a class="legal-logo" href="/">EREVIA</a>
+      <nav aria-label="Páginas legais">
+        <a href="/privacidade.html" aria-current="page">Política de Privacidade</a>
+        <a href="/termos.html">Termos de Uso</a>
+        <a href="/">Voltar ao jogo</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Política de Privacidade</h1>
+      <p class="updated">Última atualização: 13 de novembro de 2026</p>
+
+      <p class="lead">
+        Esta política explica quais dados pessoais o Erevia trata, por que, com quem eles são compartilhados, por quanto tempo
+        ficam guardados e como você exerce os seus direitos, conforme a Lei Geral de Proteção de Dados Pessoais (LGPD, Lei nº
+        13.709/2018).
+      </p>
+
+      <section class="summary" aria-labelledby="resumo">
+        <h2 id="resumo">Resumo</h2>
+        <ul>
+          <li>Guardamos o mínimo: o identificador da sua conta no Google ou no Discord, o nome de exibição que eles informam e os dados do jogo (personagens, itens, progresso). <strong>Não pedimos nem guardamos seu e-mail.</strong></li>
+          <li>Usamos um único cookie, de sessão, para manter você conectado. Não há cookies de publicidade, de rastreio nem de análise.</li>
+          <li>Não vendemos dados e não exibimos anúncios.</li>
+          <li>Você pode apagar a conta a qualquer momento, sozinho, na tela de personagens: <strong>Conta → Apagar a conta</strong>.</li>
+        </ul>
+      </section>
+
+      <h2 id="controlador">1. Quem é o responsável</h2>
+      <p>
+        O controlador dos dados (quem decide como eles são tratados) é Estúdio Erevia,
+        CNPJ 00.000.000/0001-00, responsável pelo Erevia. O canal de contato para assuntos de privacidade e
+        proteção de dados é <a href="mailto:contato@erevia.example">contato@erevia.example</a>.
+      </p>
+
+      <h2 id="dados">2. Quais dados tratamos</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Dado</th>
+              <th scope="col">De onde vem</th>
+              <th scope="col">Para quê</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Identificador da conta no provedor de login (um número ou código que o Google ou o Discord atribui à sua conta) e qual provedor você usou</td>
+              <td>Google (escopos <code>openid</code> e <code>profile</code>) ou Discord (escopo <code>identify</code>), quando você entra</td>
+              <td>Saber que é você quando volta a entrar</td>
+            </tr>
+            <tr>
+              <td>Nome de exibição (no Google, o primeiro nome do perfil; no Discord, o nome de exibição ou o nome de usuário)</td>
+              <td>Google ou Discord, a cada login</td>
+              <td>Mostrar "Conectado como …" na tela de personagens</td>
+            </tr>
+            <tr>
+              <td>Datas de criação da conta e do último login; marcação de conta banida</td>
+              <td>Geradas pelo jogo</td>
+              <td>Funcionamento da conta, segurança e moderação</td>
+            </tr>
+            <tr>
+              <td>Sessão: só o resumo criptográfico (hash SHA-256) do código da sessão, com as datas de criação e de validade</td>
+              <td>Gerada pelo jogo no login</td>
+              <td>Manter você conectado</td>
+            </tr>
+            <tr>
+              <td>Dados do jogo: nome, classe e aparência dos personagens, nível, experiência, atributos, skills, barra de atalhos, posição no mapa, moedas, itens e encantamentos, armazém da conta, karma e contagem de PvP, clã e cargo, data em que saiu de um clã, último acesso</td>
+              <td>Criados por você ao jogar</td>
+              <td>Fazer o jogo funcionar e salvar o seu progresso</td>
+            </tr>
+            <tr>
+              <td>Nome do personagem que mais causou dano na última morte de um chefe de raide</td>
+              <td>Gerado pelo jogo</td>
+              <td>Mostrar a todos quem venceu o chefe</td>
+            </tr>
+            <tr>
+              <td>Registros técnicos do servidor (data e hora, número interno da conta, erros de conexão, que podem incluir o endereço IP)</td>
+              <td>Gerados pelo servidor e pela hospedagem</td>
+              <td>Segurança, prevenção de abuso e correção de falhas</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        <strong>O que não guardamos:</strong> e-mail, senha (o login é sempre pelo Google ou pelo Discord), foto de perfil,
+        lista de amigos ou servidores do Discord, dados de pagamento (o jogo é gratuito) e o conteúdo do chat. As mensagens do
+        chat são entregues na hora a quem está online e não ficam gravadas no banco de dados.
+      </p>
+      <p>
+        <strong>O que outros jogadores veem:</strong> o nome, a classe, o nível, a aparência e o equipamento visível dos seus
+        personagens, o nome do clã, o estado de PvP (karma), as mensagens que você envia no chat e, se for o caso, o seu nome no
+        registro do chefe de raide.
+      </p>
+
+      <h2 id="cookies">3. Cookies e dados no seu navegador</h2>
+      <ul>
+        <li><strong><code>erevia_session</code></strong>: cookie de sessão, essencial. Guarda um código aleatório que identifica o seu login. É <code>HttpOnly</code> (os scripts da página não conseguem lê-lo), só é enviado ao próprio Erevia (<code>SameSite=Lax</code>), vai só por HTTPS em produção e expira em 30 dias, quando você sai ou quando apaga a conta.</li>
+        <li><strong><code>erevia_oauth_google</code> / <code>erevia_oauth_discord</code></strong>: cookie temporário, essencial, que existe só durante o login (até 10 minutos) para confirmar que a resposta do provedor é a do seu pedido (proteção contra falsificação).</li>
+        <li><strong>Armazenamento local do navegador</strong> (<code>localStorage</code>): as suas preferências do jogo (teclas, áudio, gráficos, controles) ficam só no seu aparelho e não são enviadas ao servidor. Elas são apagadas deste navegador quando você apaga a conta, e você pode apagá-las a qualquer momento limpando os dados do site.</li>
+      </ul>
+      <p>Não usamos cookies de publicidade, de rastreio, de redes sociais nem de análise de audiência. As fontes e os modelos 3D são servidos pelo próprio Erevia, sem chamar serviços de terceiros.</p>
+
+      <h2 id="bases">4. Por que tratamos os dados (finalidades e bases legais)</h2>
+      <ul>
+        <li><strong>Criar e manter a sua conta, autenticar o login, rodar o jogo e salvar o progresso</strong>: execução do contrato com você, que são os <a href="/termos.html">Termos de Uso</a> (LGPD, art. 7º, V).</li>
+        <li><strong>Segurança, prevenção de trapaça e de abuso, moderação (inclusive banimento) e correção de falhas</strong>: legítimo interesse em manter o jogo seguro e justo para todos (art. 7º, IX), sempre limitado ao necessário.</li>
+        <li><strong>Atender a obrigações legais ou ordens de autoridades</strong>, quando houver (art. 7º, II e VI).</li>
+      </ul>
+      <p>Não usamos os seus dados para publicidade, para criar perfis de consumo nem para decisões automatizadas que afetem os seus interesses.</p>
+
+      <h2 id="compartilhamento">5. Com quem compartilhamos</h2>
+      <ul>
+        <li>
+          <strong>Hospedagem (Railway):</strong> o servidor do jogo e o banco de dados ficam na plataforma Railway, que atua como
+          operadora: guarda e processa os dados só para nos prestar o serviço. Os data centers podem ficar fora do Brasil (por
+          exemplo, nos Estados Unidos), o que é uma <strong>transferência internacional de dados</strong>. Ela é feita porque é
+          necessária para executar o contrato com você (art. 33, IX, combinado com o art. 7º, V).
+        </li>
+        <li>
+          <strong>Google e Discord:</strong> quando você escolhe entrar com um deles, o seu navegador vai até o provedor, que
+          autentica você e nos informa só o identificador e o nome de exibição. Eles tratam os seus dados de acordo com as
+          próprias políticas de privacidade (<a href="https://policies.google.com/privacy" rel="noopener" target="_blank">Google</a>,
+          <a href="https://discord.com/privacy" rel="noopener" target="_blank">Discord</a>). Não enviamos a eles nenhum dado do
+          jogo.
+        </li>
+        <li><strong>Outros jogadores</strong> veem as informações do jogo descritas na seção 2.</li>
+        <li><strong>Autoridades</strong>, só quando a lei exigir ou houver ordem judicial.</li>
+      </ul>
+      <p>Não vendemos, alugamos nem cedemos os seus dados a ninguém.</p>
+
+      <h2 id="retencao">6. Por quanto tempo guardamos</h2>
+      <ul>
+        <li><strong>Conta e dados do jogo:</strong> enquanto a conta existir. Hoje não há exclusão automática de contas inativas.</li>
+        <li><strong>Sessão:</strong> deixa de valer em 30 dias; o registro dela (só o hash) é apagado quando você sai ou apaga a conta.</li>
+        <li><strong>Ao apagar a conta:</strong> tudo é apagado do banco de dados principal na hora (veja a seção 7).</li>
+        <li>
+          <strong>Cópias de segurança (backups):</strong> fazemos uma cópia diária, guardada por 6 dias, e uma semanal, guardada
+          por 27 dias. Por isso, dados apagados <strong>podem permanecer nas cópias de segurança por até 27 dias</strong>, até
+          serem substituídos. As cópias só são usadas para recuperar o jogo em caso de falha grave; se for preciso restaurar uma
+          delas, as contas apagadas nesse intervalo serão apagadas de novo.
+        </li>
+        <li><strong>Registros técnicos:</strong> por tempo limitado, conforme a retenção de registros da hospedagem, ou pelo prazo que a lei exigir.</li>
+        <li>Dados podem ser mantidos por mais tempo só quando a lei exigir ou para o exercício de direitos em processo (art. 16).</li>
+      </ul>
+
+      <h2 id="direitos">7. Os seus direitos e como exercê-los</h2>
+      <p>Pelo art. 18 da LGPD, você pode, a qualquer momento:</p>
+      <ol>
+        <li>confirmar se tratamos dados seus;</li>
+        <li>acessar os seus dados;</li>
+        <li>corrigir dados incompletos, inexatos ou desatualizados;</li>
+        <li>pedir a anonimização, o bloqueio ou a eliminação de dados desnecessários, excessivos ou tratados em desacordo com a LGPD;</li>
+        <li>pedir a portabilidade dos dados a outro fornecedor;</li>
+        <li>pedir a eliminação dos dados;</li>
+        <li>saber com quem compartilhamos os seus dados;</li>
+        <li>saber da possibilidade de não fornecer consentimento e das consequências (o login exige os dados do provedor descritos acima: sem eles, não é possível ter uma conta);</li>
+        <li>revogar o consentimento, quando ele for a base do tratamento;</li>
+        <li>opor-se a um tratamento feito com base em legítimo interesse, se achar que ele não cumpre a lei.</li>
+      </ol>
+      <h3>Apagar a conta sozinho</h3>
+      <p>
+        Na tela de personagens, abra <strong>Conta</strong> e use <strong>Apagar a conta</strong>. Depois de digitar
+        <strong>APAGAR</strong> para confirmar, apagamos na hora: a conta, a ligação com o Google ou o Discord, as sessões, todos
+        os personagens, itens, moedas e o armazém, e a participação em clãs. Se você lidera um clã, a liderança passa para o
+        membro de cargo mais alto (ou o clã é desfeito, se ficar vazio). Quem estiver jogando com a conta é desconectado. Não dá
+        para desfazer. Entrar de novo depois com o mesmo login cria uma conta nova e vazia.
+      </p>
+      <h3>Outros pedidos</h3>
+      <p>
+        Para os demais direitos, escreva para <a href="mailto:contato@erevia.example">contato@erevia.example</a>. Como não guardamos o seu e-mail,
+        podemos pedir que você confirme que é o dono da conta (por exemplo, informando o nome de um personagem e entrando no jogo)
+        antes de atender. Respondemos em até 15 dias. Você também pode retirar o acesso do Erevia à sua conta nas configurações
+        do Google ou do Discord.
+      </p>
+      <p>
+        Se achar que os seus direitos não foram atendidos, você pode reclamar à Autoridade Nacional de Proteção de Dados (ANPD):
+        <a href="https://www.gov.br/anpd" rel="noopener" target="_blank">gov.br/anpd</a>.
+      </p>
+
+      <h2 id="seguranca">8. Segurança</h2>
+      <p>
+        A conexão com o jogo usa HTTPS. Não há senha para vazar: o login é feito pelo Google ou pelo Discord, com os escopos
+        mínimos, e o banco guarda só o hash do código da sessão. O acesso ao servidor e ao banco é restrito ao responsável. Se
+        acontecer um incidente de segurança que possa causar risco ou dano relevante, avisaremos os afetados e a ANPD, como manda
+        o art. 48 da LGPD.
+      </p>
+
+      <h2 id="criancas">9. Crianças e adolescentes</h2>
+      <p>
+        O Erevia é para pessoas a partir de 13 anos. Quem tem menos de 18 anos só deve jogar com a
+        autorização dos pais ou responsáveis, que devem acompanhar o uso. Não coletamos de propósito dados de crianças com menos
+        de 13 anos; se soubermos que uma conta é de uma criança, ela será apagada. Os pais ou responsáveis podem pedir isso pelo
+        contato da seção 1.
+      </p>
+
+      <h2 id="mudancas">10. Mudanças nesta política</h2>
+      <p>
+        Podemos atualizar esta política quando o jogo mudar. A data no topo mostra a última versão. Se a mudança for importante,
+        avisaremos na tela de entrada do jogo.
+      </p>
+
+      <footer>
+        <p>Erevia · <a href="/termos.html">Termos de Uso</a> · <a href="/">Voltar ao jogo</a></p>
+      </footer>
+    </main>
+  </body>
+</html>

@@ -8,14 +8,22 @@ import {
   ChannelKind,
   ClanCmdKind,
   NpcRole,
+  TradeCmdKind,
   ClanRank,
   ClanStateSchema,
+  FriendCmdKind,
+  MailCmdKind,
   PartyCmdKind,
   PartyStateSchema,
   SelfPvpSchema,
   SkillTarget,
+  type AchievementInfo,
   type ClanState,
+  type FriendList,
+  type Mail,
+  type MailBox,
   type PartyState,
+  type Ranking,
   type Progress,
   type SelfPvp,
   type SelfStats,
@@ -25,20 +33,24 @@ import {
 } from "./gen/erevia/v1/game_pb";
 import { classInfo } from "./classes";
 import { Connection } from "./net/connection";
+import { startPerfSampler } from "./net/perf-sampler";
+import { clearResume, readResume, reconnect, type Resume } from "./net/resume";
 import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
+import { runBench, wantBench } from "./ui/bench";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { TeleportWindow } from "./ui/teleport";
 import { BarberWindow } from "./ui/barber";
 import { toBodyLook } from "./world/body-look";
 import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
+import { TradeWindow } from "./ui/trade";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
-import { buildRegions } from "./ui/regions";
+import { buildRegions, regionAt } from "./ui/regions";
 import { buildInventory } from "./ui/windows/inventory";
 import { buildWorldMap } from "./ui/windows/worldmap";
 import { buildSettings } from "./ui/windows/settings";
@@ -46,6 +58,8 @@ import { buildCharacter } from "./ui/windows/character";
 import { buildSkills } from "./ui/windows/skills";
 import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
+import { buildSocial, type SocialTab } from "./ui/windows/social";
+import { buildGlory } from "./ui/windows/glory";
 import { InvitePrompt } from "./ui/invite";
 import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
@@ -84,8 +98,16 @@ async function boot(): Promise<void> {
 
   try {
     await api.me();
+    // A conexão caiu e a página recarregou para voltar: entra direto no mesmo personagem.
+    const resume = readResume();
+    if (resume) {
+      const char = (await api.characters()).characters.find((c) => c.id === resume.id);
+      if (char) return play(char, resume);
+      clearResume();
+    }
     await openCharacters();
   } catch (err) {
+    clearResume();
     if (err instanceof ApiError && err.status === 401) {
       try {
         showLogin(await api.providers(), loginError, () => void openCharacters());
@@ -106,9 +128,9 @@ async function openCharacters(): Promise<void> {
   }
 }
 
-/** Entra no mundo com o personagem escolhido. */
-function play(character: CharacterInfo): void {
-  showScreen("screen-loading");
+/** Entra no mundo com o personagem escolhido (resume: voltando de uma queda de conexão). */
+function play(character: CharacterInfo, resume?: Resume): void {
+  showScreen("screen-loading", resume ? "Reconectando…" : undefined);
   const conn = new Connection(Connection.defaultUrl(), character.id);
   let started = false;
   let kickedReason = "";
@@ -119,6 +141,7 @@ function play(character: CharacterInfo): void {
   conn.onMessage = (msg) => {
     if (msg.msg.case === "welcome") {
       started = true;
+      clearResume();
       void startGame(conn, character, msg.msg.value).then((g) => {
         game = g;
         for (const m of backlog.splice(0)) g.apply(m);
@@ -136,6 +159,16 @@ function play(character: CharacterInfo): void {
   conn.onClose = (reason) => {
     game?.dispose();
     for (const e of document.querySelectorAll(".hud, .gwin-layer, .toasts, .tip, [data-menu], [data-sheet]")) e.remove();
+    // Caiu sem expulsão (estava jogando, ou é uma tentativa de voltar que ainda não entrou): reconecta sozinho.
+    if (!kickedReason && (started || resume)) {
+      const r: Resume = !started && resume ? resume : { id: character.id, since: Date.now(), reloads: 0 };
+      showScreen("screen-loading", "Conexão perdida. Reconectando…");
+      void reconnect(r, () =>
+        showMessage("Desconectado", "Não foi possível reconectar. Confira a sua internet.", "Tentar de novo", () => location.reload()),
+      );
+      return;
+    }
+    clearResume();
     const text = kickedReason || (started ? `A conexão caiu (${reason}).` : `Não foi possível entrar (${reason}).`);
     showMessage(started ? "Desconectado" : "Erro ao entrar", text, "Voltar", () => location.reload());
   };
@@ -227,6 +260,40 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     !!clan.id && clan.myRank >= ClanRank.OFFICER && entities.isPlayer(id) && !entities.info(id)?.clanName && clan.members.length < clan.maxMembers;
   const inviteClan = (name: string) => conn.clanCmd(ClanCmdKind.CLAN_CMD_INVITE, { name });
 
+  // ---------- Amigos e correio (janela Social) ----------
+  let friends: FriendList | null = null;
+  /** Contadores do correio e a última caixa listada (só chega quando a janela pede). */
+  let mailBox: MailBox | null = null;
+  let mails: Mail[] | null = null;
+  let socialTab: SocialTab = "friends";
+  const socialListeners = new Set<() => void>();
+  const onSocial = (fn: () => void) => {
+    socialListeners.add(fn);
+    return () => socialListeners.delete(fn);
+  };
+  const isFriend = (id: number) => !!friends?.friends.some((f) => f.characterId === id);
+  // ---------- Ranking e conquistas (só mudam quando chega mensagem) ----------
+  let ranking: Ranking | null = null;
+  let rankingAt = 0; // performance.now() da última resposta
+  let rankingAsked = 0;
+  /** O ranking guardado vale por 2 min (o servidor recalcula a cada 5). */
+  const RANKING_CACHE_MS = 2 * 60_000;
+  const rankingListeners = new Set<() => void>();
+  const refreshRanking = () => {
+    const now = performance.now();
+    const fresh = ranking && ranking.updatedAtMs > 0n && now - rankingAt < RANKING_CACHE_MS;
+    if (fresh || now - rankingAsked < 3000) return;
+    rankingAsked = now;
+    conn.rankingRequest();
+  };
+  const achievements: AchievementInfo[] = [];
+  let titleId = "";
+  const achListeners = new Set<() => void>();
+  const listen = (set: Set<() => void>) => (fn: () => void) => {
+    set.add(fn);
+    return () => set.delete(fn);
+  };
+
   // ---------- Progressão: atributos, árvore de skills e barra (vêm do servidor) ----------
   let progress: Progress | null = welcome.progress ?? null;
   const progressListeners = new Set<() => void>();
@@ -264,6 +331,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   store.setInventory(welcome.inventory);
   const itemTip = new ItemTip(document.body);
   const npcStock = new Map(welcome.npcs.map((n) => [n.id, n.stock]));
+  const npcRecipes = new Map(welcome.npcs.map((n) => [n.id, n.recipes]));
   const npcInfo = new Map(welcome.npcs.map((n) => [n.id, n]));
   const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId);
   loot.add(welcome.groundItems);
@@ -309,7 +377,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   let forcedId = 0;
   const targetExtras = (id: number): TargetExtras | undefined =>
     entities.isPlayer(id) && id !== welcome.yourId
-      ? { ally: entities.isAlly(id), canParty: canInviteParty(id), canClan: canInviteClan(id) }
+      ? { ally: entities.isAlly(id), canParty: canInviteParty(id), canClan: canInviteClan(id), canFriend: !!friends && !isFriend(id) }
       : undefined;
   const refreshTarget = () => hud.setTarget(entities.info(targetId), targetExtras(targetId));
   const selectTarget = (id: number) => {
@@ -408,6 +476,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     }
   };
   const stickTimer = window.setInterval(stepStick, 150);
+  const stopPerf = startPerfSampler(() => world.engine.getFps(), (avg, low, device, secs) => conn.clientStats(avg, low, device, secs));
   const keysHeld = new Set<string>();
   const keyStick = () => {
     const x = (keysHeld.has("KeyD") ? 1 : 0) - (keysHeld.has("KeyA") ? 1 : 0);
@@ -502,6 +571,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (action === "whisper") chat.whisperTo(info.name);
       else if (action === "party") inviteParty(info.name);
       else if (action === "clan") inviteClan(info.name);
+      else if (action === "trade") conn.tradeCmd(TradeCmdKind.TRADE_CMD_REQUEST, { targetId });
+      else if (action === "friend") conn.friendCmd(FriendCmdKind.FRIEND_CMD_ADD, { targetId });
     },
     onPartyMember: (id) => selectTarget(id),
     onCancelChannel: () => conn.cancelChannel(),
@@ -522,7 +593,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   migrateLocalHotbar();
   /** Pontos livres viram uma bolinha nos botões de Personagem e Skills. */
   const refreshBadges = () =>
-    hud.setBadges({ character: progress?.freeAttrPoints ?? 0, skills: progress?.freeSkillPoints ?? 0 });
+    hud.setBadges({ character: progress?.freeAttrPoints ?? 0, skills: progress?.freeSkillPoints ?? 0, social: mailBox?.unread ?? 0 });
   refreshBadges();
 
   const chat = new Chat(hud.chatRoot, character.name, (text, to, channel) => conn.chat(text, to, channel));
@@ -573,6 +644,26 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     hud.element,
   );
+  const tradeWin = new TradeWindow(
+    store,
+    {
+      remove: (slot) => conn.tradeCmd(TradeCmdKind.TRADE_CMD_REMOVE_ITEM, { slot }),
+      gold: (amount) => conn.tradeCmd(TradeCmdKind.TRADE_CMD_SET_GOLD, { gold: amount }),
+      lock: () => conn.tradeCmd(TradeCmdKind.TRADE_CMD_LOCK),
+      confirm: () => conn.tradeCmd(TradeCmdKind.TRADE_CMD_CONFIRM),
+      cancel: () => conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL),
+      me,
+      onOpen: () => {
+        if (isCompact()) return void wm.show("inventory");
+        const w = tradeWin.root.offsetWidth || 420;
+        const invW = wm.widthOf("inventory");
+        const left = Math.max(12, (innerWidth - w - 12 - invW) / 2);
+        tradeWin.root.style.left = `${left}px`;
+        void wm.show("inventory", { left: left + w + 12, top: tradeWin.root.offsetTop });
+      },
+    },
+    hud.element,
+  );
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma }, hud.element);
   const barberWin = new BarberWindow(
     store,
@@ -601,6 +692,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     {
       buy: (npc, id, n) => conn.buy(npc, id, n),
       sell: (npc, slot, n) => conn.sell(npc, slot, n),
+      craft: (npc, recipe) => conn.craft(npc, recipe),
       me,
       // Loja e inventário lado a lado, centralizados (se couberem; senão o inventário por cima).
       onOpen: () => {
@@ -632,7 +724,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (npc?.role === NpcRole.STORAGE) {
         storageWin.open(id, `${info.title} · ${info.name}`);
         conn.storageGold(id, 0); // pede o conteúdo
-      } else shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? []);
+      } else shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? [], npcRecipes.get(id) ?? []);
       return;
     }
     // Para a ~2 m do NPC, do lado de quem chega.
@@ -674,6 +766,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         },
         enchant: (scroll, place, slot) => conn.enchant(scroll, place, slot),
         storageOpen: () => storageWin.isOpen,
+        tradeOpen: () => tradeWin.isOpen,
+        offer: (bagSlot) => conn.tradeCmd(TradeCmdKind.TRADE_CMD_ADD_ITEM, { slot: bagSlot }),
         deposit: (bagSlot, toSlot) => conn.storageMove(storageWin.npcId, PLACE_BAG, bagSlot, PLACE_STORAGE, toSlot, 0),
         shopOpen: () => shop.isOpen,
       }),
@@ -703,7 +797,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     title: "Skills",
     hotkey: keys().skills,
     width: 1000,
-    height: 700,
+    height: 820, // 5 degraus (a janela nunca passa da altura da tela)
     build: () =>
       buildSkills({
         skills: welcome.skills,
@@ -752,6 +846,49 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         notice: (text) => conn.clanCmd(ClanCmdKind.CLAN_CMD_NOTICE, { text }),
         leave: () => conn.clanCmd(ClanCmdKind.CLAN_CMD_LEAVE),
         disband: () => conn.clanCmd(ClanCmdKind.CLAN_CMD_DISBAND),
+      }),
+  });
+  reg({
+    id: "social",
+    title: "Social",
+    hotkey: keys().social,
+    width: 560,
+    height: 640,
+    build: () =>
+      buildSocial({
+        friends: () => friends,
+        mailBox: () => mailBox,
+        mails: () => mails,
+        onChange: onSocial,
+        regionName: (x, z) => regionAt(regions, x, z).name,
+        tab: socialTab,
+        onTab: (t) => (socialTab = t),
+        addFriend: (name) => conn.friendCmd(FriendCmdKind.FRIEND_CMD_ADD, { name }),
+        removeFriend: (id) => conn.friendCmd(FriendCmdKind.FRIEND_CMD_REMOVE, { targetId: id }),
+        refreshFriends: () => conn.friendCmd(FriendCmdKind.FRIEND_CMD_LIST),
+        whisper: (name) => chat.whisperTo(name),
+        listMail: () => conn.mailCmd(MailCmdKind.MAIL_CMD_LIST),
+        readMail: (id) => conn.mailCmd(MailCmdKind.MAIL_CMD_READ, { mailId: id }),
+        deleteMail: (id) => conn.mailCmd(MailCmdKind.MAIL_CMD_DELETE, { mailId: id }),
+        sendMail: (to, subject, body) => conn.mailCmd(MailCmdKind.MAIL_CMD_SEND, { to, subject, body }),
+      }),
+  });
+  reg({
+    id: "glory",
+    title: "Glória",
+    hotkey: keys().glory,
+    width: 640,
+    height: 640,
+    build: () =>
+      buildGlory({
+        localId: welcome.yourId,
+        ranking: () => ranking,
+        onRanking: listen(rankingListeners),
+        refreshRanking,
+        achievements: () => achievements,
+        titleId: () => titleId,
+        onAchievements: listen(achListeners),
+        setTitle: (id) => conn.setTitle(id),
       }),
   });
   reg({
@@ -823,6 +960,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (hud.channeling) conn.cancelChannel();
       else if (teleportWin.isOpen) teleportWin.close();
       else if (storageWin.isOpen) storageWin.close();
+      else if (tradeWin.isOpen) conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL);
       else if (barberWin.isOpen) barberWin.close();
       else if (shop.isOpen) shop.close();
       else if (wm.closeTop()) return;
@@ -841,6 +979,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       [k.skills]: () => wm.toggle("skills"),
       [k.party]: () => wm.toggle("party"),
       [k.clan]: () => wm.toggle("clan"),
+      [k.social]: () => wm.toggle("social"),
+      [k.glory]: () => wm.toggle("glory"),
       [k.character]: () => wm.toggle("character"),
       [k.map]: () => wm.toggle("map"),
       [k.auto]: () => hud.setAuto(!hud.autoOn, true),
@@ -901,20 +1041,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     onInventory: (fn) => store.onChange(fn),
   });
 
-  // A câmera segue o jogador local.
+  // A câmera segue o jogador local (ou o ponto da medição de FPS, ?bench=1).
+  let benchFocus: Vector3 | null = null;
   world.scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(world.engine.getDeltaTime() / 1000, 0.1);
     entities.setLatency(conn.ping, welcome.tickRate);
     entities.update(dt);
     raid.update();
     const pos = entities.localPosition();
-    if (pos) {
-      world.camera.target.x = pos.x;
+    const focus = benchFocus ?? pos;
+    if (focus) {
+      world.camera.target.x = focus.x;
       world.camera.target.y = 1.4;
-      world.camera.target.z = pos.z;
-      world.followShadows(pos.x, pos.z);
+      world.camera.target.z = focus.z;
+      world.followShadows(focus.x, focus.z);
     }
-    dayNight.update(clock.phase(), pos);
+    dayNight.update(clock.phase(), focus);
     // Árvores que tapam o jogador ou o alvo ficam translúcidas.
     env?.fader.update(dt, world.camera.position, entities.focusPoints());
     loot.update(pos);
@@ -947,6 +1089,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hud.setAttacking(isAttackable(targetId));
   }, 100);
   setupPerfPanel(world.scene, world.gui, $("hud"));
+  if (wantBench()) {
+    // Espera a cena assentar (modelos, sombras) antes de medir.
+    window.setTimeout(() => {
+      void runBench({
+        engine: world.engine,
+        scene: world.scene,
+        camera: world.camera,
+        regions,
+        bounds: worldBounds(worldData),
+        setTime: (p) => clock.setFixed(p),
+        setFocus: (p) => (benchFocus = p ? new Vector3(p.x, 0, p.z) : null),
+        forEachMarker: entities.forEachMarker.bind(entities),
+        hud: $("hud"),
+      });
+    }, 3000);
+  }
 
   canvas.focus();
   if (settings.get().touchMode !== "off" && matchMedia("(pointer: coarse)").matches) {
@@ -1012,6 +1170,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       window.removeEventListener("keyup", onKeyUp);
       window.clearInterval(effectsTimer);
       window.clearInterval(stickTimer);
+      stopPerf();
       stopTouchCamera();
       stopAudio();
       wm.closeAll();
@@ -1021,6 +1180,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       shop.dispose();
       teleportWin.dispose();
       storageWin.dispose();
+      tradeWin.dispose();
       barberWin.dispose();
       window.clearInterval(channelFx);
       raid.dispose();
@@ -1142,6 +1302,15 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "storage":
           storageWin.set(msg.msg.value);
           break;
+        case "trade":
+          tradeWin.set(msg.msg.value);
+          break;
+        case "questLog": {
+          const log = msg.msg.value;
+          hud.setQuests(log);
+          if (log.completed) toast(`Missão concluída: ${log.completed}`);
+          break;
+        }
         case "enchantResult": {
           const r = msg.msg.value;
           const root = entities.rootOf(welcome.yourId);
@@ -1166,6 +1335,42 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           for (const fn of clanListeners) fn();
           if (targetId) refreshTarget();
           break;
+        case "social": {
+          const u = msg.msg.value;
+          if (u.friends) friends = u.friends;
+          if (u.mail) {
+            const was = mailBox;
+            mailBox = u.mail;
+            if (u.mail.listed) mails = u.mail.mails;
+            // Carta nova com a caixa aberta: pede a lista atualizada.
+            else if (mails && wm.isOpen("social") && (u.mail.total !== was?.total || u.mail.unread !== was?.unread)) conn.mailCmd(MailCmdKind.MAIL_CMD_LIST);
+          }
+          refreshBadges();
+          for (const fn of socialListeners) fn();
+          if (targetId) refreshTarget();
+          break;
+        }
+        case "emote":
+          entities.emote(msg.msg.value.id, msg.msg.value.kind);
+          break;
+        case "ranking":
+          ranking = msg.msg.value;
+          rankingAt = performance.now();
+          for (const fn of rankingListeners) fn();
+          break;
+        case "achievements": {
+          const a = msg.msg.value;
+          if (a.full) achievements.splice(0, achievements.length, ...a.list);
+          else
+            for (const u of a.list) {
+              const cur = achievements.find((x) => x.id === u.id);
+              if (cur) Object.assign(cur, { unlocked: u.unlocked, count: u.count, unlockedAtMs: u.unlockedAtMs });
+            }
+          titleId = a.titleId;
+          if (a.unlocked) toast(`Conquista desbloqueada: ${a.unlocked}!`);
+          for (const fn of achListeners) fn();
+          break;
+        }
         case "playerStatus":
           entities.setStatus(msg.msg.value);
           if (msg.msg.value.id === targetId || msg.msg.value.id === welcome.yourId) refreshTarget();

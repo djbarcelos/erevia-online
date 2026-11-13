@@ -163,6 +163,7 @@ func (z *Zone) runPickup(p *entity) {
 	if g.def.Kind == game.KindGold {
 		kept := z.splitGold(p, g.count)
 		inv.gold += int64(kept)
+		z.trackGold(p, "loot", int64(kept))
 		if kept != g.count {
 			label = fmt.Sprintf("%d moedas (dividido com o grupo)", kept)
 		}
@@ -172,6 +173,7 @@ func (z *Zone) runPickup(p *entity) {
 			return
 		}
 		inv.put(g.def, g.count, g.enchant)
+		z.trackItem(p, true, g.def.ID, g.count, "loot")
 	}
 	delete(z.ground, g.id)
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundRemoved{GroundRemoved: &pb.GroundItemsRemoved{
