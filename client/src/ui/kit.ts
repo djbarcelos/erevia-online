@@ -1,5 +1,5 @@
 /**
- * Kit de interface do protótipo: criação de elementos, janelas, abas, dicas, menu de
+ * Kit de interface do jogo (e do protótipo): criação de elementos, janelas, abas, dicas, menu de
  * contexto, avisos, painel inferior (celular) e controles de formulário.
  */
 
@@ -133,7 +133,7 @@ const DEFAULT_SETTINGS: Settings = {
   keys: { ...DEFAULT_KEYS },
 };
 
-const SETTINGS_KEY = "erevia.proto.settings";
+const SETTINGS_KEY = "erevia.settings";
 
 function loadSettings(): Settings {
   try {

@@ -23,7 +23,14 @@ import {
 import type { ClassId } from "../api";
 import { AnimController } from "../world/anim";
 import { CharacterModels, type AnimRole, type CharacterInstance } from "../world/models";
-import type { Appearance } from "./data/mock";
+
+/** Aparência mostrada no palco: o que vai em cada mão e a cor do emblema. */
+export interface Appearance {
+  /** Arquivo da arma da mão direita/esquerda (em /models/weapons); null = mão vazia. */
+  right: string | null;
+  left: string | null;
+  emblem: string;
+}
 
 export interface Preview {
   /** Troca a classe e a aparência (recria o modelo). */

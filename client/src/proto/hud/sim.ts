@@ -17,7 +17,7 @@ import { loadWorldData, type WorldData } from "../../world/world-data";
 import { ITEMS } from "../data/items";
 import { game, xpNeeded } from "../data/mock";
 import type { SkillNode } from "../data/skilltree";
-import { settings } from "../kit";
+import { settings } from "../../ui/kit";
 
 export interface Unit {
   id: number;

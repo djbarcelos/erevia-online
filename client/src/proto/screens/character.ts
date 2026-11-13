@@ -3,17 +3,17 @@
  * (armas das mãos, cor do emblema, poses) e nome com validação ao vivo.
  */
 
-import "../styles/screens.css";
+import "../../styles/screens.css";
 import type { ClassId } from "../../api";
 import { CLASSES, classInfo } from "../../classes";
 import { skillIcon } from "../../ui/icons";
-import { ui, uniqueIds } from "../art";
+import { ui, uniqueIds } from "../../ui/art";
 import { DEFAULT_LOOK, game, type Appearance } from "../data/mock";
 import { TREES } from "../data/skilltree";
-import { art, button, el, isCompact, tabs, toast, tooltip } from "../kit";
+import { art, button, el, isCompact, tabs, toast, tooltip } from "../../ui/kit";
 import type { Ctx, Screen } from "../main";
-import { createPreview } from "../preview3d";
-import { animatedBackdrop } from "./backdrop";
+import { createPreview } from "../../ui/preview3d";
+import { animatedBackdrop } from "../../ui/backdrop";
 
 const CLASS_EXTRA: Record<ClassId, { role: string; diff: number; bars: [number, number, number, number] }> = {
   knight: { role: "Tanque · corpo a corpo", diff: 1, bars: [55, 95, 15, 45] },

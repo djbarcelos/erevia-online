@@ -6,10 +6,10 @@
 
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS } from "../../../ui/minimap";
 import { LANDMARKS, renderMapCanvas } from "../../../world/map-painter";
-import { ui } from "../../art";
+import { ui } from "../../../ui/art";
 import { MAP_POIS, PARTY_POS, QUESTS, ZONES, zoneAt, type Zone } from "../../data/mock";
 import type { Sim } from "../../hud/sim";
-import { button, clamp, el, isCompact, toggle } from "../../kit";
+import { button, clamp, el, isCompact, toggle } from "../../../ui/kit";
 
 type Layer = "zones" | "places" | "quests" | "party" | "monsters";
 

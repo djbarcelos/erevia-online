@@ -3,7 +3,7 @@
  * silhueta de fortaleza, névoa correndo e brasas subindo. Tudo em canvas 2D.
  */
 
-import { mulberry32 } from "../../world/map-painter";
+import { mulberry32 } from "../world/map-painter";
 
 interface Ember {
   x: number;

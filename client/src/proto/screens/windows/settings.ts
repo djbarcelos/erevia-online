@@ -1,6 +1,6 @@
 /** Configurações e informações: gráficos, áudio, controles, jogo (auto-caça), conta e sobre. */
 
-import { ui } from "../../art";
+import { ui } from "../../../ui/art";
 import { game } from "../../data/mock";
 import {
   button,
@@ -16,7 +16,7 @@ import {
   toast,
   toggle,
   type Settings,
-} from "../../kit";
+} from "../../../ui/kit";
 
 interface Opts {
   close(): void;

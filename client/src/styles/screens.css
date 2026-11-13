@@ -1096,3 +1096,66 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ======================= OVERLAY DO JOGO ======================= */
+
+#overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  background: var(--bg-0);
+}
+
+.entry-content {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.entry-content > .char-screen {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.entry-content.loading,
+.entry-content.message {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.entry-loading {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+}
+
+.entry-loading .logo-word {
+  font-size: clamp(2.4rem, 8vw, 4rem);
+}
+
+.entry-msg {
+  width: min(420px, 100%);
+  padding: 28px 24px;
+  display: grid;
+  gap: 14px;
+  justify-items: center;
+  text-align: center;
+}
+
+.entry-msg .title {
+  font-size: 1.4rem;
+}
+
+.entry-msg p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.login-error {
+  margin: 0;
+  min-height: 1.2em;
+}

@@ -4,11 +4,11 @@
  * As quatro últimas abrem a janela por cima do HUD, como no jogo.
  */
 
-import "./styles/tokens.css";
-import "./styles/kit.css";
+import "../styles/tokens.css";
+import "../styles/kit.css";
 import "./styles/proto.css";
-import { applyEnvClasses, el, settings } from "./kit";
-import { ui } from "./art";
+import { applyEnvClasses, el, settings } from "../ui/kit";
+import { ui } from "../ui/art";
 
 export interface Screen {
   dispose(): void;

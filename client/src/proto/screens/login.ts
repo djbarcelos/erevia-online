@@ -1,11 +1,11 @@
 /** Tela de login: logo, entrar com Google/Discord/dev, escolha de servidor e novidades. */
 
-import "../styles/screens.css";
-import { ui } from "../art";
+import "../../styles/screens.css";
+import { ui } from "../../ui/art";
 import { NEWS, SERVERS } from "../data/mock";
-import { button, el, toast } from "../kit";
+import { button, el, toast } from "../../ui/kit";
 import type { Ctx, Screen } from "../main";
-import { animatedBackdrop } from "./backdrop";
+import { animatedBackdrop } from "../../ui/backdrop";
 
 export function mount(root: HTMLElement, ctx: Ctx): Screen {
   root.classList.add("login-screen");

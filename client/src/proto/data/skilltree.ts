@@ -9,7 +9,7 @@
 
 import type { ClassId } from "../../api";
 import { skillIcon } from "../../ui/icons";
-import { skillArt, uniqueIds, type SkillTheme } from "../art";
+import { skillArt, uniqueIds, type SkillTheme } from "../../ui/art";
 
 export const TIER_LEVELS = [1, 5, 10, 15];
 

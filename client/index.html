@@ -2,7 +2,8 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0810" />
     <title>Erevia</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/src/style.css" />
@@ -25,59 +26,8 @@
       </form>
     </div>
 
-    <div id="overlay">
-      <section id="screen-loading" class="panel">
-        <h1>Erevia</h1>
-        <p class="sub">Carregando…</p>
-      </section>
-
-      <section id="screen-login" class="panel" hidden>
-        <h1>Erevia</h1>
-        <p class="sub">Fase 1 · protótipo</p>
-        <div class="stack">
-          <a id="login-google" class="btn btn-google" href="/api/auth/google/login" hidden>Entrar com Google</a>
-          <a id="login-discord" class="btn btn-discord" href="/api/auth/discord/login" hidden>Entrar com Discord</a>
-        </div>
-        <form id="dev-login" class="stack" hidden>
-          <p class="hint">Login de desenvolvimento (só local)</p>
-          <input id="dev-user" placeholder="Usuário" minlength="3" maxlength="16"
-                 pattern="[A-Za-z0-9]{3,16}" required autocomplete="off" />
-          <button type="submit" class="btn btn-gold">Entrar (dev)</button>
-        </form>
-        <p id="no-login" class="hint" hidden>Nenhum login configurado no servidor.</p>
-        <p id="login-error" class="error" role="alert"></p>
-      </section>
-
-      <section id="screen-chars" class="panel wide" hidden>
-        <header class="row">
-          <div>
-            <h2>Seus personagens</h2>
-            <p class="sub" id="account-name"></p>
-          </div>
-          <button id="logout" type="button" class="btn btn-ghost">Sair</button>
-        </header>
-
-        <ul id="char-list" class="char-list"></ul>
-        <p id="char-empty" class="hint" hidden>Você ainda não tem personagens. Crie o primeiro abaixo.</p>
-
-        <form id="char-create" class="create">
-          <h3>Novo personagem</h3>
-          <input id="char-name" placeholder="Nome (3 a 16 letras ou números)" minlength="3" maxlength="16"
-                 pattern="[A-Za-z0-9]{3,16}" required autocomplete="off" />
-          <fieldset id="class-picker" class="classes">
-            <legend>Classe</legend>
-          </fieldset>
-          <button type="submit" class="btn btn-gold">Criar</button>
-        </form>
-        <p id="chars-error" class="error" role="alert"></p>
-      </section>
-
-      <section id="screen-message" class="panel" hidden>
-        <h2 id="message-title">Desconectado</h2>
-        <p id="message-text"></p>
-        <button id="message-btn" type="button" class="btn btn-gold">Voltar</button>
-      </section>
-    </div>
+    <!-- Telas de entrada (login, personagens, mensagens): montadas por src/ui/screens.ts -->
+    <div id="overlay"></div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

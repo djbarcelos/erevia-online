@@ -6,11 +6,11 @@
 
 import type { ClassId } from "../../../api";
 import { CLASSES, classInfo } from "../../../classes";
-import { ui } from "../../art";
+import { ui } from "../../../ui/art";
 import { game } from "../../data/mock";
 import { nodeIcon, TIER_LEVELS, TREES, type SkillNode } from "../../data/skilltree";
-import { beginDrag } from "../../hud/dragdrop";
-import { art, button, closeSheet, el, isCompact, isTouch, openSheet, toast, tooltip } from "../../kit";
+import { beginDrag } from "../../../ui/dragdrop";
+import { art, button, closeSheet, el, isCompact, isTouch, openSheet, toast, tooltip } from "../../../ui/kit";
 import { skillTip } from "../hud";
 
 export function build(): HTMLElement {

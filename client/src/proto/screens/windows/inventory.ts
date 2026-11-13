@@ -4,7 +4,7 @@
  * no celular, toque abre os detalhes num painel inferior.
  */
 
-import { ui } from "../../art";
+import { ui } from "../../../ui/art";
 import type { DerivedId } from "../../data/attributes";
 import {
   fits,
@@ -23,9 +23,9 @@ import {
   type ItemStack,
 } from "../../data/items";
 import { game } from "../../data/mock";
-import { beginDrag } from "../../hud/dragdrop";
-import { art, button, closeSheet, contextMenu, el, fmt, isTouch, openSheet, tabs, toast, tooltip, type MenuItem } from "../../kit";
-import { createPreview } from "../../preview3d";
+import { beginDrag } from "../../../ui/dragdrop";
+import { art, button, closeSheet, contextMenu, el, fmt, isTouch, openSheet, tabs, toast, tooltip, type MenuItem } from "../../../ui/kit";
+import { createPreview } from "../../../ui/preview3d";
 
 const LEFT: EquipSlot[] = ["head", "chest", "legs", "hands", "feet", "cape"];
 const RIGHT: EquipSlot[] = ["neck", "ear1", "ear2", "ring1", "ring2"];

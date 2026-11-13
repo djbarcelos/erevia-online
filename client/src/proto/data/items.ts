@@ -1,6 +1,6 @@
 /** Itens falsos do protótipo: catálogo, equipamento e mochila. */
 
-import { itemArt, type ItemArt } from "../art";
+import { itemArt, type ItemArt } from "../../ui/art";
 import type { Bonus, DerivedId } from "./attributes";
 
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legend";

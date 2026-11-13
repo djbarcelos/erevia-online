@@ -3,7 +3,7 @@
  * direita, no modo canhoto) vira o centro do joystick. Devolve um vetor (-1..1).
  */
 
-import { el, settings } from "../kit";
+import { el, settings } from "./kit";
 
 export interface Joystick {
   root: HTMLDivElement;

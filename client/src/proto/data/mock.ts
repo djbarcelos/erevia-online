@@ -8,20 +8,11 @@ import { CLASS_BASE_ATTRS, derive, attrPointsTotal, type Attrs, type Bonus, type
 import { initialInventory, ITEMS, itemStats, stack, type EquipSlot, type ItemStack } from "./items";
 import { initialRanks, skillPointsTotal, TREES, type SkillNode } from "./skilltree";
 
-export interface Appearance {
-  /** Arma da mão direita e item da esquerda (arquivos em /models/weapons; null = vazio). */
-  right: string | null;
-  left: string | null;
-  /** Cor do emblema (aura no chão e nome). */
-  emblem: string;
-}
+export type { Appearance } from "../../ui/preview3d";
+import type { Appearance } from "../../ui/preview3d";
 
-export const DEFAULT_LOOK: Record<ClassId, Appearance> = {
-  knight: { right: "sword_1handed", left: "shield_badge_color", emblem: "#d6b46e" },
-  barbarian: { right: "axe_1handed", left: "shield_round_barbarian", emblem: "#e2674a" },
-  mage: { right: "staff", left: null, emblem: "#8c6fd6" },
-  rogue: { right: "dagger", left: "dagger", emblem: "#5fae7d" },
-};
+export { DEFAULT_LOOK } from "../../ui/looks";
+import { DEFAULT_LOOK } from "../../ui/looks";
 
 export interface Hero {
   name: string;

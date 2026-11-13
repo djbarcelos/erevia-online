@@ -6,6 +6,7 @@ export interface CharacterInfo {
   id: number;
   name: string;
   class: ClassId;
+  level?: number;
 }
 
 export interface Providers {

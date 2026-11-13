@@ -4,15 +4,15 @@
  * As janelas (inventário, skills, atributos, configurações, mapa) abrem por cima.
  */
 
-import "../styles/hud.css";
-import "../styles/windows.css";
+import "../../styles/hud.css";
+import "../../styles/windows.css";
 import { Effect } from "../../gen/erevia/v1/game_pb";
 import { classInfo } from "../../classes";
 import { effectIcon } from "../../ui/icons";
 import { drawDot, drawPlayerArrow, drawBossMarker, MARKER_COLORS } from "../../ui/minimap";
 import { hourLabel, isNight } from "../../world/daynight";
 import { renderMapCanvas } from "../../world/map-painter";
-import { ui, uniqueIds } from "../art";
+import { ui, uniqueIds } from "../../ui/art";
 import { ITEMS, itemIcon } from "../data/items";
 import { CHAT_SEED, game, HOTBAR_SIZE, PARTY, QUESTS, xpNeeded, zoneAt } from "../data/mock";
 import { nodeIcon, type SkillNode } from "../data/skilltree";
@@ -32,10 +32,10 @@ import {
   tooltip,
   WindowManager,
   type WindowDef,
-} from "../kit";
+} from "../../ui/kit";
 import type { Ctx, Screen } from "../main";
 import { Sim } from "../hud/sim";
-import { createJoystick } from "../hud/touch-controls";
+import { createJoystick } from "../../ui/touch-controls";
 
 const HOTKEYS = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9", "Digit0"];
 

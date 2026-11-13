@@ -6,8 +6,8 @@
 import { classInfo } from "../../../classes";
 import { ATTRS, CLASS_BASE_ATTRS, CLASS_SUGGEST, DERIVED, derive, type AttrId, type Attrs } from "../../data/attributes";
 import { game, xpNeeded } from "../../data/mock";
-import { bar, button, el, fmt, tooltip, toast } from "../../kit";
-import { createPreview } from "../../preview3d";
+import { bar, button, el, fmt, tooltip, toast } from "../../../ui/kit";
+import { createPreview } from "../../../ui/preview3d";
 
 export function build(): HTMLElement {
   const h = game.hero;

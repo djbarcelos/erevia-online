@@ -3,7 +3,7 @@
  * com o ícone segue o dedo/cursor; ao soltar, chama onDrop com o elemento embaixo.
  */
 
-import { el, hideTip } from "../kit";
+import { el, hideTip } from "./kit";
 
 export interface DragOpts {
   icon: string;
