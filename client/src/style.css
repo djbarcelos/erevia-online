@@ -405,6 +405,17 @@
   color: var(--bad, #ff6b5b);
 }
 
+/* Destino sugerido pelo "Ir" da missão (questgo.ts) */
+.tp-row.suggested {
+  outline: 1px solid var(--gold, #d6b46e);
+  outline-offset: -1px;
+}
+
+.tp-quest {
+  color: #ffd36b;
+  font-size: 0.7rem;
+}
+
 /* Dica do item: linha do encantamento */
 .tip-stats li.ench b {
   color: #ffd36b;

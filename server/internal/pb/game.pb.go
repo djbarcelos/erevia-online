@@ -5474,11 +5474,14 @@ type QuestStepInfo struct {
 	Need  uint32                 `protobuf:"varint,3,opt,name=need,proto3" json:"need,omitempty"`
 	// Lugar do objetivo (só nos que faltam). Calculado pelo servidor quando o QuestLog vai:
 	// ao mudar o passo e ao subir de nível; nunca por tick.
-	Place         QuestPlaceKind `protobuf:"varint,4,opt,name=place,proto3,enum=erevia.v1.QuestPlaceKind" json:"place,omitempty"`
-	X             float32        `protobuf:"fixed32,5,opt,name=x,proto3" json:"x,omitempty"`
-	Z             float32        `protobuf:"fixed32,6,opt,name=z,proto3" json:"z,omitempty"`
-	Radius        float32        `protobuf:"fixed32,7,opt,name=radius,proto3" json:"radius,omitempty"`                      // metros: chegou quando está dentro
-	PlaceName     string         `protobuf:"bytes,8,opt,name=place_name,json=placeName,proto3" json:"place_name,omitempty"` // rótulo no mapa ("Esqueleto Lacaio", "Ysolde", "Portão Leste")
+	Place     QuestPlaceKind `protobuf:"varint,4,opt,name=place,proto3,enum=erevia.v1.QuestPlaceKind" json:"place,omitempty"`
+	X         float32        `protobuf:"fixed32,5,opt,name=x,proto3" json:"x,omitempty"`
+	Z         float32        `protobuf:"fixed32,6,opt,name=z,proto3" json:"z,omitempty"`
+	Radius    float32        `protobuf:"fixed32,7,opt,name=radius,proto3" json:"radius,omitempty"`                      // metros: chegou quando está dentro
+	PlaceName string         `protobuf:"bytes,8,opt,name=place_name,json=placeName,proto3" json:"place_name,omitempty"` // rótulo no mapa ("Esqueleto Lacaio", "Ysolde", "Portão Leste")
+	// Matar: nomes dos monstros que contam (o "Caçar aqui" só mira neles). Vazio = qualquer
+	// monstro (ou o passo não é de caçar).
+	Monsters      []string `protobuf:"bytes,9,rep,name=monsters,proto3" json:"monsters,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5567,6 +5570,13 @@ func (x *QuestStepInfo) GetPlaceName() string {
 		return x.PlaceName
 	}
 	return ""
+}
+
+func (x *QuestStepInfo) GetMonsters() []string {
+	if x != nil {
+		return x.Monsters
+	}
+	return nil
 }
 
 // Estado dos eventos do servidor (indicador discreto no HUD). Vai logo depois do Welcome
@@ -11416,7 +11426,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12.\n" +
 	"\x05steps\x18\x04 \x03(\v2\x18.erevia.v1.QuestStepInfoR\x05steps\x12\x16\n" +
-	"\x06reward\x18\x05 \x01(\tR\x06reward\"\xd1\x01\n" +
+	"\x06reward\x18\x05 \x01(\tR\x06reward\"\xed\x01\n" +
 	"\rQuestStepInfo\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x14\n" +
 	"\x05count\x18\x02 \x01(\rR\x05count\x12\x12\n" +
@@ -11426,7 +11436,8 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x01z\x18\x06 \x01(\x02R\x01z\x12\x16\n" +
 	"\x06radius\x18\a \x01(\x02R\x06radius\x12\x1d\n" +
 	"\n" +
-	"place_name\x18\b \x01(\tR\tplaceName\"\xdd\x01\n" +
+	"place_name\x18\b \x01(\tR\tplaceName\x12\x1a\n" +
+	"\bmonsters\x18\t \x03(\tR\bmonsters\"\xdd\x01\n" +
 	"\vEventStatus\x12\x10\n" +
 	"\x03xp2\x18\x01 \x01(\bR\x03xp2\x12 \n" +
 	"\fxp2_until_ms\x18\x02 \x01(\x03R\n" +

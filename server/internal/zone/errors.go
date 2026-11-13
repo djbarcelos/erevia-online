@@ -83,13 +83,14 @@ const (
 	sysSaveAll
 	sysInvasion
 	sysXP2
+	sysPaths
 	numSystems
 )
 
 var systemNames = [numSystems]string{
 	"daytime", "auras", "players", "monsters", "telegraphs", "ground", "flags", "invites",
 	"parties", "leave_town", "trades", "pending_saves", "invariants", "save_due", "snapshot", "after_snapshot",
-	"self_stats", "save_all", "invasion", "xp2",
+	"self_stats", "save_all", "invasion", "xp2", "paths",
 }
 
 func (s system) String() string { return systemNames[s] }
