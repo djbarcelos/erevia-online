@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	stdnet "net"
 	"net/http"
@@ -101,7 +102,15 @@ func run(log *slog.Logger) error {
 	zcfg.World = wld
 	zcfg.Size = wld.Size
 	zcfg.SafeRadius = wld.SafeRadius
+	lctx, lcancel := context.WithTimeout(ctx, 30*time.Second)
+	clans, err := st.LoadClans(lctx)
+	lcancel()
+	if err != nil {
+		return fmt.Errorf("load clans: %w", err)
+	}
+	zcfg.Clans = clanData(clans)
 	z := zone.New(zcfg, log.With("zone", "starter"), saves)
+	z.SetClanBackend(clanStore{st})
 	zoneDone := make(chan struct{})
 	go func() { z.Run(ctx); close(zoneDone) }()
 
@@ -173,7 +182,46 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		XP: c.XP, HP: c.HP, MP: c.MP, Gold: c.Gold, Items: c.Items,
 		Attrs: c.Attrs, Ranks: c.Ranks, Hotbar: c.Hotbar, Emblem: c.Emblem,
 		AccountID: c.AccountID, Karma: c.Karma, PKs: c.PKs, PvPKills: c.PvPKills,
+		ClanLeftAt: derefTime(c.ClanLeftAt),
 	}, nil
+}
+
+func derefTime(t *time.Time) time.Time {
+	if t == nil {
+		return time.Time{}
+	}
+	return *t
+}
+
+// clanData converte os clãs do banco para a zona.
+func clanData(list []store.Clan) []zone.ClanData {
+	out := make([]zone.ClanData, len(list))
+	for i, c := range list {
+		d := zone.ClanData{ID: c.ID, Name: c.Name, Notice: c.Notice, LeaderID: c.LeaderID}
+		for _, m := range c.Members {
+			d.Members = append(d.Members, zone.ClanMemberData{CharacterID: m.CharacterID, Name: m.Name, Class: m.Class, Level: m.Level, Rank: m.Rank})
+		}
+		out[i] = d
+	}
+	return out
+}
+
+// clanStore liga o worker de clãs da zona ao banco.
+type clanStore struct{ st *store.Store }
+
+func (c clanStore) CreateClan(ctx context.Context, name string, leaderID int64) (int64, error) {
+	id, err := c.st.CreateClan(ctx, name, leaderID)
+	if errors.Is(err, store.ErrNameTaken) {
+		return 0, zone.ErrClanNameTaken
+	}
+	return id, err
+}
+
+func (c clanStore) ApplyClanOp(ctx context.Context, op zone.ClanOp) error {
+	return c.st.ApplyClanOp(ctx, store.ClanOp{
+		Kind: store.ClanOpKind(op.Kind), ClanID: op.ClanID, CharacterID: op.CharacterID,
+		Rank: op.Rank, Text: op.Text, LeftAt: op.LeftAt,
+	})
 }
 
 func env(key, def string) string {

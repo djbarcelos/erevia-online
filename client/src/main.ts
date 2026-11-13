@@ -4,10 +4,14 @@ import { create } from "@bufbuild/protobuf";
 import {
   EntityKind,
   ItemKind,
+  ClanCmdKind,
+  ClanRank,
+  ClanStateSchema,
   PartyCmdKind,
   PartyStateSchema,
   SelfPvpSchema,
   SkillTarget,
+  type ClanState,
   type PartyState,
   type Progress,
   type SelfPvp,
@@ -34,6 +38,7 @@ import { buildSettings } from "./ui/windows/settings";
 import { buildCharacter } from "./ui/windows/character";
 import { buildSkills } from "./ui/windows/skills";
 import { buildParty } from "./ui/windows/party";
+import { buildClan } from "./ui/windows/clan";
 import { InvitePrompt } from "./ui/invite";
 import { AutoHunt } from "./world/autohunt";
 import { GroundLoot } from "./world/loot";
@@ -193,9 +198,17 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const inviteParty = (name: string) => conn.partyCmd(PartyCmdKind.PARTY_CMD_INVITE, name);
   const PARTY_NEAR = 30;
 
-  // ---------- Clã (bloco 3) ----------
-  const canInviteClan = (_id: number) => false;
-  const inviteClan = (_name: string) => {};
+  // ---------- Clã ----------
+  let clan: ClanState = welcome.clan ?? create(ClanStateSchema, {});
+  const clanListeners = new Set<() => void>();
+  const onClan = (fn: () => void) => {
+    clanListeners.add(fn);
+    return () => clanListeners.delete(fn);
+  };
+  /** Convidar ao clã: você é líder/oficial e ele não tem clã. */
+  const canInviteClan = (id: number) =>
+    !!clan.id && clan.myRank >= ClanRank.OFFICER && entities.isPlayer(id) && !entities.info(id)?.clanName && clan.members.length < clan.maxMembers;
+  const inviteClan = (name: string) => conn.clanCmd(ClanCmdKind.CLAN_CMD_INVITE, { name });
 
   // ---------- Progressão: atributos, árvore de skills e barra (vêm do servidor) ----------
   let progress: Progress | null = welcome.progress ?? null;
@@ -639,6 +652,28 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       }),
   });
   reg({
+    id: "clan",
+    title: "Clã",
+    hotkey: keys().clan,
+    width: 560,
+    build: () =>
+      buildClan({
+        localId: welcome.yourId,
+        state: () => clan,
+        onChange: onClan,
+        gold: () => store.gold,
+        level: () => me().myLevel,
+        create: (name) => conn.clanCmd(ClanCmdKind.CLAN_CMD_CREATE, { name }),
+        invite: inviteClan,
+        kick: (id) => conn.clanCmd(ClanCmdKind.CLAN_CMD_KICK, { targetId: id }),
+        setRank: (id, rank) => conn.clanCmd(ClanCmdKind.CLAN_CMD_RANK, { targetId: id, rank }),
+        promoteLeader: (id) => conn.clanCmd(ClanCmdKind.CLAN_CMD_LEADER, { targetId: id }),
+        notice: (text) => conn.clanCmd(ClanCmdKind.CLAN_CMD_NOTICE, { text }),
+        leave: () => conn.clanCmd(ClanCmdKind.CLAN_CMD_LEAVE),
+        disband: () => conn.clanCmd(ClanCmdKind.CLAN_CMD_DISBAND),
+      }),
+  });
+  reg({
     id: "map",
     title: "Mapa do mundo",
     hotkey: keys().map,
@@ -711,6 +746,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       [k.inventory]: () => wm.toggle("inventory"),
       [k.skills]: () => wm.toggle("skills"),
       [k.party]: () => wm.toggle("party"),
+      [k.clan]: () => wm.toggle("clan"),
       [k.character]: () => wm.toggle("character"),
       [k.map]: () => wm.toggle("map"),
       [k.auto]: () => hud.setAuto(!hud.autoOn, true),
@@ -841,6 +877,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       party: () => party,
       partyInvite: (name: string) => inviteParty(name),
       answerInvite: (accept: boolean) => invites.answer(accept),
+      clan: () => clan,
+      clanCmd: (kind: number, opts: { name?: string; targetId?: number; text?: string }) => conn.clanCmd(kind, opts),
     };
   }
 
@@ -955,6 +993,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           break;
         case "invite":
           invites.push(msg.msg.value);
+          break;
+        case "clan":
+          clan = msg.msg.value;
+          for (const fn of clanListeners) fn();
+          if (targetId) refreshTarget();
           break;
         case "playerStatus":
           entities.setStatus(msg.msg.value);

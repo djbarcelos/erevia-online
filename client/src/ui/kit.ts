@@ -100,6 +100,7 @@ export const DEFAULT_KEYS: Record<string, string> = {
   inventory: "KeyI",
   skills: "KeyK",
   party: "KeyP",
+  clan: "KeyN",
   character: "KeyC",
   map: "KeyM",
   settings: "Escape",

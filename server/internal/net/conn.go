@@ -42,10 +42,11 @@ type Character struct {
 	Hotbar []string
 	Emblem string
 	// Fase 4
-	AccountID int64
-	Karma     int
-	PKs       int
-	PvPKills  int
+	AccountID  int64
+	Karma      int
+	PKs        int
+	PvPKills   int
+	ClanLeftAt time.Time
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -114,7 +115,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z,
 		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
 		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem,
-		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills, Peer: sess,
+		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills,
+		ClanLeftAt: char.ClanLeftAt, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)

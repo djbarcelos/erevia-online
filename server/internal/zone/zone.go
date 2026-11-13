@@ -43,6 +43,7 @@ type Config struct {
 	Spawns         []game.Spawn     // monstros da zona
 	Seed           uint64           // semente do sorteio (posições, dano…)
 	World          *world.World     // obstáculos e caminhos (nil = campo aberto)
+	Clans          []ClanData       // clãs salvos (carregados na partida)
 	Clock          func() time.Time // relógio do ciclo dia/noite (nil = time.Now)
 }
 
@@ -80,7 +81,9 @@ type JoinInfo struct {
 	Karma     int
 	PKs       int
 	PvPKills  int
-	Peer      Peer
+	// ClanLeftAt: quando saiu do último clã (zero = nunca).
+	ClanLeftAt time.Time
+	Peer       Peer
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -186,6 +189,13 @@ type Zone struct {
 	partySeq       uint32
 	invites        map[uint32]*invite
 	inviteSeq      uint32
+	clans          map[int64]*clan
+	clanOf         map[int64]*clan     // personagem → clã (online ou não)
+	clanLeft       map[int64]time.Time // saídas recentes (o banco pode ainda não ter gravado)
+	clanCreating   map[uint32]*clanCreate
+	clanJobs       chan clanJob
+	clanBackend    ClanBackend
+	localClanSeq   int64
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -205,6 +215,11 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		pending:        map[uint32]SavedState{},
 		parties:        map[uint32]*party{},
 		invites:        map[uint32]*invite{},
+		clans:          map[int64]*clan{},
+		clanOf:         map[int64]*clan{},
+		clanLeft:       map[int64]time.Time{},
+		clanCreating:   map[uint32]*clanCreate{},
+		clanJobs:       make(chan clanJob, clanJobQueue),
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
 	}
@@ -214,6 +229,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 	z.night = game.IsNight(game.DayPhase(z.cfg.Clock()))
 	z.spawnMonsters()
 	z.spawnNPCs()
+	z.loadClans(cfg.Clans)
 	return z
 }
 
@@ -264,6 +280,7 @@ func (z *Zone) Run(ctx context.Context) {
 	defer ticker.Stop()
 	saveTicker := time.NewTicker(z.cfg.SaveEvery)
 	defer saveTicker.Stop()
+	go z.runClanWorker(ctx)
 
 	for {
 		select {
@@ -313,6 +330,8 @@ func (z *Zone) handle(e event) {
 		z.onProgress(e)
 	case socialEvent:
 		z.onSocial(e)
+	case clanCreatedEvent:
+		z.onClanCreated(e)
 	}
 }
 
@@ -389,6 +408,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.restoreCooldowns(p)
 	z.players[p.id] = p
 	z.byName[strings.ToLower(p.name)] = p.id
+	z.clanOnJoin(p, info.ClanLeftAt)
 
 	// Avisa os outros que alguém chegou.
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(p)}}}, p.id)
@@ -439,6 +459,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Hotbar:       &pb.Hotbar{Slots: p.pl.hotbar},
 		Branches:     branches,
 		Pvp:          z.selfPvpPB(p),
+		Clan:         z.clanPB(p),
 		Enchant:      enchantRulesPB(),
 	}}})
 	z.sendSelfStats(p)
@@ -532,6 +553,7 @@ func (z *Zone) removePlayer(id uint32) {
 	z.forgetTarget(id)
 	z.partyLeave(p, "")
 	z.dropInvites(id)
+	z.clanOnLeave(p)
 	st := z.savedState(p)
 	z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
 	z.save([]SavedState{st}, false)

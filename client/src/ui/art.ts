@@ -306,6 +306,7 @@ const UI: Record<string, string> = {
   auto: `<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>`,
   sort: `<path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/>`,
   search: `<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>`,
+  clan: `<path d="M6 3v18"/><path d="M6 4h12l-3 4.5 3 4.5H6"/>`,
   users: `<circle cx="9" cy="8" r="3.5"/><path d="M2 20c1-4 4-6 7-6s6 2 7 6"/><circle cx="17" cy="7" r="2.5"/><path d="M17 12c2 0 4 1.5 5 5"/>`,
   scroll: `<path d="M6 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M9 9h7M9 13h7"/>`,
   shop: `<path d="M4 9l2-5h12l2 5"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/>`,

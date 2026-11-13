@@ -1,5 +1,5 @@
 import { create, fromBinary, toBinary, type MessageInitShape } from "@bufbuild/protobuf";
-import { ChatChannel, ClientMessageSchema, PartyCmdKind, ServerMessageSchema, type ServerMessage } from "../gen/erevia/v1/game_pb";
+import { ChatChannel, ClanCmdKind, ClanRank, ClientMessageSchema, PartyCmdKind, ServerMessageSchema, type ServerMessage } from "../gen/erevia/v1/game_pb";
 
 const PING_INTERVAL_MS = 2000;
 
@@ -56,6 +56,11 @@ export class Connection {
   /** Grupo: convidar (pelo nome ou id), sair, expulsar ou passar a liderança. */
   partyCmd(kind: PartyCmdKind, name = "", targetId = 0): void {
     this.send({ case: "partyCmd", value: { kind, name, targetId } });
+  }
+
+  /** Clã: criar, convidar, sair, expulsar, cargo, líder, desfazer, aviso. */
+  clanCmd(kind: ClanCmdKind, opts: { name?: string; targetId?: number; rank?: ClanRank; text?: string } = {}): void {
+    this.send({ case: "clanCmd", value: { kind, name: opts.name ?? "", targetId: opts.targetId ?? 0, rank: opts.rank ?? ClanRank.MEMBER, text: opts.text ?? "" } });
   }
 
   inviteReply(inviteId: number, accept: boolean): void {

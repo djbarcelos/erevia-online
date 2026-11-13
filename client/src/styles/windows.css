@@ -1869,3 +1869,125 @@
 .pw-empty {
   margin: 0;
 }
+
+/* ---------- Fase 4: janela do clã ---------- */
+
+.clan-win {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.clan-win > p {
+  margin: 0;
+}
+
+.clan-head {
+  display: grid;
+  gap: 2px;
+}
+
+.clan-name {
+  color: #e8cf8a;
+}
+
+.clan-req {
+  display: flex;
+  gap: 14px;
+  font-size: 0.82rem;
+}
+
+.clan-req .ok::before {
+  content: "✓ ";
+  color: var(--ok);
+}
+
+.clan-req .bad::before {
+  content: "✗ ";
+}
+
+.clan-create,
+.clan-invite {
+  display: flex;
+  gap: 8px;
+}
+
+.clan-create .input,
+.clan-invite .input {
+  flex: 1;
+}
+
+.clan-notice {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(232, 207, 138, 0.06);
+  border: 1px solid rgba(232, 207, 138, 0.18);
+}
+
+.clan-notice p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.clan-notice-edit {
+  resize: vertical;
+  min-height: 44px;
+}
+
+.clan-notice .btn {
+  justify-self: end;
+}
+
+.clan-list {
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.cl-row {
+  --cc: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  opacity: 0.6;
+}
+
+.cl-row.online {
+  opacity: 1;
+}
+
+.cl-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.cl-body small {
+  color: var(--dim);
+}
+
+.cl-dot {
+  font-size: 0.7rem;
+  color: var(--dim);
+}
+
+.cl-row.online .cl-dot {
+  color: var(--ok);
+}
+
+.cl-acts {
+  display: flex;
+  gap: 6px;
+}
+
+.clan-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

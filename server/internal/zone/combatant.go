@@ -2,6 +2,7 @@ package zone
 
 import (
 	"math"
+	"time"
 
 	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
@@ -86,15 +87,16 @@ type playerState struct {
 	ambushCrit     bool
 
 	// Fase 4: PvP, grupo e clã.
-	accountID int64
-	karma     int
-	pks       int // jogadores "brancos" mortos
-	pvpKills  int // vitórias contra quem estava em combate
-	flagUntil float64
-	sentPvp   pb.PvpState
-	killedBy  string // morto: nome de quem matou
-	party     *party
-	clan      *clan
+	accountID  int64
+	karma      int
+	pks        int // jogadores "brancos" mortos
+	pvpKills   int // vitórias contra quem estava em combate
+	flagUntil  float64
+	sentPvp    pb.PvpState
+	killedBy   string // morto: nome de quem matou
+	party      *party
+	clan       *clan
+	clanLeftAt time.Time // saiu de um clã (espera para entrar em outro)
 }
 
 // rank da skill (0 = não aprendida).
