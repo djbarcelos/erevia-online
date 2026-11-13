@@ -1163,6 +1163,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "storage":
           storageWin.set(msg.msg.value);
           break;
+        case "questLog": {
+          const log = msg.msg.value;
+          hud.setQuests(log);
+          if (log.completed) toast(`Missão concluída: ${log.completed}`);
+          break;
+        }
         case "enchantResult": {
           const r = msg.msg.value;
           const root = entities.rootOf(welcome.yourId);

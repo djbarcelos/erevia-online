@@ -272,7 +272,28 @@ message ServerMessage {
     Storage storage = 24;
     Announce announce = 25;
     BossStatus boss_status = 26;
+    QuestLog quest_log = 27;
   }
+}
+
+// Missões ativas do próprio personagem: ao entrar e sempre que o progresso muda.
+message QuestLog {
+  repeated QuestInfo quests = 1;
+  string completed = 2; // título da missão que acabou de ser concluída ("" = nenhuma)
+}
+
+message QuestInfo {
+  string id = 1;
+  string title = 2;
+  string text = 3;
+  repeated QuestStepInfo steps = 4;
+  string reward = 5; // resumo da recompensa ("120 XP · 30 moedas")
+}
+
+message QuestStepInfo {
+  string text = 1;
+  uint32 count = 2;
+  uint32 need = 3;
 }
 
 // ---------- Raid boss ----------

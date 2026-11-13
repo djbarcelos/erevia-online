@@ -52,6 +52,7 @@ type Character struct {
 	// Moderação
 	GM         bool
 	MutedUntil time.Time
+	Quests     game.QuestState
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -122,7 +123,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem, Look: char.Look,
 		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills,
 		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage,
-		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Peer: sess,
+		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Quests: char.Quests, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)

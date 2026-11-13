@@ -93,6 +93,7 @@ type JoinInfo struct {
 	GM         bool
 	MutedUntil time.Time
 	UserAgent  string
+	Quests     game.QuestState
 	Peer       Peer
 }
 
@@ -112,6 +113,7 @@ type SavedState struct {
 	PKs      int
 	PvPKills int
 	Look     game.Appearance
+	Quests   game.QuestState
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -419,6 +421,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Attrs, info.Ranks, info.Hotbar = st.Attrs, st.Ranks, st.Hotbar
 		info.Karma, info.PKs, info.PvPKills = st.Karma, st.PKs, st.PvPKills
 		info.Look = st.Look
+		info.Quests = st.Quests
 		delete(z.recent, info.ID)
 	}
 
@@ -444,6 +447,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 			accountID: info.AccountID,
 			karma:     max(0, info.Karma), pks: max(0, info.PKs), pvpKills: max(0, info.PvPKills),
 			gm: info.GM, mutedUntil: info.MutedUntil, userAgent: truncateRunes(info.UserAgent, maxUserAgent),
+			quests: loadQuests(info.Quests, level),
 		},
 	}
 	p.pl.sentPvp = z.pvpState(p)
@@ -516,6 +520,8 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Bosses:       z.bossList(),
 	}}})
 	z.sendSelfStats(p)
+	z.sendQuests(p, "")
+	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
 			z.sendAnyCooldown(p, id, ready-z.now)
@@ -664,6 +670,7 @@ func (z *Zone) update(dt float64) {
 		z.expireFlags()
 		z.expireInvites()
 		z.syncParties()
+		z.checkLeaveTown()
 		if len(z.pending) > 0 {
 			z.save(nil, false)
 		}
@@ -768,7 +775,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),
 		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
-		Storage: z.storageSave(p),
+		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1

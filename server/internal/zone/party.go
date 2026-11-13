@@ -419,6 +419,7 @@ func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64
 			z.grantXP(m, xp)
 		}
 		z.burnKarma(m, dead.level)
+		z.questEvent(m, game.GoalKill, dead.mon.def.ID)
 	}
 }
 

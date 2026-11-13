@@ -76,7 +76,7 @@ func run(log *slog.Logger) error {
 				states[i] = store.CharacterState{
 					CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP,
 					Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
-					Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look,
+					Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
 				}
 				if s := p.Storage; s != nil {
 					states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
@@ -212,7 +212,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		AccountID: c.AccountID, Karma: c.Karma, PKs: c.PKs, PvPKills: c.PvPKills,
 		ClanLeftAt: derefTime(c.ClanLeftAt),
 		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
-		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil),
+		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
 	}, nil
 }
 

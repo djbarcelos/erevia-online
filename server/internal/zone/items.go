@@ -167,6 +167,7 @@ func (z *Zone) drink(p *entity, slot int, def *game.ItemDef) {
 		return
 	}
 	p.pl.inv.take(slot, 1)
+	z.questEvent(p, game.GoalPotion, def.ID)
 	p.hp = math.Min(p.stats.MaxHP, p.hp+def.HealHP)
 	p.mp = math.Min(p.stats.MaxMP, p.mp+def.HealMP)
 	p.pl.cooldowns[key] = z.now + game.CooldownSeconds(def.Cooldown)
