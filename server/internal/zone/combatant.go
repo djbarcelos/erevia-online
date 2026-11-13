@@ -91,6 +91,8 @@ type playerState struct {
 	attrs  game.Attrs
 	ranks  map[uint32]int
 	hotbar []string
+	// Especialização (segunda classe, nível 20): id do caminho ("" = ainda não escolheu).
+	spec string
 	// Muralha Viva: quando pode disparar de novo. Sumir: o próximo golpe é crítico.
 	lastStandReady float64
 	ambushCrit     bool
