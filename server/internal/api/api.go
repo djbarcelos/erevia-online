@@ -46,6 +46,8 @@ type API struct {
 	secure    bool
 	// onAccountDeleted avisa a zona que uma conta sumiu (derruba quem estiver online).
 	onAccountDeleted func(store.DeletedAccount)
+	// admin: portal de administração (admin.go).
+	admin *adminState
 }
 
 // OnAccountDeleted registra quem é avisado depois que uma conta é apagada (antes de servir).
@@ -73,6 +75,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/characters", a.handleListCharacters)
 	mux.HandleFunc("POST /api/characters", a.handleCreateCharacter)
 	mux.HandleFunc("GET /api/creation", a.handleCreation)
+	a.registerAdmin(mux)
 }
 
 // Authenticate devolve a conta da sessão no cookie (também usado pelo WebSocket).

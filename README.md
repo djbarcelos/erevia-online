@@ -122,7 +122,7 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 proto/erevia/v1/game.proto   mensagens cliente ↔ servidor
 server/
   cmd/zone/                  executável: HTTP + WebSocket + zona + arquivos do cliente
-  internal/api/              login (OAuth, dev), sessão, personagens, apagar a conta
+  internal/api/              login (OAuth, dev), sessão, personagens, apagar a conta, portal de administração (admin.go)
   internal/store/            Postgres (pgx) + migrações SQL (goose)
   internal/game/             dados e fórmulas: classes, skills, monstros, itens, drops, dano, XP
   internal/world/            mapa embutido (world.json): colisão e caminhos (A*)
@@ -131,6 +131,7 @@ server/
   internal/pb/               código Go gerado (não editar)
 client/
   privacidade.html, termos.html  páginas legais (estilo em src/styles/legal.css)
+  admin.html, src/admin/     portal de administração (/admin, só GM)
   src/ui/                    telas (login, personagens, conta) e chat
   src/world/                 cena, entidades, animações, efeitos, entrada
   scripts/build-models.mjs   personagens/monstros/animações a partir dos zips KayKit
@@ -179,6 +180,23 @@ UPDATE bug_reports SET resolved = true WHERE id = 1;
 -- Últimas ações de GM
 SELECT at, gm_name, command, target, detail FROM gm_log ORDER BY at DESC LIMIT 50;
 ```
+
+## Portal de administração
+`/admin` é o portal dos GMs, no mesmo servidor e no visual do jogo. Hoje tem a página inicial (online agora, versão no ar, uptime, contas, personagens e relatos de /bug nas últimas 24 h, e as últimas ações de GM) e o menu com Jogadores, Relatos, Métricas, Economia e Operação, ainda "em breve".
+
+**Como abrir:**
+1. Entre no jogo uma vez com a conta (Google, Discord ou, local, o login de desenvolvimento) e crie um personagem.
+2. Marque a conta como GM (o mesmo campo dos comandos de GM, ver [Moderação](#moderação)): `UPDATE accounts SET gm = true WHERE id = (SELECT account_id FROM characters WHERE lower(name) = lower('Nome'));` ou, local, `make gm NAME=Nome`.
+3. Abra `https://…/admin` no mesmo navegador. No portal vale na hora (a checagem é a cada pedido); no jogo, depois de relogar. Para tirar: `gm = false`.
+
+**Segurança:**
+- **Só GM, e o resto vê 404:** um middleware único (`AdminOnly`, em `server/internal/api/admin.go`) confere a sessão, se a conta é GM e se não está banida em toda rota de `/api/admin/*`, na página (`/admin`, `/admin/…`, `/admin.html`) e nos arquivos dela (`/assets/admin/`). Quem não é GM ou não está logado recebe o mesmo 404 de um caminho qualquer que não existe (por isso caminhos desconhecidos agora dão 404 em vez de cair no `index.html`).
+- **O que fica público:** só o que o jogo já usa (as fontes Cinzel e o polyfill de módulos do Vite). O código e o CSS do portal saem em `assets/admin/` (ver `client/vite.config.ts`), e nenhum arquivo público menciona o portal.
+- **Escrita:** todo pedido que muda algo exige o cabeçalho `X-Erevia-Admin: 1`, JSON e a mesma origem (contra CSRF), tem limite por conta (leitura: 60 de uma vez e 2/s; escrita: 10 de uma vez e 1 a cada 2 s) e vai para o `gm_log` com o comando `portal:…`, a conta e o nome do GM e o alvo.
+- Respostas do portal com `Cache-Control: no-store`, `X-Frame-Options: DENY`, CSP e `nosniff`. O log do servidor guarda só conta, método, rota e status (nada de corpo, cookie ou query).
+- **Jogadores online:** o portal nunca mexe no estado da zona nem grava no banco um personagem que está em memória; pede à zona pelo canal e espera a resposta com prazo (`askZone` em `server/internal/zone/admin.go`, hoje usado pelo "online agora").
+
+A versão no ar vem de `RAILWAY_GIT_COMMIT_SHA` (a Railway define; local aparece `dev`).
 
 ## Telemetria
 O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem travar a zona): ouro que entra e sai (e de onde), itens que entram e saem do jogo, abates, mortes, subidas de nível, sessões e o FPS dos jogadores (o cliente mede 1×/s e manda a média a cada 60 s, com o tipo de aparelho). O "painel" são views prontas; abra na aba **Data** do Postgres da Railway ou com `psql`:
