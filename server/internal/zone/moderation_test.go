@@ -84,17 +84,6 @@ func (f *fakePeer) lastSystem() string {
 	return s[len(s)-1]
 }
 
-func (f *fakePeer) kicked() string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, m := range f.msgs {
-		if k := m.GetKicked(); k != nil {
-			return k.Reason
-		}
-	}
-	return ""
-}
-
 // say manda uma mensagem no canal geral (repõe as fichas de chat antes).
 func say(z *Zone, id uint32, text string) {
 	if p := z.players[id]; p != nil {
