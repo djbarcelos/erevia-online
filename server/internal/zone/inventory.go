@@ -38,7 +38,7 @@ func loadInventory(gold int64, records []game.ItemRecord) (inventory, int) {
 		}
 		n := min(r.Count, def.Stack)
 		switch {
-		case r.Equipped && r.Slot >= 0 && r.Slot < game.EquipSlots && def.Slot == r.Slot && inv.equip[r.Slot].empty():
+		case r.Equipped && r.Slot >= 0 && r.Slot < game.EquipSlots && def.Fits(r.Slot) && inv.equip[r.Slot].empty():
 			inv.equip[r.Slot] = stack{def: def, count: 1}
 		case !r.Equipped && r.Slot >= 0 && r.Slot < game.BagSize && inv.bag[r.Slot].empty():
 			inv.bag[r.Slot] = stack{def: def, count: n}
@@ -176,7 +176,7 @@ func canEquip(def *game.ItemDef, slot int, class string, level int) string {
 	switch {
 	case def == nil || !def.Equippable():
 		return "Este item não pode ser equipado."
-	case def.Slot != slot:
+	case slot < 0 || slot >= game.EquipSlots || !def.Fits(slot):
 		return "Este item não vai nesse lugar."
 	case !def.UsableBy(class):
 		return "Sua classe não pode usar este item."
@@ -186,17 +186,52 @@ func canEquip(def *game.ItemDef, slot int, class string, level int) string {
 	return ""
 }
 
-// equipFromBag põe o item do espaço da bolsa no seu encaixe; o que estava lá volta
+// bestSlot: onde equipar o item sem escolher encaixe (duplo clique). Anéis e brincos vão
+// no primeiro encaixe livre; com os dois ocupados, trocam com o primeiro.
+func (inv *inventory) bestSlot(def *game.ItemDef) int {
+	slots := def.Slots()
+	if len(slots) == 0 {
+		return game.NoSlot
+	}
+	for _, s := range slots {
+		if inv.equip[s].empty() {
+			return s
+		}
+	}
+	return slots[0]
+}
+
+// equipFromBag põe o item do espaço da bolsa no melhor encaixe; o que estava lá volta
 // para o mesmo espaço da bolsa.
 func (inv *inventory) equipFromBag(bagSlot int, class string, level int) string {
 	if bagSlot < 0 || bagSlot >= game.BagSize || inv.bag[bagSlot].empty() {
 		return "?"
 	}
-	def := inv.bag[bagSlot].def
-	if why := canEquip(def, def.Slot, class, level); why != "" {
+	return inv.equipTo(bagSlot, inv.bestSlot(inv.bag[bagSlot].def), class, level)
+}
+
+// equipTo põe o item do espaço da bolsa num encaixe escolhido (trocando com o que houver).
+func (inv *inventory) equipTo(bagSlot, slot int, class string, level int) string {
+	if bagSlot < 0 || bagSlot >= game.BagSize || inv.bag[bagSlot].empty() {
+		return "?"
+	}
+	if why := canEquip(inv.bag[bagSlot].def, slot, class, level); why != "" {
 		return why
 	}
-	inv.bag[bagSlot], inv.equip[def.Slot] = inv.equip[def.Slot], inv.bag[bagSlot]
+	inv.bag[bagSlot], inv.equip[slot] = inv.equip[slot], inv.bag[bagSlot]
+	return ""
+}
+
+// moveInEquip troca dois encaixes (anel 1 ↔ anel 2, brinco 1 ↔ brinco 2).
+func (inv *inventory) moveInEquip(from, to int) string {
+	if from == to || from < 0 || to < 0 || from >= game.EquipSlots || to >= game.EquipSlots || inv.equip[from].empty() {
+		return "?"
+	}
+	a, b := inv.equip[from], inv.equip[to]
+	if !a.def.Fits(to) || (!b.empty() && !b.def.Fits(from)) {
+		return "Este item não vai nesse lugar."
+	}
+	inv.equip[from], inv.equip[to] = b, a
 	return ""
 }
 
@@ -235,10 +270,10 @@ func (inv *inventory) bonus() game.Stats {
 	return b
 }
 
-// weaponModel: modelo da arma equipada ("" = sem arma). Esgrima vale com espadas.
-func (inv *inventory) weaponModel() string {
+// weaponType: tipo da arma equipada ("" = sem arma). Esgrima vale com espadas.
+func (inv *inventory) weaponType() string {
 	if w := inv.equip[game.SlotWeapon]; !w.empty() {
-		return w.def.Model
+		return w.def.WeaponType
 	}
 	return ""
 }

@@ -71,7 +71,7 @@ func applyPassives(s game.Stats, p *entity) game.Stats {
 		case game.PassivePDefPct:
 			s.PDef *= 1 + v
 		case game.PassiveSwordPAtk:
-			if strings.Contains(p.pl.inv.weaponModel(), "sword") {
+			if p.pl.inv.weaponType() == game.WeaponSword {
 				s.PAtk *= 1 + v
 			}
 		case game.PassiveCritDamage:

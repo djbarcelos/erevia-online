@@ -40,6 +40,7 @@ type Character struct {
 	Attrs  game.Attrs
 	Ranks  map[uint32]int
 	Hotbar []string
+	Emblem string
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -107,7 +108,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.zone.Join(ctx, zone.JoinInfo{
 		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z,
 		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
-		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Peer: sess,
+		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)

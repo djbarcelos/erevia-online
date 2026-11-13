@@ -34,7 +34,7 @@ const (
 	pgUniqueViolation    = "23505"
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
-		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar"
+		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem"
 )
 
 var (
@@ -71,7 +71,17 @@ type Character struct {
 	Attrs     game.Attrs        `json:"-"`
 	Ranks     map[uint32]int    `json:"-"`
 	Hotbar    []string          `json:"-"`
-	kitGiven  bool
+	Emblem    string            `json:"emblem"` // sempre preenchido (padrão da classe se vazio no banco)
+	// Look: o que o personagem tem nas mãos agora (para a tela de seleção).
+	Look     CharacterLook `json:"look"`
+	kitGiven bool
+}
+
+// CharacterLook são os modelos 3D das armas equipadas e a raridade da principal.
+type CharacterLook struct {
+	Right string `json:"right"`
+	Left  string `json:"left"`
+	Grade int    `json:"grade"`
 }
 
 // CharacterState é o que a zona salva periodicamente.
@@ -215,12 +225,68 @@ func (s *Store) ListCharacters(ctx context.Context, accountID int64) ([]Characte
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanCharacter)
+	chars, err := pgx.CollectRows(rows, scanCharacter)
+	if err != nil || len(chars) == 0 {
+		return chars, err
+	}
+	// Armas nas mãos (encaixes 0 e 1) de cada um, para a tela de seleção.
+	ids := make([]int64, len(chars))
+	for i, c := range chars {
+		ids[i] = c.ID
+	}
+	rows, err = s.pool.Query(ctx,
+		`SELECT character_id, slot, item_id FROM character_items
+		WHERE place = 1 AND slot IN ($2, $3) AND character_id = ANY($1)`, ids, game.SlotWeapon, game.SlotOffhand)
+	if err != nil {
+		return nil, err
+	}
+	type hand struct {
+		char int64
+		slot int16
+		item string
+	}
+	list, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (hand, error) {
+		var h hand
+		err := row.Scan(&h.char, &h.slot, &h.item)
+		return h, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	byChar := map[int64][]game.ItemRecord{}
+	for _, h := range list {
+		byChar[h.char] = append(byChar[h.char], game.ItemRecord{Equipped: true, Slot: int(h.slot), ItemID: h.item, Count: 1})
+	}
+	for i := range chars {
+		chars[i].Look = lookOf(byChar[chars[i].ID])
+	}
+	return chars, nil
 }
 
-// CreateCharacter cria um personagem perto do centro do mapa.
-// Valide nome e classe antes de chamar.
-func (s *Store) CreateCharacter(ctx context.Context, accountID int64, name, class string) (Character, error) {
+// lookOf: modelos das armas equipadas (igual ao que a zona mostra aos outros jogadores).
+func lookOf(items []game.ItemRecord) CharacterLook {
+	var l CharacterLook
+	for _, r := range items {
+		d := game.Items[r.ItemID]
+		if !r.Equipped || d == nil {
+			continue
+		}
+		switch r.Slot {
+		case game.SlotWeapon:
+			l.Right, l.Grade = d.Model, int(d.Grade)
+			if l.Left == "" {
+				l.Left = d.OffModel
+			}
+		case game.SlotOffhand:
+			l.Left = d.Model
+		}
+	}
+	return l
+}
+
+// CreateCharacter cria um personagem perto do centro do mapa, já com o kit inicial da
+// aparência escolhida. Valide nome, classe e aparência antes de chamar.
+func (s *Store) CreateCharacter(ctx context.Context, accountID int64, name, class string, look game.Look) (Character, error) {
 	angle := mrand.Float64() * 2 * math.Pi
 	r := mrand.Float64() * spawnRadius
 	x, z := r*math.Cos(angle), r*math.Sin(angle)
@@ -239,13 +305,15 @@ func (s *Store) CreateCharacter(ctx context.Context, accountID int64, name, clas
 			return ErrTooManyCharacters
 		}
 		rows, err := tx.Query(ctx, `
-			INSERT INTO characters (account_id, name, class, x, z) VALUES ($1, $2, $3, $4, $5)
-			RETURNING `+characterCols, accountID, name, class, x, z)
+			INSERT INTO characters (account_id, name, class, x, z, emblem) VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING `+characterCols, accountID, name, class, x, z, look.Emblem)
 		if err != nil {
 			return err
 		}
-		c, err = pgx.CollectExactlyOneRow(rows, scanCharacter)
-		return err
+		if c, err = pgx.CollectExactlyOneRow(rows, scanCharacter); err != nil {
+			return err
+		}
+		return giveStarterKit(ctx, tx, &c, game.StarterKitFor(class, look))
 	})
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation && pgErr.ConstraintName == charactersNameIdxKey {
@@ -268,12 +336,13 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 		if c, err = pgx.CollectExactlyOneRow(rows, scanCharacter); err != nil {
 			return err
 		}
-		if !c.kitGiven {
-			if err := giveStarterKit(ctx, tx, &c); err != nil {
+		if !c.kitGiven { // personagem de antes do kit: recebe o padrão da classe
+			if err := giveStarterKit(ctx, tx, &c, game.StarterKit(c.Class)); err != nil {
 				return err
 			}
 		}
 		c.Items, err = loadItems(ctx, tx, c.ID)
+		c.Look = lookOf(c.Items)
 		return err
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -282,8 +351,8 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 	return c, err
 }
 
-func giveStarterKit(ctx context.Context, tx pgx.Tx, c *Character) error {
-	for _, it := range game.StarterKit(c.Class) {
+func giveStarterKit(ctx context.Context, tx pgx.Tx, c *Character, kit []game.ItemRecord) error {
+	for _, it := range kit {
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO character_items (character_id, place, slot, item_id, count) VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT DO NOTHING`, c.ID, placeOf(it), it.Slot, it.ItemID, it.Count); err != nil {
@@ -293,6 +362,7 @@ func giveStarterKit(ctx context.Context, tx pgx.Tx, c *Character) error {
 	err := tx.QueryRow(ctx, `UPDATE characters SET gold = gold + $2, kit_given = true WHERE id = $1 RETURNING gold`,
 		c.ID, game.StarterGold).Scan(&c.Gold)
 	c.kitGiven = true
+	c.Look = lookOf(kit)
 	return err
 }
 
@@ -396,10 +466,11 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var ranks, hotbar []byte
 	var a [6]int16
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
-		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar)
+		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem)
 	if err != nil {
 		return c, err
 	}
+	c.Emblem = game.EmblemOr(c.Class, c.Emblem)
 	c.X, c.Z = float64(x), float64(z)
 	c.Attrs = game.Attrs{Str: int(a[0]), Dex: int(a[1]), Con: int(a[2]), Int: int(a[3]), Wis: int(a[4]), Spi: int(a[5])}
 	c.Ranks, c.Hotbar, err = parseProgress(ranks, hotbar)

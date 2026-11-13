@@ -99,7 +99,8 @@ message PickUp {
 }
 
 // Lugares de um item: 0 = bolsa, 1 = equipado (slot = encaixe).
-// Mover entre espaços da bolsa (troca ou junta pilhas), equipar ou desequipar.
+// Mover entre espaços da bolsa (troca ou junta pilhas), equipar, desequipar ou trocar
+// dois encaixes de equipamento (anel 1 ↔ anel 2).
 message MoveItem {
   uint32 from_place = 1;
   uint32 from_slot = 2;
@@ -377,6 +378,13 @@ enum ItemKind {
   ITEM_KIND_POTION = 5;
   ITEM_KIND_MATERIAL = 6;
   ITEM_KIND_GOLD = 7;
+  ITEM_KIND_LEGS = 8;
+  ITEM_KIND_GLOVES = 9;
+  ITEM_KIND_BOOTS = 10;
+  ITEM_KIND_CAPE = 11;
+  ITEM_KIND_NECKLACE = 12;
+  ITEM_KIND_EARRING = 13;
+  ITEM_KIND_RING = 14;
 }
 
 message ItemBonus {
@@ -387,6 +395,14 @@ message ItemBonus {
   int32 p_def = 5;
   int32 m_def = 6;
   float crit = 7;
+  float accuracy = 8;
+  float evasion = 9;
+  float speed = 10; // m/s
+  float atk_speed = 11; // 0,05 = +5% de ataques por segundo
+  float cast_speed = 12; // 0,05 = +5% de velocidade de conjuração
+  float hp_regen = 13; // por segundo
+  float mp_regen = 14;
+  float crit_damage = 15; // somado ao multiplicador do crítico
 }
 
 message ItemInfo {
@@ -409,6 +425,10 @@ message ItemInfo {
   uint32 heal_mp = 17;
   string model = 18;
   string off_model = 19;
+  // Encaixes onde o item pode ir (0 arma, 1 mão secundária, 2 peito, 3 cabeça, 4 pernas,
+  // 5 mãos, 6 pés, 7 capa, 8 colar, 9–10 brincos, 11–12 anéis). `slot` é o primeiro.
+  repeated uint32 slots = 20;
+  string weapon_type = 21; // armas: sword, axe, staff, daggers
 }
 
 enum EntityKind {
@@ -439,6 +459,7 @@ message Entity {
   string offhand = 17; // modelo da outra mão
   uint32 weapon_grade = 18;
   string title = 19; // NPC: função (ex.: "Mercadora")
+  string emblem = 20; // jogadores: cor do emblema (#rrggbb), pinta o nome e o anel no chão
 }
 
 message EntityState {

@@ -101,6 +101,11 @@ func TestLoginAndCharacters(t *testing.T) {
 		{`{"name":"x","class":"knight"}`, http.StatusBadRequest},  // nome curto
 		{`{"name":"Valido","class":"dragao"}`, http.StatusBadRequest},
 		{`{"name":"Valido","class":"knight","extra":1}`, http.StatusBadRequest},
+		// Aparência fora das opções da classe.
+		{`{"name":"Valido","class":"knight","look":{"weapon":"axe_common","offhand":"","emblem":"#d6b46e"}}`, http.StatusBadRequest},
+		{`{"name":"Valido","class":"mage","look":{"weapon":"staff_common","offhand":"shield_badge","emblem":"#8c6fd6"}}`, http.StatusBadRequest},
+		{`{"name":"Valido","class":"rogue","look":{"weapon":"daggers_common","offhand":"","emblem":"#123456"}}`, http.StatusBadRequest},
+		{`{"name":"Valido","class":"rogue","look":{"weapon":"daggers_common","offhand":"","emblem":"#d04050","x":1}}`, http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		if code := c.do("POST", "/api/characters", tc.body, &errBody); code != tc.code {
@@ -108,19 +113,39 @@ func TestLoginAndCharacters(t *testing.T) {
 		}
 	}
 
-	c.do("POST", "/api/characters", `{"name":"Beto","class":"rogue"}`, nil)
+	var beto struct {
+		Emblem string
+		Look   struct{ Right, Left string }
+	}
+	if code := c.do("POST", "/api/characters", `{"name":"Beto","class":"rogue","look":{"weapon":"daggers_mixed_common","offhand":"","emblem":"#d04050"}}`, &beto); code != http.StatusCreated {
+		t.Fatalf("create with look = %d", code)
+	}
+	if beto.Emblem != "#d04050" || beto.Look.Right != "dagger" || beto.Look.Left != "skeleton_blade" {
+		t.Fatalf("created with look = %+v", beto)
+	}
 	c.do("POST", "/api/characters", `{"name":"Caio","class":"barbarian"}`, nil)
 	if code := c.do("POST", "/api/characters", `{"name":"Dani","class":"knight"}`, nil); code != http.StatusConflict {
 		t.Fatalf("4th character = %d, want 409", code)
 	}
 
 	var list struct {
-		Characters []struct{ Name string }
-		Max        int
+		Characters []struct {
+			Name   string
+			Emblem string
+			Look   struct{ Right, Left string }
+		}
+		Max int
 	}
 	c.do("GET", "/api/characters", "", &list)
 	if len(list.Characters) != 3 || list.Max != 3 {
 		t.Fatalf("list = %+v", list)
+	}
+	// A lista mostra o que cada um tem nas mãos e a cor (padrão da classe quando não escolhida).
+	if a := list.Characters[0]; a.Name != "Aria" || a.Emblem != "#8c6fd6" || a.Look.Right != "staff" {
+		t.Fatalf("list[0] = %+v", a)
+	}
+	if b := list.Characters[1]; b.Look.Left != "skeleton_blade" || b.Emblem != "#d04050" {
+		t.Fatalf("list[1] = %+v", b)
 	}
 
 	// Outro jogador não vê os personagens da Ana.
@@ -137,6 +162,31 @@ func TestLoginAndCharacters(t *testing.T) {
 	}
 	if code := c.do("GET", "/api/me", "", nil); code != http.StatusUnauthorized {
 		t.Fatalf("/me after logout = %d", code)
+	}
+}
+
+func TestCreationOptions(t *testing.T) {
+	_, newClient := newEnv(t, false)
+	var opts struct {
+		Classes map[string]struct {
+			Weapons  []struct{ ID, Name, Model, OffModel string }
+			Offhands []struct{ ID, Name, Model string }
+			Emblem   string
+		}
+		Emblems []string
+	}
+	if code := newClient().do("GET", "/api/creation", "", &opts); code != http.StatusOK {
+		t.Fatalf("creation = %d", code)
+	}
+	k := opts.Classes["knight"]
+	if len(opts.Classes) != 4 || len(opts.Emblems) != 8 || k.Weapons[0].ID != "sword_common" || k.Weapons[0].Model != "sword_1handed" {
+		t.Fatalf("options = %+v", opts)
+	}
+	if last := k.Offhands[len(k.Offhands)-1]; last.ID != "" || last.Name != "Nada" {
+		t.Fatalf("knight offhands = %+v", k.Offhands)
+	}
+	if r := opts.Classes["rogue"].Weapons[0]; r.OffModel != "dagger" {
+		t.Fatalf("rogue pair = %+v", r)
 	}
 }
 

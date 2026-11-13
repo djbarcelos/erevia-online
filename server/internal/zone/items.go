@@ -80,12 +80,13 @@ func (z *Zone) moveItem(p *entity, fromPlace, fromSlot, toPlace, toSlot int) {
 		if fromSlot < 0 || fromSlot >= game.BagSize || inv.bag[fromSlot].empty() {
 			return
 		}
-		if why = canEquip(inv.bag[fromSlot].def, toSlot, p.pl.class, p.level); why == "" {
-			why = inv.equipFromBag(fromSlot, p.pl.class, p.level)
-		}
+		why = inv.equipTo(fromSlot, toSlot, p.pl.class, p.level)
 		gear = why == ""
 	case fromPlace == placeEquip && toPlace == placeBag:
 		why = inv.unequip(fromSlot, toSlot, p.pl.class, p.level)
+		gear = why == ""
+	case fromPlace == placeEquip && toPlace == placeEquip:
+		why = inv.moveInEquip(fromSlot, toSlot)
 		gear = why == ""
 	default:
 		return
@@ -214,15 +215,22 @@ func inventoryPB(inv *inventory) *pb.Inventory {
 func itemInfoPB(d *game.ItemDef) *pb.ItemInfo {
 	b := d.Bonus
 	info := &pb.ItemInfo{
-		Id: d.ID, Name: d.Name, Kind: pb.ItemKind(d.Kind), Grade: uint32(d.Grade), Slot: int32(d.Slot),
+		Id: d.ID, Name: d.Name, Kind: pb.ItemKind(d.Kind), Grade: uint32(d.Grade), Slot: int32(d.Slot()),
 		Classes: d.Classes, ReqLevel: uint32(d.ReqLevel),
 		Bonus: &pb.ItemBonus{
 			MaxHp: int32(b.MaxHP), MaxMp: int32(b.MaxMP), PAtk: int32(b.PAtk), MAtk: int32(b.MAtk),
 			PDef: int32(b.PDef), MDef: int32(b.MDef), Crit: float32(b.Crit),
+			Accuracy: float32(b.Accuracy), Evasion: float32(b.Evasion), Speed: float32(b.Speed),
+			AtkSpeed: float32(b.AtkSpeed), CastSpeed: float32(b.CastSpeed), HpRegen: float32(b.HPRegen),
+			MpRegen: float32(b.MPRegen), CritDamage: float32(b.CritDamage),
 		},
-		Stack: uint32(min(d.Stack, game.MaxStack)), Price: uint32(d.Price), SellPrice: uint32(d.SellPrice()),
+		WeaponType: d.WeaponType,
+		Stack:      uint32(min(d.Stack, game.MaxStack)), Price: uint32(d.Price), SellPrice: uint32(d.SellPrice()),
 		Icon: d.Icon, Description: d.Description, CooldownGroup: uint32(d.Cooldown),
 		HealHp: uint32(d.HealHP), HealMp: uint32(d.HealMP), Model: d.Model, OffModel: d.OffModel,
+	}
+	for _, sl := range d.Slots() {
+		info.Slots = append(info.Slots, uint32(sl))
 	}
 	if d.Cooldown != game.CooldownNone {
 		info.CooldownMs = uint32(game.PotionCooldown * 1000)

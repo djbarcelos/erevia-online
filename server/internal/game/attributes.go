@@ -118,8 +118,9 @@ func FinishRegen(s Stats, class string, a Attrs) Stats {
 	if !ok {
 		b = ClassBaseAttrs["knight"]
 	}
-	s.HPRegen = s.MaxHP*baseHPRegen + float64(a.Con-b.Con)*conRegen
-	s.MPRegen = s.MaxMP*baseMPRegen + float64(a.Wis-b.Wis)*wisRegen
+	// Soma ao que o equipamento já deu (s.HPRegen/MPRegen chegam com os bônus).
+	s.HPRegen += s.MaxHP*baseHPRegen + float64(a.Con-b.Con)*conRegen
+	s.MPRegen += s.MaxMP*baseMPRegen + float64(a.Wis-b.Wis)*wisRegen
 	if s.HPRegen < 0 {
 		s.HPRegen = 0
 	}

@@ -74,6 +74,7 @@ type JoinInfo struct {
 	Attrs  game.Attrs
 	Ranks  map[uint32]int
 	Hotbar []string
+	Emblem string // cor do emblema ("" = padrão da classe)
 	Peer   Peer
 }
 
@@ -340,7 +341,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		pos: pos, dest: pos,
 		lastCombat: -math.MaxFloat64 / 2,
 		pl: &playerState{
-			peer: info.Peer, class: info.Class, xp: info.XP,
+			peer: info.Peer, class: info.Class, xp: info.XP, emblem: game.EmblemOr(info.Class, info.Emblem),
 			cooldowns:  map[uint32]float64{},
 			moveTokens: z.cfg.MaxMovesPerSec, chatTokens: z.cfg.ChatBurst,
 			inv:   inv,
@@ -723,6 +724,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 	if e.pl != nil {
 		w, o, g := e.pl.inv.look()
 		out.Weapon, out.Offhand, out.WeaponGrade = w, o, uint32(g)
+		out.Emblem = e.pl.emblem
 	}
 	if e.npc != nil {
 		out.Title = e.npc.title

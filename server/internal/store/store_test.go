@@ -58,7 +58,7 @@ func TestCharacters(t *testing.T) {
 	acc, _ := s.LoginIdentity(ctx, "dev", "a", "a")
 	acc2, _ := s.LoginIdentity(ctx, "dev", "b", "b")
 
-	c, err := s.CreateCharacter(ctx, acc, "Aria", "mage")
+	c, err := s.CreateCharacter(ctx, acc, "Aria", "mage", game.DefaultLook("mage"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,13 +66,13 @@ func TestCharacters(t *testing.T) {
 		t.Fatalf("bad character %+v", c)
 	}
 
-	if _, err := s.CreateCharacter(ctx, acc2, "aria", "knight"); !errors.Is(err, store.ErrNameTaken) {
+	if _, err := s.CreateCharacter(ctx, acc2, "aria", "knight", game.DefaultLook("knight")); !errors.Is(err, store.ErrNameTaken) {
 		t.Fatalf("case-insensitive duplicate name: %v", err)
 	}
 
-	s.CreateCharacter(ctx, acc, "Beto", "rogue")
-	s.CreateCharacter(ctx, acc, "Caio", "knight")
-	if _, err := s.CreateCharacter(ctx, acc, "Dani", "barbarian"); !errors.Is(err, store.ErrTooManyCharacters) {
+	s.CreateCharacter(ctx, acc, "Beto", "rogue", game.DefaultLook("rogue"))
+	s.CreateCharacter(ctx, acc, "Caio", "knight", game.DefaultLook("knight"))
+	if _, err := s.CreateCharacter(ctx, acc, "Dani", "barbarian", game.DefaultLook("barbarian")); !errors.Is(err, store.ErrTooManyCharacters) {
 		t.Fatalf("4th character: %v", err)
 	}
 
@@ -101,18 +101,32 @@ func TestStarterKitItemsAndSaveOrder(t *testing.T) {
 	s := storetest.New(t)
 	ctx := context.Background()
 	acc, _ := s.LoginIdentity(ctx, "dev", "k", "k")
-	c, err := s.CreateCharacter(ctx, acc, "Kit", "knight")
+	// Aparência escolhida: lâmina curva, sem escudo na mão (vai para a bolsa), emblema azul.
+	look := game.Look{Weapon: "blade_common", Offhand: "", Emblem: "#4f9dff"}
+	c, err := s.CreateCharacter(ctx, acc, "Kit", "knight", look)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if c.Emblem != "#4f9dff" || c.Look.Right != "skeleton_blade" || c.Look.Left != "" || c.Gold != game.StarterGold {
+		t.Fatalf("created = %+v", c)
+	}
 
-	// Primeiro carregamento: kit inicial e moedas, uma vez só.
+	// O kit é entregue na criação, uma vez só.
 	got, err := s.CharacterForAccount(ctx, acc, c.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Gold != game.StarterGold || len(got.Items) != len(game.StarterKit("knight")) {
+	kit := game.StarterKitFor("knight", look)
+	if got.Gold != game.StarterGold || len(got.Items) != len(kit) || got.Emblem != "#4f9dff" {
 		t.Fatalf("kit: gold %d items %+v", got.Gold, got.Items)
+	}
+	if got.Items[0] != (game.ItemRecord{Equipped: true, Slot: game.SlotWeapon, ItemID: "blade_common", Count: 1}) ||
+		got.Items[2] != (game.ItemRecord{Slot: 1, ItemID: "shield_badge", Count: 1}) {
+		t.Fatalf("kit items = %+v", got.Items)
+	}
+	list, err := s.ListCharacters(ctx, acc)
+	if err != nil || len(list) != 1 || list[0].Look != (store.CharacterLook{Right: "skeleton_blade", Grade: 1}) || list[0].Emblem != "#4f9dff" {
+		t.Fatalf("list = %+v, %v", list, err)
 	}
 	again, _ := s.CharacterForAccount(ctx, acc, c.ID)
 	if again.Gold != game.StarterGold || len(again.Items) != len(got.Items) {
@@ -145,7 +159,7 @@ func TestProgressionRoundTrip(t *testing.T) {
 	s := storetest.New(t)
 	ctx := context.Background()
 	acc, _ := s.LoginIdentity(ctx, "dev", "prog", "prog")
-	c, err := s.CreateCharacter(ctx, acc, "Arvore", "rogue")
+	c, err := s.CreateCharacter(ctx, acc, "Arvore", "rogue", game.DefaultLook("rogue"))
 	if err != nil {
 		t.Fatal(err)
 	}

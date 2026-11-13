@@ -66,6 +66,7 @@ type entity struct {
 type playerState struct {
 	peer       Peer
 	class      string
+	emblem     string // cor do emblema (#rrggbb)
 	xp         int64
 	cooldowns  map[uint32]float64 // skill → instante em que fica pronta
 	moveTokens float64

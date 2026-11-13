@@ -170,7 +170,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 	return gamenet.Character{
 		ID: uint32(c.ID), Name: c.Name, Class: c.Class, X: c.X, Z: c.Z,
 		XP: c.XP, HP: c.HP, MP: c.MP, Gold: c.Gold, Items: c.Items,
-		Attrs: c.Attrs, Ranks: c.Ranks, Hotbar: c.Hotbar,
+		Attrs: c.Attrs, Ranks: c.Ranks, Hotbar: c.Hotbar, Emblem: c.Emblem,
 	}, nil
 }
 

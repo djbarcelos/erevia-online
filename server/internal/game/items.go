@@ -18,6 +18,13 @@ const (
 	KindPotion
 	KindMaterial
 	KindGold // só existe no chão: ao pegar, vira saldo de moedas
+	KindLegs
+	KindGloves
+	KindBoots
+	KindCape
+	KindNecklace
+	KindEarring
+	KindRing
 )
 
 // Grade é a raridade de um item (cor do nome).
@@ -30,14 +37,53 @@ const (
 	GradeEpic
 )
 
-// Encaixes de equipamento.
+// Encaixes de equipamento. Os 4 primeiros são os de antes (os números ficam iguais no
+// banco); brincos e anéis têm dois encaixes cada.
 const (
-	SlotWeapon = iota
-	SlotOffhand
-	SlotArmor
-	SlotHelmet
+	SlotWeapon  = iota // arma
+	SlotOffhand        // mão secundária
+	SlotArmor          // peito
+	SlotHelmet         // cabeça
+	SlotLegs
+	SlotHands
+	SlotFeet
+	SlotCape
+	SlotNeck
+	SlotEar1
+	SlotEar2
+	SlotRing1
+	SlotRing2
 	EquipSlots
 	NoSlot = -1
+)
+
+// SlotNames: nome de cada encaixe (mensagens do servidor).
+var SlotNames = [EquipSlots]string{
+	"Arma", "Mão secundária", "Peito", "Cabeça", "Pernas", "Mãos", "Pés", "Capa",
+	"Colar", "Brinco", "Brinco", "Anel", "Anel",
+}
+
+// kindSlots: em quais encaixes cada tipo de item pode ir (vazio = não se equipa).
+var kindSlots = map[ItemKind][]int{
+	KindWeapon:   {SlotWeapon},
+	KindShield:   {SlotOffhand},
+	KindArmor:    {SlotArmor},
+	KindHelmet:   {SlotHelmet},
+	KindLegs:     {SlotLegs},
+	KindGloves:   {SlotHands},
+	KindBoots:    {SlotFeet},
+	KindCape:     {SlotCape},
+	KindNecklace: {SlotNeck},
+	KindEarring:  {SlotEar1, SlotEar2},
+	KindRing:     {SlotRing1, SlotRing2},
+}
+
+// Tipos de arma (a passiva Esgrima vale com espadas).
+const (
+	WeaponSword   = "sword"
+	WeaponAxe     = "axe"
+	WeaponStaff   = "staff"
+	WeaponDaggers = "daggers"
 )
 
 // Grupos de recarga de consumíveis.
@@ -62,8 +108,8 @@ type ItemDef struct {
 	Name        string
 	Kind        ItemKind
 	Grade       Grade
-	Slot        int      // encaixe de equipamento (NoSlot = não se equipa)
 	Classes     []string // classes que podem equipar (nil = todas)
+	WeaponType  string   // armas: espada, machado, cajado ou adagas
 	ReqLevel    int
 	Bonus       Stats // somado aos atributos quando equipado
 	Stack       int   // máximo por espaço (1 = não empilha)
@@ -80,8 +126,29 @@ type ItemDef struct {
 // SellPrice é quanto a loja paga por uma unidade.
 func (d *ItemDef) SellPrice() int64 { return int64(math.Floor(float64(d.Price) * SellRate)) }
 
+// Slots: encaixes onde o item pode ir (nil = não se equipa).
+func (d *ItemDef) Slots() []int { return kindSlots[d.Kind] }
+
+// Slot: o primeiro encaixe do item (NoSlot = não se equipa).
+func (d *ItemDef) Slot() int {
+	if s := d.Slots(); len(s) > 0 {
+		return s[0]
+	}
+	return NoSlot
+}
+
+// Fits informa se o item cabe no encaixe.
+func (d *ItemDef) Fits(slot int) bool {
+	for _, s := range d.Slots() {
+		if s == slot {
+			return true
+		}
+	}
+	return false
+}
+
 // Equippable informa se o item vai num encaixe de equipamento.
-func (d *ItemDef) Equippable() bool { return d.Slot != NoSlot }
+func (d *ItemDef) Equippable() bool { return len(d.Slots()) > 0 }
 
 // UsableBy informa se a classe pode equipar o item.
 func (d *ItemDef) UsableBy(class string) bool {
@@ -97,8 +164,20 @@ func (d *ItemDef) UsableBy(class string) bool {
 }
 
 func weapon(id, name, class string, g Grade, lvl int, bonus Stats, price int64, model, off, desc string) *ItemDef {
-	return &ItemDef{ID: id, Name: name, Kind: KindWeapon, Grade: g, Slot: SlotWeapon, Classes: []string{class},
+	return &ItemDef{ID: id, Name: name, Kind: KindWeapon, Grade: g, Classes: []string{class}, WeaponType: weaponTypeOf(class),
 		ReqLevel: lvl, Bonus: bonus, Stack: 1, Price: price, Model: model, OffModel: off, Icon: iconFor(class), Description: desc}
+}
+
+func weaponTypeOf(class string) string {
+	switch class {
+	case "barbarian":
+		return WeaponAxe
+	case "mage":
+		return WeaponStaff
+	case "rogue":
+		return WeaponDaggers
+	}
+	return WeaponSword
 }
 
 func iconFor(class string) string {
@@ -115,13 +194,13 @@ func iconFor(class string) string {
 	return "sword"
 }
 
-func gear(id, name string, kind ItemKind, slot int, classes []string, g Grade, lvl int, bonus Stats, price int64, model, icon, desc string) *ItemDef {
-	return &ItemDef{ID: id, Name: name, Kind: kind, Grade: g, Slot: slot, Classes: classes,
+func gear(id, name string, kind ItemKind, classes []string, g Grade, lvl int, bonus Stats, price int64, model, icon, desc string) *ItemDef {
+	return &ItemDef{ID: id, Name: name, Kind: kind, Grade: g, Classes: classes,
 		ReqLevel: lvl, Bonus: bonus, Stack: 1, Price: price, Model: model, Icon: icon, Description: desc}
 }
 
 func stackable(id, name string, kind ItemKind, price int64, icon, desc string) *ItemDef {
-	return &ItemDef{ID: id, Name: name, Kind: kind, Grade: GradeCommon, Slot: NoSlot, Stack: MaxStack,
+	return &ItemDef{ID: id, Name: name, Kind: kind, Grade: GradeCommon, Stack: MaxStack,
 		Price: price, Icon: icon, Description: desc}
 }
 
@@ -174,32 +253,115 @@ var Items = func() map[string]*ItemDef {
 			"Ninguém viu o golpe; só o resultado."),
 
 		// Escudos (Cavaleiro e Bárbaro).
-		gear("shield_badge", "Escudo de Brasão", KindShield, SlotOffhand, shieldClasses, GradeCommon, 1, Stats{PDef: 6}, 90,
+		gear("shield_badge", "Escudo de Brasão", KindShield, shieldClasses, GradeCommon, 1, Stats{PDef: 6}, 90,
 			"shield_badge_color", "shield", "O brasão da cidade, pintado à mão."),
-		gear("shield_buckler", "Broquel Bárbaro", KindShield, SlotOffhand, shieldClasses, GradeCommon, 1, Stats{PDef: 4, PAtk: 1}, 90,
+		gear("shield_buckler", "Broquel Bárbaro", KindShield, shieldClasses, GradeCommon, 1, Stats{PDef: 4, PAtk: 1}, 90,
 			"shield_round_barbarian", "shield_round", "Pequeno e leve, bom para empurrar."),
-		gear("shield_good", "Escudo de Ferro", KindShield, SlotOffhand, shieldClasses, GradeGood, 6, Stats{PDef: 14, MDef: 4}, 1000,
+		gear("shield_good", "Escudo de Ferro", KindShield, shieldClasses, GradeGood, 6, Stats{PDef: 14, MDef: 4}, 1000,
 			"shield_square", "shield", "Placas de ferro rebitadas."),
-		gear("shield_rare", "Escudo de Cravos", KindShield, SlotOffhand, shieldClasses, GradeRare, 13, Stats{PDef: 24, MDef: 8}, 3500,
+		gear("shield_rare", "Escudo de Cravos", KindShield, shieldClasses, GradeRare, 13, Stats{PDef: 24, MDef: 8}, 3500,
 			"shield_spikes", "shield_round", "Quem bate nele se arrepende."),
-		gear("shield_epic", "Égide Óssea", KindShield, SlotOffhand, shieldClasses, GradeEpic, 18, Stats{PDef: 36, MDef: 14, MaxHP: 50}, 10000,
+		gear("shield_epic", "Égide Óssea", KindShield, shieldClasses, GradeEpic, 18, Stats{PDef: 36, MDef: 14, MaxHP: 50}, 10000,
 			"shield_spikes_color", "shield_round", "Feita com a armadura do Senhor dos Ossos."),
 
-		// Armaduras e elmos (qualquer classe). Ainda não aparecem no boneco.
-		gear("armor_common", "Gibão de Couro", KindArmor, SlotArmor, nil, GradeCommon, 1, Stats{PDef: 5, MDef: 3, MaxHP: 15}, 120,
+		// Armaduras e elmos (qualquer classe). Peças de corpo não aparecem no modelo 3D.
+		gear("armor_common", "Gibão de Couro", KindArmor, nil, GradeCommon, 1, Stats{PDef: 5, MDef: 3, MaxHP: 15}, 120,
 			"", "armor", "Couro curtido, costurado em camadas."),
-		gear("armor_good", "Cota de Malha", KindArmor, SlotArmor, nil, GradeGood, 6, Stats{PDef: 13, MDef: 7, MaxHP: 40}, 1100,
+		gear("armor_good", "Cota de Malha", KindArmor, nil, GradeGood, 6, Stats{PDef: 13, MDef: 7, MaxHP: 40}, 1100,
 			"", "armor", "Milhares de anéis de ferro entrelaçados."),
-		gear("armor_rare", "Couraça de Osso", KindArmor, SlotArmor, nil, GradeRare, 13, Stats{PDef: 24, MDef: 14, MaxHP: 80}, 3800,
+		gear("armor_rare", "Couraça de Osso", KindArmor, nil, GradeRare, 13, Stats{PDef: 24, MDef: 14, MaxHP: 80}, 3800,
 			"", "armor", "Ossos de guerreiros antigos, presos com tiras de couro."),
-		gear("armor_epic", "Manto do Senhor dos Ossos", KindArmor, SlotArmor, nil, GradeEpic, 18, Stats{PDef: 34, MDef: 26, MaxHP: 130, MaxMP: 40}, 11000,
+		gear("armor_epic", "Manto do Senhor dos Ossos", KindArmor, nil, GradeEpic, 18, Stats{PDef: 34, MDef: 26, MaxHP: 130, MaxMP: 40}, 11000,
 			"", "armor", "Ainda está frio ao toque."),
-		gear("helm_common", "Capuz de Couro", KindHelmet, SlotHelmet, nil, GradeCommon, 1, Stats{PDef: 2, MDef: 3, MaxMP: 10}, 80,
+		gear("helm_common", "Capuz de Couro", KindHelmet, nil, GradeCommon, 1, Stats{PDef: 2, MDef: 3, MaxMP: 10}, 80,
 			"", "helmet", "Protege do sol e de pancadas leves."),
-		gear("helm_good", "Elmo de Ferro", KindHelmet, SlotHelmet, nil, GradeGood, 6, Stats{PDef: 6, MDef: 6, MaxMP: 25}, 800,
+		gear("helm_good", "Elmo de Ferro", KindHelmet, nil, GradeGood, 6, Stats{PDef: 6, MDef: 6, MaxMP: 25}, 800,
 			"", "helmet", "Pesado, mas salva cabeças."),
-		gear("helm_rare", "Elmo de Osso", KindHelmet, SlotHelmet, nil, GradeRare, 13, Stats{PDef: 11, MDef: 11, MaxMP: 45}, 3000,
+		gear("helm_rare", "Elmo de Osso", KindHelmet, nil, GradeRare, 13, Stats{PDef: 11, MDef: 11, MaxMP: 45}, 3000,
 			"", "helmet", "Um crânio enorme, adaptado para cabeças humanas."),
+
+		gear("helm_epic", "Elmo do Senhor dos Ossos", KindHelmet, nil, GradeEpic, 18, Stats{PDef: 16, MDef: 16, MaxHP: 40, MaxMP: 70}, 9000,
+			"", "helmet", "Os olhos vazios ainda parecem vigiar."),
+
+		// Armas e escudo que só mudam o visual (opções da criação de personagem).
+		weapon("blade_common", "Lâmina Curva", "knight", GradeCommon, 1, Stats{PAtk: 6}, 100, "skeleton_blade", "",
+			"Curva e leve: corta mais do que perfura."),
+		weapon("axe_jagged_common", "Machado Serrilhado", "barbarian", GradeCommon, 1, Stats{PAtk: 7}, 100, "skeleton_axe", "",
+			"Os dentes da lâmina prendem e rasgam."),
+		weapon("wand_common", "Varinha de Aprendiz", "mage", GradeCommon, 1, Stats{MAtk: 8}, 100, "wand", "",
+			"Curta e precisa, boa para quem está começando."),
+		weapon("staff_dark_common", "Cajado Sombrio", "mage", GradeCommon, 1, Stats{MAtk: 8}, 100, "skeleton_staff", "",
+			"Madeira escura que parece beber a luz."),
+		weapon("blades_common", "Lâminas Curvas", "rogue", GradeCommon, 1, Stats{PAtk: 5}, 100, "skeleton_blade", "skeleton_blade",
+			"Duas lâminas curvas, rápidas no corte."),
+		weapon("daggers_mixed_common", "Adaga e Lâmina", "rogue", GradeCommon, 1, Stats{PAtk: 5}, 100, "dagger", "skeleton_blade",
+			"Uma para aparar, outra para cortar."),
+		gear("shield_tower", "Escudo Pesado", KindShield, shieldClasses, GradeCommon, 1, Stats{PDef: 8, Evasion: -3}, 90,
+			"skeleton_shield_large_a", "shield", "Grande e pesado: segura tudo, menos a pressa."),
+
+		// Pernas.
+		gear("legs_common", "Calças de Couro", KindLegs, nil, GradeCommon, 1, Stats{PDef: 3, MDef: 2, MaxHP: 10}, 90,
+			"", "legs", "Couro grosso nos joelhos."),
+		gear("legs_good", "Grevas de Malha", KindLegs, nil, GradeGood, 6, Stats{PDef: 9, MDef: 4, MaxHP: 25}, 900,
+			"", "legs", "Malha de ferro sobre calças acolchoadas."),
+		gear("legs_rare", "Grevas de Osso", KindLegs, nil, GradeRare, 13, Stats{PDef: 16, MDef: 9, MaxHP: 55}, 3200,
+			"", "legs", "Placas de osso que estalam a cada passo."),
+		gear("legs_epic", "Grevas do Crepúsculo", KindLegs, nil, GradeEpic, 18, Stats{PDef: 24, MDef: 15, MaxHP: 90, Evasion: 4}, 9500,
+			"", "legs", "Leves como sombra, duras como pedra."),
+		// Mãos.
+		gear("gloves_common", "Luvas de Couro", KindGloves, nil, GradeCommon, 1, Stats{PDef: 2, Accuracy: 3}, 70,
+			"", "gloves", "Boa pegada no cabo da arma."),
+		gear("gloves_good", "Manoplas de Ferro", KindGloves, nil, GradeGood, 6, Stats{PDef: 5, PAtk: 3, MAtk: 3, Accuracy: 5}, 800,
+			"", "gloves", "Dedos articulados de ferro batido."),
+		gear("gloves_rare", "Manoplas Rúnicas", KindGloves, nil, GradeRare, 13, Stats{PDef: 9, PAtk: 6, MAtk: 6, AtkSpeed: 0.05, CastSpeed: 0.05}, 3400,
+			"", "gloves", "As runas acendem quando o portador está em perigo."),
+		gear("gloves_epic", "Garras do Ossário", KindGloves, nil, GradeEpic, 18, Stats{PDef: 13, PAtk: 10, MAtk: 10, AtkSpeed: 0.08, CastSpeed: 0.08, Crit: 0.02}, 10500,
+			"", "gloves", "Unhas de osso afiadas como navalhas."),
+		// Pés.
+		gear("boots_common", "Botas de Viajante", KindBoots, nil, GradeCommon, 1, Stats{PDef: 2, Speed: 0.2}, 80,
+			"", "boots", "Já andaram por muitas estradas."),
+		gear("boots_good", "Botas de Ferro", KindBoots, nil, GradeGood, 6, Stats{PDef: 6, MDef: 3, Speed: 0.3}, 850,
+			"", "boots", "Pesadas, mas o passo é firme."),
+		gear("boots_rare", "Botas do Vento", KindBoots, nil, GradeRare, 13, Stats{PDef: 10, MDef: 6, Speed: 0.4, Evasion: 4}, 3300,
+			"", "boots", "Dizem que não deixam pegadas."),
+		gear("boots_epic", "Passos da Sombra", KindBoots, nil, GradeEpic, 18, Stats{PDef: 15, MDef: 10, Speed: 0.5, Evasion: 8}, 10000,
+			"", "boots", "Quem as usa chega antes de ser visto."),
+		// Capas.
+		gear("cape_common", "Capa de Lã", KindCape, nil, GradeCommon, 1, Stats{MDef: 3, Evasion: 2}, 80,
+			"", "cape", "Esquenta nas noites frias da estrada."),
+		gear("cape_good", "Capa do Patrulheiro", KindCape, nil, GradeGood, 6, Stats{MDef: 7, Evasion: 3, HPRegen: 0.5}, 900,
+			"", "cape", "Verde-escura, para sumir entre as árvores."),
+		gear("cape_rare", "Capa do Crepúsculo", KindCape, nil, GradeRare, 13, Stats{MDef: 13, Evasion: 5, HPRegen: 1}, 3500,
+			"", "cape", "Tecida com fios que bebem a luz."),
+		gear("cape_epic", "Manto das Cinzas", KindCape, nil, GradeEpic, 18, Stats{MDef: 21, Evasion: 7, MaxHP: 60, HPRegen: 2}, 10500,
+			"", "cape", "Cheira a fogueira apagada há séculos."),
+		// Colares.
+		gear("neck_common", "Colar de Contas", KindNecklace, nil, GradeCommon, 1, Stats{MDef: 3, MaxMP: 15}, 100,
+			"", "necklace", "Contas de madeira pintadas à mão."),
+		gear("neck_good", "Colar do Lobo", KindNecklace, nil, GradeGood, 6, Stats{MDef: 8, MaxHP: 30}, 1000,
+			"", "necklace", "Um dente de lobo preso num cordão de couro."),
+		gear("neck_rare", "Amuleto Rúnico", KindNecklace, nil, GradeRare, 13, Stats{MDef: 14, MaxHP: 50, MaxMP: 40}, 3800,
+			"", "necklace", "Uma pedra gravada que esquenta perto de magia."),
+		gear("neck_epic", "Coração do Abismo", KindNecklace, nil, GradeEpic, 18, Stats{MDef: 22, MaxHP: 90, MaxMP: 80, PAtk: 6, MAtk: 6}, 11500,
+			"", "necklace", "Bate devagar, como um coração de verdade."),
+		// Brincos (cabem nos dois encaixes de brinco).
+		gear("ear_common", "Brinco de Osso", KindEarring, nil, GradeCommon, 1, Stats{MDef: 2, MPRegen: 0.2}, 60,
+			"", "earring", "Um ossinho polido. Simples, mas dá sorte."),
+		gear("ear_good", "Brinco de Âmbar", KindEarring, nil, GradeGood, 6, Stats{MDef: 5, MaxMP: 20, MPRegen: 0.4}, 700,
+			"", "earring", "Uma gota de resina com um inseto dentro."),
+		gear("ear_rare", "Brinco de Safira", KindEarring, nil, GradeRare, 13, Stats{MDef: 9, MaxMP: 35, CastSpeed: 0.04}, 2700,
+			"", "earring", "Faz os feitiços saírem mais depressa."),
+		gear("ear_epic", "Lágrima da Lua", KindEarring, nil, GradeEpic, 18, Stats{MDef: 14, MaxMP: 60, CastSpeed: 0.06, MAtk: 5}, 8500,
+			"", "earring", "Brilha mais forte nas noites sem nuvem."),
+		// Anéis (cabem nos dois encaixes de anel).
+		gear("ring_common", "Anel de Cobre", KindRing, nil, GradeCommon, 1, Stats{MDef: 2, PAtk: 1, MAtk: 1}, 60,
+			"", "ring", "Verde nas bordas, mas ainda serve."),
+		gear("ring_good", "Anel de Prata", KindRing, nil, GradeGood, 6, Stats{MDef: 4, Crit: 0.01, Accuracy: 4}, 700,
+			"", "ring", "Prata fina, gravada com o brasão da cidade."),
+		gear("ring_rare", "Anel de Ônix", KindRing, nil, GradeRare, 13, Stats{MDef: 8, Crit: 0.02, CritDamage: 0.1}, 2700,
+			"", "ring", "Uma pedra negra que parece engolir a luz."),
+		gear("ring_epic", "Selo do Senhor dos Ossos", KindRing, nil, GradeEpic, 18, Stats{MDef: 12, Crit: 0.03, CritDamage: 0.2, PAtk: 5, MAtk: 5}, 8500,
+			"", "ring", "Quem usa o selo dá ordens aos mortos. Ou acha que dá."),
 
 		// Poções.
 		potion("potion_hp_s", "Poção de Vida Menor", CooldownHP, 80, 0, 20, "potion_hp", "Recupera 80 de vida na hora."),
@@ -214,7 +376,7 @@ var Items = func() map[string]*ItemDef {
 		stackable("broken_crown", "Coroa Partida", KindMaterial, 1500, "crown", "A coroa do Senhor dos Ossos. Vale uma fortuna."),
 
 		// Moedas no chão.
-		{ID: GoldID, Name: "Moedas de ouro", Kind: KindGold, Grade: GradeCommon, Slot: NoSlot, Stack: math.MaxInt32, Icon: "gold",
+		{ID: GoldID, Name: "Moedas de ouro", Kind: KindGold, Grade: GradeCommon, Stack: math.MaxInt32, Icon: "gold",
 			Description: "Dinheiro corrente em Erevia."},
 	}
 	m := make(map[string]*ItemDef, len(list))
@@ -243,29 +405,43 @@ type ItemRecord struct {
 	Count    int
 }
 
-// StarterKit: arma (e escudo) equipados + algumas poções.
-func StarterKit(class string) []ItemRecord {
-	weapons := map[string]string{"knight": "sword_common", "barbarian": "axe_common", "mage": "staff_common", "rogue": "daggers_common"}
-	w, ok := weapons[class]
+// StarterKit: o kit padrão da classe (aparência padrão).
+func StarterKit(class string) []ItemRecord { return StarterKitFor(class, DefaultLook(class)) }
+
+// StarterKitFor: a arma (e o escudo) escolhidos na criação, equipados, mais poções. Quem
+// escolheu "nada" na mão secundária recebe o escudo padrão na bolsa, para não perder nada.
+func StarterKitFor(class string, look Look) []ItemRecord {
+	opts, ok := StarterLooks[class]
 	if !ok {
-		w = "sword_common"
+		class, opts = "knight", StarterLooks["knight"]
 	}
-	kit := []ItemRecord{{Equipped: true, Slot: SlotWeapon, ItemID: w, Count: 1}}
-	switch class {
-	case "knight":
-		kit = append(kit, ItemRecord{Equipped: true, Slot: SlotOffhand, ItemID: "shield_badge", Count: 1})
-	case "barbarian":
-		kit = append(kit, ItemRecord{Equipped: true, Slot: SlotOffhand, ItemID: "shield_buckler", Count: 1})
+	if !ValidLook(class, look) {
+		look = DefaultLook(class)
 	}
-	return append(kit, ItemRecord{Slot: 0, ItemID: "potion_hp_s", Count: 5})
+	kit := []ItemRecord{{Equipped: true, Slot: SlotWeapon, ItemID: look.Weapon, Count: 1}}
+	if look.Offhand != "" {
+		kit = append(kit, ItemRecord{Equipped: true, Slot: SlotOffhand, ItemID: look.Offhand, Count: 1})
+	}
+	kit = append(kit, ItemRecord{Slot: 0, ItemID: "potion_hp_s", Count: 5})
+	if look.Offhand == "" && opts.Offhands[0] != "" {
+		kit = append(kit, ItemRecord{Slot: 1, ItemID: opts.Offhands[0], Count: 1})
+	}
+	return kit
 }
 
 // Lojas dos NPCs: ids de item à venda, na ordem da lista.
 var (
-	MerchantStock = []string{"potion_hp_s", "potion_hp_l", "potion_mp_s", "potion_mp_l"}
-	SmithStock    = []string{
-		"sword_common", "sword_good", "axe_common", "axe_good", "staff_common", "staff_good", "daggers_common", "daggers_good",
-		"shield_badge", "shield_buckler", "shield_good", "armor_common", "armor_good", "helm_common", "helm_good",
+	MerchantStock = []string{
+		"potion_hp_s", "potion_hp_l", "potion_mp_s", "potion_mp_l",
+		"neck_common", "neck_good", "ear_common", "ear_good", "ring_common", "ring_good",
+	}
+	SmithStock = []string{
+		"sword_common", "blade_common", "sword_good", "axe_common", "axe_jagged_common", "axe_good",
+		"staff_common", "wand_common", "staff_dark_common", "staff_good",
+		"daggers_common", "blades_common", "daggers_mixed_common", "daggers_good",
+		"shield_badge", "shield_buckler", "shield_tower", "shield_good",
+		"armor_common", "armor_good", "helm_common", "helm_good", "legs_common", "legs_good",
+		"gloves_common", "gloves_good", "boots_common", "boots_good", "cape_common", "cape_good",
 	}
 )
 

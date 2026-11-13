@@ -18,6 +18,7 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"erevia/server/internal/game"
 	"erevia/server/internal/store"
 	"erevia/server/internal/zone"
 )
@@ -65,6 +66,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/me", a.handleMe)
 	mux.HandleFunc("GET /api/characters", a.handleListCharacters)
 	mux.HandleFunc("POST /api/characters", a.handleCreateCharacter)
+	mux.HandleFunc("GET /api/creation", a.handleCreation)
 }
 
 // Authenticate devolve a conta da sessão no cookie (também usado pelo WebSocket).
@@ -257,8 +259,9 @@ func (a *API) handleCreateCharacter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name  string `json:"name"`
-		Class string `json:"class"`
+		Name  string     `json:"name"`
+		Class string     `json:"class"`
+		Look  *game.Look `json:"look"` // opcional: sem ele, a aparência padrão da classe
 	}
 	if !readJSON(w, r, &body) {
 		return
@@ -271,7 +274,15 @@ func (a *API) handleCreateCharacter(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Classe inválida.")
 		return
 	}
-	c, err := a.store.CreateCharacter(r.Context(), accountID, body.Name, body.Class)
+	look := game.DefaultLook(body.Class)
+	if body.Look != nil {
+		if !game.ValidLook(body.Class, *body.Look) {
+			writeError(w, http.StatusBadRequest, "Aparência inválida.")
+			return
+		}
+		look = *body.Look
+	}
+	c, err := a.store.CreateCharacter(r.Context(), accountID, body.Name, body.Class, look)
 	switch {
 	case errors.Is(err, store.ErrNameTaken):
 		writeError(w, http.StatusConflict, "Esse nome já está em uso.")
@@ -282,6 +293,48 @@ func (a *API) handleCreateCharacter(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusCreated, c)
 	}
+}
+
+// creationOption é uma arma ou escudo oferecido na criação (id "" = mão vazia).
+type creationOption struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Model    string `json:"model"`
+	OffModel string `json:"offModel,omitempty"`
+}
+
+type creationClass struct {
+	Weapons  []creationOption `json:"weapons"`
+	Offhands []creationOption `json:"offhands"`
+	Emblem   string           `json:"emblem"`
+}
+
+// creationOptions é montado uma vez (dados fixos do jogo).
+var creationOptions = func() map[string]any {
+	opt := func(id string) creationOption {
+		if id == "" {
+			return creationOption{Name: "Nada"}
+		}
+		d := game.Items[id]
+		return creationOption{ID: id, Name: d.Name, Model: d.Model, OffModel: d.OffModel}
+	}
+	classes := map[string]creationClass{}
+	for c, o := range game.StarterLooks {
+		cc := creationClass{Emblem: o.Emblem}
+		for _, id := range o.Weapons {
+			cc.Weapons = append(cc.Weapons, opt(id))
+		}
+		for _, id := range o.Offhands {
+			cc.Offhands = append(cc.Offhands, opt(id))
+		}
+		classes[c] = cc
+	}
+	return map[string]any{"classes": classes, "emblems": game.Emblems}
+}()
+
+// handleCreation: opções de aparência de cada classe (armas iniciais, escudos e cores).
+func (a *API) handleCreation(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, creationOptions)
 }
 
 // ---------- Utilitários ----------

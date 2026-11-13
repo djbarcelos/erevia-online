@@ -21,6 +21,8 @@ type Stats struct {
 	CastSpeed         float64 // 1 = normal
 	HPRegen, MPRegen  float64
 	CritDamage        float64 // multiplicador do crítico (2 = dobro)
+	// AtkSpeed só existe em bônus (equipamento): +0,05 = 5% mais ataques por segundo.
+	AtkSpeed float64
 }
 
 // ClassDef descreve uma classe jogável.
@@ -78,7 +80,8 @@ func ClassStats(class string, level int) Stats {
 	return s
 }
 
-// AddBonus soma bônus planos (equipamento) aos atributos de status.
+// AddBonus soma bônus planos (equipamento) aos atributos de status. A regeneração dos
+// bônus entra antes de FinishRegen, que soma a base por cima.
 func (s Stats) AddBonus(b Stats) Stats {
 	s.MaxHP += b.MaxHP
 	s.MaxMP += b.MaxMP
@@ -89,6 +92,17 @@ func (s Stats) AddBonus(b Stats) Stats {
 	s.Crit += b.Crit
 	s.Accuracy += b.Accuracy
 	s.Evasion += b.Evasion
+	s.Speed += b.Speed
+	s.CastSpeed += b.CastSpeed
+	s.HPRegen += b.HPRegen
+	s.MPRegen += b.MPRegen
+	s.CritDamage += b.CritDamage
+	s.AtkSpeed += b.AtkSpeed
+	// Ataques por segundo crescem com o bônus (só quando há um intervalo: somar bônus
+	// entre si não mexe nele).
+	if s.AtkInterval > 0 && b.AtkSpeed != 0 {
+		s.AtkInterval /= 1 + b.AtkSpeed
+	}
 	return s
 }
 

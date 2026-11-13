@@ -84,19 +84,33 @@ const (
 	ItemKind_ITEM_KIND_POTION      ItemKind = 5
 	ItemKind_ITEM_KIND_MATERIAL    ItemKind = 6
 	ItemKind_ITEM_KIND_GOLD        ItemKind = 7
+	ItemKind_ITEM_KIND_LEGS        ItemKind = 8
+	ItemKind_ITEM_KIND_GLOVES      ItemKind = 9
+	ItemKind_ITEM_KIND_BOOTS       ItemKind = 10
+	ItemKind_ITEM_KIND_CAPE        ItemKind = 11
+	ItemKind_ITEM_KIND_NECKLACE    ItemKind = 12
+	ItemKind_ITEM_KIND_EARRING     ItemKind = 13
+	ItemKind_ITEM_KIND_RING        ItemKind = 14
 )
 
 // Enum value maps for ItemKind.
 var (
 	ItemKind_name = map[int32]string{
-		0: "ITEM_KIND_UNSPECIFIED",
-		1: "ITEM_KIND_WEAPON",
-		2: "ITEM_KIND_SHIELD",
-		3: "ITEM_KIND_ARMOR",
-		4: "ITEM_KIND_HELMET",
-		5: "ITEM_KIND_POTION",
-		6: "ITEM_KIND_MATERIAL",
-		7: "ITEM_KIND_GOLD",
+		0:  "ITEM_KIND_UNSPECIFIED",
+		1:  "ITEM_KIND_WEAPON",
+		2:  "ITEM_KIND_SHIELD",
+		3:  "ITEM_KIND_ARMOR",
+		4:  "ITEM_KIND_HELMET",
+		5:  "ITEM_KIND_POTION",
+		6:  "ITEM_KIND_MATERIAL",
+		7:  "ITEM_KIND_GOLD",
+		8:  "ITEM_KIND_LEGS",
+		9:  "ITEM_KIND_GLOVES",
+		10: "ITEM_KIND_BOOTS",
+		11: "ITEM_KIND_CAPE",
+		12: "ITEM_KIND_NECKLACE",
+		13: "ITEM_KIND_EARRING",
+		14: "ITEM_KIND_RING",
 	}
 	ItemKind_value = map[string]int32{
 		"ITEM_KIND_UNSPECIFIED": 0,
@@ -107,6 +121,13 @@ var (
 		"ITEM_KIND_POTION":      5,
 		"ITEM_KIND_MATERIAL":    6,
 		"ITEM_KIND_GOLD":        7,
+		"ITEM_KIND_LEGS":        8,
+		"ITEM_KIND_GLOVES":      9,
+		"ITEM_KIND_BOOTS":       10,
+		"ITEM_KIND_CAPE":        11,
+		"ITEM_KIND_NECKLACE":    12,
+		"ITEM_KIND_EARRING":     13,
+		"ITEM_KIND_RING":        14,
 	}
 )
 
@@ -1308,7 +1329,8 @@ func (x *PickUp) GetId() uint32 {
 }
 
 // Lugares de um item: 0 = bolsa, 1 = equipado (slot = encaixe).
-// Mover entre espaços da bolsa (troca ou junta pilhas), equipar ou desequipar.
+// Mover entre espaços da bolsa (troca ou junta pilhas), equipar, desequipar ou trocar
+// dois encaixes de equipamento (anel 1 ↔ anel 2).
 type MoveItem struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	FromPlace     uint32                 `protobuf:"varint,1,opt,name=from_place,json=fromPlace,proto3" json:"from_place,omitempty"`
@@ -3689,6 +3711,14 @@ type ItemBonus struct {
 	PDef          int32                  `protobuf:"varint,5,opt,name=p_def,json=pDef,proto3" json:"p_def,omitempty"`
 	MDef          int32                  `protobuf:"varint,6,opt,name=m_def,json=mDef,proto3" json:"m_def,omitempty"`
 	Crit          float32                `protobuf:"fixed32,7,opt,name=crit,proto3" json:"crit,omitempty"`
+	Accuracy      float32                `protobuf:"fixed32,8,opt,name=accuracy,proto3" json:"accuracy,omitempty"`
+	Evasion       float32                `protobuf:"fixed32,9,opt,name=evasion,proto3" json:"evasion,omitempty"`
+	Speed         float32                `protobuf:"fixed32,10,opt,name=speed,proto3" json:"speed,omitempty"`                          // m/s
+	AtkSpeed      float32                `protobuf:"fixed32,11,opt,name=atk_speed,json=atkSpeed,proto3" json:"atk_speed,omitempty"`    // 0,05 = +5% de ataques por segundo
+	CastSpeed     float32                `protobuf:"fixed32,12,opt,name=cast_speed,json=castSpeed,proto3" json:"cast_speed,omitempty"` // 0,05 = +5% de velocidade de conjuração
+	HpRegen       float32                `protobuf:"fixed32,13,opt,name=hp_regen,json=hpRegen,proto3" json:"hp_regen,omitempty"`       // por segundo
+	MpRegen       float32                `protobuf:"fixed32,14,opt,name=mp_regen,json=mpRegen,proto3" json:"mp_regen,omitempty"`
+	CritDamage    float32                `protobuf:"fixed32,15,opt,name=crit_damage,json=critDamage,proto3" json:"crit_damage,omitempty"` // somado ao multiplicador do crítico
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3772,6 +3802,62 @@ func (x *ItemBonus) GetCrit() float32 {
 	return 0
 }
 
+func (x *ItemBonus) GetAccuracy() float32 {
+	if x != nil {
+		return x.Accuracy
+	}
+	return 0
+}
+
+func (x *ItemBonus) GetEvasion() float32 {
+	if x != nil {
+		return x.Evasion
+	}
+	return 0
+}
+
+func (x *ItemBonus) GetSpeed() float32 {
+	if x != nil {
+		return x.Speed
+	}
+	return 0
+}
+
+func (x *ItemBonus) GetAtkSpeed() float32 {
+	if x != nil {
+		return x.AtkSpeed
+	}
+	return 0
+}
+
+func (x *ItemBonus) GetCastSpeed() float32 {
+	if x != nil {
+		return x.CastSpeed
+	}
+	return 0
+}
+
+func (x *ItemBonus) GetHpRegen() float32 {
+	if x != nil {
+		return x.HpRegen
+	}
+	return 0
+}
+
+func (x *ItemBonus) GetMpRegen() float32 {
+	if x != nil {
+		return x.MpRegen
+	}
+	return 0
+}
+
+func (x *ItemBonus) GetCritDamage() float32 {
+	if x != nil {
+		return x.CritDamage
+	}
+	return 0
+}
+
 type ItemInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -3793,6 +3879,10 @@ type ItemInfo struct {
 	HealMp        uint32                 `protobuf:"varint,17,opt,name=heal_mp,json=healMp,proto3" json:"heal_mp,omitempty"`
 	Model         string                 `protobuf:"bytes,18,opt,name=model,proto3" json:"model,omitempty"`
 	OffModel      string                 `protobuf:"bytes,19,opt,name=off_model,json=offModel,proto3" json:"off_model,omitempty"`
+	// Encaixes onde o item pode ir (0 arma, 1 mão secundária, 2 peito, 3 cabeça, 4 pernas,
+	// 5 mãos, 6 pés, 7 capa, 8 colar, 9–10 brincos, 11–12 anéis). `slot` é o primeiro.
+	Slots         []uint32 `protobuf:"varint,20,rep,packed,name=slots,proto3" json:"slots,omitempty"`
+	WeaponType    string   `protobuf:"bytes,21,opt,name=weapon_type,json=weaponType,proto3" json:"weapon_type,omitempty"` // armas: sword, axe, staff, daggers
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3960,6 +4050,20 @@ func (x *ItemInfo) GetOffModel() string {
 	return ""
 }
 
+func (x *ItemInfo) GetSlots() []uint32 {
+	if x != nil {
+		return x.Slots
+	}
+	return nil
+}
+
+func (x *ItemInfo) GetWeaponType() string {
+	if x != nil {
+		return x.WeaponType
+	}
+	return ""
+}
+
 type Entity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -3980,7 +4084,8 @@ type Entity struct {
 	Weapon        string                 `protobuf:"bytes,16,opt,name=weapon,proto3" json:"weapon,omitempty"`   // modelo da arma (jogadores)
 	Offhand       string                 `protobuf:"bytes,17,opt,name=offhand,proto3" json:"offhand,omitempty"` // modelo da outra mão
 	WeaponGrade   uint32                 `protobuf:"varint,18,opt,name=weapon_grade,json=weaponGrade,proto3" json:"weapon_grade,omitempty"`
-	Title         string                 `protobuf:"bytes,19,opt,name=title,proto3" json:"title,omitempty"` // NPC: função (ex.: "Mercadora")
+	Title         string                 `protobuf:"bytes,19,opt,name=title,proto3" json:"title,omitempty"`   // NPC: função (ex.: "Mercadora")
+	Emblem        string                 `protobuf:"bytes,20,opt,name=emblem,proto3" json:"emblem,omitempty"` // jogadores: cor do emblema (#rrggbb), pinta o nome e o anel no chão
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4144,6 +4249,13 @@ func (x *Entity) GetWeaponGrade() uint32 {
 func (x *Entity) GetTitle() string {
 	if x != nil {
 		return x.Title
+	}
+	return ""
+}
+
+func (x *Entity) GetEmblem() string {
+	if x != nil {
+		return x.Emblem
 	}
 	return ""
 }
@@ -5314,7 +5426,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"reservedMs\"/\n" +
 	"\aNpcInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x14\n" +
-	"\x05stock\x18\x02 \x03(\tR\x05stock\"\xa1\x01\n" +
+	"\x05stock\x18\x02 \x03(\tR\x05stock\"\x80\x03\n" +
 	"\tItemBonus\x12\x15\n" +
 	"\x06max_hp\x18\x01 \x01(\x05R\x05maxHp\x12\x15\n" +
 	"\x06max_mp\x18\x02 \x01(\x05R\x05maxMp\x12\x13\n" +
@@ -5322,7 +5434,18 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x05m_atk\x18\x04 \x01(\x05R\x04mAtk\x12\x13\n" +
 	"\x05p_def\x18\x05 \x01(\x05R\x04pDef\x12\x13\n" +
 	"\x05m_def\x18\x06 \x01(\x05R\x04mDef\x12\x12\n" +
-	"\x04crit\x18\a \x01(\x02R\x04crit\"\x92\x04\n" +
+	"\x04crit\x18\a \x01(\x02R\x04crit\x12\x1a\n" +
+	"\baccuracy\x18\b \x01(\x02R\baccuracy\x12\x18\n" +
+	"\aevasion\x18\t \x01(\x02R\aevasion\x12\x14\n" +
+	"\x05speed\x18\n" +
+	" \x01(\x02R\x05speed\x12\x1b\n" +
+	"\tatk_speed\x18\v \x01(\x02R\batkSpeed\x12\x1d\n" +
+	"\n" +
+	"cast_speed\x18\f \x01(\x02R\tcastSpeed\x12\x19\n" +
+	"\bhp_regen\x18\r \x01(\x02R\ahpRegen\x12\x19\n" +
+	"\bmp_regen\x18\x0e \x01(\x02R\ampRegen\x12\x1f\n" +
+	"\vcrit_damage\x18\x0f \x01(\x02R\n" +
+	"critDamage\"\xc9\x04\n" +
 	"\bItemInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12'\n" +
@@ -5345,7 +5468,10 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\aheal_hp\x18\x10 \x01(\rR\x06healHp\x12\x17\n" +
 	"\aheal_mp\x18\x11 \x01(\rR\x06healMp\x12\x14\n" +
 	"\x05model\x18\x12 \x01(\tR\x05model\x12\x1b\n" +
-	"\toff_model\x18\x13 \x01(\tR\boffModel\"\xbb\x03\n" +
+	"\toff_model\x18\x13 \x01(\tR\boffModel\x12\x14\n" +
+	"\x05slots\x18\x14 \x03(\rR\x05slots\x12\x1f\n" +
+	"\vweapon_type\x18\x15 \x01(\tR\n" +
+	"weaponType\"\xd3\x03\n" +
 	"\x06Entity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\f\n" +
@@ -5366,7 +5492,8 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x06weapon\x18\x10 \x01(\tR\x06weapon\x12\x18\n" +
 	"\aoffhand\x18\x11 \x01(\tR\aoffhand\x12!\n" +
 	"\fweapon_grade\x18\x12 \x01(\rR\vweaponGrade\x12\x14\n" +
-	"\x05title\x18\x13 \x01(\tR\x05title\"\xa1\x01\n" +
+	"\x05title\x18\x13 \x01(\tR\x05title\x12\x16\n" +
+	"\x06emblem\x18\x14 \x01(\tR\x06emblem\"\xa1\x01\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +
@@ -5455,7 +5582,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x18CHAT_CHANNEL_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14CHAT_CHANNEL_GENERAL\x10\x01\x12\x18\n" +
 	"\x14CHAT_CHANNEL_WHISPER\x10\x02\x12\x17\n" +
-	"\x13CHAT_CHANNEL_SYSTEM\x10\x03*\xbe\x01\n" +
+	"\x13CHAT_CHANNEL_SYSTEM\x10\x03*\xd4\x02\n" +
 	"\bItemKind\x12\x19\n" +
 	"\x15ITEM_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10ITEM_KIND_WEAPON\x10\x01\x12\x14\n" +
@@ -5464,7 +5591,15 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x10ITEM_KIND_HELMET\x10\x04\x12\x14\n" +
 	"\x10ITEM_KIND_POTION\x10\x05\x12\x16\n" +
 	"\x12ITEM_KIND_MATERIAL\x10\x06\x12\x12\n" +
-	"\x0eITEM_KIND_GOLD\x10\a*\x87\x01\n" +
+	"\x0eITEM_KIND_GOLD\x10\a\x12\x12\n" +
+	"\x0eITEM_KIND_LEGS\x10\b\x12\x14\n" +
+	"\x10ITEM_KIND_GLOVES\x10\t\x12\x13\n" +
+	"\x0fITEM_KIND_BOOTS\x10\n" +
+	"\x12\x12\n" +
+	"\x0eITEM_KIND_CAPE\x10\v\x12\x16\n" +
+	"\x12ITEM_KIND_NECKLACE\x10\f\x12\x15\n" +
+	"\x11ITEM_KIND_EARRING\x10\r\x12\x12\n" +
+	"\x0eITEM_KIND_RING\x10\x0e*\x87\x01\n" +
 	"\n" +
 	"EntityKind\x12\x1b\n" +
 	"\x17ENTITY_KIND_UNSPECIFIED\x10\x00\x12\x16\n" +
