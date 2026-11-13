@@ -259,6 +259,8 @@ type Zone struct {
 
 	gone map[uint32]bool // personagens de contas apagadas (ver account.go)
 
+	errs zoneErrors // panics, tick lento e erros do banco (ver errors.go)
+
 	inv          *invasion // invasão da cidade em andamento (nil = nenhuma)
 	xp2          xp2State
 	eventBackend EventBackend
@@ -373,13 +375,14 @@ func (z *Zone) Run(ctx context.Context) {
 	defer ticker.Stop()
 	saveTicker := time.NewTicker(z.cfg.SaveEvery)
 	defer saveTicker.Stop()
-	go z.runClanWorker(ctx)
-	go z.runModWorker(ctx)
-	go z.runTelemetryWorker(ctx)
-	go z.runBossWorker(ctx)
-	go z.runSocialWorker(ctx)
-	go z.runRankingWorker(ctx)
-	go z.runEventWorker(ctx)
+	// Workers com recover: um panic é registrado e o worker recomeça (ver errors.go).
+	z.goWorker(ctx, "clan", z.runClanWorker)
+	z.goWorker(ctx, "mod", z.runModWorker)
+	z.goWorker(ctx, "telemetry", z.runTelemetryWorker)
+	z.goWorker(ctx, "boss", z.runBossWorker)
+	z.goWorker(ctx, "social", z.runSocialWorker)
+	z.goWorker(ctx, "ranking", z.runRankingWorker)
+	z.goWorker(ctx, "event", z.runEventWorker)
 
 	for {
 		select {
@@ -391,14 +394,16 @@ func (z *Zone) Run(ctx context.Context) {
 			return
 		case e := <-z.events:
 			z.stats.events++
-			z.handle(e)
+			z.handleSafe(e)
 		case <-ticker.C:
 			start := time.Now()
 			z.update(dt.Seconds())
-			z.stats.add(time.Since(start))
+			took := time.Since(start)
+			z.stats.add(took)
+			z.checkSlowTick(took)
 			z.flushTickStats(start)
 		case <-saveTicker.C:
-			z.saveAll(false)
+			z.runSystem(sysSaveAll, func() { z.saveAll(false) })
 		}
 	}
 }
@@ -723,63 +728,76 @@ func (z *Zone) removePlayer(id uint32) {
 	z.dropInvites(id)
 	z.clanOnLeave(p)
 	z.socialOnLeave(p)
-	st := z.savedState(p)
-	z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
-	z.save([]SavedState{st}, false)
+	if !z.dropAfterPanic(p) { // caiu por panic: não grava o estado atual (ver errors.go)
+		st := z.savedState(p)
+		z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
+		z.save([]SavedState{st}, false)
+	}
 	// Quem o conhecia recebe o Despawn pela AOI no fim do tick.
 	p.gone = true
 	z.aoiDirty = true
 	z.log.Info("player left", "id", id, "name", p.name, "online", len(z.players))
 }
 
-// update avança a simulação um tick e envia o delta para todos.
+// update avança a simulação um tick e envia o delta para todos. Cada sistema roda em
+// runSystem (recover e tempo); cada jogador e monstro tem o seu recover (ver errors.go).
 func (z *Zone) update(dt float64) {
 	z.tick++
 	z.now += dt
-	z.updateDaytime()
+	z.runSystem(sysDaytime, z.updateDaytime)
 
 	if z.now >= z.nextAura {
 		z.nextAura = z.now + auraEvery
-		z.updateAuras()
+		z.runSystem(sysAuras, z.updateAuras)
 	}
-	for _, p := range z.players {
-		p.pl.moveTokens = math.Min(z.cfg.MaxMovesPerSec, p.pl.moveTokens+z.cfg.MaxMovesPerSec*dt)
-		p.pl.chatTokens = math.Min(z.cfg.ChatBurst, p.pl.chatTokens+z.cfg.ChatPerSec*dt)
-		z.step(p, dt)
-		z.checkEmote(p)
-	}
-	for _, m := range z.monsters {
-		if m.dead {
-			z.updateDeadMonster(m)
-			continue
+	z.runSystem(sysPlayers, func() {
+		for _, p := range z.players {
+			z.guardPlayer(p, func() {
+				p.pl.moveTokens = math.Min(z.cfg.MaxMovesPerSec, p.pl.moveTokens+z.cfg.MaxMovesPerSec*dt)
+				p.pl.chatTokens = math.Min(z.cfg.ChatBurst, p.pl.chatTokens+z.cfg.ChatPerSec*dt)
+				z.step(p, dt)
+				z.checkEmote(p)
+			})
 		}
-		z.think(m)
-		z.step(m, dt)
-	}
-	z.updateTelegraphs()
-	z.updateInvasion()
+	})
+	z.runSystem(sysMonsters, func() {
+		for _, m := range z.monsters {
+			z.guardMonster(m, func() {
+				if m.dead {
+					z.updateDeadMonster(m)
+					return
+				}
+				z.think(m)
+				z.step(m, dt)
+			})
+		}
+	})
+	z.runSystem(sysTelegraphs, z.updateTelegraphs)
+	z.runSystem(sysInvasion, z.updateInvasion)
 
 	if z.tick%uint32(z.cfg.TickRate) == 0 { // 1×/s
-		z.expireGround()
-		z.expireFlags()
-		z.expireInvites()
-		z.syncParties()
-		z.checkLeaveTown()
-		z.checkTrades()
-		z.updateXP2()
+		z.runSystem(sysGround, z.expireGround)
+		z.runSystem(sysFlags, z.expireFlags)
+		z.runSystem(sysInvites, z.expireInvites)
+		z.runSystem(sysParties, z.syncParties)
+		z.runSystem(sysLeaveTown, z.checkLeaveTown)
+		z.runSystem(sysTrades, z.checkTrades)
+		z.runSystem(sysXP2, z.updateXP2)
 		if len(z.pending) > 0 {
-			z.save(nil, false)
+			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}
 	}
-	z.saveDue()
+	z.runSystem(sysSaveDue, z.saveDue)
 
-	z.flushSnapshot()
-	z.runAfterSnapshot()
-	for _, p := range z.players {
-		if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || int(math.Floor(p.mp)) != p.pl.sentMP {
-			z.sendSelfStats(p)
+	z.runSystem(sysSnapshot, z.flushSnapshot)
+	z.runSystem(sysAfterSnapshot, z.runAfterSnapshot)
+	z.runSystem(sysSelfStats, func() {
+		for _, p := range z.players {
+			if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || int(math.Floor(p.mp)) != p.pl.sentMP {
+				z.sendSelfStats(p)
+			}
 		}
-	}
+	})
 }
 
 // step: efeitos, regeneração, ação e movimento de uma entidade viva.
@@ -939,6 +957,7 @@ func (z *Zone) save(batch []SavedState, blocking bool) {
 	if z.saves == nil {
 		return
 	}
+	z.noteSaved(batch) // o último estado salvo vale depois de um panic (ver errors.go)
 	if len(z.pending) > 0 {
 		merged := make([]SavedState, 0, len(z.pending)+len(batch))
 		newer := map[uint32]bool{}
