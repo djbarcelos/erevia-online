@@ -748,7 +748,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     title: "Skills",
     hotkey: keys().skills,
     width: 1000,
-    height: 700,
+    height: 820, // 5 degraus (a janela nunca passa da altura da tela)
     build: () =>
       buildSkills({
         skills: welcome.skills,

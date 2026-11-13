@@ -46,4 +46,17 @@ export const SKILL_THEMES: Record<string, SkillTheme> = {
   r_flask: { glyph: "flask", bg: ["#5ac05a", "#0e2a0e"], accent: "#b0ff60" },
   r_para: { glyph: "bolt", bg: ["#6ab03a", "#14280a"], accent: "#f0ff80" },
   r_plague: { glyph: "skull", bg: ["#3a9a3a", "#081e08"], accent: "#c0ff80" },
+  // 5º degrau (nível 20): glifos que já existem, com o fundo mais escuro e o brilho dourado.
+  k_bulwark: { glyph: "shield", bg: ["#4a6fc0", "#0c1430"], accent: "#ffe08a" },
+  k_horizon: { glyph: "sword", bg: ["#e0b450", "#3a2004"], accent: "#ffffff" },
+  k_aegis: { glyph: "crown", bg: ["#3fb08f", "#06241c"], accent: "#ffe9a8" },
+  b_seismic: { glyph: "crack", bg: ["#d8602a", "#3a0c04"], accent: "#ffe08a" },
+  b_whirl: { glyph: "swirl", bg: ["#c02838", "#2a0408"], accent: "#ffb0a0" },
+  b_stone: { glyph: "fist", bg: ["#8a8a7a", "#1e1e16"], accent: "#e8f0a0" },
+  m_inferno: { glyph: "flame", bg: ["#f05018", "#480a02"], accent: "#fff0a0" },
+  m_zero: { glyph: "snow", bg: ["#8ad8ff", "#06203a"], accent: "#ffffff" },
+  m_arcane: { glyph: "burst", bg: ["#9a5af0", "#1a0840"], accent: "#f0e0ff" },
+  r_fatal: { glyph: "daggers", bg: ["#d03030", "#2a0404"], accent: "#ffe08a" },
+  r_shadow: { glyph: "blink", bg: ["#5a3ab8", "#0a0628"], accent: "#ffd28a" },
+  r_miasma: { glyph: "smoke", bg: ["#3aa83a", "#061e06"], accent: "#d0ff80" },
 };

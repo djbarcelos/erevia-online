@@ -6,10 +6,15 @@ import (
 )
 
 const (
-	CritMult      = 2.0
-	DeathXPLoss   = 0.04 // fração da XP do nível perdida ao morrer
-	xpCurveBase   = 80.0
-	xpCurveExp    = 2.2
+	CritMult    = 2.0
+	DeathXPLoss = 0.04 // fração da XP do nível perdida ao morrer
+	xpCurveBase = 80.0
+	xpCurveExp  = 2.2
+	// Do nível 20 em diante, cada nível pede 10% a mais por nível acima do 19 (o 20 pede
+	// ×1,1, o 29 pede ×2): sem isso, os 10 níveis do fim passariam rápido demais. Até o 19
+	// a curva é a de sempre (a XP salva dos personagens continua no mesmo nível).
+	xpLateFrom    = 20
+	xpLateStep    = 0.10
 	monsterXPExp  = 1.6
 	freeLevelDiff = 5 // até 5 níveis abaixo, XP cheia
 )
@@ -59,7 +64,11 @@ func XPToNext(l int) int64 {
 	if l >= MaxLevel {
 		return 0
 	}
-	return int64(math.Round(xpCurveBase * math.Pow(float64(l), xpCurveExp)))
+	xp := xpCurveBase * math.Pow(float64(l), xpCurveExp)
+	if l >= xpLateFrom {
+		xp *= 1 + xpLateStep*float64(l-xpLateFrom+1)
+	}
+	return int64(math.Round(xp))
 }
 
 // XPLevelStart é a XP total acumulada no início do nível l.

@@ -127,14 +127,14 @@ type BannerDef struct {
 }
 
 // TierLevels: nível do personagem que libera cada degrau da árvore.
-var TierLevels = [4]int{1, 5, 10, 15}
+var TierLevels = [5]int{1, 5, 10, 15, 20}
 
 type SkillDef struct {
 	ID      uint32
 	Class   string
 	Name    string
 	Branch  int // 0–2
-	Tier    int // 0–3
+	Tier    int // 0–4
 	MaxRank int
 
 	Passive PassiveKind // != 0: skill passiva (não se usa)
@@ -246,6 +246,19 @@ const (
 	SkillToxicFlask
 	SkillParalysis
 	SkillPlague
+	// 5º degrau (nível 20), um por ramo. No fim para não mudar os ids salvos.
+	SkillBulwark      // Cavaleiro: Baluarte
+	SkillHorizon      // Cavaleiro: Corte do Horizonte
+	SkillAegis        // Cavaleiro: Égide da Ordem
+	SkillSeismicAxe   // Bárbaro: Machadada Sísmica
+	SkillBloodWhirl   // Bárbaro: Redemoinho Sangrento
+	SkillStoneSkin    // Bárbaro: Pele de Pedra
+	SkillInferno      // Mago: Inferno
+	SkillAbsoluteZero // Mago: Zero Absoluto
+	SkillArcaneBlast  // Mago: Rajada Arcana
+	SkillFatalBlow    // Ladino: Golpe Fatal
+	SkillShadowStrike // Ladino: Golpe das Sombras
+	SkillMiasma       // Ladino: Miasma
 )
 
 // ---------------------------------------------------------------------------------------
@@ -382,6 +395,29 @@ func knightTree() []*SkillDef {
 			Text: func(int) string {
 				return "Finca um estandarte por 20 s: você e os aliados a até 8 m dele ganham +20% de defesa."
 			}},
+		// 5º degrau (nível 20)
+		{ID: SkillBulwark, Class: c, Name: "Baluarte", Branch: 0, Tier: 4, MaxRank: 3,
+			Target: TargetAreaSelf, Range: 5, MP: Scale{35, 0}, CD: Scale{24, 0}, Mult: Scale{1.4, 0.2}, Taunt: true,
+			OnTarget: &EffectSpec{Kind: EffectStun, Duration: Scale{1.5, 0.25}},
+			FX:       "k_bulwark", Description: "Crava o escudo no chão e vira o centro da batalha.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Causa %s do ataque a até 5 m, atordoa por %s s e faz os monstros atingidos atacarem você.",
+					pct(Scale{1.4, 0.2}.At(r)), num(Scale{1.5, 0.25}.At(r)))
+			}},
+		{ID: SkillHorizon, Class: c, Name: "Corte do Horizonte", Branch: 1, Tier: 4, MaxRank: 3,
+			Target: TargetEnemy, Range: 3, Splash: 3.5, MP: Scale{32, 0}, CD: Scale{15, 0}, Mult: Scale{2, 0.3},
+			OnTarget: &EffectSpec{Kind: EffectSlow, Duration: Scale{3, 0}, Value: Scale{0.4, 0}},
+			FX:       "k_horizon", Description: "Um corte tão largo que parece partir o horizonte.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Causa %s do ataque no alvo e em todos a até 3,5 m dele, que ficam 40%% mais lentos por 3 s.", pct(Scale{2, 0.3}.At(r)))
+			}},
+		{ID: SkillAegis, Class: c, Name: "Égide da Ordem", Branch: 2, Tier: 4, MaxRank: 3,
+			Target: TargetSelf, MP: Scale{45, 0}, CD: Scale{45, 0}, AllyRadius: 10,
+			OnSelf: &EffectSpec{Kind: EffectShield, Duration: Scale{8, 0}, Value: Scale{250, 125}},
+			FX:     "k_aegis", Description: "O juramento da ordem protege quem luta ao seu lado.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Você e os aliados a até 10 m ganham um escudo que absorve até %s de dano por 8 s.", num(Scale{250, 125}.At(r)))
+			}},
 	}
 }
 
@@ -451,6 +487,29 @@ func barbarianTree() []*SkillDef {
 			Passive: PassiveBearSpirit, PValue: Scale{0.03, 0}, FX: "b_bear",
 			Description: "Ferido, o bárbaro luta como uma fera.",
 			Text:        func(int) string { return "Abaixo de 50% de vida, regenera 3% da vida máxima por segundo." }},
+		// 5º degrau (nível 20)
+		{ID: SkillSeismicAxe, Class: c, Name: "Machadada Sísmica", Branch: 0, Tier: 4, MaxRank: 3,
+			Target: TargetEnemy, Range: 2.5, Splash: 3, MP: Scale{35, 0}, CD: Scale{16, 0}, Mult: Scale{2.4, 0.3},
+			ExecuteBelow: 0.3, ExecuteMult: 1.5,
+			FX: "b_seismic", Description: "O machado desce com tanta força que o chão em volta explode.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Causa %s do ataque no alvo e em todos a até 3 m dele; 50%% a mais em quem estiver abaixo de 30%% de vida.", pct(Scale{2.4, 0.3}.At(r)))
+			}},
+		{ID: SkillBloodWhirl, Class: c, Name: "Redemoinho Sangrento", Branch: 1, Tier: 4, MaxRank: 3,
+			Target: TargetAreaSelf, Range: 4, MP: Scale{30, 0}, CD: Scale{12, 0}, Mult: Scale{0.9, 0.15}, Hits: 2,
+			FX: "b_whirl", Description: "Gira o machado duas vezes, sem escolher em quem acerta.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Dois golpes de %s do ataque em todos os inimigos a até 4 m (a Sede de Sangue cura a cada golpe).", pct(Scale{0.9, 0.15}.At(r)))
+			}},
+		{ID: SkillStoneSkin, Class: c, Name: "Pele de Pedra", Branch: 2, Tier: 4, MaxRank: 3,
+			Target: TargetAreaSelf, Range: 5, MP: Scale{35, 0}, CD: Scale{30, 0}, Mult: Scale{1, 0.15},
+			OnSelf:   &EffectSpec{Kind: EffectBuffDef, Duration: Scale{10, 0}, Value: Scale{0.35, 0.1}},
+			OnTarget: &EffectSpec{Kind: EffectSlow, Duration: Scale{3, 0}, Value: Scale{0.3, 0}},
+			FX:       "b_stone", Description: "A pele endurece como rocha e o chão treme em volta.",
+			Text: func(r int) string {
+				return fmt.Sprintf("+%s de defesa por 10 s; os inimigos a até 5 m levam %s do ataque e ficam 30%% mais lentos por 3 s.",
+					pct(Scale{0.35, 0.1}.At(r)), pct(Scale{1, 0.15}.At(r)))
+			}},
 	}
 }
 
@@ -527,6 +586,29 @@ func mageTree() []*SkillDef {
 			Passive: PassiveOverload, PValue: Scale{0.15, 0}, FX: "m_over",
 			Description: "Mais poder, mais custo.",
 			Text:        func(int) string { return "+15% de ataque mágico; as skills custam 10% a mais de mana." }},
+		// 5º degrau (nível 20)
+		{ID: SkillInferno, Class: c, Name: "Inferno", Branch: 0, Tier: 4, MaxRank: 3,
+			Target: TargetEnemy, Range: 18, Splash: 5, MP: Scale{50, 0}, CD: Scale{18, 0}, Mult: Scale{1.8, 0.25}, Magic: true, Fire: true,
+			OnTarget: &EffectSpec{Kind: EffectBurn, Duration: Scale{5, 0}, Value: Scale{0.25, 0.05}, AtkFrac: true},
+			FX:       "m_inferno", Description: "Faz chover fogo e deixa o chão em chamas.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Causa %s do ataque mágico no alvo e em todos a até 5 m dele, que queimam por %s do ataque mágico por segundo durante 5 s.",
+					pct(Scale{1.8, 0.25}.At(r)), pct(Scale{0.25, 0.05}.At(r)))
+			}},
+		{ID: SkillAbsoluteZero, Class: c, Name: "Zero Absoluto", Branch: 1, Tier: 4, MaxRank: 3,
+			Target: TargetAreaSelf, Range: 6, MP: Scale{55, 0}, CD: Scale{30, 0}, Mult: Scale{1.5, 0.25}, Magic: true,
+			OnTarget: &EffectSpec{Kind: EffectStun, Duration: Scale{1.5, 0.25}},
+			FX:       "m_zero", Description: "O ar em volta congela de uma vez.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Causa %s do ataque mágico a até 6 m e congela os inimigos (atordoa) por %s s.",
+					pct(Scale{1.5, 0.25}.At(r)), num(Scale{1.5, 0.25}.At(r)))
+			}},
+		{ID: SkillArcaneBlast, Class: c, Name: "Rajada Arcana", Branch: 2, Tier: 4, MaxRank: 3,
+			Target: TargetEnemy, Range: 20, MP: Scale{45, 0}, CD: Scale{10, 0}, Mult: Scale{3, 0.4}, Magic: true, NoMiss: true,
+			FX: "m_arcane", Description: "Mana pura, concentrada num único disparo.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Causa %s do ataque mágico no alvo. Não erra.", pct(Scale{3, 0.4}.At(r)))
+			}},
 	}
 }
 
@@ -603,6 +685,29 @@ func rogueTree() []*SkillDef {
 			FX:       "r_plague", Description: "Uma doença que passa de corpo em corpo.",
 			Text: func(int) string {
 				return "Infecta o alvo: 20% do ataque por segundo por 8 s. Se ele morrer infectado, a praga pula para os inimigos a até 6 m."
+			}},
+		// 5º degrau (nível 20)
+		{ID: SkillFatalBlow, Class: c, Name: "Golpe Fatal", Branch: 0, Tier: 4, MaxRank: 3,
+			Target: TargetEnemy, Range: 2.5, MP: Scale{35, 0}, CD: Scale{18, 0}, Mult: Scale{2.5, 0.4}, ExtraCrit: 0.5,
+			ExecuteBelow: 0.35, ExecuteMult: 1.5,
+			FX: "r_fatal", Description: "Um só golpe, no lugar exato.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Causa %s do ataque com +50%% de chance de crítico; 50%% a mais em alvos abaixo de 35%% de vida.", pct(Scale{2.5, 0.4}.At(r)))
+			}},
+		{ID: SkillShadowStrike, Class: c, Name: "Golpe das Sombras", Branch: 1, Tier: 4, MaxRank: 3,
+			Target: TargetEnemy, Range: 12, MP: Scale{30, 0}, CD: Scale{20, 0}, Mult: Scale{1.8, 0.3}, Charge: true,
+			OnTarget: &EffectSpec{Kind: EffectBlind, Duration: Scale{4, 0}, Value: Scale{0.3, 0.1}},
+			FX:       "r_shadow", Description: "Sai das sombras colado no alvo e ataca os olhos.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Salta até o alvo (até 12 m), causa %s do ataque e o cega: ele erra %s mais por 4 s.",
+					pct(Scale{1.8, 0.3}.At(r)), pct(Scale{0.3, 0.1}.At(r)))
+			}},
+		{ID: SkillMiasma, Class: c, Name: "Miasma", Branch: 2, Tier: 4, MaxRank: 3,
+			Target: TargetAreaSelf, Range: 6, MP: Scale{40, 0}, CD: Scale{20, 0},
+			OnTarget: &EffectSpec{Kind: EffectPoison, Duration: Scale{6, 0}, Value: Scale{0.3, 0.05}, AtkFrac: true},
+			FX:       "r_miasma", Description: "Quebra frascos em volta de si e o ar fica venenoso.",
+			Text: func(r int) string {
+				return fmt.Sprintf("Envenena todos os inimigos a até 6 m: %s do ataque por segundo, por 6 s.", pct(Scale{0.3, 0.05}.At(r)))
 			}},
 	}
 }
