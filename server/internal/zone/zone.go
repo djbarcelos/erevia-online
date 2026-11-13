@@ -405,7 +405,6 @@ func (z *Zone) handle(e event) {
 			z.onClientStats(p, e.msg)
 		}
 
-
 	case accountGoneEvent:
 		z.onAccountGone(e.d)
 	}
