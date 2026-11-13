@@ -33,6 +33,7 @@ import {
 } from "@babylonjs/core";
 import { QUALITIES, settings, type Quality, type Settings } from "../ui/kit";
 import { RAID_LAIR, regionAt, type Region } from "../ui/regions";
+import { setPaletteColors, setPaletteEnabled } from "./palette-material";
 import type { WorldScene } from "./scene";
 
 // ---------------------------------------------------------------------------------------
@@ -170,14 +171,6 @@ export interface TimeLook {
   golden: number;
 }
 
-/** Saída da gradação para o material de paleta (palette-material.ts). */
-export interface GradeOut {
-  /** Cor da sombra da região, já com a hora (0–1, espaço gama). */
-  shade: Color3;
-  /** Cor da luz de borda. */
-  rim: Color3;
-}
-
 // ---------------------------------------------------------------------------------------
 // Sistema
 // ---------------------------------------------------------------------------------------
@@ -207,13 +200,14 @@ export class RenderQuality {
   private fogOut = new Color3();
   private skyOut = new Color3();
   private groundOut = new Color3();
-  readonly out: GradeOut = { shade: new Color3(), rim: new Color3() };
+  private rim = new Color3();
 
   constructor(
     private world: WorldScene,
     private glow: GlowLayer,
   ) {
     const scene = world.scene;
+    setPaletteEnabled(!LEGACY_RENDER);
     if (!LEGACY_RENDER) {
       const ip = scene.imageProcessingConfiguration;
       ip.toneMappingEnabled = true;
@@ -245,11 +239,6 @@ export class RenderQuality {
     return this.presetName;
   }
 
-  /** Gradação e névoa ligadas (desligadas só no ?render=antigo). */
-  get grading(): boolean {
-    return !LEGACY_RENDER;
-  }
-
   private apply(s: Settings): void {
     this.lastQuality = s.quality;
     this.lastShadows = s.shadows;
@@ -278,7 +267,7 @@ export class RenderQuality {
    */
   private buildPost(p: Preset): void {
     const { scene, camera } = this.world;
-    this.ssao?.dispose();
+    this.ssao?.dispose(true); // true: desliga também o passe de geometria (GeometryBufferRenderer)
     this.ssao = null;
     this.pipeline?.dispose();
     this.pipeline = null;
@@ -366,8 +355,9 @@ export class RenderQuality {
     Color3.LerpToRef(t.hemiSky, tintKeepingValue(t.hemiSky, shade, 1, this.tmp), 0.12, this.skyOut);
     hemi.diffuse = this.skyOut;
 
-    this.out.shade.copyFrom(shade);
-    Color3.LerpToRef(t.light, accent, 0.35, this.out.rim);
+    // Material de paleta: sombra da região e borda na cor da luz com o destaque.
+    Color3.LerpToRef(t.light, accent, 0.35, this.rim);
+    setPaletteColors(shade, this.rim);
   }
 
   /** Vetor do visual da região no ponto (o covil do raid vence o Vale, onde ele fica). */
