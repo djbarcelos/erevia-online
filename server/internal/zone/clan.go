@@ -271,6 +271,10 @@ func (z *Zone) clanCreate(p *entity, name string) {
 // onClanCreated: o banco respondeu ao pedido de criar.
 func (z *Zone) onClanCreated(e clanCreatedEvent) {
 	delete(z.clanCreating, e.req.player)
+	if e.err == nil && z.gone[e.req.player] { // a conta foi apagada enquanto o banco criava
+		z.clanOp(ClanOp{Kind: ClanOpDisband, ClanID: e.id})
+		return
+	}
 	p := z.players[e.req.player]
 	if e.err != nil {
 		z.refundGold(e.req.player, e.req.cost)
