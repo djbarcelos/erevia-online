@@ -68,3 +68,31 @@ func TestValidName(t *testing.T) {
 		}
 	}
 }
+
+// Soltar o WASD: o pedido chega atrasado (latência + 1 tick). Antes o cliente mandava
+// um destino com a posição que ele via, e o servidor voltava até ela e virava para trás.
+// Com o stop o servidor para onde está.
+func TestStopAfterWalkingNeverGoesBack(t *testing.T) {
+	z := newTestZone(nil)
+	join(z, 1, "Ana")
+	p := z.players[1]
+	start := p.pos
+	z.handle(moveEvent{id: 1, x: start.X + 3, z: start.Z})
+	for i := 0; i < 8; i++ {
+		z.update(0.05) // seis ticks até soltar + dois de latência
+	}
+	ahead := p.pos.X
+	z.handle(stopEvent{id: 1})
+	if p.dest != p.pos {
+		t.Fatalf("deveria parar onde está: pos=%v dest=%v", p.pos, p.dest)
+	}
+	for i := 0; i < 10; i++ {
+		z.update(0.05)
+		if p.pos.X < ahead-1e-9 {
+			t.Fatalf("o servidor voltou: x=%.3f depois de ter chegado a %.3f", p.pos.X, ahead)
+		}
+		if p.face.X <= 0 {
+			t.Fatalf("o personagem virou para trás: face=%v", p.face)
+		}
+	}
+}

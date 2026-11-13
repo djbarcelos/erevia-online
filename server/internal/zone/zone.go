@@ -147,9 +147,14 @@ type skillEvent struct {
 }
 type respawnEvent struct{ id uint32 }
 
+// stopEvent: soltou o WASD/joystick. O servidor para onde está; o cliente não sabe o ponto
+// exato (latência), e mandar um destino faria o personagem voltar e virar.
+type stopEvent struct{ id uint32 }
+
 func (joinEvent) isEvent()    {}
 func (leaveEvent) isEvent()   {}
 func (moveEvent) isEvent()    {}
+func (stopEvent) isEvent()    {}
 func (chatEvent) isEvent()    {}
 func (attackEvent) isEvent()  {}
 func (skillEvent) isEvent()   {}
@@ -250,6 +255,7 @@ func (z *Zone) Leave(ctx context.Context, id uint32, peer Peer) {
 func (z *Zone) Move(ctx context.Context, id uint32, x, z2 float64) {
 	z.post(ctx, moveEvent{id: id, x: x, z: z2})
 }
+func (z *Zone) Stop(ctx context.Context, id uint32) { z.post(ctx, stopEvent{id: id}) }
 func (z *Zone) Chat(ctx context.Context, id uint32, text, to string, channel pb.ChatChannel) {
 	z.post(ctx, chatEvent{id: id, text: text, to: to, channel: channel})
 }
@@ -318,6 +324,8 @@ func (z *Zone) handle(e event) {
 		}
 	case moveEvent:
 		z.onMove(e)
+	case stopEvent:
+		z.onStop(e)
 	case chatEvent:
 		z.onChat(e)
 	case attackEvent:
@@ -494,6 +502,16 @@ func (z *Zone) onMove(e moveEvent) {
 		return
 	}
 	z.goTo(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.bounds()))
+}
+
+// onStop para o andar livre. Não gasta token (parar não é abusável, e perder o pedido
+// deixaria o personagem seguir sozinho) e não cancela ataque nem canal.
+func (z *Zone) onStop(e stopEvent) {
+	p, ok := z.players[e.id]
+	if !ok || p.dead || p.act.kind != actNone {
+		return
+	}
+	p.stopMoving()
 }
 
 func (z *Zone) onChat(e chatEvent) {

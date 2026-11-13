@@ -2186,6 +2186,7 @@ type MoveTo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	X             float32                `protobuf:"fixed32,1,opt,name=x,proto3" json:"x,omitempty"`
 	Z             float32                `protobuf:"fixed32,2,opt,name=z,proto3" json:"z,omitempty"`
+	Stop          bool                   `protobuf:"varint,3,opt,name=stop,proto3" json:"stop,omitempty"` // parar onde estiver no servidor (x/z ignorados): soltar o WASD/joystick
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2232,6 +2233,13 @@ func (x *MoveTo) GetZ() float32 {
 		return x.Z
 	}
 	return 0
+}
+
+func (x *MoveTo) GetStop() bool {
+	if x != nil {
+		return x.Stop
+	}
+	return false
 }
 
 type Ping struct {
@@ -7673,10 +7681,11 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\bskill_id\x18\x01 \x01(\rR\askillId\x12\x12\n" +
 	"\x04rank\x18\x02 \x01(\rR\x04rank\")\n" +
 	"\x04Join\x12!\n" +
-	"\fcharacter_id\x18\x01 \x01(\rR\vcharacterId\"$\n" +
+	"\fcharacter_id\x18\x01 \x01(\rR\vcharacterId\"8\n" +
 	"\x06MoveTo\x12\f\n" +
 	"\x01x\x18\x01 \x01(\x02R\x01x\x12\f\n" +
-	"\x01z\x18\x02 \x01(\x02R\x01z\"'\n" +
+	"\x01z\x18\x02 \x01(\x02R\x01z\x12\x12\n" +
+	"\x04stop\x18\x03 \x01(\bR\x04stop\"'\n" +
 	"\x04Ping\x12\x1f\n" +
 	"\vclient_time\x18\x01 \x01(\x01R\n" +
 	"clientTime\"`\n" +

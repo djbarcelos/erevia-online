@@ -48,6 +48,11 @@ export class Connection {
     this.send({ case: "moveTo", value: { x, z } });
   }
 
+  /** Para de andar onde estiver no servidor (soltou o WASD/joystick). */
+  stop(): void {
+    this.send({ case: "moveTo", value: { stop: true } });
+  }
+
   /** channel: GRUPO ou CLÃ (sem canal = geral, ou sussurro se "to" estiver preenchido). */
   chat(text: string, to: string, channel = ChatChannel.UNSPECIFIED): void {
     this.send({ case: "chatSend", value: { text, to, channel } });

@@ -171,6 +171,7 @@ message Join {
 message MoveTo {
   float x = 1;
   float z = 2;
+  bool stop = 3; // parar onde estiver no servidor (x/z ignorados): soltar o WASD/joystick
 }
 
 message Ping {

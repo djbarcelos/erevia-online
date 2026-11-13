@@ -163,7 +163,8 @@ interface View extends EntityInfo {
 /** Jogadores e monstros na tela: criação, movimento suave, animações e combate. */
 export class EntityManager {
   private views = new Map<number, View>();
-  private localPending: { x: number; z: number; at: number } | null = null;
+  /** Destino previsto esperando o servidor confirmar (stop = soltou o WASD/joystick). */
+  private localPending: { x: number; z: number; at: number; stop?: boolean } | null = null;
   private mats = new Map<string, StandardMaterial>();
   private ringMat: StandardMaterial;
   /** Último evento de skill com área no alvo (para animar uma vez só). */
@@ -536,9 +537,20 @@ export class EntityManager {
     // não deixa um snapshot antigo "puxar" o personagem de volta.
     if (s.id === this.localId && this.localPending) {
       const pend = this.localPending;
-      const confirmed = Math.abs(s.targetX - pend.x) < 0.05 && Math.abs(s.targetZ - pend.z) < 0.05;
       const expired = performance.now() - pend.at > PENDING_TIMEOUT_MS;
-      if (!confirmed && !expired) return;
+      if (pend.stop) {
+        // Parando: o servidor para onde estiver, sempre um pouco à frente do que vemos.
+        // Até o snapshot dele parado chegar, segue a posição dele sem andar para trás.
+        const stopped = Math.abs(s.targetX - s.x) < 0.05 && Math.abs(s.targetZ - s.z) < 0.05;
+        if (!stopped && !expired) {
+          v.target.x = s.x;
+          v.target.z = s.z;
+          return;
+        }
+      } else {
+        const confirmed = Math.abs(s.targetX - pend.x) < 0.05 && Math.abs(s.targetZ - pend.z) < 0.05;
+        if (!confirmed && !expired) return;
+      }
       this.localPending = null;
     }
     v.target.x = s.targetX;
@@ -940,10 +952,13 @@ export class EntityManager {
     return this.local?.root.position;
   }
 
-  /** Ponto onde o jogador local está de fato (posição prevista, à frente da desenhada). */
-  localMovePosition(): { x: number; z: number } | undefined {
+  /** Soltou o WASD/joystick: para a previsão na hora e espera o servidor dizer onde parou. */
+  stopLocal(): void {
     const v = this.local;
-    return v ? { x: v.server.x, z: v.server.z } : undefined;
+    if (!v || v.dead) return;
+    v.target.x = v.server.x;
+    v.target.z = v.server.z;
+    this.localPending = { x: v.server.x, z: v.server.z, at: performance.now(), stop: true };
   }
 
   /** Entidades vivas para o mapa (posição desenhada, não a do servidor). */

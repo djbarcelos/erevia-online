@@ -173,7 +173,11 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 
 		switch m := msg.Msg.(type) {
 		case *pb.ClientMessage_MoveTo:
-			s.zone.Move(ctx, id, float64(m.MoveTo.X), float64(m.MoveTo.Z))
+			if m.MoveTo.Stop {
+				s.zone.Stop(ctx, id)
+			} else {
+				s.zone.Move(ctx, id, float64(m.MoveTo.X), float64(m.MoveTo.Z))
+			}
 		case *pb.ClientMessage_ChatSend:
 			s.zone.Chat(ctx, id, m.ChatSend.Text, m.ChatSend.To, m.ChatSend.Channel)
 		case *pb.ClientMessage_Attack:
