@@ -32,6 +32,7 @@ func main() {
 }
 
 func run(log *slog.Logger) error {
+	startedAt := time.Now() // uptime no portal de administração
 	addr := env("ADDR", "")
 	if addr == "" {
 		addr = ":" + env("PORT", "8080") // a Railway define PORT
@@ -151,6 +152,8 @@ func run(log *slog.Logger) error {
 	zoneDone := make(chan struct{})
 	go func() { z.Run(ctx); close(zoneDone) }()
 
+	// Portal de administração (/admin e /api/admin/*): só GM; "online agora" vem da zona pelo canal.
+	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: z})
 	mux := http.NewServeMux()
 	httpAPI.Register(mux)
 	mux.Handle("/ws", gamenet.NewServer(z, &wsBackend{api: httpAPI, store: st}, log, origins))
@@ -164,7 +167,7 @@ func run(log *slog.Logger) error {
 		w.Write([]byte("ok"))
 	})
 	if dir := os.Getenv("STATIC_DIR"); dir != "" {
-		mux.Handle("/", staticHandler(dir))
+		mux.Handle("/", staticHandler(dir, httpAPI.AdminOnly))
 		log.Info("serving client", "dir", dir)
 	}
 
