@@ -262,3 +262,57 @@ export const CHAT_SEED: { ch: "general" | "party" | "whisper" | "system"; from?:
   { ch: "whisper", from: "Kael", text: "bora fazer a missão do capitão depois?" },
   { ch: "system", text: "Você recebeu 1.240 de XP." },
 ];
+
+// ---------------------------------------------------------------------------------------
+// Mapa: zonas de caça (anéis ao redor da cidade) e pontos de interesse
+// ---------------------------------------------------------------------------------------
+
+export interface Zone {
+  id: string;
+  name: string;
+  rMin: number;
+  rMax: number;
+  levelMin: number;
+  levelMax: number;
+  safe?: boolean;
+  /** "r,g,b" */
+  rgb: string;
+  desc: string;
+}
+
+export const ZONES: Zone[] = [
+  { id: "city", name: "Vel'Aran", rMin: 0, rMax: 40, levelMin: 0, levelMax: 0, safe: true, rgb: "120,190,255", desc: "Cidade murada. Zona segura: aqui ninguém ataca." },
+  { id: "outskirts", name: "Arredores", rMin: 40, rMax: 58, levelMin: 1, levelMax: 8, rgb: "120,200,110", desc: "Bichos fracos perto da muralha. Bom para começar." },
+  { id: "bones", name: "Campos dos Ossos", rMin: 58, rMax: 105, levelMin: 10, levelMax: 16, rgb: "230,180,80", desc: "Esqueletos que levantam à noite. Chefe: Capitão Ossudo." },
+  { id: "wastes", name: "Ermos Partidos", rMin: 105, rMax: 150, levelMin: 17, levelMax: 25, rgb: "230,90,70", desc: "Terra rachada e perigosa. Vá em grupo." },
+];
+
+export function zoneAt(x: number, z: number): Zone {
+  const r = Math.hypot(x, z);
+  return ZONES.find((zn) => r >= zn.rMin && r < zn.rMax) ?? ZONES[ZONES.length - 1];
+}
+
+export interface MapPoi {
+  kind: "quest" | "quest-area" | "gate" | "portal";
+  name: string;
+  sub?: string;
+  x: number;
+  z: number;
+  r?: number;
+}
+
+export const MAP_POIS: MapPoi[] = [
+  { kind: "quest", name: "Capitão Hadrian", sub: "Carta para o capitão", x: 36, z: 6 },
+  { kind: "quest-area", name: "Ossos que não descansam", sub: "Derrotar esqueletos", x: 0, z: 78, r: 20 },
+  { kind: "portal", name: "Pedra de Teleporte", sub: "Viagem rápida", x: 8, z: -8 },
+  { kind: "gate", name: "Portão Norte", x: 0, z: 39 },
+  { kind: "gate", name: "Portão Sul", x: 0, z: -39 },
+  { kind: "gate", name: "Portão Leste", x: 39, z: 0 },
+  { kind: "gate", name: "Portão Oeste", x: -39, z: 0 },
+];
+
+/** Posições falsas dos colegas de grupo no mapa. */
+export const PARTY_POS = [
+  { name: "Lyra", x: 12, z: 70 },
+  { name: "Brann", x: -15, z: 74 },
+];

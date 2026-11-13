@@ -14,7 +14,7 @@ import { hourLabel, isNight } from "../../world/daynight";
 import { renderMapCanvas } from "../../world/map-painter";
 import { ui, uniqueIds } from "../art";
 import { ITEMS, itemIcon } from "../data/items";
-import { CHAT_SEED, game, HOTBAR_SIZE, PARTY, QUESTS, xpNeeded } from "../data/mock";
+import { CHAT_SEED, game, HOTBAR_SIZE, PARTY, QUESTS, xpNeeded, zoneAt } from "../data/mock";
 import { nodeIcon, type SkillNode } from "../data/skilltree";
 import {
   art,
@@ -107,7 +107,7 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
     height: 640,
     build: async (close) => (await import("./windows/settings")).build({ close, exit: () => ctx.go("personagem"), logout: () => ctx.go("login") }),
   });
-  reg({ id: "map", title: "Mapa do mundo", hotkey: settings.get().keys.map, width: 720, height: 720, build: () => buildMap() });
+  reg({ id: "map", title: "Mapa do mundo", hotkey: settings.get().keys.map, width: 1080, height: 740, build: async () => (await import("./windows/worldmap")).build(sim) });
   const wm = new WindowManager(defs);
   wm.onChange = () => {
     menuBtns.forEach((b, id) => b.classList.toggle("on", wm.isOpen(id)));
@@ -150,7 +150,7 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
   const miniCtx = miniCanvas.getContext("2d")!;
   const clock = el("span", "mm-clock");
   const coords = el("span", "mm-coords");
-  const zoneName = el("div", "mm-zone", "Campos ao Norte");
+  const zoneName = el("div", "mm-zone", "");
   let miniRadius = 40;
   const zoomIn = button("+", "mm-btn", () => (miniRadius = Math.max(20, miniRadius - 10)));
   const zoomOut = button("−", "mm-btn", () => (miniRadius = Math.min(90, miniRadius + 10)));
@@ -438,37 +438,6 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
     openSheet(el("div", null, el("h3", "title sheet-title", "Menu"), grid));
   }
 
-  function buildMap(): HTMLElement {
-    const wrap = el("div", "world-map");
-    const c = el("canvas", "wm-canvas");
-    const src = mapCanvas ?? (mapCanvas = renderMapCanvas(sim.data));
-    c.width = src.width;
-    c.height = src.height;
-    const cx = c.getContext("2d")!;
-    const draw = () => {
-      if (!c.isConnected) return;
-      cx.drawImage(src, 0, 0);
-      const k = src.width / sim.data.size;
-      const p = (x: number, z: number) => [(x + sim.data.size / 2) * k, (sim.data.size / 2 - z) * k] as const;
-      for (const u of sim.units) {
-        if (u.dead) continue;
-        const [x, y] = p(u.x, u.z);
-        if (u.boss) drawBossMarker(cx, x, y, 9);
-        else drawDot(cx, x, y, 5, MARKER_COLORS.monster);
-      }
-      const [x, y] = p(sim.me.x, sim.me.z);
-      cx.save();
-      cx.translate(x, y);
-      cx.rotate(sim.me.heading);
-      cx.scale(1.6, 1.6);
-      drawPlayerArrow(cx, 14);
-      cx.restore();
-      requestAnimationFrame(draw);
-    };
-    draw();
-    wrap.append(c, el("p", "muted small wm-legend", "● Monstros   ◆ Chefe   ▲ Você — role para aproximar (no jogo real)"));
-    return wrap;
-  }
 
   // ---------- Chat ----------
   function createChat() {
@@ -828,6 +797,7 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
       pingEl.className = sim.ping < 60 ? "ok" : "warn";
       clock.innerHTML = `${ui(isNight(sim.phase) ? "moon" : "sun", 12)}${hourLabel(sim.phase)}`;
       coords.textContent = `${Math.round(sim.me.x)}, ${Math.round(sim.me.z)}`;
+      zoneName.textContent = zoneAt(sim.me.x, sim.me.z).name;
     }
   };
 

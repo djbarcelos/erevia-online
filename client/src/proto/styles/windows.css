@@ -1361,3 +1361,305 @@
 .mm-item:active {
   transform: scale(0.96);
 }
+
+/* ======================= MAPA DO MUNDO (novo) ======================= */
+
+.wmap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  height: 100%;
+}
+
+.wmap-view {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: #0d120b;
+  border-right: 1px solid var(--line);
+}
+
+.wmap-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+.wmap-compass {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
+}
+
+.wmap-compass svg {
+  width: 100%;
+  height: 100%;
+}
+
+.wmap-scale {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: grid;
+  gap: 3px;
+  font-size: 0.7rem;
+  color: var(--gold-hi);
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+
+.wmap-scale i {
+  display: block;
+  height: 6px;
+  border: 2px solid var(--gold-hi);
+  border-top: 0;
+  box-shadow: 0 1px 2px #000;
+}
+
+.wmap-tools {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.wmap-btn {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: rgba(14, 11, 20, 0.88);
+  color: var(--gold-hi);
+  font-size: 1.3rem;
+  padding: 0;
+}
+
+.wmap-btn:hover,
+.wmap-btn.on {
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(214, 180, 110, 0.35);
+}
+
+.wmap-hover {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(10, 8, 14, 0.85);
+  border: 1px solid var(--line);
+  font-size: 0.76rem;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.wmap-hint {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(10, 8, 14, 0.7);
+  font-size: 0.72rem;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.wmap-side {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(214, 180, 110, 0.05), transparent 40%);
+}
+
+.wmap-title {
+  margin: 0;
+  font-family: var(--font-title);
+  color: var(--gold);
+  letter-spacing: 0.08em;
+  font-size: 1.05rem;
+}
+
+.wmap-here {
+  --zc: var(--gold);
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--zc);
+}
+
+.wmap-here b {
+  font-family: var(--font-title);
+  font-size: 1rem;
+}
+
+.wmap-here .zl {
+  color: var(--zc);
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.wmap-here small {
+  line-height: 1.35;
+}
+
+.wmap-sec {
+  margin-top: 6px;
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-lo);
+}
+
+.wmap-layers {
+  display: grid;
+  gap: 2px;
+}
+
+.wmap-layer {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.lg-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+}
+
+.wmap-zones,
+.wmap-quests {
+  display: grid;
+  gap: 6px;
+}
+
+.wmap-zone,
+.wmap-quest {
+  --zc: var(--gold);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.3);
+  text-align: left;
+  color: var(--text);
+}
+
+.wmap-zone:hover,
+.wmap-quest:hover {
+  border-color: var(--zc);
+}
+
+.wmap-zone .zc {
+  width: 10px;
+  height: 34px;
+  border-radius: 3px;
+  background: var(--zc);
+  opacity: 0.85;
+}
+
+.wmap-zone .zn,
+.wmap-quest > span:last-child {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.wmap-zone small,
+.wmap-quest small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.3;
+}
+
+.wmap-zone .zl {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--zc);
+  white-space: nowrap;
+}
+
+.wmap-quest {
+  grid-template-columns: auto 1fr;
+}
+
+.qm {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid #ffd36b;
+  color: #ffd36b;
+  font-weight: 900;
+  background: #2a1d07;
+}
+
+@media (max-width: 767px), (max-height: 520px) {
+  .wmap {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .wmap-view {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .wmap-side {
+    max-height: 34dvh;
+  }
+
+  .wmap-hint {
+    display: none;
+  }
+
+  .wmap-compass {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+/* Celular deitado: painel ao lado, estreito */
+@media (max-height: 520px) and (min-width: 600px) {
+  .wmap {
+    grid-template-columns: minmax(0, 1fr) 230px;
+    grid-template-rows: 1fr;
+  }
+
+  .wmap-side {
+    max-height: none;
+  }
+
+  .wmap-view {
+    border-bottom: 0;
+    border-right: 1px solid var(--line);
+  }
+}
