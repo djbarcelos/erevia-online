@@ -1470,18 +1470,19 @@ export class EntityManager {
       }
 
       const pos = v.root.position;
+      // Só escreve na posição quando ela muda: escrever (mesmo o mesmo valor) marca o nó
+      // como sujo, e aí o Babylon refaz a matriz de tudo que está embaixo dele no quadro.
+      // As aproximações suaves encostam no destino abaixo de 1 mm (invisível) e param.
       if (v.id === this.localId && this.localDriven && !v.dead) {
         // Cliente dirigindo: desenha a previsão (a câmera vai junto, sem trancos) mais o
         // resto de alguma correção, que some suavemente.
         const k = Math.exp(-LOCAL_SMOOTH_RATE * dt);
-        this.drawOffset.x *= k;
-        this.drawOffset.z *= k;
-        pos.x = v.server.x + this.drawOffset.x;
-        pos.z = v.server.z + this.drawOffset.z;
+        this.drawOffset.x = settle(this.drawOffset.x * k, 0);
+        this.drawOffset.z = settle(this.drawOffset.z * k, 0);
+        setIfChanged(pos, v.server.x + this.drawOffset.x, v.server.z + this.drawOffset.z);
       } else {
         // Aproxima suavemente a posição desenhada da posição extrapolada.
-        pos.x += (v.server.x - pos.x) * blend;
-        pos.z += (v.server.z - pos.z) * blend;
+        setIfChanged(pos, settle(pos.x + (v.server.x - pos.x) * blend, v.server.x), settle(pos.z + (v.server.z - pos.z) * blend, v.server.z));
       }
       if (v.id === this.localId) this.recordLocal(v);
 
@@ -1491,7 +1492,14 @@ export class EntityManager {
         v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
         v.faceYaw = null;
       } else if (v.faceYaw !== null) {
-        v.visual.rotation.y = lerpAngle(v.visual.rotation.y, v.faceYaw, 1 - Math.exp(-FACE_RATE * dt));
+        const yaw = lerpAngle(v.visual.rotation.y, v.faceYaw, 1 - Math.exp(-FACE_RATE * dt));
+        // Já virou: fixa o ângulo e para de girar (senão o nó fica sujo todo quadro).
+        if (Math.abs(lerpAngle(yaw, v.faceYaw, 1) - yaw) < 1e-3) {
+          v.visual.rotation.y = v.faceYaw;
+          v.faceYaw = null;
+        } else {
+          v.visual.rotation.y = yaw;
+        }
       }
       if (v.bounds) this.moveBounds(v);
       if (v.anim) {
@@ -1842,6 +1850,17 @@ function showDamage(): boolean {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/** Valor de uma aproximação suave, já no destino quando falta menos de 1 mm. */
+function settle(v: number, target: number): number {
+  return Math.abs(target - v) < 1e-3 ? target : v;
+}
+
+/** Muda x/z só se mudaram (escrever no Vector3 marca o nó como sujo). */
+function setIfChanged(p: Vector3, x: number, z: number): void {
+  if (p.x !== x) p.x = x;
+  if (p.z !== z) p.z = z;
 }
 
 function lerpAngle(a: number, b: number, t: number): number {
