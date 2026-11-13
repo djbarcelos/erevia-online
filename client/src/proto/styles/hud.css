@@ -129,15 +129,29 @@
   align-items: center;
   gap: 2px 12px;
   padding: 8px 14px 8px 8px;
-  width: 440px;
+  width: 100%;
 }
 
+/* Buffs numa linha embaixo das barras */
 .hud-me .effects {
   grid-column: 1 / -1;
-  grid-row: 1;
+  grid-row: 2;
+  margin-top: 4px;
+}
+
+.hud-me .effects:empty {
+  display: none;
+}
+
+/* Coluna esquerda: personagem, grupo e missões */
+.hud-left {
   position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
+  top: 12px;
+  left: 12px;
+  width: 300px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
 }
 
 .me-crest {
@@ -291,7 +305,7 @@
 .hud-minimap {
   position: absolute;
   top: 12px;
-  left: 12px;
+  right: 12px;
   display: grid;
   justify-items: center;
   gap: 6px;
@@ -396,7 +410,7 @@
 .hud-tr {
   position: absolute;
   top: 12px;
-  right: 12px;
+  right: 210px;
   display: grid;
   justify-items: end;
   gap: 6px;
@@ -464,10 +478,6 @@
 /* ---------- Missões e grupo ---------- */
 
 .hud-side {
-  position: absolute;
-  right: 12px;
-  top: 112px;
-  width: 236px;
   display: grid;
   gap: 10px;
 }
@@ -478,7 +488,7 @@
   gap: 6px;
   padding: 8px 10px 10px;
   border-radius: 6px;
-  background: linear-gradient(90deg, transparent, rgba(10, 8, 14, 0.72) 18%);
+  background: linear-gradient(270deg, transparent, rgba(10, 8, 14, 0.72) 22%);
 }
 
 .side-head {
@@ -493,7 +503,7 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 0;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 .side-head i {
@@ -512,7 +522,7 @@
 .quest {
   display: grid;
   gap: 1px;
-  text-align: right;
+  text-align: left;
 }
 
 .quest b {
@@ -523,7 +533,7 @@
 
 .q-step {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
   color: var(--text);
   font-size: 0.78rem;
@@ -850,7 +860,7 @@
 .auto-pill {
   position: absolute;
   left: 50%;
-  bottom: 168px;
+  bottom: 92px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -1248,22 +1258,16 @@
   display: none;
 }
 
-.hud-screen.touch .hud-bottom {
+.hud-screen.touch .hud-left {
   left: calc(8px + var(--safe-l));
   top: calc(8px + var(--safe-t));
-  bottom: auto;
-  transform: none;
+  width: 260px;
 }
 
 .hud-screen.touch .hud-me {
-  width: 260px;
+  width: 100%;
   padding: 6px 10px 6px 6px;
   gap: 2px 10px;
-}
-
-.hud-screen.touch .hud-me .effects {
-  top: calc(100% + 6px);
-  bottom: auto;
 }
 
 .hud-screen.touch .me-crest {
@@ -1331,26 +1335,11 @@
 }
 
 .hud-screen.touch .hud-side {
-  top: auto;
-  right: auto;
-  left: calc(8px + var(--safe-l));
-  top: calc(78px + var(--safe-t));
   width: 220px;
 }
 
 .hud-screen.touch .party {
   display: none;
-}
-
-.hud-screen.touch .quests {
-  background: linear-gradient(270deg, transparent, rgba(10, 8, 14, 0.72) 18%);
-}
-
-.hud-screen.touch .quests .side-head,
-.hud-screen.touch .quest,
-.hud-screen.touch .q-step {
-  justify-content: flex-start;
-  text-align: left;
 }
 
 .hud-screen.touch .hud-chat:not(.open) {
@@ -1519,8 +1508,16 @@
 }
 
 /* ---------- Desktop em janela pequena ---------- */
+@media (max-width: 1200px) {
+  /* Menu passa para baixo do minimapa */
+  .hud-screen:not(.touch) .hud-tr {
+    right: 12px;
+    top: 262px;
+  }
+}
+
 @media (max-width: 1100px) {
-  .hud-screen:not(.touch) .hud-side {
+  .hud-screen:not(.touch) .party {
     display: none;
   }
 
@@ -1536,11 +1533,18 @@
     --s: 40px;
   }
 
-  .hud-screen:not(.touch) .hud-me {
-    width: 360px;
+  .hud-screen:not(.touch) .hud-left {
+    width: 250px;
   }
 
   .hud-screen:not(.touch) .hud-chat {
+    display: none;
+  }
+}
+
+/* Pouca altura no desktop: missões recolhem a lista de grupo para não cobrir o chat */
+@media (max-height: 820px) {
+  .hud-screen:not(.touch) .party {
     display: none;
   }
 }

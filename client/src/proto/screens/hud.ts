@@ -220,7 +220,9 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
     row.style.setProperty("--cc", info.color);
     party.append(row);
   }
-  side.append(quests, party);
+  side.append(party, quests);
+  // Coluna esquerda: personagem (vida, mana, nível), grupo e missões.
+  const left = el("div", "hud-left", me, side);
 
   // ---------- Chat ----------
   const chat = createChat();
@@ -260,7 +262,7 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
   autoBtn.onclick = () => toggleAuto();
   tooltip(autoBtn, () => `<h4>Auto-caça</h4>Procura monstros num raio de ${settings.get().autoRadius} m, ataca, usa as skills da barra e toma poção abaixo de ${settings.get().autoPotion}% de HP.<div class="cmp muted">Ajuste em Configurações → Jogo</div>`);
   const xpBar = bar("xp", "hud-xp");
-  const bottom = el("div", "hud-bottom", me, el("div", "hb-row", hotbar, autoBtn));
+  const bottom = el("div", "hud-bottom", el("div", "hb-row", hotbar, autoBtn));
 
   // ---------- Status da auto-caça ----------
   const autoPill = el("div", "auto-pill");
@@ -341,7 +343,7 @@ export async function mount(root: HTMLElement, ctx: Ctx): Promise<Screen> {
   const bannerEl = el("div", "level-banner");
   bannerEl.hidden = true;
 
-  hud.append(mini, target, topRight, side, chat.root, bottom, xpBar.root, autoPill, loot, touch, bannerEl, death);
+  hud.append(left, mini, target, topRight, chat.root, bottom, xpBar.root, autoPill, loot, touch, bannerEl, death);
 
   // =================================================================================
   // Comportamento
