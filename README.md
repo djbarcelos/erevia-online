@@ -2,7 +2,7 @@
 
 MMORPG 3D no navegador. Cliente em **TypeScript + Babylon.js**, servidor em **Go**, comunicação por **WebSocket + Protobuf** e banco em **PostgreSQL**.
 
-**Produção:** https://erevia-production.up.railway.app (deploy automático a cada push na `main`).
+**Produção:** https://erevia-production.up.railway.app (deploy automático a cada push na `main`, depois que o CI passa).
 
 Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
@@ -14,6 +14,12 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Encantamento:** pergaminhos de Arma e de Armadura (Ferreiro e drops) sobem o item até **+10**. Até +3 é seguro; depois a chance cai de 70% a 40%, e falhar quebra o item. O pergaminho **abençoado** (só drop) só volta a +0. Cada nível acima de +3 vale o dobro. Armas +4 brilham dourado e +7 pulsam.
 - **Armazém:** Otto, o Guarda do Armazém, na praça: 60 espaços e moedas, compartilhados pelos personagens da conta. Arrastar da bolsa guarda; duplo clique retira.
 - **Visual do personagem:** na criação, além da arma e do emblema, escolha o rosto e o cabelo (5 cabeças: Nobre, Selvagem, Sábio, Astuto e Andarilho, que qualquer classe pode usar), o tom de pele, a cor do cabelo e a cor da roupa (8 de cada, ou a original da classe) e se o elmo/gorro/chapéu aparece. Depois, Teodoro, o **Barbeiro** (ao norte do poço), muda o visual por 300 moedas, com prévia 3D. Todos veem o visual novo na hora.
+
+### Base para crescer (moderação, /bug, reconexão e CI)
+- **Comandos de GM** (contas com `accounts.gm`, ver [Moderação](#moderação)): `/gm` lista os comandos; `/kick Nome [motivo]`, `/mute Nome minutos [motivo]` e `/unmute Nome`, `/ban Nome [motivo]` (vale para a conta inteira, mesmo offline, e derruba quem está online) e `/unban Nome`, `/tp X Z`, `/goto Nome`, `/summon Nome`, `/give Nome item|moedas [qtd]`, `/anuncio texto` e `/online`. Para quem não é GM, eles aparecem como comando desconhecido. Toda ação fica no `gm_log`. O silêncio vale em todos os canais e continua depois de relogar.
+- **`/bug texto`:** qualquer jogador (mesmo silenciado), um a cada 30 s. Vai para `bug_reports` com o personagem, o nível, a posição, a versão do servidor (commit do deploy) e o navegador.
+- **Reconexão automática:** se a conexão cair, o jogo espera o servidor responder e volta sozinho ao mesmo personagem (desiste depois de 2 min com o servidor fora do ar ou de 5 recargas). Quem foi expulso ou banido não volta.
+- **CI:** cada push e pull request roda os testes no GitHub Actions (servidor com Postgres e `-race`, tipos e build do cliente). A Railway só publica a `main` com o CI verde.
 
 ### Fase 3 e interface nova (Fases A–C)
 - **13 encaixes de equipamento:** cabeça, peito, pernas, mãos, pés, capa, arma, mão secundária, colar, 2 brincos e 2 anéis. Anéis e brincos vão no encaixe livre com duplo clique, ou no que você escolher arrastando; dá para trocar anel 1 ↔ anel 2 arrastando. Itens novos nas 4 raridades com bônus novos: precisão, esquiva, velocidade de movimento, de ataque e de conjuração, regeneração de vida e mana e dano crítico.
@@ -71,6 +77,7 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 | `make proto` | Regera o código Go/TS depois de mudar `proto/erevia/v1/game.proto` |
 | `make build` | Binário do servidor e build do cliente |
 | `make docker` | Imagem de produção (a mesma que a Railway usa) |
+| `make gm NAME=Fulano` | Torna GM a conta do personagem no banco local (relogue depois) |
 
 ## Estrutura
 ```
@@ -116,3 +123,20 @@ Projeto com dois serviços no ambiente `production`:
 URLs de retorno do OAuth em produção:
 - `https://erevia-production.up.railway.app/api/auth/google/callback`
 - `https://erevia-production.up.railway.app/api/auth/discord/callback`
+
+O serviço **erevia** espera o CI do GitHub antes de publicar (`checkSuites: true` em `.railway/railway.ts`; no painel, "Wait for CI").
+
+## Moderação
+GM é um campo da conta, marcado direto no banco (no painel da Railway: Postgres → Data, ou `psql`). O jogador precisa relogar para virar GM.
+
+```sql
+-- Tornar GM a conta dona do personagem "Nome"
+UPDATE accounts SET gm = true WHERE id = (SELECT account_id FROM characters WHERE lower(name) = lower('Nome'));
+
+-- Relatos de /bug ainda abertos, e marcar um como resolvido
+SELECT id, at, character_name, level, x, z, version, text FROM bug_reports WHERE NOT resolved ORDER BY at DESC;
+UPDATE bug_reports SET resolved = true WHERE id = 1;
+
+-- Últimas ações de GM
+SELECT at, gm_name, command, target, detail FROM gm_log ORDER BY at DESC LIMIT 50;
+```

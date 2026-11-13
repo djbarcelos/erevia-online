@@ -112,8 +112,10 @@ func run(log *slog.Logger) error {
 		return fmt.Errorf("load clans: %w", err)
 	}
 	zcfg.Clans = clanData(clans)
+	zcfg.Version = env("RAILWAY_GIT_COMMIT_SHA", "dev") // a Railway define o commit do deploy
 	z := zone.New(zcfg, log.With("zone", "starter"), saves)
 	z.SetClanBackend(clanStore{st})
+	z.SetModBackend(modStore{st})
 	zoneDone := make(chan struct{})
 	go func() { z.Run(ctx); close(zoneDone) }()
 
@@ -187,7 +189,34 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		AccountID: c.AccountID, Karma: c.Karma, PKs: c.PKs, PvPKills: c.PvPKills,
 		ClanLeftAt: derefTime(c.ClanLeftAt),
 		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
+		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil),
 	}, nil
+}
+
+// modStore liga a moderação da zona ao banco.
+type modStore struct{ st *store.Store }
+
+func (m modStore) SetBanned(ctx context.Context, name string, banned bool, reason string) error {
+	_, err := m.st.SetBanned(ctx, name, banned, reason)
+	if errors.Is(err, store.ErrNotFound) {
+		return zone.ErrNoSuchCharacter
+	}
+	return err
+}
+
+func (m modStore) SetMute(ctx context.Context, accountID int64, until time.Time) error {
+	return m.st.SetMute(ctx, accountID, until)
+}
+
+func (m modStore) LogGM(ctx context.Context, e zone.GMLog) error {
+	return m.st.LogGM(ctx, store.GMEntry{GMAccountID: e.GMAccountID, GMName: e.GMName, Command: e.Command, Target: e.Target, Detail: e.Detail})
+}
+
+func (m modStore) SaveBug(ctx context.Context, b zone.BugReport) error {
+	return m.st.SaveBugReport(ctx, store.BugReport{
+		AccountID: b.AccountID, CharacterID: int64(b.CharacterID), CharacterName: b.Name, Level: b.Level,
+		X: b.X, Z: b.Z, Version: b.Version, UserAgent: b.UserAgent, Text: b.Text,
+	})
 }
 
 func derefTime(t *time.Time) time.Time {

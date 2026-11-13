@@ -267,6 +267,7 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
               ["Enter", "Chat"],
               ["Ctrl + clique", "Atacar jogador"],
               ["/g · /c", "Chat do grupo · clã"],
+              ["/bug texto", "Relatar um problema"],
             ].map(([k, l]) => el("div", "sc", el("kbd", null, k), el("span", null, l))),
           ),
         ),

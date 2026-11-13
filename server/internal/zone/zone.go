@@ -45,6 +45,7 @@ type Config struct {
 	World          *world.World     // obstáculos e caminhos (nil = campo aberto)
 	Clans          []ClanData       // clãs salvos (carregados na partida)
 	Clock          func() time.Time // relógio do ciclo dia/noite (nil = time.Now)
+	Version        string           // versão do servidor (vai nos relatos de /bug)
 }
 
 func DefaultConfig() Config {
@@ -86,7 +87,11 @@ type JoinInfo struct {
 	ClanLeftAt time.Time
 	// Storage: o armazém da conta como está no banco (nil = vazio).
 	Storage *StorageData
-	Peer    Peer
+	// Moderação: GM da conta, silêncio no chat (zero = livre) e navegador (para o /bug).
+	GM         bool
+	MutedUntil time.Time
+	UserAgent  string
+	Peer       Peer
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -211,6 +216,8 @@ type Zone struct {
 	clanBackend    ClanBackend
 	localClanSeq   int64
 	storages       map[int64]*storage // conta → armazém
+	modJobs        chan modJob
+	modBackend     ModBackend
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -236,6 +243,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		clanCreating:   map[uint32]*clanCreate{},
 		clanJobs:       make(chan clanJob, clanJobQueue),
 		storages:       map[int64]*storage{},
+		modJobs:        make(chan modJob, modJobQueue),
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
 	}
@@ -298,6 +306,7 @@ func (z *Zone) Run(ctx context.Context) {
 	saveTicker := time.NewTicker(z.cfg.SaveEvery)
 	defer saveTicker.Stop()
 	go z.runClanWorker(ctx)
+	go z.runModWorker(ctx)
 
 	for {
 		select {
@@ -351,6 +360,8 @@ func (z *Zone) handle(e event) {
 		z.onSocial(e)
 	case clanCreatedEvent:
 		z.onClanCreated(e)
+	case modResultEvent:
+		z.onModResult(e)
 	}
 }
 
@@ -414,6 +425,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 			attrs: attrs, ranks: ranks, hotbar: hotbar,
 			accountID: info.AccountID,
 			karma:     max(0, info.Karma), pks: max(0, info.PKs), pvpKills: max(0, info.PvPKills),
+			gm: info.GM, mutedUntil: info.MutedUntil, userAgent: truncateRunes(info.UserAgent, maxUserAgent),
 		},
 	}
 	p.pl.sentPvp = z.pvpState(p)
@@ -531,6 +543,15 @@ func (z *Zone) onChat(e chatEvent) {
 		return
 	}
 	p.pl.chatTokens--
+
+	if isCommand(text, e.to, e.channel) {
+		z.command(p, text)
+		return
+	}
+	if left := z.mutedFor(p); left > 0 {
+		z.system(p, "Você está silenciado por mais "+minutesText(left)+".")
+		return
+	}
 
 	switch e.channel {
 	case pb.ChatChannel_CHAT_CHANNEL_PARTY:
