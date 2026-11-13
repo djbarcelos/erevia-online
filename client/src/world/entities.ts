@@ -40,6 +40,9 @@ import { GOLEM_BODY, GOLEM_MODEL } from "./golem";
 import { buildTeleportStone } from "./teleport-stone";
 import type { Bounds, Collision } from "./world-data";
 import { specInfo } from "../ui/specs";
+import { GRADE_COLOR } from "../ui/items";
+import { settings } from "../ui/kit";
+import { skillFxColors } from "../ui/skill-themes";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -85,6 +88,20 @@ const FACE_RATE = 25;
 /** Corpo sumindo (s) e monstro nascendo (s). */
 const CORPSE_SINK_S = 0.9;
 const SPAWN_FADE_S = 0.5;
+/**
+ * Pausa de impacto (s) no seu golpe que acerta: congela só a pose do alvo (e a sua, se o
+ * golpe é corpo a corpo). Normal, skill, crítico e o golpe que mata.
+ */
+const HIT_STOP = { hit: 0.045, skill: 0.06, crit: 0.075, kill: 0.08 };
+/** Rastro da arma: começa antes do impacto e acaba logo depois (ms). */
+const TRAIL_BEFORE_MS = 140;
+const TRAIL_AFTER_MS = 60;
+/** Rastro dos outros só até esta distância de você (m). */
+const TRAIL_OTHERS_M = 20;
+/** Distância de um passo correndo (m): uma nuvem de poeira por passo. */
+const STEP_M = 1.6;
+/** Abaixo desta velocidade (m/s) é andar, não correr: sem poeira. */
+const DUST_MIN_SPEED = 2.5;
 
 /** Efeito ativo numa entidade (para os ícones do HUD). */
 export interface ActiveEffect {
@@ -208,6 +225,8 @@ interface View extends EntityInfo {
   lastLand: number;
   /** Para onde virar (golpes): gira suave até lá; null = segue o movimento. */
   faceYaw: number | null;
+  /** Encaixe da mão da arma (rastro do golpe); undefined = ainda não procurado. */
+  hand: TransformNode | null | undefined;
 }
 
 /** Jogadores e monstros na tela: criação, movimento suave, animações e combate. */
@@ -242,6 +261,9 @@ export class EntityManager {
   private models: CharacterModels | null = null;
   private targetId = 0;
   private catalog = new Map<number, SkillInfo>();
+  /** Passos do jogador local correndo (poeira): fração do passo atual e o pé. */
+  private stepPhase = 0;
+  private stepSide = 1;
 
   constructor(
     private scene: Scene,
@@ -527,7 +549,7 @@ export class EntityManager {
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
-      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null,
+      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, hand: undefined,
     };
     this.views.set(e.id, v);
     // NPCs ficam parados, virados para o centro da praça.
@@ -660,7 +682,7 @@ export class EntityManager {
       v.server.x = v.target.x = s.x;
       v.server.z = v.target.z = s.z;
       if (s.id === this.localId) this.resetLocalPrediction();
-      this.fx.blinkFlash(from, v.root.position.clone(), new Color3(0.7, 0.5, 1));
+      this.fx.as(s.id === this.localId, () => this.fx.blinkFlash(from, v.root.position.clone(), new Color3(0.7, 0.5, 1)));
       if (s.speed > 0) v.speed = s.speed;
       return;
     }
@@ -847,19 +869,26 @@ export class EntityManager {
     const now = performance.now();
     // Veneno, queimadura e praga: só o número (sem animação de golpe).
     if (ev.dot !== Effect.UNSPECIFIED) {
-      const color = ev.dot === Effect.BURN ? "#ffa04a" : ev.dot === Effect.PLAGUE ? "#9ccf5a" : "#7dff7a";
+      // Queimadura no Lendário do guia, veneno no Bom, praga num verde mais seco.
+      const color = ev.dot === Effect.BURN ? "#ff9a3c" : ev.dot === Effect.PLAGUE ? "#9ccf5a" : "#7bd88f";
       this.at(Math.max(now, dst.impactUntil), dst.id, () => {
-        this.fx.damageNumber(dst.head, String(ev.damage), color, false);
+        if (showDamage()) this.fx.number(dst.head, "dot", String(ev.damage), color);
         if (ev.kill) dst.anim?.play("hit");
       });
       return;
     }
-    // Golpes de área do raid boss: o visual veio no aviso do chão; aqui só o número.
+    // Golpes de área do raid boss: o visual veio no aviso do chão; aqui o número e, em
+    // você, o tremor e o flash.
     if (ev.skillId >= RAID_HIT_BASE) {
       this.at(Math.max(now, dst.impactUntil), dst.id, () => {
-        if (ev.damage > 0) this.fx.damageNumber(dst.head, String(ev.damage), "#d68cff", ev.crit);
-        gameAudio.hit("raid", ev.crit, false, dst.root.position, ev.targetId === this.localId);
+        const onMe = ev.targetId === this.localId;
+        if (ev.damage > 0 && showDamage()) this.fx.number(dst.head, ev.crit ? "crit" : "raid", ev.crit ? `${ev.damage}!` : String(ev.damage));
+        gameAudio.hit("raid", ev.crit, false, dst.root.position, onMe);
         dst.anim?.play("hit");
+        if (onMe && ev.damage > 0) {
+          this.fx.shake(0.12, 0.25);
+          this.fx.hitFlash(dst.meshes, false);
+        }
       });
       return;
     }
@@ -884,7 +913,9 @@ export class EntityManager {
     } else if (src && src !== dst) {
       release = this.swing(src, dst, ev.skillId ? "skill" : "attack", now);
       if (sk && sk.target === SkillTarget.ENEMY) this.fx.skillName(src.head, sk.name);
+      if (!isCaster(src.model)) this.startTrail(src, release, sk);
     }
+    const local = ev.sourceId === this.localId || ev.targetId === this.localId;
 
     let impact = release;
     if (src && src !== dst && !isArea) {
@@ -895,8 +926,8 @@ export class EntityManager {
       // O projétil sai da mão no instante da soltura, do lugar onde cada um estiver.
       const launch = (fn: (from: Vector3, to: Vector3) => void) =>
         this.at(release, dst.id, () => {
-          gameAudio.launch(sk?.fx, src.root.position, ev.sourceId === this.localId || ev.targetId === this.localId);
-          fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0)));
+          gameAudio.launch(sk?.fx, src.root.position, local);
+          this.fx.as(local, () => fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0))));
         });
       if (sk?.fx === "fireball" || sk?.fx === "me_lance") {
         launch((a, b) => this.fx.fireball(a, b, travel));
@@ -990,19 +1021,56 @@ export class EntityManager {
     if (!this.views.has(dst.id)) return;
     // Último golpe a caminho chegou: a barra mostra a vida que o servidor mandou.
     this.flushHp(dst);
-    if (ev.heal && src) this.fx.damageNumber(src.head, `+${ev.heal}`, "#7dff9a", false);
-    if (ev.absorbed && !ev.miss) this.fx.damageNumber(dst.head, `(${ev.absorbed} absorvido)`, "#9fc6ff", false);
+    const numbers = showDamage();
+    if (ev.heal && src && numbers) this.fx.number(src.head, "heal", `+${ev.heal}`);
     const mine = ev.sourceId === this.localId;
     const onMe = ev.targetId === this.localId;
     if (ev.miss) {
-      this.fx.damageNumber(dst.head, "Errou", "#b9b4c2", false);
+      // Em você: você esquivou; nos outros: o golpe errou.
+      if (numbers) this.fx.number(dst.head, onMe ? "dodge" : "miss", onMe ? "Esquivou" : "Errou");
       if (!quiet) gameAudio.miss(dst.root.position, mine || onMe);
       return;
     }
+    // O escudo segurou: tudo ("Bloqueado") ou parte (o número sai também, logo abaixo).
+    if (ev.absorbed && numbers) this.fx.number(dst.head, "block", ev.damage === 0 ? "Bloqueado" : `(${ev.absorbed} absorvido)`);
     if (!quiet) gameAudio.hit(sk?.fx, ev.crit, !sk && !!src && isCaster(src.model), dst.root.position, mine || onMe);
+    if (!quiet) this.feel(ev, src, dst, sk, mine, onMe);
     // Impacto (a Bola de Fogo e a magia básica já explodiram ao chegar).
     const at = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
     const from = src ? src.root.position.add(new Vector3(0, 1 * src.scale, 0)) : at;
+    // Marca no chão da área em volta do alvo (uma vez por skill, não por inimigo atingido).
+    if (!quiet && sk && sk.splash > 0) this.fx.as(mine || onMe, () => this.fx.areaMark(dst.root.position, sk.splash, sk.fx));
+    this.fx.as(mine || onMe, () => this.impactFx(quiet, ev, src, dst, sk, at, from, mine));
+    const color = onMe || ev.crit || !sk ? undefined : (SKILL_NUMBER_COLOR[sk.fx] ?? skillFxColors(sk.fx)?.trail);
+    if (ev.damage === 0 && sk && sk.power === 0) return; // skill só de efeito (Frasco, Marca…)
+    if (ev.damage > 0 || !ev.absorbed) {
+      const kind = onMe ? "taken" : ev.crit ? "crit" : sk ? "skill" : mine ? "mine" : "damage";
+      if (numbers) this.fx.number(dst.head, kind, ev.crit ? `${ev.damage}!` : String(ev.damage), color);
+    }
+    if (!ev.kill && !dst.dead) dst.anim?.play("hit");
+  }
+
+  /**
+   * Sensação do golpe que encostou: pausa de impacto e flash no seu golpe; flash e tremor
+   * quando o golpe é em você (tremor só do chefe) e tremor leve no seu crítico.
+   */
+  private feel(ev: CombatEvent, src: View | undefined, dst: View, sk: SkillInfo | undefined, mine: boolean, onMe: boolean): void {
+    if (mine && src && src !== dst && ev.damage > 0) {
+      const s = ev.kill ? HIT_STOP.kill : ev.crit ? HIT_STOP.crit : sk ? HIT_STOP.skill : HIT_STOP.hit;
+      dst.anim?.hitStop(s);
+      // O atacante só congela se está no instante do golpe (corpo a corpo); quem soltou um
+      // projétil já está em outra pose quando ele chega.
+      if (Math.abs(performance.now() - src.swingImpact) < 120) src.anim?.hitStop(s);
+      this.fx.hitFlash(dst.meshes, ev.crit);
+      if (ev.crit) this.fx.shake(0.07, 0.18);
+    } else if (onMe && ev.damage > 0) {
+      this.fx.hitFlash(dst.meshes, false);
+      if (src?.boss) this.fx.shake(0.12, 0.25);
+    }
+  }
+
+  /** Efeito do impacto de cada skill (a receita de cada uma). */
+  private impactFx(quiet: boolean, ev: CombatEvent, src: View | undefined, dst: View, sk: SkillInfo | undefined, at: Vector3, from: Vector3, mine: boolean): void {
     switch (quiet ? "quiet" : sk?.fx) {
       case "quiet":
       case "m_rain":
@@ -1061,13 +1129,34 @@ export class EntityManager {
       case "fireball":
         break;
       default:
-        if (!src || !isCaster(src.model)) this.fx.meleeHit(at, ev.crit);
+        // Faíscas de impacto (sistemas fixos) espirrando para longe de quem bateu.
+        if (!src || !isCaster(src.model)) this.fx.meleeHit(at, ev.crit, src ? from : undefined);
     }
-    let color = onMe ? "#ff6b5a" : ev.crit ? "#ffd34d" : mine ? "#ffffff" : "#e8e1d4";
-    if (sk && !onMe && !ev.crit) color = SKILL_NUMBER_COLOR[sk.fx] ?? color;
-    if (ev.damage === 0 && sk && sk.power === 0) return; // skill só de efeito (Frasco, Marca…)
-    this.fx.damageNumber(dst.head, ev.crit ? `${ev.damage}!` : String(ev.damage), color, ev.crit || !!sk);
-    if (!ev.kill && !dst.dead) dst.anim?.play("hit");
+  }
+
+  /**
+   * Rastro da arma de quem bate corpo a corpo, em volta do instante do impacto. A cor é a
+   * do tema da skill ou, no ataque básico, a da raridade da arma (guia de arte, 3.2).
+   */
+  private startTrail(src: View, impact: number, sk: SkillInfo | undefined): void {
+    const mine = src.id === this.localId;
+    // Dos outros, só perto de você (longe, o rastro tem poucos pixels e o pool é pequeno).
+    if (!mine && (this.distanceTo(src.id) ?? Infinity) > TRAIL_OTHERS_M) return;
+    if (src.hand === undefined) src.hand = this.findHand(src);
+    if (!src.hand) return;
+    const hex = (sk && skillFxColors(sk.fx)?.trail) || GRADE_COLOR[src.grade] || GRADE_COLOR[1];
+    const hand = src.hand;
+    this.fx.as(mine, () =>
+      this.fx.weaponTrail(hand, impact - TRAIL_BEFORE_MS, impact + TRAIL_AFTER_MS, Color3.FromHexString(hex).scale(0.8)),
+    );
+  }
+
+  /** Encaixe da arma na mão direita do modelo (null = sem modelo ou sem encaixe). */
+  private findHand(v: View): TransformNode | null {
+    const root = v.model3d?.root;
+    if (!root) return null;
+    const hand = root.getDescendants(false, (n) => n.name.split("#")[0] === "handslot.r")[0];
+    return hand instanceof TransformNode ? hand : null;
   }
 
   /** Mostra a vida guardada se nenhum golpe estiver mais a caminho (ex.: o golpe errou). */
@@ -1100,10 +1189,12 @@ export class EntityManager {
         const a = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
         const b = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
         gameAudio.cast(sk.fx, src.root.position, local);
-        this.fx.bolt(a, b, travel, color, () => {
-          gameAudio.hit(sk.fx, false, false, dst.root.position, local);
-          if (sk.fx === "r_flask" || sk.fx === "r_plague") this.fx.poisonSplash(dst.root.position.clone(), sk.splash || 1.5, color);
-        });
+        this.fx.as(local, () =>
+          this.fx.bolt(a, b, travel, color, () => {
+            gameAudio.hit(sk.fx, false, false, dst.root.position, local);
+            if (sk.fx === "r_flask" || sk.fx === "r_plague") this.fx.poisonSplash(dst.root.position.clone(), sk.splash || 1.5, color);
+          }),
+        );
       });
       return;
     }
@@ -1113,7 +1204,16 @@ export class EntityManager {
     src.swingImpact = src.lastLand = at;
     src.lastSwing = now;
     this.castImpact.set(`${ev.sourceId}:${ev.skillId}`, { t: now, at });
-    this.at(at, src.id, () => this.castFx(src, sk, ev.sourceId === this.localId));
+    // Giros e pancadas corpo a corpo: o rastro da arma acompanha o golpe.
+    if (sk.target === SkillTarget.AREA && sk.power > 0 && !isCaster(src.model)) this.startTrail(src, at, sk);
+    this.at(at, src.id, () => {
+      const mine = ev.sourceId === this.localId;
+      this.fx.as(mine, () => {
+        // Marca no chão do tamanho real da área (biblioteca nova), por baixo da receita.
+        if (sk.target === SkillTarget.AREA) this.fx.areaMark(src.root.position, sk.range, sk.fx);
+        this.castFx(src, sk, mine);
+      });
+    });
   }
 
   /** Visual de uma skill em si mesmo ou em área. */
@@ -1145,7 +1245,7 @@ export class EntityManager {
         break;
       case "b_roar":
         this.fx.shout(src, new Color3(0.7, 0.4, 0.9), sk.range);
-        if (mine) this.fx.shake(6);
+        if (mine) this.fx.shake(0.08);
         break;
       case "k_spin":
       case "b_whirl":
@@ -1203,7 +1303,7 @@ export class EntityManager {
     this.at(Math.max(now, v.impactUntil), v.id, () => {
       if (v.effects.get(ev.effect) !== ef || v.shownDead) return; // acabou ou foi renovado antes
       if (ev.effect === Effect.INVISIBLE) this.setGhost(v, true);
-      ef.visual = this.fx.effect(ev.effect, v, Math.max(0, ef.until - performance.now()));
+      this.fx.as(v.id === this.localId, () => (ef.visual = this.fx.effect(ev.effect, v, Math.max(0, ef.until - performance.now()))));
     });
   }
 
@@ -1323,7 +1423,7 @@ export class EntityManager {
     v.hp = l.maxHp;
     this.refreshLabel(v);
     this.refreshHpBar(v);
-    this.fx.levelUp(v.root);
+    this.fx.as(l.id === this.localId, () => this.fx.levelUp(v.root));
     gameAudio.levelUp(v.root.position, l.id === this.localId);
   }
 
@@ -1373,6 +1473,7 @@ export class EntityManager {
       if (v.id === this.localId) this.recordLocal(v);
 
       const moving = dist > 0.05 && !v.dead;
+      if (v.id === this.localId) this.footsteps(v, moving, dt);
       if (moving) {
         v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
         v.faceYaw = null;
@@ -1391,6 +1492,22 @@ export class EntityManager {
         v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active);
       }
     }
+  }
+
+  /**
+   * Poeira nos passos do jogador local correndo: uma nuvem pequena a cada passo, alternando
+   * o pé (o Fx só desenha no médio e no alto). Invisível não levanta poeira.
+   */
+  private footsteps(v: View, moving: boolean, dt: number): void {
+    if (!moving || v.speed < DUST_MIN_SPEED || v.effects.has(Effect.INVISIBLE)) {
+      this.stepPhase = 0.6; // o primeiro passo depois de parar sai logo
+      return;
+    }
+    this.stepPhase += (v.speed * dt) / STEP_M;
+    if (this.stepPhase < 1) return;
+    this.stepPhase -= Math.floor(this.stepPhase);
+    this.stepSide = -this.stepSide;
+    this.fx.footDust(v.root.position, v.visual.rotation.y, this.stepSide);
   }
 
   /** Guarda a posição prevista do jogador local (para a reconciliação). */
@@ -1527,6 +1644,7 @@ export class EntityManager {
     v.meshes = meshes;
     v.model3d = inst;
     v.anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
+    v.hand = undefined; // modelo novo: procura o encaixe da mão de novo no próximo golpe
     v.capsule?.dispose();
     v.capsule = null;
     if (v.dead) this.showDead(v, true);
@@ -1662,6 +1780,11 @@ const SKILL_NUMBER_COLOR: Record<string, string> = {
 /** Modelos que atacam com magia à distância. */
 function isCaster(model: string): boolean {
   return model === "mage" || model.includes("mage");
+}
+
+/** Configurações → Jogo → Números de dano. */
+function showDamage(): boolean {
+  return settings.get().showDamage;
 }
 
 function clamp(v: number, lo: number, hi: number): number {

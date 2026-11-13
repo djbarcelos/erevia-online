@@ -72,6 +72,11 @@ export const LEGACY_RENDER = params.get("render") === "antigo";
 /** ?quality=baixa|media|alta: força o preset (sem salvar), para medir. */
 const URL_QUALITY = QUALITIES.find((q) => q === params.get("quality")) ?? null;
 
+/** Preset em uso agora: o da URL vence o salvo; o render antigo conta como o alto (efeitos de antes). */
+export function activeQuality(): Quality {
+  return LEGACY_RENDER ? "alta" : (URL_QUALITY ?? settings.get().quality);
+}
+
 /**
  * Exposição antes do ACES. O ACES leva o branco (1,0) a ~0,62 e o cinza médio (0,2) a ~0,12;
  * com 1,5 os tons médios ficam onde estavam (0,2 → 0,21; 0,5 → 0,52) e só o alto comprime.

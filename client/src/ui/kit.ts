@@ -91,6 +91,8 @@ export interface Settings {
   lefty: boolean;
   showNames: boolean;
   showDamage: boolean;
+  /** Tremor leve da câmera nos seus críticos e nos golpes do chefe em você (desligável por conforto). */
+  cameraShake: boolean;
   showHelm: boolean;
   /** Missão rastreada no minimapa, no mapa e na seta da borda da tela. */
   questMarkers: boolean;
@@ -156,6 +158,7 @@ const DEFAULT_SETTINGS: Settings = {
   lefty: false,
   showNames: true,
   showDamage: true,
+  cameraShake: true,
   showHelm: true,
   questMarkers: true,
   language: "pt-BR",
