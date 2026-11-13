@@ -424,6 +424,7 @@ func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64
 	if z.night {
 		total *= game.NightXP
 	}
+	total *= z.xpEventMult() // XP em dobro (events.go)
 	total *= partyBonus[min(len(takers), len(partyBonus))-1] * frac
 	for _, m := range takers {
 		if xp := int64(math.Round(total * float64(m.level) / float64(sum))); xp > 0 {

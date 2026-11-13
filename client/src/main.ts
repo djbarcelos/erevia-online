@@ -1376,6 +1376,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "bossStatus":
           raid.onStatus(msg.msg.value);
           break;
+        case "eventStatus":
+          hud.setEvents(msg.msg.value, serverNow);
+          break;
       }
     },
   };
