@@ -215,6 +215,7 @@ type Zone struct {
 	clanBackend    ClanBackend
 	localClanSeq   int64
 	storages       map[int64]*storage // conta → armazém
+	stats          tickStats
 	bossBackend    BossBackend
 	bossJobs       chan BossData
 	telegraphs     []*telegraph
@@ -319,9 +320,13 @@ func (z *Zone) Run(ctx context.Context) {
 			}
 			return
 		case e := <-z.events:
+			z.stats.events++
 			z.handle(e)
 		case <-ticker.C:
+			start := time.Now()
 			z.update(dt.Seconds())
+			z.stats.add(time.Since(start))
+			z.flushTickStats(start)
 		case <-saveTicker.C:
 			z.saveAll(false)
 		}
