@@ -44,7 +44,12 @@ type API struct {
 	log       *slog.Logger
 	providers map[string]*provider
 	secure    bool
+	// onAccountDeleted avisa a zona que uma conta sumiu (derruba quem estiver online).
+	onAccountDeleted func(store.DeletedAccount)
 }
+
+// OnAccountDeleted registra quem é avisado depois que uma conta é apagada (antes de servir).
+func (a *API) OnAccountDeleted(fn func(store.DeletedAccount)) { a.onAccountDeleted = fn }
 
 func New(st *store.Store, cfg Config, log *slog.Logger) *API {
 	a := &API{store: st, cfg: cfg, log: log, providers: map[string]*provider{}}
@@ -64,6 +69,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/dev", a.handleDevLogin)
 	mux.HandleFunc("POST /api/auth/logout", a.handleLogout)
 	mux.HandleFunc("GET /api/me", a.handleMe)
+	mux.HandleFunc("DELETE /api/account", a.handleDeleteAccount)
 	mux.HandleFunc("GET /api/characters", a.handleListCharacters)
 	mux.HandleFunc("POST /api/characters", a.handleCreateCharacter)
 	mux.HandleFunc("GET /api/creation", a.handleCreation)
@@ -230,6 +236,47 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"accountId": accountID, "displayName": name})
+}
+
+// AccountDeleteConfirm é o que o jogador digita para confirmar que quer apagar a conta.
+const AccountDeleteConfirm = "APAGAR"
+
+// handleDeleteAccount apaga a conta e tudo o que é dela (LGPD, art. 18), encerra a sessão
+// e derruba da zona quem estiver jogando com ela.
+func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	if !a.checkPost(w, r) {
+		return
+	}
+	accountID, ok := a.requireAccount(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Confirm string `json:"confirm"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if strings.TrimSpace(body.Confirm) != AccountDeleteConfirm {
+		writeError(w, http.StatusBadRequest, "Digite "+AccountDeleteConfirm+" para confirmar.")
+		return
+	}
+	d, err := a.store.DeleteAccount(r.Context(), accountID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) { // não existe mais: já foi apagada
+		a.internalError(w, err)
+		return
+	}
+	if err == nil {
+		a.log.Info("account deleted", "account", accountID, "characters", len(d.Characters), "clans", len(d.Clans))
+		if a.onAccountDeleted != nil {
+			a.onAccountDeleted(d)
+		}
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: SessionCookie, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode,
+	})
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // ---------- Personagens ----------

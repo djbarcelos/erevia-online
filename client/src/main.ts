@@ -31,6 +31,7 @@ import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens
 import { EntityManager } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
+import { runBench, wantBench } from "./ui/bench";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { TeleportWindow } from "./ui/teleport";
@@ -934,20 +935,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   });
   const stopTouchCamera = setupTouchCamera(canvas, world.camera);
 
-  // A câmera segue o jogador local.
+  // A câmera segue o jogador local (ou o ponto da medição de FPS, ?bench=1).
+  let benchFocus: Vector3 | null = null;
   world.scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(world.engine.getDeltaTime() / 1000, 0.1);
     entities.setLatency(conn.ping, welcome.tickRate);
     entities.update(dt);
     raid.update();
     const pos = entities.localPosition();
-    if (pos) {
-      world.camera.target.x = pos.x;
+    const focus = benchFocus ?? pos;
+    if (focus) {
+      world.camera.target.x = focus.x;
       world.camera.target.y = 1.4;
-      world.camera.target.z = pos.z;
-      world.followShadows(pos.x, pos.z);
+      world.camera.target.z = focus.z;
+      world.followShadows(focus.x, focus.z);
     }
-    dayNight.update(clock.phase(), pos);
+    dayNight.update(clock.phase(), focus);
     // Árvores que tapam o jogador ou o alvo ficam translúcidas.
     env?.fader.update(dt, world.camera.position, entities.focusPoints());
     loot.update(pos);
@@ -980,6 +983,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hud.setAttacking(isAttackable(targetId));
   }, 100);
   setupPerfPanel(world.scene, world.gui, $("hud"));
+  if (wantBench()) {
+    // Espera a cena assentar (modelos, sombras) antes de medir.
+    window.setTimeout(() => {
+      void runBench({
+        engine: world.engine,
+        scene: world.scene,
+        camera: world.camera,
+        regions,
+        bounds: worldBounds(worldData),
+        setTime: (p) => clock.setFixed(p),
+        setFocus: (p) => (benchFocus = p ? new Vector3(p.x, 0, p.z) : null),
+        forEachMarker: entities.forEachMarker.bind(entities),
+        hud: $("hud"),
+      });
+    }, 3000);
+  }
 
   canvas.focus();
   if (settings.get().touchMode !== "off" && matchMedia("(pointer: coarse)").matches) {
