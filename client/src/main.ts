@@ -1162,6 +1162,29 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     };
   }
 
+  // Testes de navegador (e2e/, no CI contra o build de produção): com ?e2e=1 na URL, só
+  // leitura, para achar na tela onde clicar (NPC, monstro). Toda ação do teste passa pelo
+  // mouse e pelo teclado; nada aqui manda mensagem ao servidor ou muda o estado do jogo.
+  if (new URLSearchParams(location.search).has("e2e")) {
+    (window as unknown as Record<string, unknown>).__ereviaE2E = {
+      me: () => {
+        const p = entities.localPosition();
+        return p ? { x: p.x, z: p.z } : null;
+      },
+      screenPos: (id: number) => entities.screenPos(id, world.scene),
+      /** Entidades vivas que o cliente conhece: NPCs ou monstros (sem os chefes), com nome e posição. */
+      entities: (kind: "npc" | "monster") => {
+        const want = kind === "npc" ? EntityKind.NPC : EntityKind.MONSTER;
+        const out: { id: number; name: string; x: number; z: number }[] = [];
+        entities.forEachMarker((m) => {
+          if (m.kind === want && !m.boss) out.push({ id: m.id, name: entities.info(m.id)?.name ?? "", x: m.x, z: m.z });
+        });
+        return out;
+      },
+      targetId: () => targetId,
+    };
+  }
+
   let lastXp: bigint | null = null;
   return {
     dispose() {

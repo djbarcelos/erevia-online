@@ -5,3 +5,5 @@ dist/
 .env
 server/bin/
 assets-src/
+test-results/
+playwright-report/
