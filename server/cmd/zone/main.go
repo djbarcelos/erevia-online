@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -65,38 +66,10 @@ func run(log *slog.Logger) error {
 	log.Info("auth providers", "google", cfg.Google != nil, "discord", cfg.Discord != nil, "dev", devLogin)
 	httpAPI := api.New(st, cfg, log)
 
-	// Persistência: a zona entrega estados por canal; esta goroutine grava em lote.
+	// Persistência: a zona entrega estados por canal; uma goroutine (abaixo, depois de criar
+	// a zona, que registra os erros) grava em lote.
 	saves := make(chan []zone.SavedState, 1024)
 	persistDone := make(chan struct{})
-	go func() {
-		defer close(persistDone)
-		for batch := range saves {
-			states := make([]store.CharacterState, len(batch))
-			for i, p := range batch {
-				states[i] = store.CharacterState{
-					CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP,
-					Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
-					Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
-					Achievements: p.Achievements, Title: p.Title,
-				}
-				if s := p.Storage; s != nil {
-					states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
-				}
-			}
-			// Tenta de novo se o banco falhar (o save_seq impede que uma tentativa atrasada
-			// desfaça um salvamento mais novo).
-			for attempt := 1; attempt <= 3; attempt++ {
-				sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				err := st.SaveStates(sctx, states)
-				cancel()
-				if err == nil {
-					break
-				}
-				log.Error("save states", "err", err, "count", len(states), "attempt", attempt)
-				time.Sleep(time.Duration(attempt) * time.Second)
-			}
-		}
-	}()
 
 	wld, err := world.Load()
 	if err != nil {
@@ -131,6 +104,12 @@ func run(log *slog.Logger) error {
 	z.SetSocialBackend(socialStore{st})
 	z.SetEventSink(eventStore{st})
 	z.SetRankingBackend(rankingStore{st})
+	go func() {
+		defer close(persistDone)
+		for batch := range saves {
+			saveBatch(st, z, log, batch)
+		}
+	}()
 
 	// Conta apagada: o banco já apagou tudo; a zona derruba quem estiver online e acerta os
 	// clãs em memória do jeito que o banco deixou.
@@ -165,7 +144,7 @@ func run(log *slog.Logger) error {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           recoverHTTP(z, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		// Conexões WebSocket herdam ctx e são encerradas no SIGINT.
 		BaseContext: func(stdnet.Listener) context.Context { return ctx },
@@ -191,6 +170,68 @@ func run(log *slog.Logger) error {
 	}
 	log.Info("bye")
 	return nil
+}
+
+// saveBatch grava um lote de personagens (e armazéns). Falhas viram db_error; um panic
+// (dado estranho no lote) é registrado e perde só este lote, sem derrubar o processo.
+func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.SavedState) {
+	defer func() {
+		if r := recover(); r != nil {
+			z.ReportPanic("persist", 0, "", r, debug.Stack())
+		}
+	}()
+	states := make([]store.CharacterState, len(batch))
+	for i, p := range batch {
+		states[i] = store.CharacterState{
+			CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP,
+			Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
+			Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
+			Achievements: p.Achievements, Title: p.Title,
+		}
+		if s := p.Storage; s != nil {
+			states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
+		}
+	}
+	// Tenta de novo se o banco falhar (o save_seq impede que uma tentativa atrasada
+	// desfaça um salvamento mais novo).
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err = st.SaveStates(sctx, states)
+		cancel()
+		if err == nil {
+			return
+		}
+		log.Error("save states", "err", err, "count", len(states), "attempt", attempt)
+		z.ReportDBError("save_characters", err)
+		time.Sleep(time.Duration(attempt) * time.Second)
+	}
+	// As 3 tentativas falharam: este lote não foi gravado (o próximo salvamento do
+	// personagem, a cada 30 s, leva o estado mais novo).
+	z.ReportDBError("save_characters_lost", err)
+}
+
+// recoverHTTP registra (server_error) um panic num handler HTTP e responde 500. O net/http
+// já não deixa o processo cair, mas sem isto o erro só ia para o log.
+func recoverHTTP(z *zone.Zone, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			v := recover()
+			if v == nil {
+				return
+			}
+			if v == http.ErrAbortHandler { // aborto pedido pelo próprio handler
+				panic(v)
+			}
+			path := r.URL.Path
+			if len(path) > 80 {
+				path = path[:80]
+			}
+			z.ReportPanic("http:"+r.Method+" "+path, 0, "", v, debug.Stack())
+			http.Error(w, "erro interno", http.StatusInternalServerError)
+		}()
+		h.ServeHTTP(w, r)
+	})
 }
 
 // wsBackend liga o WebSocket à sessão HTTP e ao banco.

@@ -7,8 +7,11 @@ package net
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -118,6 +121,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sess := &session{
 		conn: c, send: make(chan []byte, sendQueueSize),
 		closing: make(chan string, 1), cancel: cancel,
+		report: func(where string, v any, stack []byte) { s.zone.ReportPanic(where, char.ID, "", v, stack) },
 	}
 	go sess.writePump(ctx)
 	s.zone.Join(ctx, zone.JoinInfo{
@@ -165,6 +169,13 @@ func readJoin(ctx context.Context, c *websocket.Conn) (uint32, error) {
 
 func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 	var msg pb.ClientMessage
+	// Um panic aqui não pode pular o Leave (a zona ficaria com um fantasma): registra e
+	// volta normalmente para ServeHTTP tirar o jogador da zona.
+	defer func() {
+		if r := recover(); r != nil {
+			s.zone.ReportPanic("net:readPump", id, msgCase(&msg), r, debug.Stack())
+		}
+	}()
 	for {
 		rctx, cancel := context.WithTimeout(ctx, idleTimeout)
 		typ, data, err := sess.conn.Read(rctx)
@@ -261,6 +272,8 @@ type session struct {
 	send    chan []byte
 	closing chan string
 	cancel  context.CancelFunc
+	// report registra um panic recuperado no writePump (zone.ReportPanic).
+	report func(where string, r any, stack []byte)
 }
 
 func (s *session) Send(msg []byte) bool {
@@ -282,6 +295,15 @@ func (s *session) Close(reason string) {
 }
 
 func (s *session) writePump(ctx context.Context) {
+	// Esta goroutine não tem recover acima dela: um panic aqui derrubaria o processo.
+	defer func() {
+		if r := recover(); r != nil {
+			if s.report != nil {
+				s.report("net:writePump", r, debug.Stack())
+			}
+			s.cancel() // derruba só esta conexão: o readPump termina e a zona recebe o Leave
+		}
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -317,4 +339,12 @@ func (s *session) flush(limit time.Duration) {
 			return
 		}
 	}
+}
+
+// msgCase: o case do oneof ClientMessage (ex.: "PickUp"), para o registro de panic.
+func msgCase(m *pb.ClientMessage) string {
+	if m.Msg == nil {
+		return ""
+	}
+	return strings.TrimPrefix(fmt.Sprintf("%T", m.Msg), "*pb.ClientMessage_")
 }
