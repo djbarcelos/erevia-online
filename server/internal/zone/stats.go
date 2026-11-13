@@ -13,6 +13,7 @@ type tickStats struct {
 	total  time.Duration
 	worst  time.Duration
 	events int
+	slow   int // ticks acima do orçamento (ver checkSlowTick)
 }
 
 func (s *tickStats) add(d time.Duration) {
@@ -37,6 +38,7 @@ func (z *Zone) flushTickStats(now time.Time) {
 		"max_ms", float64(s.worst.Microseconds())/1000,
 		"budget_ms", 1000/float64(z.cfg.TickRate),
 		"events_per_s", int(float64(s.events)/secs),
+		"slow_ticks", s.slow,
 		"players", len(z.players), "monsters", len(z.monsters), "ground", len(z.ground))
 	*s = tickStats{since: now}
 }

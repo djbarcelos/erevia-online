@@ -4,6 +4,8 @@
  * degraus vem das skills, então um degrau novo no servidor aparece sozinho. Clique soma 1 ponto (fica pendente);
  * botão direito desfaz o pendente; "Confirmar" manda LearnSkills (o servidor confere tudo).
  * Skills ativas aprendidas vão para a barra arrastando (ou pelo botão, no celular).
+ * Embaixo, o ramo da especialização (níveis 20, 24 e 28): só o do caminho escolhido na
+ * Mestra dos Caminhos (Progress.spec); antes disso, um aviso com os dois caminhos.
  */
 
 import type { Progress, SkillBranch, SkillInfo } from "../../gen/erevia/v1/game_pb";
@@ -11,6 +13,7 @@ import { formatSeconds, skillIcon } from "../icons";
 import { ui, uniqueIds } from "../art";
 import { beginDrag } from "../dragdrop";
 import { art, button, closeSheet, el, isCompact, isTouch, openSheet, toast, tooltip } from "../kit";
+import { specInfo } from "../specs";
 
 export interface SkillsDeps {
   skills: SkillInfo[];
@@ -25,9 +28,12 @@ export interface SkillsDeps {
 
 export function buildSkills(d: SkillsDeps): HTMLElement {
   const byId = new Map(d.skills.map((s) => [s.id, s]));
-  const tiers = d.skills.reduce((n, s) => Math.max(n, s.tier + 1), 0);
+  // Árvore da classe (3 ramos) e skills dos dois caminhos da especialização (spec preenchido).
+  const classTree = d.skills.filter((s) => !s.spec);
+  const specIds = [...new Set(d.skills.filter((s) => s.spec).map((s) => s.spec))];
+  const tiers = classTree.reduce((n, s) => Math.max(n, s.tier + 1), 0);
   // Nível que libera cada degrau (o mesmo para as 3 skills dele).
-  const tierLevels = Array.from({ length: tiers }, (_, t) => d.skills.find((s) => s.tier === t)?.levelReq ?? 1);
+  const tierLevels = Array.from({ length: tiers }, (_, t) => classTree.find((s) => s.tier === t)?.levelReq ?? 1);
   const saved = (): Map<number, number> => new Map((d.progress()?.ranks ?? []).map((r) => [r.skillId, r.rank]));
   let pending = saved();
   let selected: SkillInfo | null = null;
@@ -197,7 +203,7 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
     detail.append(
       el("div", "td-icon-wrap", art(uniqueIds(skillIcon(s.fx)), `td-icon ${s.passive ? "passive" : "active"}`)),
       el("h3", "title td-name", s.name),
-      el("div", "muted small", `${d.branches[s.branch]?.name ?? ""} · ${s.passive ? "Passiva" : "Ativa"} · Rank ${r}/${s.maxRank}`),
+      el("div", "muted small", `${(s.spec ? specInfo(s.spec)?.name : d.branches[s.branch]?.name) ?? ""} · ${s.passive ? "Passiva" : "Ativa"} · Rank ${r}/${s.maxRank}`),
       ranks,
     );
     if (!s.passive) {
@@ -223,7 +229,7 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
   function render() {
     tree.replaceChildren(el("div", "tg-corner"));
     d.branches.forEach((b, i) => {
-      const spent = d.skills.filter((s) => s.branch === i).reduce((a, s) => a + rank(s), 0);
+      const spent = classTree.filter((s) => s.branch === i).reduce((a, s) => a + rank(s), 0);
       const col = el("div", "tg-branch", el("b", null, b.name), el("small", null, b.description), el("span", "tg-spent", `${spent} pts`));
       col.style.setProperty("--bc", b.color);
       tree.append(col);
@@ -232,7 +238,7 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
       const lvl = tierLevels[tier];
       tree.append(el("div", `tg-level${d.level() < lvl ? " locked" : ""}`, el("span", null, `Nv ${lvl}`)));
       for (let br = 0; br < 3; br++) {
-        const s = d.skills.find((x) => x.branch === br && x.tier === tier);
+        const s = classTree.find((x) => x.branch === br && x.tier === tier);
         const cell = el("div", "tg-cell");
         if (s) {
           const color = d.branches[br]?.color ?? "#d6b46e";
@@ -247,6 +253,7 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
         tree.append(cell);
       }
     }
+    tree.append(specRow());
     const f = free();
     points.replaceChildren(el("span", "label", "Pontos"), el("b", f > 0 ? "gold" : "", String(f)));
     const cur = saved();
@@ -255,6 +262,37 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
     confirm.disabled = !changed;
     note.textContent = `Nível ${d.level()}: 1 ponto de skill por nível.${changed ? " Há mudanças não confirmadas." : ""}`;
     renderDetail();
+  }
+
+  /** Ramo da especialização: as 3 skills do caminho escolhido, lado a lado. */
+  function specRow(): HTMLElement {
+    const mine = specInfo(d.progress()?.spec);
+    const row = el("div", "tg-spec");
+    if (!mine) {
+      const names = specIds.map((id) => specInfo(id)?.name).filter(Boolean);
+      row.classList.add("locked");
+      row.append(
+        el("b", null, "Especialização"),
+        el("small", null, `No nível 20, a missão A Encruzilhada (Mestra Ysolde, na praça) libera um destes caminhos: ${names.join(" ou ")}. Cada um traz um bônus de atributos e 3 skills novas.`),
+      );
+      return row;
+    }
+    row.style.setProperty("--bc", mine.color);
+    const nodes = el("div", "tg-spec-nodes");
+    d.skills
+      .filter((s) => s.spec === mine.id)
+      .sort((a, b) => a.tier - b.tier)
+      .forEach((s, i) => {
+        const cell = el("div", "tg-spec-cell", el("span", `tg-spec-lvl${d.level() < s.levelReq ? " locked" : ""}`, `Nv ${s.levelReq}`), nodeEl(s, mine.color));
+        if (i > 0) {
+          const p = parent(s);
+          nodes.append(el("span", `tg-spec-link${p && rank(p) > 0 ? " lit" : ""}`));
+        }
+        nodes.append(cell);
+      });
+    const spent = d.skills.filter((s) => s.spec === mine.id).reduce((a, s) => a + rank(s), 0);
+    row.append(el("div", "tg-spec-head", el("b", null, mine.name), el("small", null, `${mine.bonusText} · ${mine.description}`), el("span", "tg-spent", `${spent} pts`)), nodes);
+    return row;
   }
 
   render();

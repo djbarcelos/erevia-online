@@ -14,6 +14,7 @@ import {
   tabs,
   toast,
   toggle,
+  type Quality,
   type Settings,
 } from "../kit";
 
@@ -24,6 +25,8 @@ export interface SettingsOpts {
   logout(): void;
   /** Dados para as abas Conta e Sobre. */
   info(): { account: string; character: string; level: number; ping: number; online: number };
+  /** Abre a janela "O que há de novo". */
+  news(): void;
 }
 
 const pct = (v: number) => `${v}%`;
@@ -34,6 +37,17 @@ function row(label: string, control: HTMLElement, hint?: string): HTMLElement {
 
 function group(title: string, ...rows: HTMLElement[]): HTMLElement {
   return el("section", "set-group", el("h3", "set-group-title", title), ...rows);
+}
+
+/** O que cada preset liga (o mesmo de world/render.ts: PRESETS). */
+const QUALITY_HINTS: Record<Quality, string> = {
+  baixa: "Render a 80%, sombras simples, sem brilho (bloom) nem SSAO. Para celulares.",
+  media: "Brilho nas chamas e efeitos, vinheta e sombras boas.",
+  alta: "Tudo da média, mais oclusão de ambiente (SSAO), FXAA e sombras suaves.",
+};
+
+function qualityHint(q: Quality, picked: boolean): string {
+  return `${QUALITY_HINTS[q]}${picked ? "" : " (escolhida pelo aparelho)"} Aplica na hora.`;
 }
 
 const set = <K extends keyof Settings>(k: K) => (v: Settings[K]) => settings.set(k, v);
@@ -78,21 +92,29 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "set-page",
         group(
           "Qualidade",
-          row(
-            "Predefinição",
-            segmented(
-              [
-                { id: "baixa", label: "Baixa" },
-                { id: "media", label: "Média" },
-                { id: "alta", label: "Alta" },
-                { id: "ultra", label: "Ultra" },
-              ],
-              s.quality,
-              set("quality"),
-            ),
-            "Ajusta sombras, distância e efeitos de uma vez.",
-          ),
-          row("Sombras", toggle(s.shadows, set("shadows"), "Sombras")),
+          (() => {
+            const hint = el("small", null, qualityHint(s.quality, s.qualityPicked));
+            const r = row(
+              "Predefinição",
+              segmented(
+                [
+                  { id: "baixa", label: "Baixa" },
+                  { id: "media", label: "Média" },
+                  { id: "alta", label: "Alta" },
+                ],
+                s.quality,
+                (v: Quality) => {
+                  // Escolha do jogador: deixa de seguir o aparelho. Aplica na hora (world/render.ts).
+                  settings.set("qualityPicked", true);
+                  settings.set("quality", v);
+                  hint.textContent = qualityHint(v, true);
+                },
+              ),
+            );
+            r.querySelector(".set-label")?.append(hint);
+            return r;
+          })(),
+          row("Sombras", toggle(s.shadows, set("shadows"), "Sombras"), "Desligar economiza bastante no celular."),
           row("Distância de visão", slider(s.viewDistance, 30, 150, 10, set("viewDistance"), (v) => `${v} m`)),
           row(
             "Limite de FPS",
@@ -205,7 +227,17 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
           "Tela",
           row("Nomes sobre os monstros", toggle(s.showNames, set("showNames"), "Nomes")),
           row("Números de dano", toggle(s.showDamage, set("showDamage"), "Números de dano")),
+          row(
+            "Tremor de câmera",
+            toggle(s.cameraShake, set("cameraShake"), "Tremor de câmera"),
+            "Nos seus críticos e nos golpes do chefe em você. Desligue se incomodar.",
+          ),
           row("Mostrar elmo", toggle(s.showHelm, set("showHelm"), "Mostrar elmo")),
+          row(
+            "Marcadores de missão",
+            toggle(s.questMarkers, set("questMarkers"), "Marcadores de missão"),
+            "A missão rastreada (clique no painel Missões) aparece no minimapa e no mapa, com a seta na borda da tela.",
+          ),
           row(
             "Idioma",
             select(
@@ -247,6 +279,7 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "div",
         "set-page about",
         el("div", "about-logo", el("span", "logo-word small-logo", "EREVIA"), el("span", "muted small", "Fase 3 · interface nova")),
+        group("Novidades", row("O que há de novo", button("Abrir", "btn btn-sm", opts.news), "O que mudou nas últimas versões do jogo.")),
         group(
           "Conexão",
           row("Ping", el("span", opts.info().ping < 80 ? "ok" : "warn", `${opts.info().ping} ms`)),

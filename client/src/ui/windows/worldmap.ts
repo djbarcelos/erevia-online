@@ -2,15 +2,17 @@
  * Mapa do mundo (tecla M): terreno pintado, regiões de caça com faixa de nível, chefes,
  * locais da cidade, NPCs, outros jogadores, monstros e você. Arrastar move, roda/pinça
  * dá zoom, clique marca o destino e o personagem anda até lá. Painel lateral com o local
- * atual, camadas e regiões.
+ * atual, camadas e regiões. A missão rastreada aparece como área, ícone e uma linha reta
+ * tracejada de você até ela.
  */
 
-import { EntityKind } from "../../gen/erevia/v1/game_pb";
+import { EntityKind, QuestPlaceKind } from "../../gen/erevia/v1/game_pb";
 import { LANDMARKS, renderMapCanvas } from "../../world/map-painter";
 import { worldBounds, type WorldData } from "../../world/world-data";
 import { ui } from "../art";
 import { button, clamp, el, isCompact, toggle } from "../kit";
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS, type MapSource } from "../minimap";
+import { drawQuestTarget, type QuestTracker } from "../quest-nav";
 import { levelText, regionAt, type BossPoint, type Region } from "../regions";
 
 export interface WorldMapDeps {
@@ -27,6 +29,8 @@ export interface WorldMapDeps {
   bossStatus?(b: BossPoint): { alive: boolean; windowStartMs: number; windowEndMs: number } | undefined;
   /** Relógio do servidor (ms), para as janelas de renascimento. */
   serverNow?(): number;
+  /** Missão rastreada (área, ícone e linha até ela). */
+  quests?: QuestTracker;
 }
 
 const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -160,7 +164,22 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     }
   };
   refreshBosses(performance.now());
-  side.append(el("h3", "wmap-title", "Erevia"), here, el("div", "wmap-sec", "Camadas"), layers, el("div", "wmap-sec", "Regiões"), zoneList);
+  // Missão rastreada: some sem alvo (ou com os marcadores desligados).
+  const questSec = el("div", "wmap-sec", "Missão rastreada");
+  const questRow = el("div", "wmap-quests");
+  const renderQuest = () => {
+    const t = d.quests?.target();
+    const q = d.quests?.tracked();
+    questSec.hidden = questRow.hidden = !t || !q;
+    if (!t || !q) return questRow.replaceChildren();
+    const b = el("button", "wmap-quest");
+    b.type = "button";
+    b.append(el("span", "qm", "◎"), el("span", null, el("b", null, q.title), el("small", null, t.name)));
+    b.onclick = () => flyTo(t.x, t.z, Math.max(1.6, Math.min(5, 90 / Math.max(10, t.radius * 3))));
+    questRow.replaceChildren(b);
+  };
+  const offQuests = d.quests?.onChange(renderQuest);
+  side.append(el("h3", "wmap-title", "Erevia"), here, questSec, questRow, el("div", "wmap-sec", "Camadas"), layers, el("div", "wmap-sec", "Regiões"), zoneList);
   if (d.bosses.length) side.append(el("div", "wmap-sec", "Chefes"), bossList);
   if (d.stones.length) {
     const stoneList = el("div", "wmap-quests");
@@ -478,6 +497,14 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     }
     refreshBosses(now);
 
+    // Missão rastreada: linha reta tracejada até a área ou o ícone, com o nome.
+    const qt = d.quests?.target();
+    if (qt) {
+      drawQuestTarget(ctx, qt, me, sx, sy, scale, 9);
+      const fs = clamp(scale * 2.6, 10, 13);
+      label(qt.name, sx(qt.x), sy(qt.z) - Math.max(15, qt.radius * scale * (qt.kind === QuestPlaceKind.HUNT ? 1 : 0)) - fs * 0.6, fs, "#ffe6a6", 700);
+    }
+
     // Destino marcado + caminho
     if (waypoint) {
       const arrived = Math.hypot(me.x - waypoint.x, me.z - waypoint.z) < 1.5;
@@ -569,7 +596,9 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
   }
 
   raf = requestAnimationFrame(draw);
+  renderQuest();
   root.addEventListener("win-close", () => {
+    offQuests?.();
     alive = false;
     cancelAnimationFrame(raf);
   });

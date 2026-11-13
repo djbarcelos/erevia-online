@@ -40,7 +40,40 @@ message ClientMessage {
     MailCmd mail_cmd = 30;
     RankingRequest ranking_request = 31;
     AchievementCmd achievement_cmd = 32;
+    SpecCmd spec_cmd = 50;
   }
+}
+
+// ---------- Especialização (segunda classe, nível 20) ----------
+
+enum SpecCmdKind {
+  SPEC_CMD_UNSPECIFIED = 0;
+  SPEC_CMD_TALK = 1; // falar com a Mestra dos Caminhos (npc_id): anda a missão e abre a escolha
+  SPEC_CMD_CHOOSE = 2; // escolher o caminho spec (quem já tem um troca, pagando)
+}
+
+message SpecCmd {
+  SpecCmdKind kind = 1;
+  uint32 npc_id = 2;
+  string spec = 3;
+}
+
+// Janela da Mestra: os dois caminhos da classe (Welcome.specs e as skills com spec).
+message SpecChoice {
+  uint32 npc_id = 1;
+  string current = 2; // caminho atual ("" = ainda não escolheu: a escolha é de graça)
+  uint64 change_cost = 3; // moedas para trocar de caminho depois de escolher
+}
+
+// Uma especialização (segunda classe).
+message SpecInfo {
+  string id = 1;
+  string class = 2;
+  string name = 3;
+  string description = 4;
+  string color = 5; // "#rrggbb"
+  Attrs bonus = 6; // bônus passivo de atributos
+  string bonus_text = 7; // "+12 Constituição"
 }
 
 // ---------- Ranking, conquistas e títulos ----------
@@ -335,6 +368,8 @@ message ServerMessage {
     Emote emote = 30;
     Ranking ranking = 31;
     Achievements achievements = 32;
+    SpecChoice spec_choice = 50;
+    EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
   }
 }
 
@@ -429,10 +464,47 @@ message QuestInfo {
   string reward = 5; // resumo da recompensa ("120 XP · 30 moedas")
 }
 
+// Onde fica um objetivo: o minimapa, o mapa e a seta da borda da tela apontam para lá.
+enum QuestPlaceKind {
+  QUEST_PLACE_KIND_NONE = 0; // sem lugar (usar skill, tomar poção)
+  QUEST_PLACE_KIND_HUNT = 1; // área de caça (círculo de centro x, z e raio radius)
+  QUEST_PLACE_KIND_NPC = 2; // um NPC (falar com ele)
+  QUEST_PLACE_KIND_GATE = 3; // portão da cidade
+  QUEST_PLACE_KIND_STONE = 4; // Pedra de Teleporte
+  QUEST_PLACE_KIND_SHOP = 5; // loja (NPC que vende)
+}
+
 message QuestStepInfo {
   string text = 1;
   uint32 count = 2;
   uint32 need = 3;
+  // Lugar do objetivo (só nos que faltam). Calculado pelo servidor quando o QuestLog vai:
+  // ao mudar o passo e ao subir de nível; nunca por tick.
+  QuestPlaceKind place = 4;
+  float x = 5;
+  float z = 6;
+  float radius = 7; // metros: chegou quando está dentro
+  string place_name = 8; // rótulo no mapa ("Esqueleto Lacaio", "Ysolde", "Portão Leste")
+}
+
+// ---------- Eventos (invasão da cidade e XP em dobro) ----------
+
+enum InvasionPhase {
+  INVASION_PHASE_NONE = 0;
+  INVASION_PHASE_WARNING = 1; // anunciada: começa em at_ms
+  INVASION_PHASE_ACTIVE = 2; // as ondas estão chegando; acaba por tempo em at_ms
+}
+
+// Estado dos eventos do servidor (indicador discreto no HUD). Vai logo depois do Welcome
+// (se houver algo ligado) e a cada mudança; durante a invasão, no máximo 1×/s.
+message EventStatus {
+  bool xp2 = 1; // XP de monstros em dobro
+  int64 xp2_until_ms = 2; // até quando (relógio do servidor; 0 = sem previsão)
+  InvasionPhase invasion = 3;
+  int64 invasion_at_ms = 4; // aviso: quando as ondas começam; ativa: o tempo limite
+  uint32 wave = 5; // onda atual (1…waves)
+  uint32 waves = 6;
+  uint32 alive = 7; // esqueletos vivos agora
 }
 
 // ---------- Raid boss ----------
@@ -474,9 +546,19 @@ enum TelegraphKind {
   TELEGRAPH_KIND_WAVE = 1; // Onda de Ossos: em volta do chefe
   TELEGRAPH_KIND_RAIN = 2; // Chuva de Ossos: em cima de um jogador
   TELEGRAPH_KIND_MARK = 3; // Marca da Morte: segue o marcado e explode em volta dele
+  TELEGRAPH_KIND_STRIKE = 4; // habilidade de monstro comum ou chefe de campo (pancada no chão)
 }
 
-// Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro do círculo.
+// Forma do aviso. x, z é a origem: o centro (círculo e anel) ou o ponto de onde sai o
+// cone ou a linha, na direção angle.
+enum TelegraphShape {
+  TELEGRAPH_SHAPE_CIRCLE = 0; // raio radius
+  TELEGRAPH_SHAPE_CONE = 1; // raio radius e abertura total arc
+  TELEGRAPH_SHAPE_LINE = 2; // retângulo de length × width saindo de x, z
+  TELEGRAPH_SHAPE_DONUT = 3; // anel entre inner_radius e radius (o buraco é seguro)
+}
+
+// Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro da forma.
 message Telegraph {
   uint32 id = 1;
   TelegraphKind kind = 2;
@@ -487,7 +569,13 @@ message Telegraph {
   uint32 source_id = 7;
   uint32 follow_id = 8; // segue esta entidade (Marca da Morte)
   bool resolved = 9; // o golpe caiu agora (em x, z)
-  bool cancelled = 10; // o chefe reiniciou ou morreu antes
+  bool cancelled = 10; // o monstro desistiu da luta ou morreu antes
+  TelegraphShape shape = 11;
+  float angle = 12; // direção do cone e da linha (rad, em Y: 0 = +Z, π/2 = +X)
+  float arc = 13; // cone: abertura total (rad)
+  float length = 14; // linha: comprimento (m)
+  float width = 15; // linha: largura (m)
+  float inner_radius = 16; // anel: raio do buraco seguro (m)
 }
 
 enum PvpState {
@@ -502,6 +590,7 @@ message PlayerStatus {
   PvpState pvp_state = 2;
   string clan_name = 3;
   string title = 4; // título escolhido (de uma conquista; "" = nenhum)
+  string spec = 5; // especialização (SpecInfo.id; "" = nenhuma)
 }
 
 // PvP do próprio personagem.
@@ -621,6 +710,7 @@ enum NpcRole {
   NPC_ROLE_TELEPORT = 1;
   NPC_ROLE_STORAGE = 2;
   NPC_ROLE_BARBER = 3;
+  NPC_ROLE_MASTER = 4; // Mestra dos Caminhos (especialização)
 }
 
 // Atributos e skills aprendidas do jogador.
@@ -633,6 +723,7 @@ message Progress {
   // O que +1 ponto em cada atributo muda agora (ordem: for, des, con, int, sab, esp).
   // As fórmulas são lineares nos atributos: dá para prever qualquer distribuição somando.
   repeated StatBlock per_point = 6;
+  string spec = 7; // especialização escolhida ("" = nenhuma); o bônus dela já está nos atributos
 }
 
 // Atributos de combate (valores finais ou diferenças).
@@ -688,6 +779,7 @@ message Welcome {
   ClanState clan = 19;
   EnchantRules enchant = 20;
   repeated BossStatus bosses = 21; // chefes fixos (vivos ou com a janela de renascimento)
+  repeated SpecInfo specs = 22; // as especializações de todas as classes
 }
 
 // Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
@@ -973,6 +1065,7 @@ message Entity {
   uint32 weapon_enchant = 23;
   BodyLook look = 24; // jogadores: visual do corpo
   bool raid = 25; // raid boss (barra no topo da tela)
+  string spec = 26; // jogadores: especialização (SpecInfo.id; "" = nenhuma)
 }
 
 message EntityState {
@@ -1091,7 +1184,7 @@ message SkillInfo {
   bool effect_on_self = 15;
   float extra_crit = 16;
   // Árvore de skills
-  uint32 branch = 17; // 0–2 (Welcome.branches)
+  uint32 branch = 17; // 0–2 (Welcome.branches); 3 = ramo da especialização
   uint32 tier = 18; // 0–3
   uint32 max_rank = 19;
   bool passive = 20;
@@ -1099,6 +1192,7 @@ message SkillInfo {
   uint32 parent_id = 22; // nó de cima no ramo (0 = raiz)
   repeated SkillRankInfo ranks = 23; // valores em cada rank (índice 0 = rank 1)
   float splash = 24; // raio em volta do alvo (0 = só o alvo)
+  string spec = 25; // especialização dona da skill ("" = árvore da classe); branch = 3
 }
 
 // Valores de uma skill num rank.

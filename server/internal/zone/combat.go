@@ -63,8 +63,13 @@ func (z *Zone) runAction(e *entity) {
 	e.stopMoving()
 
 	// Sem combate dentro da cidade (quem está lá dentro só anda), menos contra quem tem karma.
+	// Contra monstros vale pveSafe: durante a invasão, as estradas e a praça ficam abertas.
 	townHunt := e.pl != nil && t.pl != nil && z.hostile(e, t, e.act.force)
-	if (z.inSafe(e.pos) || z.inSafe(t.pos)) && !townHunt {
+	safe := z.inSafe
+	if e.pl == nil || t.pl == nil {
+		safe = z.pveSafe
+	}
+	if (safe(e.pos) || safe(t.pos)) && !townHunt {
 		if e.act.kind == actSkill {
 			z.system(e, "Não é possível lutar dentro da cidade.")
 			z.cancelQueuedSkill(e)
@@ -134,7 +139,7 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 	}
 	z.cancelChannel(p, "Viagem cancelada.")
 	s := game.Skills[skillID]
-	if s == nil || s.Class != p.pl.class || s.IsPassive() {
+	if s == nil || s.Class != p.pl.class || s.IsPassive() || s.Spec != "" && s.Spec != p.pl.spec {
 		return
 	}
 	if p.pl.rank(s.ID) < 1 {
@@ -153,7 +158,7 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 	case game.TargetSelf:
 		z.castSkill(p, s, nil)
 	case game.TargetAreaSelf:
-		if z.inSafe(p.pos) {
+		if z.pveSafe(p.pos) { // jogadores na área continuam protegidos (hostile usa inSafe)
 			z.system(p, "Não é possível lutar dentro da cidade.")
 			return
 		}
@@ -453,6 +458,9 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 	if dst.mon != nil && dst.mon.raid != nil {
 		z.raidCredit(dst, src, math.Min(dmg, dst.hp))
 	}
+	if dst.mon != nil && dst.mon.invader {
+		z.invasionCredit(src, math.Min(dmg, dst.hp))
+	}
 	dst.hp -= dmg
 	if dst.hp <= 0 {
 		if ev != nil {
@@ -505,7 +513,11 @@ func (z *Zone) regen(e *entity, dt float64) {
 	e.mp = math.Min(e.stats.MaxMP, e.mp+mp*dt)
 }
 
-func (z *Zone) inSafe(p Vec2) bool { return math.Hypot(p.X, p.Z) < z.cfg.SafeRadius }
+func (z *Zone) inSafe(p Vec2) bool { return p.X*p.X+p.Z*p.Z < z.cfg.SafeRadius*z.cfg.SafeRadius }
+
+// pveSafe: zona segura para lutar com monstros. Durante a invasão, as estradas dos portões
+// e a praça deixam de ser (o PvP continua com inSafe: karma e flag não mudam).
+func (z *Zone) pveSafe(p Vec2) bool { return z.inSafe(p) && !z.invasionOpen(p) }
 
 func (z *Zone) sendCooldown(p *entity, skillID uint32, seconds float64) {
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_SkillCooldown{SkillCooldown: &pb.SkillCooldown{

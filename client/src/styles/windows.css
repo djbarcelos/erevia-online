@@ -2255,3 +2255,77 @@
   justify-content: flex-end;
   padding: 0 10px 8px;
 }
+
+/* Ramo da especialização (embaixo dos 3 ramos da classe). */
+.tg-spec {
+  --bc: var(--gold);
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 10px 12px 14px;
+  border-top: 2px solid color-mix(in srgb, var(--bc) 60%, transparent);
+  border-radius: 6px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bc) 12%, transparent), transparent);
+}
+
+.tg-spec.locked {
+  --bc: var(--dim);
+  text-align: center;
+}
+
+.tg-spec.locked small,
+.tg-spec-head small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.tg-spec > b,
+.tg-spec-head b {
+  font-family: var(--font-title);
+  color: var(--bc);
+  letter-spacing: 0.08em;
+}
+
+.tg-spec-head {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.tg-spec-nodes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.tg-spec-cell {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.tg-spec-lvl {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.tg-spec-lvl.locked {
+  color: var(--dim);
+}
+
+.tg-spec-link {
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tg-spec-link.lit {
+  background: var(--bc);
+  box-shadow: 0 0 10px var(--bc);
+}

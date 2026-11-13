@@ -147,8 +147,9 @@ func TestTwoPlayersMoveAndChat(t *testing.T) {
 			self = e
 		}
 	}
-	// A árvore inteira da classe (15 skills), com as 2 iniciais aprendidas, e a barra padrão.
-	if len(welcomeA.Skills) != 15 || len(welcomeA.Branches) != 3 {
+	// A árvore inteira da classe (15 skills) mais as 6 dos dois caminhos da especialização,
+	// com as 2 iniciais aprendidas, e a barra padrão.
+	if len(welcomeA.Skills) != 15+6 || len(welcomeA.Branches) != 3 {
 		t.Fatalf("welcome should carry the class tree, got %d skills / %d branches", len(welcomeA.Skills), len(welcomeA.Branches))
 	}
 	if welcomeA.Progress == nil || len(welcomeA.Progress.Ranks) != 2 || len(welcomeA.Progress.PerPoint) != 6 {

@@ -71,7 +71,10 @@ export function applyEnvClasses(): void {
 // ---------------------------------------------------------------------------------------
 
 export interface Settings {
-  quality: "baixa" | "media" | "alta" | "ultra";
+  /** Preset de qualidade do render (world/render.ts). */
+  quality: Quality;
+  /** O jogador escolheu o preset; senão ele segue o aparelho (detectQuality). */
+  qualityPicked: boolean;
   shadows: boolean;
   viewDistance: number;
   fpsLimit: "30" | "60" | "120" | "0";
@@ -88,7 +91,11 @@ export interface Settings {
   lefty: boolean;
   showNames: boolean;
   showDamage: boolean;
+  /** Tremor leve da câmera nos seus críticos e nos golpes do chefe em você (desligável por conforto). */
+  cameraShake: boolean;
   showHelm: boolean;
+  /** Missão rastreada no minimapa, no mapa e na seta da borda da tela. */
+  questMarkers: boolean;
   language: "pt-BR" | "en" | "es";
   autoRadius: number;
   autoSkills: boolean;
@@ -113,8 +120,29 @@ export const DEFAULT_KEYS: Record<string, string> = {
   potion: "KeyQ",
 };
 
+export type Quality = "baixa" | "media" | "alta";
+export const QUALITIES: readonly Quality[] = ["baixa", "media", "alta"];
+
+/**
+ * Preset da primeira vez, pelo aparelho: computador → alta; celular e tablet → média só
+ * nos aparelhos com bastante memória e núcleos (o navegador informa), senão baixa. A meta
+ * é 30 FPS estáveis num celular médio; o jogador pode subir em Configurações → Gráficos.
+ */
+export function detectQuality(): Quality {
+  const nav = navigator as Navigator & { deviceMemory?: number; userAgentData?: { mobile?: boolean } };
+  const mobile =
+    nav.userAgentData?.mobile === true ||
+    /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent) ||
+    (coarse.matches && nav.maxTouchPoints > 0);
+  if (!mobile) return "alta";
+  const mem = nav.deviceMemory ?? 4;
+  const cores = nav.hardwareConcurrency ?? 4;
+  return mem >= 6 && cores >= 8 ? "media" : "baixa";
+}
+
 const DEFAULT_SETTINGS: Settings = {
-  quality: "alta",
+  quality: detectQuality(),
+  qualityPicked: false,
   shadows: true,
   viewDistance: 70,
   fpsLimit: "60",
@@ -130,7 +158,9 @@ const DEFAULT_SETTINGS: Settings = {
   lefty: false,
   showNames: true,
   showDamage: true,
+  cameraShake: true,
   showHelm: true,
+  questMarkers: true,
   language: "pt-BR",
   autoRadius: 25,
   autoSkills: true,
@@ -147,7 +177,12 @@ function loadSettings(): Settings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const s = JSON.parse(raw) as Partial<Settings>;
-      return { ...DEFAULT_SETTINGS, ...s, keys: { ...DEFAULT_KEYS, ...(s.keys ?? {}) } };
+      const v: Settings = { ...DEFAULT_SETTINGS, ...s, keys: { ...DEFAULT_KEYS, ...(s.keys ?? {}) } };
+      // Antes do render novo a qualidade não fazia nada (e existia "ultra"): quem nunca
+      // escolheu segue o aparelho; um preset que não existe mais vira o mais alto.
+      if (!v.qualityPicked) v.quality = DEFAULT_SETTINGS.quality;
+      else if (!QUALITIES.includes(v.quality)) v.quality = "alta";
+      return v;
     }
   } catch {
     // armazenamento bloqueado ou corrompido: usa o padrão

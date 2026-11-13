@@ -296,7 +296,7 @@ func (z *Zone) partyPB(pt *party) *pb.PartyState {
 		out.Members = append(out.Members, &pb.PartyMember{
 			Id: m.id, Name: m.name, Class: m.pl.class, Level: uint32(m.level),
 			Hp: uint32(m.hpInt()), MaxHp: uint32(m.maxHPInt()),
-			Mp: uint32(math.Floor(m.mp)), MaxMp: uint32(math.Round(m.stats.MaxMP)),
+			Mp: uint32(m.mpInt()), MaxMp: uint32(m.maxMPInt()),
 			X: float32(m.pos.X), Z: float32(m.pos.Z), Dead: m.dead,
 		})
 	}
@@ -424,6 +424,7 @@ func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64
 	if z.night {
 		total *= game.NightXP
 	}
+	total *= z.xpEventMult() // XP em dobro (events.go)
 	total *= partyBonus[min(len(takers), len(partyBonus))-1] * frac
 	for _, m := range takers {
 		if xp := int64(math.Round(total * float64(m.level) / float64(sum))); xp > 0 {

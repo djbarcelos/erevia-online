@@ -106,6 +106,7 @@ func (z *Zone) doModJob(ctx context.Context, job modJob) event {
 				break
 			}
 			z.log.Error("mod job", "err", err, "attempt", attempt)
+			z.ReportDBError("moderation", err)
 			select {
 			case <-ctx.Done():
 				return nil
@@ -195,6 +196,10 @@ func (z *Zone) command(p *entity, text string) {
 		z.devRaid(p, args)
 		return
 	}
+	if cmd == "/avisos" && z.cfg.DevCommands { // avisos no chão de teste (abilities.go)
+		z.devWarnings(p)
+		return
+	}
 	if !p.pl.gm {
 		z.system(p, "Comando desconhecido: "+fields[0])
 		return
@@ -203,7 +208,8 @@ func (z *Zone) command(p *entity, text string) {
 	case "/gm":
 		z.system(p, "GM: /kick Nome [motivo] · /mute Nome minutos [motivo] · /unmute Nome · "+
 			"/ban Nome [motivo] · /unban Nome · /tp X Z · /goto Nome · /summon Nome · "+
-			"/give Nome item|moedas [qtd] · /anuncio texto · /online")
+			"/give Nome item|moedas [qtd] · /anuncio texto · /online · "+
+			"/evento invasao [agora|parar] · /evento xp2 horas|off")
 	case "/kick":
 		z.gmKick(p, args)
 	case "/mute":
@@ -226,6 +232,8 @@ func (z *Zone) command(p *entity, text string) {
 		z.gmAnnounce(p, strings.Join(args, " "))
 	case "/online":
 		z.gmOnline(p)
+	case "/evento":
+		z.gmEvent(p, args)
 	default:
 		z.system(p, "Comando desconhecido: "+fields[0]+" (/gm lista os comandos)")
 	}

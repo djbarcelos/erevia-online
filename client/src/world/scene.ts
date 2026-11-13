@@ -19,6 +19,7 @@ import {
 import { AdvancedDynamicTexture } from "@babylonjs/gui";
 import { addGroundDetail } from "./ground";
 import { paintTerrain, projection } from "./map-painter";
+import { registerPaletteMaterial } from "./palette-material";
 import { worldBounds, type WorldData } from "./world-data";
 
 /** Cor do horizonte ao entardecer (valor inicial; o ciclo dia/noite muda depois). */
@@ -53,6 +54,8 @@ export interface WorldScene {
  */
 export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldData): Promise<WorldScene> {
   const engine = await createEngine(canvas);
+  // Material de paleta em todo material Standard/PBR criado daqui em diante (só GLSL).
+  if (!engine.isWebGPU) registerPaletteMaterial();
   const scene = new Scene(engine);
   // O Babylon faz picking a cada movimento do mouse contra todas as malhas clicáveis; o jogo
   // só precisa de pick no clique e no hover (feito à mão, com intervalo), então desligamos.
@@ -149,6 +152,8 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
   const gui = AdvancedDynamicTexture.CreateFullscreenUI("ui", true, scene);
+  // Nomes, barras e números de dano ficam fora do pós-processamento (SSAO e FXAA do preset alto).
+  if (gui.layer) gui.layer.applyPostProcess = false;
 
   window.addEventListener("resize", () => engine.resize());
   engine.runRenderLoop(() => scene.render());
