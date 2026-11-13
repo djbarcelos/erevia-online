@@ -15,6 +15,7 @@ import {
   TransformNode,
   Vector2,
   Vector3,
+  type AbstractMesh,
   type ArcRotateCamera,
   type GlowLayer,
   type IParticleEmitterType,
@@ -308,6 +309,97 @@ export class Fx {
     this.shakeLeft -= dt;
     const p = this.shakePower * Math.max(0, this.shakeLeft / 0.22);
     this.camera.targetScreenOffset = new Vector2((Math.random() - 0.5) * p, (Math.random() - 0.5) * p);
+  }
+
+  // ------------------------------------------------------------------------------------
+  // Peças fixas do cenário (Pedra de Teleporte)
+  // ------------------------------------------------------------------------------------
+
+  /** Texturas pintadas dos efeitos (brilho, runas…), para peças fixas reaproveitarem. */
+  get textures(): FxTextures {
+    return this.tex;
+  }
+
+  /** Material emissivo aditivo compartilhado (a cor vem daqui; a textura dá o contorno). */
+  glowMaterial(color: Color3, tex: Texture | null, alpha = 1): StandardMaterial {
+    return this.mat(color, tex, true, alpha);
+  }
+
+  /** Põe/tira uma malha da camada de brilho (só as incluídas brilham). */
+  glowInclude(m: Mesh): void {
+    this.addGlow(m);
+  }
+
+  glowExclude(m: Mesh): void {
+    this.removeGlow(m);
+    this.glowColors.delete(m);
+  }
+
+  private glowColors = new Map<AbstractMesh, Color3>();
+  private glowSelector = false;
+
+  /**
+   * Cor do brilho de uma malha, independente da emissiveColor do material (a camada
+   * multiplica esta cor pela textura emissiva). Útil quando o material tem emissiveColor
+   * preta porque a cor já está pintada na textura. O objeto pode ser alterado depois
+   * (pulsar). As outras malhas seguem o comportamento padrão do Babylon.
+   */
+  setGlowColor(m: Mesh, color: Color3): void {
+    const glow = this.glow;
+    if (!glow) return;
+    this.glowColors.set(m, color);
+    if (this.glowSelector) return;
+    this.glowSelector = true;
+    glow.customEmissiveColorSelector = (mesh, _sub, material, out) => {
+      const own = this.glowColors.get(mesh);
+      if (own) {
+        out.set(own.r, own.g, own.b, 1);
+        return;
+      }
+      const mat = material as unknown as { emissiveColor?: Color3; emissiveTexture?: { level: number } | null; emissiveIntensity?: number; alpha: number };
+      if (mat?.emissiveColor) {
+        const level = (mat.emissiveTexture?.level ?? 1) * (mat.emissiveIntensity ?? 1);
+        out.set(mat.emissiveColor.r * level, mat.emissiveColor.g * level, mat.emissiveColor.b * level, mat.alpha);
+      } else {
+        const n = glow.neutralColor;
+        out.set(n.r, n.g, n.b, n.a);
+      }
+    };
+  }
+
+  /**
+   * Aura da Pedra de Teleporte: grãos de luz subindo devagar em volta da rocha e
+   * faíscas caindo do núcleo de luz do topo. Para sozinha quando `root` é descartado.
+   */
+  teleportAura(root: TransformNode, coreY: number): FxHandle {
+    const at = (y: number) => {
+      const p = new Vector3();
+      return () => (root.isDisposed() ? null : p.copyFrom(root.getAbsolutePosition()).addInPlaceFromFloats(0, y, 0));
+    };
+    const motes = this.stream(at(0.1), 9, {
+      tex: this.tex.flare,
+      life: [2.6, 3.8],
+      size: [0.05, 0.13],
+      speed: [0.3, 0.65],
+      colors: [c4(0.45, 0.8, 1, 0.9), c4(0.75, 0.92, 1, 0.75), c4(0.2, 0.45, 1, 0)],
+      emitter: rising(1.15, 0.2, 0.12),
+    });
+    const sparks = this.stream(at(coreY), 5, {
+      tex: this.tex.star,
+      life: [0.7, 1.4],
+      size: [0.07, 0.15],
+      speed: [0.05, 0.25],
+      colors: [c4(0.85, 0.96, 1, 1), c4(0.5, 0.8, 1, 0.9), c4(0.3, 0.55, 1, 0)],
+      emitter: new SphereParticleEmitter(0.38),
+      gravity: -0.45,
+      spin: 2,
+    });
+    return {
+      stop: () => {
+        motes.stop();
+        sparks.stop();
+      },
+    };
   }
 
   private addGlow(m: Mesh): void {
