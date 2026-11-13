@@ -6,6 +6,8 @@ WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY client/ ./
+# O build gera public/novidades.json a partir do changelog da raiz.
+COPY CHANGELOG.md /app/CHANGELOG.md
 RUN npm run build
 
 # 2) Servidor Go: binário estático

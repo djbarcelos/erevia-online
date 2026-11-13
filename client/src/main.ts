@@ -63,6 +63,8 @@ import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
 import { buildGlory } from "./ui/windows/glory";
+import { takeUnseenNews, whatsNewDef } from "./ui/windows/whatsnew";
+import { loadNews } from "./news";
 import { InvitePrompt } from "./ui/invite";
 import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
@@ -947,8 +949,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           location.reload();
         },
         info: () => ({ account: "", character: character.name, level: me().myLevel, ping: conn.ping, online: entities.count }),
+        news: () => void wm.show("news"),
       }),
   });
+  reg(whatsNewDef());
   const wm = new WindowManager(defs);
   wm.onChange = () => {
     for (const id of defs.keys()) hud.setWindowOpen(id, wm.isOpen(id));
@@ -1118,6 +1122,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         hud: $("hud"),
       });
     }, 3000);
+  }
+
+  // "O que há de novo": abre sozinha uma vez por versão do changelog (fora da medição de FPS).
+  if (!wantBench()) {
+    void loadNews().then((news) => {
+      if (news && wm.layer.isConnected && takeUnseenNews(news.latest)) void wm.show("news");
+    });
   }
 
   canvas.focus();
