@@ -36,7 +36,7 @@ const (
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
 		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
-		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title"
+		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec"
 )
 
 var (
@@ -90,7 +90,9 @@ type Character struct {
 	// Conquistas e o título em uso (id da conquista; "" = nenhum).
 	Achievements game.AchievementState `json:"-"`
 	Title        string                `json:"-"`
-	kitGiven     bool
+	// Especialização (segunda classe, nível 20; "" = nenhuma).
+	Spec     string `json:"spec"`
+	kitGiven bool
 }
 
 // StorageState é o armazém de uma conta: moedas e itens (Equipped é sempre false).
@@ -128,7 +130,8 @@ type CharacterState struct {
 	// Conquistas e título vão junto com o personagem (mesma linha, mesma transação).
 	Achievements game.AchievementState
 	Title        string
-	Seq          int64 // salvamento mais velho que o gravado é ignorado
+	Spec         string // especialização ("" = nenhuma)
+	Seq          int64  // salvamento mais velho que o gravado é ignorado
 	// Storage (opcional): o armazém da conta mudou e vai junto, na mesma transação.
 	Storage *StorageState
 }
@@ -499,13 +502,13 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 				attr_str = $10, attr_dex = $11, attr_con = $12, attr_int = $13, attr_wis = $14, attr_spi = $15,
 				skill_ranks = $16, hotbar = $17, karma = $18, pk_count = $19, pvp_kills = $20,
 				skin = $21, hair = $22, outfit = $23, head = $24, hide_hat = $25, quests = $26,
-				achievements = $27, title = $28
+				achievements = $27, title = $28, spec = $29
 				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
 				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq,
 				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar,
 				max(c.Karma, 0), max(c.PKs, 0), max(c.PvPKills, 0),
 				c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit, c.Appearance.Head, c.Appearance.HideHat, quests,
-				achievements, c.Title)
+				achievements, c.Title, c.Spec)
 		}
 		br := tx.SendBatch(ctx, batch)
 		var ids []int64
@@ -595,7 +598,7 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
 		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
 		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat, &quests,
-		&achievements, &c.Title)
+		&achievements, &c.Title, &c.Spec)
 	if err != nil {
 		return c, err
 	}

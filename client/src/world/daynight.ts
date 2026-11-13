@@ -1,6 +1,5 @@
 import {
   Color3,
-  Color4,
   Constants,
   DynamicTexture,
   GlowLayer,
@@ -11,7 +10,9 @@ import {
   Vector3,
   type Scene,
 } from "@babylonjs/core";
+import type { Region } from "../ui/regions";
 import { mulberry32 } from "./map-painter";
+import { RenderQuality } from "./render";
 import type { WorldScene } from "./scene";
 import { Torches } from "./torches";
 import type { WorldData } from "./world-data";
@@ -136,6 +137,12 @@ function sample(phase: number): Key {
     shadow: num(a.shadow, b.shadow),
     night: num(a.night, b.night),
   };
+}
+
+/** 0–1: perto do nascer (fase 0) ou do pôr do sol (~0,71), quando a luz fica dourada. */
+function golden(phase: number): number {
+  const bell = (c: number, w: number) => Math.max(0, 1 - Math.abs(phase - c) / w);
+  return Math.max(bell(0.02, 0.06), bell(1.02, 0.06), bell(0.71, 0.07));
 }
 
 function smooth(t: number): number {
@@ -263,8 +270,10 @@ function additive(scene: Scene, name: string, tex: DynamicTexture): StandardMate
 
 /** Liga céu, luzes, neblina, sol, lua, estrelas e tochas à hora do mundo. */
 export class DayNight {
-  /** Camada de brilho compartilhada (chamas e efeitos visuais). */
+  /** Camada de brilho compartilhada (chamas e efeitos visuais). É o bloom do render. */
   readonly glow: GlowLayer;
+  /** Presets de qualidade, pós-processamento e cor por região. */
+  readonly render: RenderQuality;
   private torches: Torches | null = null;
   private sunDisc: Mesh;
   private moon: Mesh;
@@ -284,6 +293,7 @@ export class DayNight {
     const scene = world.scene;
     this.glow = new GlowLayer("glow", scene, { mainTextureRatio: 0.5, blurKernelSize: 48 });
     this.glow.intensity = 0.9;
+    this.render = new RenderQuality(world, this.glow);
 
     this.stars = MeshBuilder.CreateSphere("stars", { diameter: 1500, segments: 16, sideOrientation: Mesh.BACKSIDE }, scene);
     this.starMat = additive(scene, "starMat", starTexture(scene));
@@ -325,6 +335,11 @@ export class DayNight {
     if (data.torches?.length) this.torches = new Torches(scene, data.torches, world, this.glow);
   }
 
+  /** Regiões do mapa, para a névoa e a cor por região. */
+  setRegions(regions: Region[]): void {
+    this.render.setRegions(regions);
+  }
+
   /** 0 (dia claro) a 1 (noite fechada). */
   get night(): number {
     return this._night;
@@ -340,14 +355,18 @@ export class DayNight {
       this.lastSky = phase;
       this.paintSky(k);
     }
-    const fog = hex(k.fog);
-    scene.fogColor = fog;
-    scene.fogDensity = k.fogDensity;
-    scene.clearColor = new Color4(fog.r, fog.g, fog.b, 1);
     scene.ambientColor = hex(k.ambient);
     hemi.intensity = k.hemi;
-    hemi.diffuse = hex(k.hemiSky);
-    hemi.groundColor = hex(k.hemiGround);
+    // Névoa e luz do céu: a hora, misturada com a cor da região (render.ts).
+    this.render.update(player, {
+      fog: hex(k.fog),
+      fogDensity: k.fogDensity,
+      hemiSky: hex(k.hemiSky),
+      hemiGround: hex(k.hemiGround),
+      light: hex(k.lightColor),
+      night: k.night,
+      golden: golden(phase),
+    });
     this.world.outerMat.diffuseColor = Color3.Lerp(new Color3(0.2, 0.26, 0.14), new Color3(0.07, 0.09, 0.08), k.night);
 
     // Sol de dia, lua à noite. Perto do horizonte a luz some, então a troca não aparece.

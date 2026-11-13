@@ -133,9 +133,12 @@ type SkillDef struct {
 	ID      uint32
 	Class   string
 	Name    string
-	Branch  int // 0–2
-	Tier    int // 0–4
+	Branch  int // 0–2 (SpecBranch nas skills de especialização)
+	Tier    int // 0–4 (0–2 nas de especialização)
 	MaxRank int
+	// Spec: id da especialização dona da skill ("" = árvore comum da classe). Só quem
+	// escolheu esse caminho aprende e usa.
+	Spec string
 
 	Passive PassiveKind // != 0: skill passiva (não se usa)
 	PValue  Scale
@@ -169,7 +172,12 @@ type SkillDef struct {
 func (s *SkillDef) IsPassive() bool { return s.Passive != PassiveNone }
 
 // LevelReq: nível mínimo para aprender (o do degrau).
-func (s *SkillDef) LevelReq() int { return TierLevels[s.Tier] }
+func (s *SkillDef) LevelReq() int {
+	if s.Spec != "" {
+		return SpecTierLevels[s.Tier]
+	}
+	return TierLevels[s.Tier]
+}
 
 func (s *SkillDef) MPCost(rank int) float64   { return s.MP.At(rank) }
 func (s *SkillDef) Cooldown(rank int) float64 { return s.CD.At(rank) }
@@ -180,7 +188,7 @@ func (s *SkillDef) Parent() *SkillDef {
 		return nil
 	}
 	for _, o := range Skills {
-		if o.Class == s.Class && o.Branch == s.Branch && o.Tier == s.Tier-1 {
+		if o.Class == s.Class && o.Spec == s.Spec && o.Branch == s.Branch && o.Tier == s.Tier-1 {
 			return o
 		}
 	}
@@ -259,6 +267,31 @@ const (
 	SkillFatalBlow    // Ladino: Golpe Fatal
 	SkillShadowStrike // Ladino: Golpe das Sombras
 	SkillMiasma       // Ladino: Miasma
+	// Especializações (nível 20, 24 e 28), 3 por caminho. No fim, pelo mesmo motivo.
+	SkillBastionDefy   // Bastião: Desafio do Bastião
+	SkillBastionVigor  // Bastião: Vigor do Bastião
+	SkillBastionLast   // Bastião: Último Bastião
+	SkillHeraldDawn    // Arauto: Martelo da Aurora
+	SkillHeraldBless   // Arauto: Bênção do Arauto
+	SkillHeraldSun     // Arauto: Sol Nascente
+	SkillRagerRed      // Sanguinário: Golpe Rubro
+	SkillRagerBlind    // Sanguinário: Fúria Cega
+	SkillRagerCarnage  // Sanguinário: Carnificina
+	SkillWarlordCry    // Caudilho: Brado do Caudilho
+	SkillWarlordCharge // Caudilho: Avanço do Caudilho
+	SkillWarlordBanner // Caudilho: Estandarte de Guerra
+	SkillElemLance     // Elementalista: Lança Ígnea
+	SkillElemFocus     // Elementalista: Foco Elemental
+	SkillElemCata      // Elementalista: Cataclismo
+	SkillOccRot        // Ocultista: Peste Sombria
+	SkillOccDrain      // Ocultista: Drenar Vontade
+	SkillOccAbyss      // Ocultista: Marca do Abismo
+	SkillCutBlades     // Sicário: Lâmina Oculta
+	SkillCutInstinct   // Sicário: Instinto Assassino
+	SkillCutSentence   // Sicário: Sentença
+	SkillHuntKnife     // Caçador: Faca de Arremesso
+	SkillHuntNet       // Caçador: Rede de Caça
+	SkillHuntRain      // Caçador: Chuva de Lâminas
 )
 
 // ---------------------------------------------------------------------------------------
@@ -289,7 +322,7 @@ func atkName(magic bool) string {
 // ---------------------------------------------------------------------------------------
 
 func init() {
-	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree()} {
+	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees()} {
 		for _, s := range list {
 			if s.Hits == 0 {
 				s.Hits = 1
@@ -712,11 +745,12 @@ func rogueTree() []*SkillDef {
 	}
 }
 
-// ClassTree devolve as skills da classe, por ramo e degrau.
+// ClassTree devolve as skills da árvore comum da classe, por ramo e degrau (sem as das
+// especializações: ver SpecTree).
 func ClassTree(class string) []*SkillDef {
 	var out []*SkillDef
 	for _, s := range Skills {
-		if s.Class == class {
+		if s.Class == class && s.Spec == "" {
 			out = append(out, s)
 		}
 	}
@@ -770,8 +804,9 @@ func RanksUsed(ranks map[uint32]int) int {
 }
 
 // ValidateRanks confere uma árvore inteira (a atual mais o que se quer aprender):
-// skills da classe, ranks dentro do máximo, nível do degrau, nó de cima aprendido e pontos.
-func ValidateRanks(class string, level int, ranks map[uint32]int) error {
+// skills da classe, ranks dentro do máximo, nível do degrau, nó de cima aprendido, a
+// especialização (spec: a do personagem, "" = nenhuma) e pontos.
+func ValidateRanks(class, spec string, level int, ranks map[uint32]int) error {
 	for id, r := range ranks {
 		s := Skills[id]
 		if s == nil || s.Class != class {
@@ -782,6 +817,9 @@ func ValidateRanks(class string, level int, ranks map[uint32]int) error {
 		}
 		if r == 0 {
 			continue
+		}
+		if s.Spec != "" && s.Spec != spec {
+			return fmt.Errorf("%s é do caminho %s", s.Name, SpecName(s.Spec))
 		}
 		if level < s.LevelReq() {
 			return fmt.Errorf("%s exige nível %d", s.Name, s.LevelReq())
