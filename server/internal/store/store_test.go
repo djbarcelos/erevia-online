@@ -123,8 +123,8 @@ func TestStarterKitItemsAndSaveOrder(t *testing.T) {
 		{Equipped: true, Slot: game.SlotWeapon, ItemID: "sword_good", Count: 1},
 		{Slot: 3, ItemID: "bone_old", Count: 42},
 	}
-	newer := store.CharacterState{CharacterID: c.ID, Level: 2, XP: 200, HP: -1, MP: -1, Gold: 777, Items: items, Seq: 200}
-	older := store.CharacterState{CharacterID: c.ID, Level: 1, XP: 100, HP: -1, MP: -1, Gold: 1, Seq: 100}
+	newer := store.CharacterState{CharacterID: c.ID, Level: 2, XP: 200, HP: -1, MP: -1, Gold: 777, Items: items, Seq: 1794527065649061000} // nanossegundos, como a zona usa
+	older := store.CharacterState{CharacterID: c.ID, Level: 1, XP: 100, HP: -1, MP: -1, Gold: 1, Seq: 1794527065649060000}
 	if err := s.SaveStates(ctx, []store.CharacterState{newer}); err != nil {
 		t.Fatal(err)
 	}

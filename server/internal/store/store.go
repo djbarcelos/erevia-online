@@ -329,8 +329,8 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 		for _, c := range latest {
 			order = append(order, c)
 			batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, gold = $8,
-				save_seq = GREATEST(save_seq, $9), last_seen_at = now()
-				WHERE id = $1 AND ($9 = 0 OR save_seq < $9) RETURNING id`,
+				save_seq = GREATEST(save_seq, $9::bigint), last_seen_at = now()
+				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
 				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq)
 		}
 		br := tx.SendBatch(ctx, batch)

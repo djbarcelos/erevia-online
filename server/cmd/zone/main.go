@@ -77,11 +77,18 @@ func run(log *slog.Logger) error {
 					Gold: p.Gold, Items: p.Items, Seq: p.Seq,
 				}
 			}
-			sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			if err := st.SaveStates(sctx, states); err != nil {
-				log.Error("save states", "err", err, "count", len(states))
+			// Tenta de novo se o banco falhar (o save_seq impede que uma tentativa atrasada
+			// desfaça um salvamento mais novo).
+			for attempt := 1; attempt <= 3; attempt++ {
+				sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				err := st.SaveStates(sctx, states)
+				cancel()
+				if err == nil {
+					break
+				}
+				log.Error("save states", "err", err, "count", len(states), "attempt", attempt)
+				time.Sleep(time.Duration(attempt) * time.Second)
 			}
-			cancel()
 		}
 	}()
 
