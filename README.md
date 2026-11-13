@@ -6,7 +6,15 @@ MMORPG 3D no navegador. Cliente em **TypeScript + Babylon.js**, servidor em **Go
 
 Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
-## Estado atual: Fase 3 (itens e economia) + interface nova + progressão (Fase B) + equipamento completo (Fase C)
+## Estado atual: Fase 4 (PvP, grupo, clãs, teleporte, encantamento e armazém)
+- **PvP com flag e karma:** Ctrl + clique (ou o botão **Atacar** no quadro do alvo) ataca um jogador fora da cidade. Quem ataca fica com o nome **roxo** por 30 s. Matar quem não estava lutando dá **karma** (nome **vermelho**) e conta um PK; matar quem estava roxo conta uma vitória. Morrer para um jogador não custa XP. Quem tem karma perde o dobro de XP ao morrer e pode deixar cair de 1 a 3 itens (da bolsa ou equipados), reservados para quem matou; pode ser caçado dentro da cidade, não ataca lá e não usa teleporte. Caçar monstros limpa o karma. Abaixo do nível 6 ninguém luta contra jogadores; grupo e clã nunca se acertam; skills de área nunca acertam quem não está em combate. A auto-caça para se um jogador atacar. Karma, PKs e vitórias ficam na janela do personagem (C).
+- **Grupo (tecla P):** até 6 pessoas, convite pelo botão **Grupo +** do quadro do alvo, pela janela ou com `/convidar Nome`. A XP do monstro vai para o grupo (ou jogador) que causou mais dano e é dividida pelo nível entre quem está vivo a até 30 m, com 10% de bônus por pessoa. O saque reservado vale para o grupo, e as moedas pegas são divididas. Painel do grupo no HUD, colegas em azul no nome e nos mapas, chat `/g`. Grito de Guerra, Estandarte e Aura de Coragem valem só para o grupo e o clã.
+- **Clãs (tecla N):** criar custa 5.000 moedas e nível 10. Cargos: líder, oficial e membro (convidar, expulsar, promover, passar a liderança, aviso do clã, desfazer). Até 30 membros; quem sai espera 24 h para entrar em outro. O nome do clã aparece embaixo do nome; chat `/c`.
+- **Pedras de Teleporte:** na praça e em acampamentos nas estradas (Arredores, Campos dos Ossos, Ermos Partidos), 20 a 160 moedas. Viajar leva 2 s; dano ou movimento cancelam. O **Pergaminho de Retorno** (Mercadora) leva à cidade em 5 s, com recarga de 30 s.
+- **Encantamento:** pergaminhos de Arma e de Armadura (Ferreiro e drops) sobem o item até **+10**. Até +3 é seguro; depois a chance cai de 70% a 40%, e falhar quebra o item. O pergaminho **abençoado** (só drop) só volta a +0. Cada nível acima de +3 vale o dobro. Armas +4 brilham dourado e +7 pulsam.
+- **Armazém:** Otto, o Guarda do Armazém, na praça: 60 espaços e moedas, compartilhados pelos personagens da conta. Arrastar da bolsa guarda; duplo clique retira.
+
+### Fase 3 e interface nova (Fases A–C)
 - **13 encaixes de equipamento:** cabeça, peito, pernas, mãos, pés, capa, arma, mão secundária, colar, 2 brincos e 2 anéis. Anéis e brincos vão no encaixe livre com duplo clique, ou no que você escolher arrastando; dá para trocar anel 1 ↔ anel 2 arrastando. Itens novos nas 4 raridades com bônus novos: precisão, esquiva, velocidade de movimento, de ataque e de conjuração, regeneração de vida e mana e dano crítico.
 - **Aparência na criação:** cada classe escolhe a arma inicial (ex.: espada ou lâmina curva para o cavaleiro; cajado, varinha ou cajado sombrio para o mago; três pares de lâminas para o ladino), o escudo (ou nada, e ele vai para a bolsa) e a cor do emblema. A arma é um item de verdade do kit. A cor pinta o nome e um anel no chão para todos verem, e a tela de seleção mostra cada personagem com o que tem nas mãos.
 - **Atributos com pontos livres (tecla C):** Força, Destreza, Constituição, Inteligência, Sabedoria e Espírito. Cada classe começa com a sua base e ganha 3 pontos por nível. A janela mostra a diferença exata antes de confirmar (vida, ataque, defesa, crítico, precisão, esquiva, velocidade de ataque e de conjuração, regeneração).
@@ -19,12 +27,12 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
   - **Celular:** joystick, botão de ataque com as skills em volta, poção, trocar alvo, AUTO e menu ☰; arrastar o dedo gira a câmera e a pinça dá zoom. Liga sozinho em telas de toque (ou em Configurações → Controles).
   - **Auto-caça (F ou AUTO):** escolhe o monstro mais perto no raio configurado, ataca, usa as skills da barra, toma poção abaixo do limite, pega o saque e volta à cidade sem poção. Roda no navegador e só manda os comandos normais (o servidor valida tudo).
 - **Itens e moedas:** cerca de 75 itens em 4 raridades (comum, bom, raro e épico): armas de cada classe, escudos, armaduras, elmos, pernas, luvas, botas, capas, joias, poções e materiais. A arma e o escudo aparecem na mão do personagem; armas raras e épicas brilham.
-- **Drops:** monstros deixam moedas e itens no chão (saquinho com o nome; feixe de luz nos itens bons). Por 15 s, só quem causou mais dano pode pegar; depois fica livre, e some em 60 s. Clicar no item faz o personagem andar até ele e pegar.
+- **Drops:** monstros deixam moedas e itens no chão (saquinho com o nome; feixe de luz nos itens bons). Por 15 s, só quem causou mais dano (ou o grupo dele) pode pegar; depois fica livre, e some em 60 s. Clicar no item faz o personagem andar até ele e pegar.
 - **Inventário (tecla I):** 40 espaços e os 13 encaixes ao redor da miniatura 3D, com os atributos embaixo. Arrastar e soltar move, troca, equipa e destrói; duplo clique usa ou equipa.
 - **Poções nas teclas 3–6:** arraste uma poção do inventário para a barra. Vida e mana têm recargas separadas (10 s).
 - **Loja:** a Mercadora Lívia (poções e joias) e o Ferreiro Bruno (armas, escudos e armaduras comuns e boas) ficam na praça. Clicar num deles abre a loja ao lado do inventário, com filtro por categoria e "só da minha classe"; vender paga 40% do preço.
 - **Kit inicial:** a arma (e o escudo) escolhidos na criação, equipados, 5 poções e 50 moedas.
-- **Persistência segura:** moedas e itens são salvos junto com o personagem numa única transação. Um salvamento atrasado nunca sobrescreve um mais novo, e relogar rápido usa o estado da memória (não perde nem duplica itens). O servidor é o único que cria ou destrói itens.
+- **Persistência segura:** moedas, itens, karma e o armazém da conta são salvos junto com o personagem numa única transação; clãs são gravados em ordem por um worker do banco. Um salvamento atrasado nunca sobrescreve um mais novo, e relogar rápido usa o estado da memória (não perde nem duplica itens). O servidor é o único que cria ou destrói itens.
 
 ### Fases anteriores
 - **Cenário:** mapa de 300 × 300 m. Cidade murada (raio 38 m, 4 portões) com taverna, mercado, ferreiro, igreja, 16 casas e torres, em escala de personagem (casas de ~7 m, taverna de ~12 m). Estradas de terra e floresta que fica mais seca e sombria longe da cidade. Montanhas na borda, céu de entardecer e sombras. Tudo desenhado com *thin instances* (cerca de 1.800 objetos, 60 FPS). Árvores altas (cerca de 9–14 m; as secas mais distantes chegam a 19 m) e vegetação espaçada.
@@ -72,7 +80,7 @@ server/
   internal/store/            Postgres (pgx) + migrações SQL (goose)
   internal/game/             dados e fórmulas: classes, skills, monstros, itens, drops, dano, XP
   internal/world/            mapa embutido (world.json): colisão e caminhos (A*)
-  internal/zone/             simulação da zona: combate, IA, chat, inventário, drops, loja (uma goroutine, tick 20 Hz)
+  internal/zone/             simulação da zona: combate, PvP, IA, chat, inventário, drops, loja, grupo, clã, teleporte, encantamento, armazém (uma goroutine, tick 20 Hz)
   internal/net/              conexões WebSocket (read/write pumps)
   internal/pb/               código Go gerado (não editar)
 client/
