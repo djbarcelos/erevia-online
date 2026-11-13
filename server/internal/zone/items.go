@@ -67,6 +67,7 @@ func (z *Zone) inventoryChanged(p *entity, gearChanged bool) {
 	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Inventory{Inventory: inventoryPB(&p.pl.inv)}})
 	z.saveSoon(p)
+	z.tradeInventoryChanged(p)
 }
 
 func (z *Zone) saveSoon(p *entity) {

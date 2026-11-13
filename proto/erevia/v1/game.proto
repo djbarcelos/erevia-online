@@ -33,7 +33,29 @@ message ClientMessage {
     StorageMove storage_move = 23;
     StorageGold storage_gold = 24;
     ChangeLook change_look = 25;
+    TradeCmd trade_cmd = 26;
   }
+}
+
+// ---------- Troca entre jogadores ----------
+
+enum TradeCmdKind {
+  TRADE_CMD_UNSPECIFIED = 0;
+  TRADE_CMD_REQUEST = 1; // convidar target_id para trocar (vira um Invite para ele)
+  TRADE_CMD_ADD_ITEM = 2; // oferecer o item do espaço slot da bolsa (count 0 = a pilha toda)
+  TRADE_CMD_REMOVE_ITEM = 3; // tirar da oferta o item do espaço slot da bolsa
+  TRADE_CMD_SET_GOLD = 4; // moedas oferecidas (gold)
+  TRADE_CMD_LOCK = 5; // travar a própria oferta
+  TRADE_CMD_CONFIRM = 6; // confirmar (só com as duas ofertas travadas)
+  TRADE_CMD_CANCEL = 7;
+}
+
+message TradeCmd {
+  TradeCmdKind kind = 1;
+  uint32 target_id = 2;
+  uint32 slot = 3;
+  uint32 count = 4;
+  int64 gold = 5;
 }
 
 // Visual do corpo. O valor zero é o visual original da classe.
@@ -273,7 +295,31 @@ message ServerMessage {
     Announce announce = 25;
     BossStatus boss_status = 26;
     QuestLog quest_log = 27;
+    TradeState trade = 28;
   }
+}
+
+// Janela de troca: enviada aos dois a cada mudança; open = false fecha a janela.
+message TradeState {
+  bool open = 1;
+  uint32 partner_id = 2;
+  string partner_name = 3;
+  TradeOffer mine = 4;
+  TradeOffer theirs = 5;
+}
+
+message TradeOffer {
+  repeated TradeItem items = 1;
+  int64 gold = 2;
+  bool locked = 3;
+  bool confirmed = 4;
+}
+
+message TradeItem {
+  uint32 slot = 1; // espaço na bolsa de quem oferece
+  string item_id = 2;
+  uint32 count = 3;
+  uint32 enchant = 4;
 }
 
 // Missões ativas do próprio personagem: ao entrar e sempre que o progresso muda.
@@ -376,6 +422,7 @@ enum InviteKind {
   INVITE_KIND_UNSPECIFIED = 0;
   INVITE_KIND_PARTY = 1;
   INVITE_KIND_CLAN = 2;
+  INVITE_KIND_TRADE = 3;
 }
 
 // Alguém convidou você. Expira em expires_ms.

@@ -127,6 +127,8 @@ func (z *Zone) replyInvite(p *entity, id uint32, accept bool) {
 		z.partyJoin(from, p)
 	case pb.InviteKind_INVITE_KIND_CLAN:
 		z.clanJoin(from, p, inv.clanID)
+	case pb.InviteKind_INVITE_KIND_TRADE:
+		z.openTrade(from, p)
 	}
 }
 

@@ -227,6 +227,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			s.zone.Social(ctx, id, m.ClanCmd)
 		case *pb.ClientMessage_InviteReply:
 			s.zone.Social(ctx, id, m.InviteReply)
+		case *pb.ClientMessage_TradeCmd:
+			s.zone.Trade(ctx, id, m.TradeCmd)
 		case *pb.ClientMessage_Ping:
 			// Respondido aqui mesmo, sem passar pela zona, para medir só a rede.
 			pong, _ := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Pong{
