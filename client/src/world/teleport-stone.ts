@@ -113,6 +113,37 @@ function blob(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, co
   });
 }
 
+/**
+ * Converte o mapa de altura (canal vermelho, cinza) pintado no canvas em mapa de normais,
+ * no próprio canvas. Repete na horizontal (textura que dá a volta) e prende na vertical.
+ */
+export function heightToNormal(ctx: CanvasRenderingContext2D, w: number, hgt: number, strength: number): void {
+  const src = ctx.getImageData(0, 0, w, hgt).data;
+  const h = (x: number, y: number) => src[((y < 0 ? 0 : y >= hgt ? hgt - 1 : y) * w + ((x + w) % w)) << 2] / 255;
+  const out = ctx.createImageData(w, hgt);
+  const d = out.data;
+  for (let y = 0; y < hgt; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = (h(x + 1, y) - h(x - 1, y)) * strength;
+      const dy = (h(x, y + 1) - h(x, y - 1)) * strength;
+      // Canvas cresce para baixo; na textura v cresce para cima.
+      let nx = -dx;
+      let ny = dy;
+      let nz = 1;
+      const l = Math.hypot(nx, ny, nz);
+      nx /= l;
+      ny /= l;
+      nz /= l;
+      const i = (y * w + x) << 2;
+      d[i] = (nx * 0.5 + 0.5) * 255;
+      d[i + 1] = (ny * 0.5 + 0.5) * 255;
+      d[i + 2] = (nz * 0.5 + 0.5) * 255;
+      d[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+}
+
 interface StoneLayout {
   runes: Stroke[];
   /** Rachaduras por onde a luz das runas vaza. */
@@ -236,31 +267,7 @@ function paintNormal(scene: Scene, lay: StoneLayout): DynamicTexture {
   ctx.strokeStyle = "rgba(0,0,0,0.9)";
   strokeAll(ctx, lay.runes);
 
-  const src = ctx.getImageData(0, 0, TEX, TEX).data;
-  const h = (x: number, y: number) => src[(((y < 0 ? 0 : y >= TEX ? TEX - 1 : y) * TEX + ((x + TEX) % TEX)) << 2)] / 255;
-  const out = ctx.createImageData(TEX, TEX);
-  const d = out.data;
-  const strength = 3.2;
-  for (let y = 0; y < TEX; y++) {
-    for (let x = 0; x < TEX; x++) {
-      const dx = (h(x + 1, y) - h(x - 1, y)) * strength;
-      const dy = (h(x, y + 1) - h(x, y - 1)) * strength;
-      // Canvas cresce para baixo; na textura v cresce para cima.
-      let nx = -dx;
-      let ny = dy;
-      let nz = 1;
-      const l = Math.hypot(nx, ny, nz);
-      nx /= l;
-      ny /= l;
-      nz /= l;
-      const i = (y * TEX + x) << 2;
-      d[i] = (nx * 0.5 + 0.5) * 255;
-      d[i + 1] = (ny * 0.5 + 0.5) * 255;
-      d[i + 2] = (nz * 0.5 + 0.5) * 255;
-      d[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(out, 0, 0);
+  heightToNormal(ctx, TEX, TEX, 3.2);
   tex.update(true, false);
   tex.wrapU = Texture.WRAP_ADDRESSMODE;
   tex.wrapV = Texture.CLAMP_ADDRESSMODE;
@@ -431,7 +438,7 @@ function stoneAssets(scene: Scene): Assets {
 // ---------------------------------------------------------------------------------------
 
 /** Garante que as normais apontam para fora (inverte a ordem dos triângulos se preciso). */
-function outward(positions: number[], indices: number[], probe: number, cx = 0, cz = 0): number[] {
+export function outward(positions: number[], indices: number[], probe: number, cx = 0, cz = 0): number[] {
   const normals: number[] = [];
   VertexData.ComputeNormals(positions, indices, normals);
   const rx = positions[probe * 3] - cx;
@@ -521,13 +528,22 @@ function rockGeometry(seed: number): VertexData {
   return vd;
 }
 
-/** Pedregulhos meio enterrados em volta da base (uma malha só). */
-function pebbles(scene: Scene, id: number, seed: number): Mesh {
+export interface RubbleOpts {
+  /** Quantidade mínima (pode vir 1 a mais). */
+  count: number;
+  /** Distância do centro (m). */
+  ring: [number, number];
+  /** Tamanho de cada pedra (m). */
+  size: [number, number];
+}
+
+/** Pedregulhos meio enterrados em volta de um ponto (uma malha só, sem pai). */
+export function rubbleMesh(scene: Scene, name: string, seed: number, o: RubbleOpts): Mesh {
   const rand = mulberry32(seed);
   const parts: Mesh[] = [];
-  const count = 5 + Math.floor(rand() * 2);
+  const count = o.count + Math.floor(rand() * 2);
   for (let i = 0; i < count; i++) {
-    const m = MeshBuilder.CreateIcoSphere(`tpPebble${id}-${i}`, { radius: 1, subdivisions: 2, flat: false, updatable: true }, scene);
+    const m = MeshBuilder.CreateIcoSphere(`${name}-${i}`, { radius: 1, subdivisions: 2, flat: false, updatable: true }, scene);
     const p = m.getVerticesData(VertexBuffer.PositionKind)!;
     const a = [rand() * 6.28, rand() * 6.28, rand() * 6.28, rand() * 6.28];
     for (let k = 0; k < p.length; k += 3) {
@@ -543,14 +559,16 @@ function pebbles(scene: Scene, id: number, seed: number): Mesh {
     VertexData.ComputeNormals(p, idx, nrm);
     m.updateVerticesData(VertexBuffer.NormalKind, nrm);
     const ang = (i / count) * Math.PI * 2 + (rand() - 0.5) * 0.7;
-    const dist = 0.62 + rand() * 0.28;
-    const s = 0.14 + rand() * 0.16;
+    const dist = o.ring[0] + rand() * (o.ring[1] - o.ring[0]);
+    const s = o.size[0] + rand() * (o.size[1] - o.size[0]);
     m.scaling.set(s * (1 + rand() * 0.5), s * (0.55 + rand() * 0.3), s * (1 + rand() * 0.4));
     m.rotation.set(rand() * 0.4, rand() * Math.PI * 2, rand() * 0.4);
     m.position.set(Math.sin(ang) * dist, s * 0.18, Math.cos(ang) * dist);
     parts.push(m);
   }
-  return Mesh.MergeMeshes(parts, true, true)!;
+  const merged = Mesh.MergeMeshes(parts, true, true)!;
+  merged.name = name;
+  return merged;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -571,8 +589,7 @@ export function buildTeleportStone(scene: Scene, fx: Fx, id: number, visual: Tra
   rock.material = rockMat;
   rock.receiveShadows = true;
 
-  const rubble = pebbles(scene, id, seed + 1);
-  rubble.name = `tpRubble${id}`;
+  const rubble = rubbleMesh(scene, `tpRubble${id}`, seed + 1, { count: 5, ring: [0.62, 0.9], size: [0.14, 0.3] });
   rubble.parent = visual;
   rubble.material = rubbleMat;
   rubble.receiveShadows = true;
@@ -601,11 +618,11 @@ export function buildTeleportStone(scene: Scene, fx: Fx, id: number, visual: Tra
   // Chão: poça de luz azul (faz o papel de uma luz de verdade) e círculo de runas.
   const pool = MeshBuilder.CreateGround(`tpPool${id}`, { width: 6, height: 6 }, scene);
   pool.parent = root;
-  pool.position.y = 0.025;
+  pool.position.y = 0.06;
   pool.material = fx.glowMaterial(new Color3(0.2, 0.44, 0.95), tex.flare);
   const circle = MeshBuilder.CreateGround(`tpCircle${id}`, { width: 3.4, height: 3.4 }, scene);
   circle.parent = root;
-  circle.position.y = 0.035;
+  circle.position.y = 0.07;
   circle.material = fx.glowMaterial(new Color3(0.36, 0.7, 1), circleTex);
 
   const all = [rock, rubble, core, halo, ...wisps, pool, circle];

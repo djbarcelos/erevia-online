@@ -5,17 +5,15 @@ import {
   DynamicTexture,
   GlowLayer,
   Material,
-  Matrix,
   Mesh,
   MeshBuilder,
-  PointLight,
-  Quaternion,
   StandardMaterial,
   Vector3,
   type Scene,
 } from "@babylonjs/core";
 import { mulberry32 } from "./map-painter";
 import type { WorldScene } from "./scene";
+import { Torches } from "./torches";
 import type { WorldData } from "./world-data";
 
 // ---------------------------------------------------------------------------------------
@@ -257,135 +255,6 @@ function additive(scene: Scene, name: string, tex: DynamicTexture): StandardMate
   m.disableDepthWrite = true;
   m.backFaceCulling = false;
   return m;
-}
-
-// ---------------------------------------------------------------------------------------
-// Tochas
-// ---------------------------------------------------------------------------------------
-
-const TORCH_LIGHTS = 3;
-const TORCH_HEIGHT = 2.75;
-const TORCH_RANGE = 14;
-
-class Torches {
-  private flame: Mesh;
-  private core: Mesh;
-  private flameBuf: Float32Array;
-  private coreBuf: Float32Array;
-  private lights: PointLight[] = [];
-  private seeds: number[];
-  private nextPick = 0;
-  private lit = -1;
-
-  constructor(
-    scene: Scene,
-    private spots: { x: number; z: number }[],
-    world: WorldScene,
-    glow: GlowLayer,
-  ) {
-    const wood = new StandardMaterial("torchWood", scene);
-    wood.diffuseColor = new Color3(0.28, 0.18, 0.11);
-    wood.specularColor = Color3.Black();
-    const iron = new StandardMaterial("torchIron", scene);
-    iron.diffuseColor = new Color3(0.16, 0.15, 0.15);
-    iron.specularColor = new Color3(0.15, 0.15, 0.15);
-
-    const post = MeshBuilder.CreateCylinder("torchPost", { height: 2.5, diameterTop: 0.12, diameterBottom: 0.2, tessellation: 8 }, scene);
-    post.bakeTransformIntoVertices(Matrix.Translation(0, 1.25, 0));
-    post.material = wood;
-    const bowl = MeshBuilder.CreateCylinder("torchBowl", { height: 0.26, diameterTop: 0.46, diameterBottom: 0.2, tessellation: 10 }, scene);
-    bowl.bakeTransformIntoVertices(Matrix.Translation(0, 2.55, 0));
-    bowl.material = iron;
-
-    const flameMat = new StandardMaterial("torchFlame", scene);
-    flameMat.emissiveColor = new Color3(1, 0.45, 0.12);
-    flameMat.diffuseColor = Color3.Black();
-    flameMat.specularColor = Color3.Black();
-    flameMat.disableLighting = true;
-    flameMat.fogEnabled = false;
-    this.flame = MeshBuilder.CreateSphere("torchFlame", { diameter: 1, segments: 8 }, scene);
-    this.flame.material = flameMat;
-    const coreMat = flameMat.clone("torchCore");
-    coreMat.emissiveColor = new Color3(1, 0.88, 0.5);
-    this.core = MeshBuilder.CreateSphere("torchCore", { diameter: 1, segments: 6 }, scene);
-    this.core.material = coreMat;
-
-    const base = new Float32Array(spots.length * 16);
-    spots.forEach((s, i) => Matrix.Translation(s.x, 0, s.z).copyToArray(base, i * 16));
-    for (const m of [post, bowl]) {
-      m.thinInstanceSetBuffer("matrix", base.slice(), 16, true);
-      m.isPickable = false;
-      m.receiveShadows = true;
-      m.freezeWorldMatrix();
-      world.shadows.addShadowCaster(m, false);
-    }
-    this.flameBuf = new Float32Array(spots.length * 16);
-    this.coreBuf = new Float32Array(spots.length * 16);
-    for (const m of [this.flame, this.core]) {
-      m.isPickable = false;
-      m.thinInstanceSetBuffer("matrix", m === this.flame ? this.flameBuf : this.coreBuf, 16, false);
-      glow.addIncludedOnlyMesh(m);
-    }
-    this.seeds = spots.map((_, i) => i * 1.731 + 0.37);
-
-    for (let i = 0; i < TORCH_LIGHTS; i++) {
-      const l = new PointLight(`torchLight${i}`, new Vector3(0, -50, 0), scene);
-      l.diffuse = new Color3(1, 0.62, 0.3);
-      l.specular = new Color3(0.4, 0.25, 0.1);
-      l.range = TORCH_RANGE;
-      l.intensity = 0;
-      this.lights.push(l);
-    }
-  }
-
-  /** `lit`: 0 (apagadas, de dia) a 1 (acesas). */
-  update(lit: number, t: number, player: Vector3 | undefined): void {
-    const on = smooth((lit - 0.15) / 0.5);
-    const tmp = new Matrix();
-    const q = Quaternion.Identity();
-    const sc = new Vector3();
-    const pos = new Vector3();
-    if (on > 0.001 || this.lit !== 0) {
-      this.spots.forEach((s, i) => {
-        const f = flicker(t, this.seeds[i]);
-        const k = on * (0.85 + 0.25 * f);
-        sc.set(0.3 * k, 0.55 * k, 0.3 * k);
-        pos.set(s.x, TORCH_HEIGHT + 0.1 * k, s.z);
-        Matrix.ComposeToRef(sc, q, pos, tmp);
-        tmp.copyToArray(this.flameBuf, i * 16);
-        sc.set(0.15 * k, 0.3 * k, 0.15 * k);
-        pos.set(s.x, TORCH_HEIGHT + 0.02, s.z);
-        Matrix.ComposeToRef(sc, q, pos, tmp);
-        tmp.copyToArray(this.coreBuf, i * 16);
-      });
-      this.flame.thinInstanceBufferUpdated("matrix");
-      this.core.thinInstanceBufferUpdated("matrix");
-      this.lit = on > 0.001 ? on : 0;
-    }
-
-    // As 3 luzes de verdade vão para as tochas mais próximas do jogador.
-    if (player && performance.now() > this.nextPick) {
-      this.nextPick = performance.now() + 500;
-      const near = this.spots
-        .map((s, i) => ({ i, d: Math.hypot(s.x - player.x, s.z - player.z) }))
-        .sort((a, b) => a.d - b.d)
-        .slice(0, TORCH_LIGHTS);
-      near.forEach((n, j) => {
-        const s = this.spots[n.i];
-        this.lights[j].position.set(s.x, TORCH_HEIGHT + 0.3, s.z);
-        this.lights[j].metadata = n.i;
-      });
-    }
-    for (const l of this.lights) {
-      const i = typeof l.metadata === "number" ? l.metadata : 0;
-      l.intensity = on * (1.5 + 0.35 * flicker(t, this.seeds[i] ?? 0));
-    }
-  }
-}
-
-/** Cintilação suave (-1..1) de cada chama. */
-function flicker(t: number, seed: number): number {
-  return Math.sin(t * 9.1 + seed) * 0.5 + Math.sin(t * 15.7 + seed * 2.3) * 0.3 + Math.sin(t * 4.3 + seed * 0.7) * 0.2;
 }
 
 // ---------------------------------------------------------------------------------------
