@@ -24,6 +24,7 @@ import {
 } from "./gen/erevia/v1/game_pb";
 import { classInfo } from "./classes";
 import { Connection } from "./net/connection";
+import { clearResume, readResume, reconnect, type Resume } from "./net/resume";
 import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
@@ -79,8 +80,16 @@ async function boot(): Promise<void> {
 
   try {
     await api.me();
+    // A conexão caiu e a página recarregou para voltar: entra direto no mesmo personagem.
+    const resume = readResume();
+    if (resume) {
+      const char = (await api.characters()).characters.find((c) => c.id === resume.id);
+      if (char) return play(char, resume);
+      clearResume();
+    }
     await openCharacters();
   } catch (err) {
+    clearResume();
     if (err instanceof ApiError && err.status === 401) {
       try {
         showLogin(await api.providers(), loginError, () => void openCharacters());
@@ -101,9 +110,9 @@ async function openCharacters(): Promise<void> {
   }
 }
 
-/** Entra no mundo com o personagem escolhido. */
-function play(character: CharacterInfo): void {
-  showScreen("screen-loading");
+/** Entra no mundo com o personagem escolhido (resume: voltando de uma queda de conexão). */
+function play(character: CharacterInfo, resume?: Resume): void {
+  showScreen("screen-loading", resume ? "Reconectando…" : undefined);
   const conn = new Connection(Connection.defaultUrl(), character.id);
   let started = false;
   let kickedReason = "";
@@ -114,6 +123,7 @@ function play(character: CharacterInfo): void {
   conn.onMessage = (msg) => {
     if (msg.msg.case === "welcome") {
       started = true;
+      clearResume();
       void startGame(conn, character, msg.msg.value).then((g) => {
         game = g;
         for (const m of backlog.splice(0)) g.apply(m);
@@ -131,6 +141,16 @@ function play(character: CharacterInfo): void {
   conn.onClose = (reason) => {
     game?.dispose();
     for (const e of document.querySelectorAll(".hud, .gwin-layer, .toasts, .tip, [data-menu], [data-sheet]")) e.remove();
+    // Caiu sem expulsão (estava jogando, ou é uma tentativa de voltar que ainda não entrou): reconecta sozinho.
+    if (!kickedReason && (started || resume)) {
+      const r: Resume = !started && resume ? resume : { id: character.id, since: Date.now(), reloads: 0 };
+      showScreen("screen-loading", "Conexão perdida. Reconectando…");
+      void reconnect(r, () =>
+        showMessage("Desconectado", "Não foi possível reconectar. Confira a sua internet.", "Tentar de novo", () => location.reload()),
+      );
+      return;
+    }
+    clearResume();
     const text = kickedReason || (started ? `A conexão caiu (${reason}).` : `Não foi possível entrar (${reason}).`);
     showMessage(started ? "Desconectado" : "Erro ao entrar", text, "Voltar", () => location.reload());
   };
