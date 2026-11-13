@@ -192,10 +192,17 @@ func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 				out = append(out, SpawnPoint{Monster: def, Level: level, X: x, Z: z, Respawn: s.Respawn})
 				continue
 			}
-			// Raio uniforme em área (sqrt) para não amontoar perto do centro do anel.
-			u := rng.Float64()
-			r := math.Sqrt(s.RMin*s.RMin + u*(s.RMax*s.RMax-s.RMin*s.RMin))
-			a := rng.Float64() * 2 * math.Pi
+			// Raio uniforme em área (sqrt) para não amontoar perto do centro do anel. Fora do
+			// covil do raid boss (sorteia de novo; só quem cairia lá dentro muda de lugar).
+			var r, a float64
+			for range 20 {
+				u := rng.Float64()
+				r = math.Sqrt(s.RMin*s.RMin + u*(s.RMax*s.RMax-s.RMin*s.RMin))
+				a = rng.Float64() * 2 * math.Pi
+				if math.Hypot(r*math.Cos(a)-RaidLairX, r*math.Sin(a)-RaidLairZ) > RaidLairRadius+6 {
+					break
+				}
+			}
 			t := (r - s.RMin) / math.Max(1e-9, s.RMax-s.RMin)
 			level := s.LevelMin + int(math.Round(t*float64(s.LevelMax-s.LevelMin)))
 			out = append(out, SpawnPoint{Monster: def, Level: level, X: r * math.Cos(a), Z: r * math.Sin(a), Respawn: s.Respawn})

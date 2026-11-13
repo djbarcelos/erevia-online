@@ -94,7 +94,7 @@ const ITEM_WEAPONS = [
   "skeleton_blade", "skeleton_axe", "skeleton_staff", "skeleton_shield_large_a",
 ];
 /** Brilho das armas raras (3) e épicas (4). */
-const GRADE_GLOW: Record<number, Color3> = { 3: new Color3(0.15, 0.35, 0.9), 4: new Color3(0.6, 0.2, 0.95) };
+const GRADE_GLOW: Record<number, Color3> = { 3: new Color3(0.15, 0.35, 0.9), 4: new Color3(0.6, 0.2, 0.95), 5: new Color3(1, 0.5, 0.1) };
 /** Encantamento: +4 a +6 brilha dourado; +7 ou mais, dourado forte e pulsando. */
 const ENCHANT_GLOW = { light: new Color3(0.45, 0.33, 0.08), strong: new Color3(1, 0.72, 0.22) };
 

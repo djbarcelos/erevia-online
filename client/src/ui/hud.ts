@@ -712,6 +712,11 @@ export class Hud {
     setTimeout(() => line.remove(), 5000);
   }
 
+  /** Prende um elemento extra na camada do HUD (barra do raid boss, anúncios). */
+  mount(...els: HTMLElement[]): void {
+    this.root.append(...els);
+  }
+
   levelBanner(level: number): void {
     this.bannerEl.hidden = false;
     this.bannerEl.replaceChildren(el("div", "lb-title", `Nível ${level}!`), el("div", "lb-sub", "Você ficou mais forte."));

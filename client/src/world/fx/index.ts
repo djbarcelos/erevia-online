@@ -1161,6 +1161,144 @@ export class Fx {
     return { stop: () => (stop = true) };
   }
 
+  // ------------------------------------------------------------------------------------
+  // Raid boss
+  // ------------------------------------------------------------------------------------
+
+  /**
+   * Aviso no chão: círculo com borda pulsando e um disco que se enche até o golpe cair.
+   * follow (Marca da Morte) faz o círculo andar junto com o marcado.
+   */
+  telegraph(at: Vector3, radius: number, ms: number, color: Color3, follow?: () => Vector3 | null): FxHandle {
+    const holder = new TransformNode("fx-telegraph", this.scene);
+    holder.position.set(at.x, 0.07, at.z);
+    const disc = (name: string, alpha: number, additive: boolean) => {
+      const d = MeshBuilder.CreateDisc(name, { radius: 1, tessellation: 48 }, this.scene);
+      d.rotation.x = Math.PI / 2;
+      d.material = this.mat(color, null, additive, alpha);
+      d.isPickable = false;
+      d.parent = holder;
+      return d;
+    };
+    const base = disc("fx-tg-base", 0.18, false);
+    base.scaling.setAll(radius);
+    const fill = disc("fx-tg-fill", 0.32, false);
+    fill.position.y = 0.01;
+    const ring = MeshBuilder.CreateGround("fx-tg-ring", { width: 1, height: 1 }, this.scene);
+    ring.material = this.mat(color, this.tex.ring, true);
+    ring.isPickable = false;
+    ring.parent = holder;
+    ring.position.y = 0.02;
+    ring.scaling.set(radius * 2.15, 1, radius * 2.15);
+    const runes = MeshBuilder.CreateGround("fx-tg-runes", { width: 1, height: 1 }, this.scene);
+    runes.material = this.mat(color, this.tex.runes, true, 0.6);
+    runes.isPickable = false;
+    runes.parent = holder;
+    runes.position.y = 0.03;
+    runes.scaling.set(radius * 1.6, 1, radius * 1.6);
+    const secs = ms / 1000;
+    let stopped = false;
+    this.run(
+      (t, dt) => {
+        if (follow) {
+          const p = follow();
+          if (p) holder.position.set(p.x, 0.07, p.z);
+        }
+        const k = Math.min(1, t / Math.max(0.05, secs));
+        fill.scaling.setAll(Math.max(0.01, radius * k));
+        const pulse = 0.75 + 0.25 * Math.sin(t * (6 + 10 * k));
+        ring.visibility = pulse;
+        base.visibility = Math.min(1, t / 0.15);
+        runes.rotation.y += dt * (0.6 + 2 * k);
+        // Segura um instante depois do fim: o impacto chega no mesmo snapshot.
+        return !stopped && t < secs + 0.25;
+      },
+      () => holder.dispose(false, true),
+    );
+    return { stop: () => (stopped = true) };
+  }
+
+  /** O golpe do aviso caiu: ossos explodindo do chão (Onda/Chuva) ou a marca estourando. */
+  telegraphImpact(at: Vector3, radius: number, color: Color3, kind: "wave" | "rain" | "mark", mine: boolean): void {
+    const ground = new Vector3(at.x, 0, at.z);
+    if (kind === "rain") {
+      // Uma lança de osso caindo do céu.
+      this.orb(ground.add(new Vector3(-2, 16, -1.5)), ground, 0.45, {
+        core: new Color3(0.95, 0.92, 0.82),
+        halo: color,
+        size: 0.7,
+        arc: 0,
+        smoke: false,
+        trail: {
+          tex: this.tex.spark,
+          life: [0.15, 0.3],
+          size: [0.2, 0.4],
+          speed: [0, 0.3],
+          colors: [c4(0.9, 0.85, 0.75), c4(color.r, color.g, color.b), c4(0.2, 0.1, 0.2, 0)],
+        },
+        rate: 90,
+        onArrive: (p) => this.slam(p, radius, color, mine),
+      });
+      return;
+    }
+    this.slam(ground, radius, color, mine, kind === "wave");
+    // Estilhaços de osso.
+    this.burst(ground.add(new Vector3(0, 0.3, 0)), kind === "wave" ? 60 : 36, {
+      tex: this.tex.spark,
+      life: [0.4, 0.8],
+      size: [0.15, 0.3],
+      speed: [4, 9],
+      colors: [c4(0.95, 0.92, 0.82), c4(0.85, 0.8, 0.7), c4(0.4, 0.35, 0.3, 0)],
+      emitter: new HemisphericParticleEmitter(radius * 0.4, 0),
+      gravity: -14,
+      stretched: true,
+    });
+    this.lightFlash(ground.add(new Vector3(0, 2, 0)), color, 3, 0.4);
+  }
+
+  /** Guardas Ossários saindo do chão. */
+  summonRise(at: Vector3): void {
+    const ground = new Vector3(at.x, 0, at.z);
+    this.decal(ground, this.tex.runes, new Color3(0.55, 0.25, 0.85), { size: [0.5, 2.6], dur: 1.6, spin: 2 });
+    this.decal(ground, this.tex.crack, new Color3(0.2, 0.16, 0.14), { size: [1.4, 2], dur: 2.5, additive: false });
+    this.burst(ground.add(new Vector3(0, 0.2, 0)), 30, {
+      tex: this.tex.smoke,
+      life: [0.7, 1.2],
+      size: [0.4, 0.8],
+      speed: [0.6, 1.6],
+      colors: [c4(0.3, 0.22, 0.35, 0.75), c4(0.2, 0.15, 0.25, 0.6), c4(0.1, 0.08, 0.12, 0)],
+      emitter: rising(0.8, 0.1, 0.3),
+      additive: false,
+      grow: 0.7,
+    });
+  }
+
+  /** Aura do raid boss: névoa e faíscas subindo e um anel de runas girando aos pés. */
+  raidAura(body: FxBody, color: Color3): FxHandle {
+    const feet = () => (body.root.isDisposed() ? null : body.root.position);
+    return this.all([
+      this.footRing(body, this.tex.runes, color, Infinity, 2.2, 0.4),
+      this.stream(feet, 26, {
+        tex: this.tex.flare,
+        life: [1, 1.8],
+        size: [0.12, 0.3],
+        speed: [0.6, 1.4],
+        colors: [c4(color.r, color.g, color.b, 0.9), c4(color.r * 0.7, color.g * 0.7, color.b * 0.7, 0.8), c4(0.1, 0, 0.1, 0)],
+        emitter: rising(0.9 * body.scale, 0.2, 0.2),
+      }),
+      this.stream(feet, 10, {
+        tex: this.tex.smoke,
+        life: [1.4, 2.2],
+        size: [0.6, 1.2],
+        speed: [0.2, 0.6],
+        colors: [c4(0.15, 0.08, 0.2, 0.45), c4(0.1, 0.05, 0.12, 0.35), c4(0.05, 0.02, 0.06, 0)],
+        emitter: rising(1.1 * body.scale, 0.1, 0.3),
+        additive: false,
+        grow: 1.4,
+      }),
+    ]);
+  }
+
   effect(kind: Effect, body: FxBody, ms: number): FxHandle | null {
     const secs = ms / 1000;
     const feet = () => (body.root.isDisposed() ? null : body.root.position);
@@ -1277,6 +1415,11 @@ export class Fx {
         return null;
       case Effect.MARK:
         return this.headSigil(body, new Color3(1, 0.15, 0.15), secs, this.tex.runes);
+      case Effect.DEATH_MARK:
+        return this.all([
+          this.headSigil(body, new Color3(0.85, 0.2, 1), secs, this.tex.runes),
+          this.footRing(body, this.tex.ring, new Color3(0.85, 0.2, 1), secs, 2.2, 2),
+        ]);
       case Effect.UNDYING:
         return this.all([
           this.footRing(body, this.tex.runes, new Color3(1, 0.8, 0.3), secs, 2.4, 1),
