@@ -18,8 +18,8 @@ import {
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture } from "@babylonjs/gui";
 import { addGroundDetail } from "./ground";
-import { paintTerrain } from "./map-painter";
-import type { WorldData } from "./world-data";
+import { paintTerrain, projection } from "./map-painter";
+import { worldBounds, type WorldData } from "./world-data";
 
 /** Cor do horizonte ao entardecer (valor inicial; o ciclo dia/noite muda depois). */
 const HORIZON = new Color3(0.78, 0.6, 0.52);
@@ -110,7 +110,10 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   shadows.darkness = 0.35;
 
   // Chão pintado (grama, estradas, praça).
-  const ground = MeshBuilder.CreateGround("ground", { width: world.size, height: world.size, subdivisions: 2 }, scene);
+  // O mapa é um retângulo (cresceu só para o sul): o chão fica centrado nele.
+  const b = worldBounds(world);
+  const ground = MeshBuilder.CreateGround("ground", { width: b.maxX - b.minX, height: b.maxZ - b.minZ, subdivisions: 2 }, scene);
+  ground.position.set((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2);
   const groundMat = new StandardMaterial("groundMat", scene);
   groundMat.diffuseTexture = paintGround(scene, world);
   groundMat.specularColor = new Color3(0.03, 0.03, 0.03);
@@ -118,8 +121,8 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   ground.receiveShadows = true;
   addGroundDetail(scene, world, groundMat);
   // Fora do mapa: um chão grande e simples até as montanhas.
-  const outer = MeshBuilder.CreateGround("outer", { width: 900, height: 900 }, scene);
-  outer.position.y = -0.05;
+  const outer = MeshBuilder.CreateGround("outer", { width: 1200, height: 1200 }, scene);
+  outer.position.set((b.minX + b.maxX) / 2, -0.05, (b.minZ + b.maxZ) / 2);
   const outerMat = new StandardMaterial("outerMat", scene);
   outerMat.diffuseColor = new Color3(0.2, 0.26, 0.14);
   outerMat.specularColor = Color3.Black();
@@ -179,12 +182,19 @@ async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractEngine> 
   return new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
 }
 
-/** Pinta a textura do chão uma vez (o mesmo desenho do mapa, em ~10 px por metro). */
+/**
+ * Pinta a textura do chão uma vez (o mesmo desenho do mapa). Com o mapa retangular, a
+ * textura segue a proporção e fica com ~8 px por metro (o lado maior cabe em 4096).
+ */
 function paintGround(scene: Scene, world: WorldData): DynamicTexture {
-  const PX = world.size > 200 ? 3072 : 2048;
-  const tex = new DynamicTexture("groundTex", { width: PX, height: PX }, scene, true);
+  const b = worldBounds(world);
+  const w = b.maxX - b.minX;
+  const d = b.maxZ - b.minZ;
+  const k = Math.min(10.24, 4096 / Math.max(w, d));
+  const proj = projection(world, Math.round(w * k));
+  const tex = new DynamicTexture("groundTex", { width: proj.width, height: proj.height }, scene, true);
   // O chão do Babylon põe o u ao longo de +X e o v ao longo de +Z: o mesmo do canvas do mapa.
-  paintTerrain(tex.getContext() as CanvasRenderingContext2D, world, PX);
+  paintTerrain(tex.getContext() as CanvasRenderingContext2D, world, proj.width);
   tex.update(true);
   tex.anisotropicFilteringLevel = 8;
   tex.wrapU = tex.wrapV = Texture.CLAMP_ADDRESSMODE;

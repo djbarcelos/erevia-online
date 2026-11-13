@@ -54,7 +54,7 @@ func (z *Zone) chargeLanding(src, t *entity) (Vec2, bool) {
 		return src.pos, true
 	}
 	dir := Vec2{X: (src.pos.X - t.pos.X) / d, Z: (src.pos.Z - t.pos.Z) / d}
-	land := clampToZone(Vec2{X: t.pos.X + dir.X*chargeStop, Z: t.pos.Z + dir.Z*chargeStop}, z.cfg.Size/2)
+	land := clampToZone(Vec2{X: t.pos.X + dir.X*chargeStop, Z: t.pos.Z + dir.Z*chargeStop}, z.bounds())
 	if !z.walkable(land) {
 		return Vec2{}, false
 	}
@@ -82,10 +82,10 @@ func (z *Zone) blink(e *entity, distance float64) {
 		dir = Vec2{Z: 1}
 	}
 	best := e.pos
-	half := z.cfg.Size / 2
+	bounds := z.bounds()
 	for step := 0.5; step <= distance+1e-9; step += 0.5 {
 		p := Vec2{X: e.pos.X + dir.X*step, Z: e.pos.Z + dir.Z*step}
-		if math.Abs(p.X) > half || math.Abs(p.Z) > half || !z.walkable(p) {
+		if !bounds.Contains(toPt(p)) || !z.walkable(p) {
 			break
 		}
 		if w := z.cfg.World; w != nil && !w.SegmentClear(toPt(e.pos), toPt(p)) {

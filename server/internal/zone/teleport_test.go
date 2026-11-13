@@ -41,6 +41,22 @@ func TestStonesAreListedWithDestinations(t *testing.T) {
 	}
 }
 
+func TestValeStoneIsLastAndKeepsOldIDs(t *testing.T) {
+	want := []string{"Cidade", "Arredores", "Campos dos Ossos", "Ermos Partidos", "Vale das Pedras Vivas"}
+	if len(teleportStones) != len(want) {
+		t.Fatalf("%d pedras, esperava %d", len(teleportStones), len(want))
+	}
+	for i, n := range want {
+		if teleportStones[i].name != n {
+			t.Errorf("pedra %d = %q, esperava %q (o id do destino é a posição + 1)", i, teleportStones[i].name, n)
+		}
+	}
+	vale := teleportStones[4]
+	if vale.z > -150 || vale.price <= teleportStones[3].price {
+		t.Errorf("pedra do vale deveria ficar no sul e custar mais: %+v", vale)
+	}
+}
+
 func TestTeleportChannelsChargesAndArrives(t *testing.T) {
 	z := newCombatZone(fixed("skeleton_minion", 3, 63, 5))
 	m := z.onlyMonster()

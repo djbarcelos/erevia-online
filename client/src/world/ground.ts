@@ -1,5 +1,5 @@
 import { Color3, DynamicTexture, Mesh, MeshBuilder, Scene, StandardMaterial, Texture, VertexBuffer } from "@babylonjs/core";
-import type { WorldData } from "./world-data";
+import { worldBounds, type WorldData } from "./world-data";
 
 /**
  * Nitidez do chão. O chão pintado (cores, estradas, praça) é uma textura só para o mapa
@@ -11,7 +11,9 @@ import type { WorldData } from "./world-data";
  */
 export function addGroundDetail(scene: Scene, world: WorldData, groundMat: StandardMaterial): void {
   const detail = grassDetail(scene);
-  detail.uScale = detail.vScale = world.size / GRASS_TILE_M;
+  const b = worldBounds(world);
+  detail.uScale = (b.maxX - b.minX) / GRASS_TILE_M;
+  detail.vScale = (b.maxZ - b.minZ) / GRASS_TILE_M;
   groundMat.detailMap.texture = detail;
   groundMat.detailMap.diffuseBlendLevel = 0.9;
   groundMat.detailMap.bumpLevel = 0;

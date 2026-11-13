@@ -243,12 +243,72 @@ func TestExpandSpawnsDeterministicAndInRing(t *testing.T) {
 		if a[i] != b[i] {
 			t.Fatal("same seed must give same spawns")
 		}
-		r := math.Hypot(a[i].X, a[i].Z)
-		if r < 44 || r > 145 { // fora da cidade (raio 40) e dentro do mapa (±150)
-			t.Errorf("spawn outside hunting area: r=%.1f", r)
+	}
+	// Cada grupo no seu lugar: anéis em volta da cidade, áreas no próprio disco.
+	rng := rand.New(rand.NewPCG(9, 9))
+	for _, s := range DefaultSpawns() {
+		for _, p := range ExpandSpawns([]Spawn{s}, rng) {
+			if p.Level < s.LevelMin || p.Level > max(s.LevelMin, s.LevelMax) {
+				t.Errorf("%s: nível %d fora de %d–%d", s.Monster, p.Level, s.LevelMin, s.LevelMax)
+			}
+			switch {
+			case s.Area:
+				if math.Hypot(p.X-s.X, p.Z-s.Z) > s.Radius+1e-9 {
+					t.Errorf("%s fora da área: (%.1f, %.1f)", s.Monster, p.X, p.Z)
+				}
+			case s.Fixed:
+			default:
+				r := math.Hypot(p.X, p.Z)
+				if r < 44 || r > 145 { // fora da cidade (raio 40) e dentro do quadrado original (±150)
+					t.Errorf("spawn outside hunting area: r=%.1f", r)
+				}
+			}
 		}
-		if a[i].Level < 1 || a[i].Level > 22 {
-			t.Errorf("bad level %d", a[i].Level)
+	}
+}
+
+func TestStoneGolemIsSlowTankInSouthValley(t *testing.T) {
+	golem, warrior := Monsters["stone_golem"], Monsters["skeleton_warrior"]
+	if golem == nil {
+		t.Fatal("golem não existe")
+	}
+	g, w := MonsterStats(golem, 17), MonsterStats(warrior, 17)
+	if g.MaxHP < 1.8*w.MaxHP || g.PDef <= w.PDef || g.PAtk <= w.PAtk {
+		t.Errorf("golem deveria ser bem mais resistente e forte: %+v vs %+v", g, w)
+	}
+	if g.Speed >= w.Speed || g.AtkInterval <= w.AtkInterval {
+		t.Errorf("golem deveria ser lento: speed %.1f, intervalo %.1f", g.Speed, g.AtkInterval)
+	}
+	// Só no Vale das Pedras Vivas (sul, além do quadrado original), níveis 20–25,
+	// mais fortes quanto mais fundo.
+	var n int
+	shallow, deep := SpawnPoint{Z: -1e9}, SpawnPoint{Z: 1e9}
+	for _, sp := range ExpandSpawns(DefaultSpawns(), rand.New(rand.NewPCG(3, 3))) {
+		if sp.Monster != golem {
+			continue
 		}
+		n++
+		if math.Hypot(sp.X, sp.Z+270) > 52 || sp.Z > -150 || sp.Level < 20 || sp.Level > 25 {
+			t.Errorf("golem fora do vale: (%.1f, %.1f) nv %d", sp.X, sp.Z, sp.Level)
+		}
+		if sp.Z > shallow.Z {
+			shallow = sp
+		}
+		if sp.Z < deep.Z {
+			deep = sp
+		}
+	}
+	if n != 12 {
+		t.Errorf("esperava 12 golens, veio %d", n)
+	}
+	if deep.Level <= shallow.Level {
+		t.Errorf("o golem mais fundo (nv %d) deveria ser mais forte que o da entrada (nv %d)", deep.Level, shallow.Level)
+	}
+	var core bool
+	for _, e := range golem.Loot {
+		core = core || e.ItemID == "rune_core"
+	}
+	if !core {
+		t.Error("golem deveria derrubar Núcleo Rúnico")
 	}
 }

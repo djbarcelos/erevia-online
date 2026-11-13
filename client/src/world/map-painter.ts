@@ -1,5 +1,5 @@
 import kitSizes from "./kit-sizes.json";
-import type { WorldData } from "./world-data";
+import { rockyAt, worldBounds, type WorldData } from "./world-data";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -7,25 +7,33 @@ type Ctx = CanvasRenderingContext2D;
 export interface MapProjection {
   /** Pixels por metro. */
   k: number;
+  /** Tamanho do canvas que cobre o mapa inteiro. */
+  width: number;
+  height: number;
   cx(x: number): number;
   cy(z: number): number;
 }
 
+/** Projeção do mapa (retângulo `bounds`) num canvas de `px` pixels de largura. */
 export function projection(world: WorldData, px: number): MapProjection {
-  const k = px / world.size;
+  const b = worldBounds(world);
+  const k = px / (b.maxX - b.minX);
   return {
     k,
-    cx: (x) => (x + world.size / 2) * k,
-    cy: (z) => (world.size / 2 - z) * k,
+    width: px,
+    height: Math.round((b.maxZ - b.minZ) * k),
+    cx: (x) => (x - b.minX) * k,
+    cy: (z) => (b.maxZ - z) * k,
   };
 }
 
 /**
- * Pinta o terreno (grama, estradas de terra e praça de pedra) num canvas quadrado de
- * `px` pixels que cobre o mapa inteiro. Usado pela textura do chão e pelo mapa.
+ * Pinta o terreno (grama, vale de pedra do sul, estradas de terra e praça de pedra) num
+ * canvas de `px` pixels de largura que cobre o mapa inteiro (a altura segue a proporção
+ * do mapa). Usado pela textura do chão e pelo mapa.
  */
 export function paintTerrain(ctx: Ctx, world: WorldData, px: number): void {
-  const { k, cx, cy } = projection(world, px);
+  const { k, cx, cy, width: pw, height: ph } = projection(world, px);
   const rand = mulberry32(7);
 
   // Base: grama, escurecendo e secando com a distância.
@@ -35,20 +43,22 @@ export function paintTerrain(ctx: Ctx, world: WorldData, px: number): void {
   grad.addColorStop(0.7, "#4a5a35");
   grad.addColorStop(1, "#4a4a3a");
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, px, px);
+  ctx.fillRect(0, 0, pw, ph);
 
   // Manchas de variação (rápido: círculos translúcidos).
   const tones = ["#6d8a42", "#557233", "#47622c", "#7a8c48", "#5a5a3c", "#3f5528"];
-  const area = (world.size / 200) ** 2; // quantidades calibradas para um mapa de 200 m
+  const area = (pw * ph) / (200 * k) ** 2; // quantidades calibradas para um mapa de 200 m
   for (let i = 0; i < 9000 * area; i++) {
     ctx.globalAlpha = 0.05 + rand() * 0.1;
     ctx.fillStyle = tones[Math.floor(rand() * tones.length)];
     const r = (0.6 + rand() * 4) * k;
     ctx.beginPath();
-    ctx.arc(rand() * px, rand() * px, r, 0, Math.PI * 2);
+    ctx.arc(rand() * pw, rand() * ph, r, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+
+  if (world.biome) paintValley(ctx, world, projection(world, px));
 
   // Estradas de terra (borda mais escura + miolo + pedrinhas).
   ctx.lineCap = "round";
@@ -107,6 +117,76 @@ export function paintTerrain(ctx: Ctx, world: WorldData, px: number): void {
   }
 }
 
+/**
+ * Vale das Pedras Vivas: a grama seca, vira terra batida e depois cascalho e rocha, com a
+ * borda ondulada igual à do gerador (as árvores e pedras param no mesmo lugar).
+ */
+function paintValley(ctx: Ctx, world: WorldData, p: MapProjection): void {
+  const b = worldBounds(world);
+  const bio = world.biome!;
+  const top = Math.max(0, Math.floor(p.cy(bio.zFrom + bio.amp + 2)));
+  const rows = p.height - top;
+  if (rows <= 0) return;
+  const img = ctx.getImageData(0, top, p.width, rows);
+  const d = img.data;
+  const DRY = [124, 118, 76];
+  const DIRT = [122, 104, 80];
+  const GRAVEL = [136, 131, 121];
+  const mix = (a: number[], c: number[], t: number, i: number) => a[i] + (c[i] - a[i]) * t;
+  for (let y = 0; y < rows; y++) {
+    const z = b.maxZ - (top + y + 0.5) / p.k;
+    for (let x = 0; x < p.width; x++) {
+      const wx = b.minX + (x + 0.5) / p.k;
+      const t = rockyAt(world, wx, z);
+      if (t <= 0.002) continue;
+      // Variação fina (manchas de terra e pedra) para o chão não ficar liso.
+      const n = Math.sin(wx * 0.9 + z * 0.35) * Math.sin(z * 0.8 - wx * 0.3) * 0.5 + Math.sin(wx * 2.7 + z * 3.1) * 0.25;
+      const u = Math.max(0, Math.min(1, t + n * 0.18));
+      const a = Math.min(1, t * 1.6); // a grama começa a secar antes das pedras aparecerem
+      const i = (y * p.width + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const target = u < 0.5 ? mix(DRY, DIRT, u * 2, c) : mix(DIRT, GRAVEL, (u - 0.5) * 2, c);
+        d[i + c] = d[i + c] + (target + n * 10 - d[i + c]) * a;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, top);
+
+  // Lajes de rocha exposta, veios claros e pedrinhas, mais densos no fundo do vale.
+  const rand = mulberry32(31);
+  const area = ((b.maxX - b.minX) * (b.maxZ - (bio.zFrom + bio.amp))) / 1000;
+  for (let i = 0; i < 260 * area; i++) {
+    const wx = b.minX + rand() * (b.maxX - b.minX);
+    const wz = bio.zFrom + bio.amp + rand() * (b.minZ - bio.zFrom - bio.amp);
+    const t = rockyAt(world, wx, wz);
+    if (rand() > t) continue;
+    const kind = rand();
+    if (kind < 0.18) {
+      ctx.fillStyle = rand() < 0.5 ? "rgba(92,88,82,0.35)" : "rgba(170,165,154,0.3)";
+      ctx.beginPath();
+      ctx.ellipse(p.cx(wx), p.cy(wz), (0.8 + rand() * 2.6) * p.k, (0.5 + rand() * 1.6) * p.k, rand() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (kind < 0.26) {
+      ctx.strokeStyle = "rgba(60,56,50,0.4)";
+      ctx.lineWidth = 0.08 * p.k;
+      ctx.beginPath();
+      let x = wx;
+      let z = wz;
+      ctx.moveTo(p.cx(x), p.cy(z));
+      for (let s = 0; s < 4; s++) {
+        x += (rand() - 0.5) * 2.4;
+        z += (rand() - 0.5) * 2.4;
+        ctx.lineTo(p.cx(x), p.cy(z));
+      }
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = rand() < 0.5 ? "rgba(70,66,60,0.45)" : "rgba(190,184,172,0.45)";
+      const s = (0.1 + rand() * 0.25) * p.k;
+      ctx.fillRect(p.cx(wx), p.cy(wz), s, s);
+    }
+  }
+}
+
 /** Nome no mapa das construções que merecem rótulo. */
 export const LANDMARKS: Record<string, string> = {
   tavern: "Taverna",
@@ -135,17 +215,33 @@ const sizes = kitSizes as Record<string, number[]>;
  * de cima. `pxPerMeter` define a resolução (4 px/m dá 1200 px num mapa de 300 m).
  */
 export function renderMapCanvas(world: WorldData, pxPerMeter = 4): HTMLCanvasElement {
-  const px = Math.round(world.size * pxPerMeter);
+  const b = worldBounds(world);
+  const px = Math.round((b.maxX - b.minX) * pxPerMeter);
+  const { k, cx, cy, height } = projection(world, px);
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = px;
-  const ctx = canvas.getContext("2d")!;
+  canvas.width = px;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
   paintTerrain(ctx, world, px);
-  const { k, cx, cy } = projection(world, px);
 
   // Pedras e árvores: copas escuras com um leve brilho, por cima do terreno.
   for (const o of world.objects) {
     const isTree = o.k.startsWith("tree_");
     const isRock = o.k.startsWith("rock_");
+    if (o.k.startsWith("monolith")) {
+      // Monólito rúnico: lajota escura com um risco âmbar (as runas).
+      const fallen = o.k === "monolith_fallen";
+      const w = (fallen ? 2.6 : 1.1) * o.s[0];
+      ctx.save();
+      ctx.translate(cx(o.x), cy(o.z));
+      ctx.rotate(o.r);
+      ctx.fillStyle = "rgba(70,72,80,0.95)";
+      ctx.fillRect((-w / 2) * k, -0.55 * k, w * k, 1.1 * k);
+      ctx.fillStyle = "rgba(255,170,80,0.8)";
+      ctx.fillRect(-0.12 * k, -0.25 * k, 0.24 * k, 0.5 * k);
+      ctx.restore();
+      continue;
+    }
     if (!isTree && !isRock) continue;
     const sz = sizes[o.k];
     const r = sz ? (Math.max(sz[0] * o.s[0], sz[2] * o.s[2]) / 2) * (isTree ? 0.8 : 0.7) : 1;
@@ -238,11 +334,12 @@ export function renderMapCanvas(world: WorldData, pxPerMeter = 4): HTMLCanvasEle
   }
 
   // Vinheta suave nas bordas do mapa.
-  const vig = ctx.createRadialGradient(px / 2, px / 2, px * 0.35, px / 2, px / 2, px * 0.72);
+  const big = Math.max(px, height);
+  const vig = ctx.createRadialGradient(px / 2, height / 2, big * 0.35, px / 2, height / 2, big * 0.72);
   vig.addColorStop(0, "rgba(0,0,0,0)");
   vig.addColorStop(1, "rgba(0,0,0,0.35)");
   ctx.fillStyle = vig;
-  ctx.fillRect(0, 0, px, px);
+  ctx.fillRect(0, 0, px, height);
   return canvas;
 }
 

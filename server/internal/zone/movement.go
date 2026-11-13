@@ -1,18 +1,28 @@
 package zone
 
-import "math"
+import (
+	"math"
+
+	"erevia/server/internal/world"
+)
 
 // Vec2 é uma posição no plano do chão (X, Z). A altura (Y) virá depois, com o terreno.
 type Vec2 struct {
 	X, Z float64
 }
 
-// clampToZone limita v ao quadrado [-half, half] em X e Z.
-func clampToZone(v Vec2, half float64) Vec2 {
-	return Vec2{
-		X: math.Max(-half, math.Min(half, v.X)),
-		Z: math.Max(-half, math.Min(half, v.Z)),
+// clampToZone limita v ao retângulo jogável.
+func clampToZone(v Vec2, b world.Bounds) Vec2 {
+	p := b.Clamp(world.Point{X: v.X, Z: v.Z})
+	return Vec2{X: p.X, Z: p.Z}
+}
+
+// bounds é o retângulo jogável: o do mapa carregado ou, sem mapa, o quadrado Size.
+func (z *Zone) bounds() world.Bounds {
+	if z.cfg.World != nil {
+		return z.cfg.World.Bounds
 	}
+	return world.Square(z.cfg.Size)
 }
 
 // step move pos em direção a target, andando no máximo dist.

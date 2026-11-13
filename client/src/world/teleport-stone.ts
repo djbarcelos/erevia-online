@@ -279,36 +279,70 @@ function paintNormal(scene: Scene, lay: StoneLayout): DynamicTexture {
  * StandardMaterial a textura emissiva SOMA à emissiveColor, então a cor fica aqui e a
  * emissiveColor do material fica preta.
  */
-function paintEmissive(scene: Scene, lay: StoneLayout): DynamicTexture {
-  const tex = new DynamicTexture("tpStoneGlow", { width: TEX, height: TEX }, scene, true);
+/** Cores das runas acesas: azul na Pedra de Teleporte, âmbar fraco nos monólitos do vale. */
+interface GlowPalette {
+  name: string;
+  /** Reflexo de luz no alto e na base (só a Pedra de Teleporte, que tem núcleo de luz). */
+  wash: boolean;
+  shadow: string;
+  halo: string;
+  crack: string;
+  core: string;
+  coreCrack: string;
+}
+
+const BLUE_RUNES: GlowPalette = {
+  name: "tpStoneGlow",
+  wash: true,
+  shadow: "rgba(90,170,255,0.95)",
+  halo: "rgba(80,160,255,0.45)",
+  crack: "rgba(70,150,255,0.45)",
+  core: "rgb(170,225,255)",
+  coreCrack: "rgba(130,200,255,0.75)",
+};
+
+const AMBER_RUNES: GlowPalette = {
+  name: "monolithGlow",
+  wash: false,
+  shadow: "rgba(255,140,40,0.9)",
+  halo: "rgba(255,120,30,0.35)",
+  crack: "rgba(255,110,30,0.3)",
+  core: "rgb(255,190,110)",
+  coreCrack: "rgba(255,160,80,0.6)",
+};
+
+function paintEmissive(scene: Scene, lay: StoneLayout, pal: GlowPalette = BLUE_RUNES): DynamicTexture {
+  const tex = new DynamicTexture(pal.name, { width: TEX, height: TEX }, scene, true);
   const ctx = tex.getContext() as CanvasRenderingContext2D;
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, TEX, TEX);
-  // Reflexo do núcleo de luz no alto da pedra e da luz do chão na base.
-  const wash = ctx.createLinearGradient(0, 0, 0, TEX);
-  wash.addColorStop(0, "rgba(70,130,220,0.32)");
-  wash.addColorStop(0.3, "rgba(40,80,160,0.06)");
-  wash.addColorStop(0.85, "rgba(30,60,140,0)");
-  wash.addColorStop(1, "rgba(40,90,190,0.14)");
-  ctx.fillStyle = wash;
-  ctx.fillRect(0, 0, TEX, TEX);
+  if (pal.wash) {
+    // Reflexo do núcleo de luz no alto da pedra e da luz do chão na base.
+    const wash = ctx.createLinearGradient(0, 0, 0, TEX);
+    wash.addColorStop(0, "rgba(70,130,220,0.32)");
+    wash.addColorStop(0.3, "rgba(40,80,160,0.06)");
+    wash.addColorStop(0.85, "rgba(30,60,140,0)");
+    wash.addColorStop(1, "rgba(40,90,190,0.14)");
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, TEX, TEX);
+  }
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   // Halo macio em volta dos sulcos.
-  ctx.shadowColor = "rgba(90,170,255,0.95)";
+  ctx.shadowColor = pal.shadow;
   ctx.shadowBlur = 10;
-  ctx.strokeStyle = "rgba(80,160,255,0.45)";
+  ctx.strokeStyle = pal.halo;
   ctx.lineWidth = 6;
   strokeAll(ctx, lay.runes);
   ctx.lineWidth = 2.4;
-  ctx.strokeStyle = "rgba(70,150,255,0.45)";
+  ctx.strokeStyle = pal.crack;
   strokeAll(ctx, lay.litCracks);
   // Miolo forte.
   ctx.shadowBlur = 4;
-  ctx.strokeStyle = "rgb(170,225,255)";
+  ctx.strokeStyle = pal.core;
   ctx.lineWidth = 2.6;
   strokeAll(ctx, lay.runes);
-  ctx.strokeStyle = "rgba(130,200,255,0.75)";
+  ctx.strokeStyle = pal.coreCrack;
   ctx.lineWidth = 1.1;
   strokeAll(ctx, lay.litCracks);
   tex.update(true);
@@ -404,6 +438,8 @@ interface Assets {
   glowTint: Color3;
   /** Círculo mágico do chão (branco; a cor vem do material). */
   circle: DynamicTexture;
+  /** Desenho das runas e rachaduras (reaproveitado pelos monólitos). */
+  lay: StoneLayout;
 }
 
 const assets = new WeakMap<Scene, Assets>();
@@ -428,7 +464,7 @@ function stoneAssets(scene: Scene): Assets {
   rubble.bumpTexture = bump;
   rubble.specularColor = rock.specularColor.clone();
   rubble.specularPower = 24;
-  a = { rock, rubble, glowTint: Color3.White(), circle: paintCircle(scene) };
+  a = { rock, rubble, glowTint: Color3.White(), circle: paintCircle(scene), lay };
   assets.set(scene, a);
   return a;
 }
@@ -538,6 +574,67 @@ export interface RubbleOpts {
 }
 
 /** Pedregulhos meio enterrados em volta de um ponto (uma malha só, sem pai). */
+/** Tipos de monólito rúnico colocados pelo gerador do mundo (Vale das Pedras Vivas). */
+export const MONOLITH_KINDS = ["monolith", "monolith_broken", "monolith_fallen"] as const;
+
+/**
+ * Moldes dos monólitos rúnicos do vale (o cenário desenha cópias com thin instances):
+ * a mesma pedra da Pedra de Teleporte, mais fina, com runas âmbar quase apagadas.
+ * - monolith: inteiro, de pé (~1,1 × 2,6 m);
+ * - monolith_broken: partido em ~1,3 m, com o topo lascado;
+ * - monolith_fallen: tombado, deitado ao longo de X (~2,6 m) e meio enterrado.
+ */
+export function monolithProtos(scene: Scene): Map<string, Mesh> {
+  const a = stoneAssets(scene);
+  const mat = new StandardMaterial("monolith", scene);
+  mat.diffuseTexture = a.rock.diffuseTexture;
+  mat.bumpTexture = a.rock.bumpTexture;
+  const glow = paintEmissive(scene, a.lay, AMBER_RUNES);
+  mat.emissiveTexture = glow;
+  mat.emissiveColor = Color3.Black();
+  mat.useEmissiveAsIllumination = true;
+  mat.specularColor = new Color3(0.1, 0.1, 0.1);
+  mat.specularPower = 24;
+  // Pulso lento e fraco: magia antiga, quase apagada (acorda um pouco à noite pelo contraste).
+  scene.onBeforeRenderObservable.add(() => {
+    glow.level = 0.42 + 0.18 * Math.sin(performance.now() / 1700);
+  });
+
+  const build = (kind: (typeof MONOLITH_KINDS)[number], seed: number): Mesh => {
+    const vd = rockGeometry(seed);
+    const p = vd.positions as number[];
+    for (let i = 0; i < p.length; i += 3) {
+      p[i] *= 0.8;
+      p[i + 2] *= 0.8;
+      if (kind === "monolith_broken") {
+        // Quebra: tudo acima de um corte irregular desce até ele (vira um topo lascado).
+        const th = Math.atan2(p[i], p[i + 2]);
+        const cut = 1.28 + 0.16 * Math.sin(3 * th + 1) + 0.08 * Math.sin(7 * th);
+        if (p[i + 1] > cut) p[i + 1] = cut + (p[i + 1] - cut) * 0.06;
+      }
+      if (kind === "monolith_fallen") {
+        // Deita ao longo de +X e afunda um pouco no chão.
+        const x = p[i];
+        const y = p[i + 1];
+        p[i] = y - 1.3;
+        p[i + 1] = -x + 0.34;
+      }
+    }
+    const normals: number[] = [];
+    VertexData.ComputeNormals(p, vd.indices as number[], normals);
+    vd.normals = normals;
+    const m = new Mesh(`proto-${kind}`, scene);
+    vd.applyToMesh(m);
+    m.material = mat;
+    return m;
+  };
+  return new Map<string, Mesh>([
+    ["monolith", build("monolith", 4242)],
+    ["monolith_broken", build("monolith_broken", 5151)],
+    ["monolith_fallen", build("monolith_fallen", 6363)],
+  ]);
+}
+
 export function rubbleMesh(scene: Scene, name: string, seed: number, o: RubbleOpts): Mesh {
   const rand = mulberry32(seed);
   const parts: Mesh[] = [];

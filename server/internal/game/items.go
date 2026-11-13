@@ -415,6 +415,7 @@ var Items = func() map[string]*ItemDef {
 		stackable("bone_old", "Osso Velho", KindMaterial, 10, "bone", "Um osso qualquer. Alguém na cidade compra."),
 		stackable("skull_cracked", "Crânio Rachado", KindMaterial, 35, "skull", "Os alquimistas pagam bem por isso."),
 		stackable("shadow_essence", "Essência Sombria", KindMaterial, 100, "essence", "Fumaça escura presa num frasco."),
+		stackable("rune_core", "Núcleo Rúnico", KindMaterial, 220, "rune_core", "O coração de um Golem de Pedra. Ainda pulsa, morno, na mão."),
 		stackable("broken_crown", "Coroa Partida", KindMaterial, 1500, "crown", "A coroa do Senhor dos Ossos. Vale uma fortuna."),
 
 		// Moedas no chão.

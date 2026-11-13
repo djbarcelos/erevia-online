@@ -18,11 +18,11 @@ var embedded []byte
 const AgentRadius = 0.4
 
 const (
-	cellSize     = 1.0 // metros por célula da grade de caminhos
-	maxExpanded  = 40000
-	sampleStep   = 0.5 // passo da checagem de linha reta (m)
-	bucketSize   = 4.0 // balde espacial para a checagem exata de colisão
-	cellClearPad = 0.3 // folga extra ao marcar células bloqueadas (caminhos não raspam)
+	cellSize     = 1.0    // metros por célula da grade de caminhos
+	maxExpanded  = 120000 // o mapa vai até o Vale das Pedras Vivas: caminhos longos
+	sampleStep   = 0.5    // passo da checagem de linha reta (m)
+	bucketSize   = 4.0    // balde espacial para a checagem exata de colisão
+	cellClearPad = 0.3    // folga extra ao marcar células bloqueadas (caminhos não raspam)
 )
 
 type Point struct{ X, Z float64 }
@@ -31,17 +31,45 @@ type Collider struct {
 	X, Z, R float64
 }
 
+// Bounds é o retângulo jogável do mapa (o mapa cresce só para o sul, então não é
+// um quadrado centrado na cidade).
+type Bounds struct {
+	MinX float64 `json:"minX"`
+	MaxX float64 `json:"maxX"`
+	MinZ float64 `json:"minZ"`
+	MaxZ float64 `json:"maxZ"`
+}
+
+// Square é o quadrado de lado size centrado na origem.
+func Square(size float64) Bounds {
+	h := size / 2
+	return Bounds{MinX: -h, MaxX: h, MinZ: -h, MaxZ: h}
+}
+
+// Clamp prende o ponto dentro do retângulo.
+func (b Bounds) Clamp(p Point) Point {
+	return Point{X: min(max(p.X, b.MinX), b.MaxX), Z: min(max(p.Z, b.MinZ), b.MaxZ)}
+}
+
+// Contains: o ponto está dentro (bordas incluídas)?
+func (b Bounds) Contains(p Point) bool {
+	return p.X >= b.MinX && p.X <= b.MaxX && p.Z >= b.MinZ && p.Z <= b.MaxZ
+}
+
 type World struct {
+	// Size é o lado do quadrado original (compatibilidade); os limites reais estão em Bounds.
 	Size       float64
+	Bounds     Bounds
 	SafeRadius float64
 	colliders  []Collider
 	buckets    map[[2]int][]int
-	n          int    // células por lado
-	blocked    []bool // grade n×n para o A*
+	nx, nz     int    // células em X e em Z
+	blocked    []bool // grade nx×nz para o A*
 }
 
 type fileFormat struct {
 	Size       float64    `json:"size"`
+	Bounds     *Bounds    `json:"bounds"`
 	SafeRadius float64    `json:"safeRadius"`
 	Colliders  []Collider `json:"colliders"`
 }
@@ -64,14 +92,29 @@ func Load() (*World, error) {
 	if f.Size <= 0 {
 		return nil, fmt.Errorf("world.json: size inválido")
 	}
-	w := New(f.Size, f.Colliders)
+	b := Square(f.Size)
+	if f.Bounds != nil {
+		b = *f.Bounds
+		if b.MaxX <= b.MinX || b.MaxZ <= b.MinZ {
+			return nil, fmt.Errorf("world.json: bounds inválido")
+		}
+	}
+	w := NewBounds(b, f.Colliders)
+	w.Size = f.Size
 	w.SafeRadius = f.SafeRadius
 	return w, nil
 }
 
-// New monta um mundo a partir de colisores (usado também nos testes).
+// New monta um mundo quadrado centrado na origem (usado nos testes).
 func New(size float64, colliders []Collider) *World {
-	w := &World{Size: size, colliders: colliders, buckets: map[[2]int][]int{}}
+	w := NewBounds(Square(size), colliders)
+	w.Size = size
+	return w
+}
+
+// NewBounds monta um mundo retangular a partir de colisores.
+func NewBounds(b Bounds, colliders []Collider) *World {
+	w := &World{Size: max(b.MaxX-b.MinX, b.MaxZ-b.MinZ), Bounds: b, colliders: colliders, buckets: map[[2]int][]int{}}
 	for i, c := range colliders {
 		r := c.R + AgentRadius
 		for bx := bucket(c.X - r); bx <= bucket(c.X+r); bx++ {
@@ -81,12 +124,13 @@ func New(size float64, colliders []Collider) *World {
 			}
 		}
 	}
-	w.n = int(math.Ceil(size / cellSize))
-	w.blocked = make([]bool, w.n*w.n)
-	for gz := 0; gz < w.n; gz++ {
-		for gx := 0; gx < w.n; gx++ {
+	w.nx = int(math.Ceil((b.MaxX - b.MinX) / cellSize))
+	w.nz = int(math.Ceil((b.MaxZ - b.MinZ) / cellSize))
+	w.blocked = make([]bool, w.nx*w.nz)
+	for gz := 0; gz < w.nz; gz++ {
+		for gx := 0; gx < w.nx; gx++ {
 			p := w.cellCenter(gx, gz)
-			w.blocked[gz*w.n+gx] = w.blockedPad(p.X, p.Z, cellClearPad)
+			w.blocked[gz*w.nx+gx] = w.blockedPad(p.X, p.Z, cellClearPad)
 		}
 	}
 	return w
@@ -126,7 +170,7 @@ func (w *World) NearestFree(p Point) Point {
 		return p
 	}
 	gx, gz := w.toCell(p)
-	for r := 1; r < w.n; r++ {
+	for r := 1; r < max(w.nx, w.nz); r++ {
 		best, bestD := Point{}, math.Inf(1)
 		for dz := -r; dz <= r; dz++ {
 			for dx := -r; dx <= r; dx++ {
@@ -134,7 +178,7 @@ func (w *World) NearestFree(p Point) Point {
 					continue
 				}
 				x, z := gx+dx, gz+dz
-				if !w.inGrid(x, z) || w.blocked[z*w.n+x] {
+				if !w.inGrid(x, z) || w.blocked[z*w.nx+x] {
 					continue
 				}
 				c := w.cellCenter(x, z)
@@ -167,7 +211,7 @@ func (w *World) FindPath(a, b Point) []Point {
 	}
 	pts := make([]Point, 0, len(cells)+1)
 	for _, c := range cells {
-		pts = append(pts, w.cellCenter(c%w.n, c/w.n))
+		pts = append(pts, w.cellCenter(c%w.nx, c/w.nx))
 	}
 	if cells[len(cells)-1] == goal {
 		pts[len(pts)-1] = b // termina no ponto exato pedido
@@ -195,36 +239,34 @@ func (w *World) smooth(from Point, pts []Point) []Point {
 func (w *World) nearestFreeCell(p Point) int {
 	q := w.NearestFree(p)
 	gx, gz := w.toCell(q)
-	if !w.inGrid(gx, gz) || w.blocked[gz*w.n+gx] {
+	if !w.inGrid(gx, gz) || w.blocked[gz*w.nx+gx] {
 		// q pode estar livre sem que o centro da célula esteja: procura a célula livre mais perto.
 		for r := 0; r < 4; r++ {
 			for dz := -r; dz <= r; dz++ {
 				for dx := -r; dx <= r; dx++ {
 					x, z := gx+dx, gz+dz
-					if w.inGrid(x, z) && !w.blocked[z*w.n+x] {
-						return z*w.n + x
+					if w.inGrid(x, z) && !w.blocked[z*w.nx+x] {
+						return z*w.nx + x
 					}
 				}
 			}
 		}
 		return -1
 	}
-	return gz*w.n + gx
+	return gz*w.nx + gx
 }
 
 func (w *World) toCell(p Point) (int, int) {
-	half := w.Size / 2
-	gx := int(math.Floor((p.X + half) / cellSize))
-	gz := int(math.Floor((p.Z + half) / cellSize))
-	return min(max(gx, 0), w.n-1), min(max(gz, 0), w.n-1)
+	gx := int(math.Floor((p.X - w.Bounds.MinX) / cellSize))
+	gz := int(math.Floor((p.Z - w.Bounds.MinZ) / cellSize))
+	return min(max(gx, 0), w.nx-1), min(max(gz, 0), w.nz-1)
 }
 
 func (w *World) cellCenter(gx, gz int) Point {
-	half := w.Size / 2
-	return Point{X: -half + (float64(gx)+0.5)*cellSize, Z: -half + (float64(gz)+0.5)*cellSize}
+	return Point{X: w.Bounds.MinX + (float64(gx)+0.5)*cellSize, Z: w.Bounds.MinZ + (float64(gz)+0.5)*cellSize}
 }
 
-func (w *World) inGrid(x, z int) bool { return x >= 0 && z >= 0 && x < w.n && z < w.n }
+func (w *World) inGrid(x, z int) bool { return x >= 0 && z >= 0 && x < w.nx && z < w.nz }
 
 // ---------- A* (8 direções, sem cortar quinas) ----------
 
@@ -247,9 +289,9 @@ var dirs = [8][3]float64{
 }
 
 func (w *World) astar(start, goal int) []int {
-	gx, gz := goal%w.n, goal/w.n
+	gx, gz := goal%w.nx, goal/w.nx
 	h := func(c int) float64 {
-		dx, dz := float64(abs(c%w.n-gx)), float64(abs(c/w.n-gz))
+		dx, dz := float64(abs(c%w.nx-gx)), float64(abs(c/w.nx-gz))
 		return math.Max(dx, dz) + (math.Sqrt2-1)*math.Min(dx, dz)
 	}
 	g := map[int]float64{start: 0}
@@ -272,16 +314,16 @@ func (w *World) astar(start, goal int) []int {
 		if hc := h(cur); hc < bestH {
 			best, bestH = cur, hc
 		}
-		cx, cz := cur%w.n, cur/w.n
+		cx, cz := cur%w.nx, cur/w.nx
 		for _, d := range dirs {
 			nx, nz := cx+int(d[0]), cz+int(d[1])
-			if !w.inGrid(nx, nz) || w.blocked[nz*w.n+nx] {
+			if !w.inGrid(nx, nz) || w.blocked[nz*w.nx+nx] {
 				continue
 			}
-			if d[0] != 0 && d[1] != 0 && (w.blocked[cz*w.n+nx] || w.blocked[nz*w.n+cx]) {
+			if d[0] != 0 && d[1] != 0 && (w.blocked[cz*w.nx+nx] || w.blocked[nz*w.nx+cx]) {
 				continue // não corta quinas
 			}
-			next := nz*w.n + nx
+			next := nz*w.nx + nx
 			ng := g[cur] + d[2]
 			if old, ok := g[next]; ok && ng >= old {
 				continue

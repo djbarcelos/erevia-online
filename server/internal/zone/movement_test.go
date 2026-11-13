@@ -3,6 +3,8 @@ package zone
 import (
 	"math"
 	"testing"
+
+	"erevia/server/internal/world"
 )
 
 func TestStepMovesTowardTarget(t *testing.T) {
@@ -31,13 +33,26 @@ func TestStepStopsAtTarget(t *testing.T) {
 }
 
 func TestClampToZone(t *testing.T) {
-	got := clampToZone(Vec2{500, -500}, 100)
+	got := clampToZone(Vec2{500, -500}, world.Square(200))
 	if got != (Vec2{100, -100}) {
 		t.Fatalf("got %v, want {100 -100}", got)
 	}
 	in := Vec2{3, -4}
-	if clampToZone(in, 100) != in {
+	if clampToZone(in, world.Square(200)) != in {
 		t.Fatal("point inside zone should not change")
+	}
+}
+
+func TestClampToZoneRectangle(t *testing.T) {
+	b := world.Bounds{MinX: -150, MaxX: 150, MinZ: -330, MaxZ: 150}
+	if got := clampToZone(Vec2{10, -300}, b); got != (Vec2{10, -300}) {
+		t.Fatalf("o sul estendido deveria ser válido, veio %v", got)
+	}
+	if got := clampToZone(Vec2{0, -400}, b); got != (Vec2{0, -330}) {
+		t.Fatalf("got %v, want {0 -330}", got)
+	}
+	if got := clampToZone(Vec2{0, 200}, b); got != (Vec2{0, 150}) {
+		t.Fatalf("o norte não cresceu: got %v", got)
 	}
 }
 

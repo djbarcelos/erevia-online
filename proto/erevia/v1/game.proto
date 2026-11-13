@@ -480,6 +480,9 @@ message MapZone {
   float x = 7;
   float z = 8;
   bool boss = 9;
+  bool area = 10; // área de caça própria (disco de centro x, z e raio radius)
+  float radius = 11;
+  string region = 12; // nome da região ("Vale das Pedras Vivas")
 }
 
 message Spawn {

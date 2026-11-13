@@ -11,12 +11,13 @@ import {
   Vector3,
   VertexData,
 } from "@babylonjs/core";
+import { monolithProtos } from "./teleport-stone";
 import type { WorldData } from "./world-data";
 
 /** Tipos que projetam sombra (grama, arbustos e adereços pequenos não, para economizar). */
-const CASTS_SHADOW = /^(tree_|rock_3|tavern|church|blacksmith|market|home_|well|windmill|tower_|wall_)/;
+const CASTS_SHADOW = /^(tree_|rock_3|rock_1_[hk]|rock_2_f|monolith|tavern|church|blacksmith|market|home_|well|windmill|tower_|wall_)/;
 /** Tipos que recebem sombra (construções e muralhas ficam mais "assentadas" no chão). */
-const RECEIVES_SHADOW = /^(tavern|church|blacksmith|market|home_|windmill|tower_|wall_|well)/;
+const RECEIVES_SHADOW = /^(tavern|church|blacksmith|market|home_|windmill|tower_|wall_|well|monolith)/;
 /** Árvores ficam translúcidas quando tapam o jogador ou o alvo. */
 const FADES = /^tree_/;
 
@@ -47,6 +48,10 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
       protos.set(node.name.slice(5), mesh);
     }
     for (const root of c.rootNodes) if (root.name === "__root__") root.dispose();
+  }
+  // Monólitos rúnicos do vale: desenhados em código (mesma pedra da Pedra de Teleporte).
+  if (world.objects.some((o) => o.k.startsWith("monolith"))) {
+    for (const [kind, mesh] of monolithProtos(scene)) protos.set(kind, mesh);
   }
 
   // Agrupa as posições por tipo e cria um buffer de matrizes para cada um.

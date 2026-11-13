@@ -4748,6 +4748,9 @@ type MapZone struct {
 	X             float32                `protobuf:"fixed32,7,opt,name=x,proto3" json:"x,omitempty"`
 	Z             float32                `protobuf:"fixed32,8,opt,name=z,proto3" json:"z,omitempty"`
 	Boss          bool                   `protobuf:"varint,9,opt,name=boss,proto3" json:"boss,omitempty"`
+	Area          bool                   `protobuf:"varint,10,opt,name=area,proto3" json:"area,omitempty"` // área de caça própria (disco de centro x, z e raio radius)
+	Radius        float32                `protobuf:"fixed32,11,opt,name=radius,proto3" json:"radius,omitempty"`
+	Region        string                 `protobuf:"bytes,12,opt,name=region,proto3" json:"region,omitempty"` // nome da região ("Vale das Pedras Vivas")
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4843,6 +4846,27 @@ func (x *MapZone) GetBoss() bool {
 		return x.Boss
 	}
 	return false
+}
+
+func (x *MapZone) GetArea() bool {
+	if x != nil {
+		return x.Area
+	}
+	return false
+}
+
+func (x *MapZone) GetRadius() float32 {
+	if x != nil {
+		return x.Radius
+	}
+	return 0
+}
+
+func (x *MapZone) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
 }
 
 type Spawn struct {
@@ -7857,7 +7881,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\bbranches\x18\x11 \x03(\v2\x16.erevia.v1.SkillBranchR\bbranches\x12$\n" +
 	"\x03pvp\x18\x12 \x01(\v2\x12.erevia.v1.SelfPvpR\x03pvp\x12(\n" +
 	"\x04clan\x18\x13 \x01(\v2\x14.erevia.v1.ClanStateR\x04clan\x121\n" +
-	"\aenchant\x18\x14 \x01(\v2\x17.erevia.v1.EnchantRulesR\aenchant\"\xc7\x01\n" +
+	"\aenchant\x18\x14 \x01(\v2\x17.erevia.v1.EnchantRulesR\aenchant\"\x8b\x02\n" +
 	"\aMapZone\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x13\n" +
 	"\x05r_min\x18\x02 \x01(\x02R\x04rMin\x12\x13\n" +
@@ -7867,7 +7891,11 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x05fixed\x18\x06 \x01(\bR\x05fixed\x12\f\n" +
 	"\x01x\x18\a \x01(\x02R\x01x\x12\f\n" +
 	"\x01z\x18\b \x01(\x02R\x01z\x12\x12\n" +
-	"\x04boss\x18\t \x01(\bR\x04boss\"2\n" +
+	"\x04boss\x18\t \x01(\bR\x04boss\x12\x12\n" +
+	"\x04area\x18\n" +
+	" \x01(\bR\x04area\x12\x16\n" +
+	"\x06radius\x18\v \x01(\x02R\x06radius\x12\x16\n" +
+	"\x06region\x18\f \x01(\tR\x06region\"2\n" +
 	"\x05Spawn\x12)\n" +
 	"\x06entity\x18\x01 \x01(\v2\x11.erevia.v1.EntityR\x06entity\"\x19\n" +
 	"\aDespawn\x12\x0e\n" +

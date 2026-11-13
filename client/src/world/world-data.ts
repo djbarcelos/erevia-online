@@ -1,7 +1,28 @@
+/** Retângulo jogável (o mapa cresceu só para o sul). */
+export interface Bounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+/** Bioma do sul: borda ondulada com a floresta e a área dos golens. */
+export interface BiomeInfo {
+  name: string;
+  zFrom: number;
+  zTo: number;
+  amp: number;
+  ph: number[];
+  vale: { x: number; z: number; r: number };
+}
+
 /** Layout do mundo gerado por scripts/build-world.mjs (o servidor usa o mesmo arquivo). */
 export interface WorldData {
   version: number;
+  /** Lado do quadrado original (compatibilidade); os limites reais estão em `bounds`. */
   size: number;
+  bounds?: Bounds;
+  biome?: BiomeInfo;
   safeRadius: number;
   wall: { apothem: number; sides: number };
   roads: { x1: number; z1: number; x2: number; z2: number; w: number }[];
@@ -9,6 +30,29 @@ export interface WorldData {
   objects: { k: string; x: number; z: number; r: number; s: [number, number, number] }[];
   /** Tochas que acendem à noite. */
   torches?: { x: number; z: number }[];
+}
+
+/** Limites do mapa (sem `bounds` no arquivo: o quadrado `size` centrado na cidade). */
+export function worldBounds(world: WorldData): Bounds {
+  if (world.bounds) return world.bounds;
+  const h = world.size / 2;
+  return { minX: -h, maxX: h, minZ: -h, maxZ: h };
+}
+
+/**
+ * Quanto o ponto já é "vale de pedra" (0 = floresta, 1 = pedra). Mesma conta do gerador
+ * (scripts/build-world.mjs), para o chão pintado bater com as pedras e árvores.
+ */
+export function rockyAt(world: WorldData, x: number, z: number): number {
+  const b = world.biome;
+  if (!b) return 0;
+  const n =
+    (Math.sin(x * 0.045 + b.ph[0]) * Math.sin(z * 0.05 + b.ph[1]) +
+      0.5 * Math.sin(x * 0.11 + z * 0.07 + b.ph[2]) +
+      0.3 * Math.sin(x * 0.23 - z * 0.19 + b.ph[3])) /
+    1.8;
+  const t = Math.max(0, Math.min(1, (z + n * b.amp - b.zFrom) / (b.zTo - b.zFrom)));
+  return t * t * (3 - 2 * t);
 }
 
 export async function loadWorldData(): Promise<WorldData> {

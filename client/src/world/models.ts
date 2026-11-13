@@ -16,6 +16,7 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
+import { createGolem, GOLEM_MODEL } from "./golem";
 import { bodyPalettes, colorKey, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook } from "./body-look";
 
 /**
@@ -128,6 +129,7 @@ export class CharacterModels {
     private models: Map<string, ModelAssets>,
     private animTemplates: Map<string, AnimationGroup>,
     private weaponFiles: Map<string, AssetContainer | null>,
+    private scene: Scene,
   ) {}
 
   /** Materiais com brilho, por material original + raridade (compartilhados, nunca descartados). */
@@ -218,7 +220,7 @@ export class CharacterModels {
         templates.set(g.name, g);
       }
     }
-    return new CharacterModels(models, templates, weaponByFile);
+    return new CharacterModels(models, templates, weaponByFile, scene);
   }
 
   /** Cópia do material com brilho (uma por material + tipo de brilho; "e2" pulsa). */
@@ -245,7 +247,7 @@ export class CharacterModels {
   }
 
   has(model: string): boolean {
-    return this.models.has(model);
+    return model === GOLEM_MODEL || this.models.has(model);
   }
 
   /** Arquivos de arma carregados (podem ser usados em `weapons` do instantiate). */
@@ -258,6 +260,8 @@ export class CharacterModels {
    * `weapons` troca o que vai em cada mão (null = mão vazia); sem ele, usa as armas padrão.
    */
   instantiate(model: string, id: string, weapons?: Partial<Record<Slot, string | null>>, look?: BodyLook): CharacterInstance | null {
+    // Golem: modelado e animado em código (sem arquivo glTF).
+    if (model === GOLEM_MODEL) return createGolem(this.scene, id);
     const assets = this.models.get(model);
     const set = ANIM_SETS[model];
     if (!assets || !set) return null;

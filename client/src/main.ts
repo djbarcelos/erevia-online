@@ -56,7 +56,7 @@ import { loadEnvironment, type Environment } from "./world/environment";
 import { DayNight, WorldClock } from "./world/daynight";
 import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
-import { Collision, loadWorldData } from "./world/world-data";
+import { Collision, loadWorldData, worldBounds } from "./world/world-data";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("game");
@@ -151,7 +151,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const dayNight = new DayNight(world, worldData);
   const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
   const collision = new Collision(worldData);
-  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, welcome.zoneSize / 2, fx, world.shadows, collision);
+  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
   for (const e of welcome.entities) entities.add(e);
 

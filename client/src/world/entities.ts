@@ -35,7 +35,7 @@ import { toBodyLook, type BodyLook } from "./body-look";
 import type { Fx, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
 import { buildTeleportStone } from "./teleport-stone";
-import type { Collision } from "./world-data";
+import type { Bounds, Collision } from "./world-data";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -168,7 +168,8 @@ export class EntityManager {
     private scene: Scene,
     private gui: AdvancedDynamicTexture,
     readonly localId: number,
-    private zoneHalf: number,
+    /** Retângulo jogável (o mapa cresceu só para o sul). */
+    private bounds: Bounds,
     private fx: Fx,
     private shadows: ShadowGenerator,
     private collision: Collision,
@@ -544,8 +545,8 @@ export class EntityManager {
   predictLocalMove(x: number, z: number): { x: number; z: number } | null {
     const v = this.local;
     if (!v || v.dead) return null;
-    const cx = clamp(x, -this.zoneHalf, this.zoneHalf);
-    const cz = clamp(z, -this.zoneHalf, this.zoneHalf);
+    const cx = clamp(x, this.bounds.minX, this.bounds.maxX);
+    const cz = clamp(z, this.bounds.minZ, this.bounds.maxZ);
     // Só prevê em linha reta se não houver obstáculo; senão espera o caminho do servidor
     // (que contorna casas e muralhas) chegar no próximo snapshot.
     if (this.collision.segmentClear(v.server.x, v.server.z, cx, cz)) {

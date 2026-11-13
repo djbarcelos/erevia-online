@@ -25,13 +25,16 @@ type stoneDef struct {
 	price int64 // preço para chegar aqui
 }
 
-// teleportStones: praça da cidade e um acampamento em cada anel de caça, à beira das
-// estradas (as estradas são seguras de obstáculos).
+// teleportStones: praça da cidade, um acampamento em cada anel de caça e um no Vale das
+// Pedras Vivas, à beira das estradas (as estradas são seguras de obstáculos).
 var teleportStones = []stoneDef{
 	{name: "Cidade", x: 7, z: 7, price: 20},
 	{name: "Arredores", x: 60, z: 5, price: 40},
 	{name: "Campos dos Ossos", x: 5, z: 94, price: 90},
 	{name: "Ermos Partidos", x: -128, z: 5, price: 160},
+	// No fim da estrada sul, na entrada do vale dos golens (sempre no fim da lista: o id
+	// de cada destino é a posição + 1).
+	{name: "Vale das Pedras Vivas", x: 6, z: -198, price: 220},
 }
 
 // channelState: o que o jogador está canalizando (pedra ou pergaminho).
@@ -168,7 +171,7 @@ func (z *Zone) updateChannel(p *entity) {
 func (z *Zone) arrive(p *entity, dest Vec2) {
 	a := z.rng.Float64() * 2 * math.Pi
 	r := 1 + z.rng.Float64()*arriveScatter
-	spot := z.freeSpot(clampToZone(Vec2{X: dest.X + r*math.Cos(a), Z: dest.Z + r*math.Sin(a)}, z.cfg.Size/2))
+	spot := z.freeSpot(clampToZone(Vec2{X: dest.X + r*math.Cos(a), Z: dest.Z + r*math.Sin(a)}, z.bounds()))
 	z.forgetTarget(p.id)
 	p.teleportTo(spot)
 	p.lastCombat = -math.MaxFloat64 / 2

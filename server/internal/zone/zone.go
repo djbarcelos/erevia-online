@@ -383,7 +383,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	}
 
 	level := game.LevelForXP(info.XP)
-	pos := z.freeSpot(clampToZone(Vec2{X: info.X, Z: info.Z}, z.cfg.Size/2))
+	pos := z.freeSpot(clampToZone(Vec2{X: info.X, Z: info.Z}, z.bounds()))
 	attrs, ranks, hotbar := loadProgress(info.Class, level, info.Attrs, info.Ranks, info.Hotbar)
 	inv, skipped := loadInventory(info.Gold, info.Items)
 	if skipped > 0 {
@@ -493,7 +493,7 @@ func (z *Zone) onMove(e moveEvent) {
 	if p.stunned(z.now) {
 		return
 	}
-	z.goTo(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.cfg.Size/2))
+	z.goTo(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.bounds()))
 }
 
 func (z *Zone) onChat(e chatEvent) {

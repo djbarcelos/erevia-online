@@ -37,6 +37,9 @@ var (
 	lootBoss = []LootEntry{{"broken_crown", 1, 1, 1}, {"shadow_essence", 1, 2, 4}, {"potion_hp_l", 1, 2, 3}, {"potion_mp_l", 1, 1, 2},
 		{"scroll_ench_weapon", 0.5, 1, 1}, {"scroll_ench_armor", 0.6, 1, 2},
 		{"scroll_ench_weapon_b", 0.15, 1, 1}, {"scroll_ench_armor_b", 0.2, 1, 1}}
+	lootGolem = []LootEntry{{"rune_core", 0.3, 1, 1}, {"potion_hp_s", 0.12, 1, 2}, {"potion_hp_l", 0.03, 1, 1},
+		{"scroll_ench_armor", 0.02, 1, 1}, {"scroll_ench_weapon", 0.01, 1, 1},
+		{"scroll_ench_armor_b", 0.004, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
 )
 
 var Monsters = map[string]*MonsterDef{
@@ -52,6 +55,10 @@ var Monsters = map[string]*MonsterDef{
 	"skeleton_mage": {ID: "skeleton_mage", Name: "Esqueleto Mago", Model: "skeleton_mage",
 		HP: 45, HPLvl: 14, Atk: 10, AtkLv: 2.4, Def: 6, DefLv: 1.6, Range: 10, Interval: 2.0, Speed: 3.5, Magic: true, Aggressive: true, XPBase: 18, Scale: 1,
 		GoldChance: 0.7, GoldMin: 2.5, GoldMax: 4.5, Loot: lootMage},
+	// Lento e muito resistente; bate forte e devagar.
+	"stone_golem": {ID: "stone_golem", Name: "Golem de Pedra", Model: "stone_golem",
+		HP: 180, HPLvl: 40, Atk: 14, AtkLv: 2.6, Def: 26, DefLv: 4, Range: 2.6, Interval: 2.4, Speed: 2.8, Aggressive: true, XPBase: 40, Scale: 1.25,
+		GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem},
 	"bone_lord": {ID: "bone_lord", Name: "Senhor dos Ossos", Model: "skeleton_warrior",
 		HP: 400, HPLvl: 60, Atk: 14, AtkLv: 3, Def: 20, DefLv: 4, Range: 2.8, Interval: 1.8, Speed: 4, Aggressive: true, XPBase: 120, Scale: 1.6, Boss: true,
 		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootBoss},
@@ -85,6 +92,11 @@ type Spawn struct {
 	// Ponto fixo opcional (chefes). Se Fixed, usa X/Z e LevelMin.
 	Fixed bool
 	X, Z  float64
+	// Área: espalha no disco de centro X/Z e raio Radius (bioma próprio, fora dos anéis).
+	// O nível sobe com a profundidade: LevelMin na borda norte, LevelMax na borda sul.
+	Area   bool
+	Radius float64
+	Region string // nome da região (aparece no mapa)
 }
 
 // SpawnPoint é a posição concreta de um monstro.
@@ -95,7 +107,7 @@ type SpawnPoint struct {
 	Respawn float64
 }
 
-// DefaultSpawns: 3 anéis de caça + chefe.
+// DefaultSpawns: 3 anéis de caça + chefe + o Vale das Pedras Vivas (golens), no sul.
 func DefaultSpawns() []Spawn {
 	return []Spawn{
 		{Monster: "skeleton_minion", Count: 30, RMin: 46, RMax: 74, LevelMin: 1, LevelMax: 5, Respawn: 20},
@@ -104,6 +116,9 @@ func DefaultSpawns() []Spawn {
 		{Monster: "skeleton_mage", Count: 10, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
 		{Monster: "skeleton_warrior", Count: 10, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
 		{Monster: "bone_lord", Count: 1, Fixed: true, X: 0, Z: -132, LevelMin: 22, Respawn: 300},
+		// No fim da lista para não mudar os ids dos monstros que já existiam.
+		{Monster: "stone_golem", Count: 12, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 25, Respawn: 60,
+			Region: "Vale das Pedras Vivas"},
 	}
 }
 
@@ -118,6 +133,16 @@ func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 		for i := 0; i < s.Count; i++ {
 			if s.Fixed {
 				out = append(out, SpawnPoint{Monster: def, Level: s.LevelMin, X: s.X, Z: s.Z, Respawn: s.Respawn})
+				continue
+			}
+			if s.Area {
+				// Uniforme no disco (sqrt no raio para não amontoar no centro).
+				r := s.Radius * math.Sqrt(rng.Float64())
+				a := rng.Float64() * 2 * math.Pi
+				x, z := s.X+r*math.Cos(a), s.Z+r*math.Sin(a)
+				depth := (s.Z + s.Radius - z) / math.Max(1e-9, 2*s.Radius) // 0 na borda norte, 1 na sul
+				level := s.LevelMin + int(math.Round(depth*float64(s.LevelMax-s.LevelMin)))
+				out = append(out, SpawnPoint{Monster: def, Level: level, X: x, Z: z, Respawn: s.Respawn})
 				continue
 			}
 			// Raio uniforme em área (sqrt) para não amontoar perto do centro do anel.

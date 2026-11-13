@@ -7,6 +7,7 @@
  * - no toque: joystick e botões de ação (ataque, skills em arco, poção, alvo, AUTO).
  */
 
+import { worldBounds } from "../world/world-data";
 import "../styles/hud.css";
 import "../styles/windows.css";
 import { classInfo } from "../classes";
@@ -924,7 +925,8 @@ export class Hud {
     if (this.miniCanvas.width !== W) this.miniCanvas.width = this.miniCanvas.height = W;
     const c = this.miniCtx;
     const world = src.world;
-    const k = src.mapCanvas.width / world.size;
+    const b = worldBounds(world);
+    const k = src.mapCanvas.width / (b.maxX - b.minX);
     const scale = W / (this.miniRadius * 2);
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, W, W);
@@ -934,8 +936,8 @@ export class Hud {
     c.clip();
     c.fillStyle = "#1a2214";
     c.fillRect(0, 0, W, W);
-    const mx = (pos.x + world.size / 2) * k;
-    const my = (world.size / 2 - pos.z) * k;
+    const mx = (pos.x - b.minX) * k;
+    const my = (b.maxZ - pos.z) * k;
     const sr = this.miniRadius * k;
     c.drawImage(src.mapCanvas, mx - sr, my - sr, sr * 2, sr * 2, 0, 0, W, W);
     src.forEachMarker((m) => {

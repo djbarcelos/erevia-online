@@ -32,7 +32,7 @@ func (z *Zone) spawnMonsters() {
 	points := game.ExpandSpawns(z.cfg.Spawns, z.rng)
 	for i, sp := range points {
 		id := monsterIDBase + uint32(i)
-		home := z.freeSpot(clampToZone(Vec2{X: sp.X, Z: sp.Z}, z.cfg.Size/2))
+		home := z.freeSpot(clampToZone(Vec2{X: sp.X, Z: sp.Z}, z.bounds()))
 		m := &entity{
 			id: id, kind: pb.EntityKind_ENTITY_KIND_MONSTER,
 			name: sp.Monster.Name, model: sp.Monster.Model, level: sp.Level, scale: sp.Monster.Scale,
@@ -115,7 +115,7 @@ func (z *Zone) think(m *entity) {
 		if z.nearestPlayer(m.pos, wakeRange) != nil {
 			a := z.rng.Float64() * 2 * math.Pi
 			r := z.rng.Float64() * wanderRadius
-			spot := clampToZone(Vec2{X: ms.home.X + r*math.Cos(a), Z: ms.home.Z + r*math.Sin(a)}, z.cfg.Size/2)
+			spot := clampToZone(Vec2{X: ms.home.X + r*math.Cos(a), Z: ms.home.Z + r*math.Sin(a)}, z.bounds())
 			if z.walkable(spot) && (z.cfg.World == nil || z.cfg.World.SegmentClear(toPt(m.pos), toPt(spot))) {
 				m.setDest(spot)
 			}

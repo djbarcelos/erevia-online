@@ -123,3 +123,32 @@ func TestEmbeddedWorld(t *testing.T) {
 		t.Error("path out of town should go through a gate")
 	}
 }
+
+func TestEmbeddedWorldGrowsSouthOnly(t *testing.T) {
+	w, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := w.Bounds
+	if b.MinX != -150 || b.MaxX != 150 || b.MaxZ != 150 || b.MinZ != -330 {
+		t.Fatalf("o mapa deveria crescer só para o sul (até z=-330): %+v", b)
+	}
+	// O vale é alcançável a pé pela cidade (portão sul → estrada → entrada do vale) e
+	// dá para andar até o fundo da área dos golens.
+	from := w.NearestFree(Point{0, -42})
+	for _, goal := range []Point{{6, -198}, {0, -270}, {-30, -300}, {35, -290}} {
+		to := w.NearestFree(goal)
+		path := w.FindPath(from, to)
+		if len(path) == 0 {
+			t.Fatalf("sem caminho até %v", goal)
+		}
+		pathOK(t, w, from, path)
+		if end := path[len(path)-1]; math.Hypot(end.X-to.X, end.Z-to.Z) > 0.5 {
+			t.Errorf("caminho até %v parou em %v", goal, end)
+		}
+	}
+	// A célula mais ao sul existe na grade (o A* não corta o mapa estendido).
+	if p := w.NearestFree(Point{0, -328}); p.Z > -320 {
+		t.Errorf("o fundo do vale deveria ser andável: %v", p)
+	}
+}

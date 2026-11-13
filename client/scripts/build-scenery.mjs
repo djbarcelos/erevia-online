@@ -21,6 +21,9 @@ const FOREST = [
   ...['Tree_Bare_1_A', 'Tree_Bare_1_B', 'Tree_Bare_2_A', 'Tree_Bare_2_B'],
   ...['Bush_1_A', 'Bush_2_A', 'Bush_3_A', 'Bush_4_A'],
   ...['Rock_1_A', 'Rock_1_E', 'Rock_2_A', 'Rock_3_A', 'Rock_3_E'],
+  // Vale das Pedras Vivas (sul): mais variedade de pedra e árvore seca.
+  ...['Rock_1_C', 'Rock_1_H', 'Rock_1_K', 'Rock_2_C', 'Rock_2_F', 'Rock_3_B', 'Rock_3_C', 'Rock_3_G', 'Rock_3_J'],
+  ...['Tree_Bare_1_C', 'Tree_Bare_2_C'],
   ...['Grass_1_A', 'Grass_2_A'],
 ].map((n) => ({ name: n.toLowerCase(), path: pjoin(forest, `${n}_Color1.gltf`) }));
 
@@ -34,6 +37,8 @@ const TOWN = [
   ...['wall_straight', 'wall_straight_gate', 'wall_corner_A_outside', 'fence_wood_straight'].map(neutral),
   ...['barrel', 'crate_A_big', 'crate_long_A', 'tent', 'weaponrack', 'flag_blue', 'sack', 'wheelbarrow'].map(prop),
   ...['mountain_A_grass_trees', 'mountain_B_grass', 'mountain_C_grass_trees', 'hills_A_trees', 'hills_B_trees'].map(nature),
+  // Montanhas de rocha nua para a borda do vale do sul.
+  ...['mountain_A', 'mountain_B', 'mountain_C', 'mountain_A_grass', 'hills_A', 'hills_C'].map(nature),
 ];
 
 const io = new NodeIO();

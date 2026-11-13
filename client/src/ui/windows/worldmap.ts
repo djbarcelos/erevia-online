@@ -7,7 +7,7 @@
 
 import { EntityKind } from "../../gen/erevia/v1/game_pb";
 import { LANDMARKS, renderMapCanvas } from "../../world/map-painter";
-import type { WorldData } from "../../world/world-data";
+import { worldBounds, type WorldData } from "../../world/world-data";
 import { ui } from "../art";
 import { button, clamp, el, isCompact, toggle } from "../kit";
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS, type MapSource } from "../minimap";
@@ -42,7 +42,10 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
   const world = d.map.world;
   if (!cached || cached.world !== world) cached = { world, canvas: renderMapCanvas(world, 6) };
   const src = cached.canvas;
-  const half = world.size / 2;
+  // O mapa é um retângulo (cresceu só para o sul).
+  const bounds = worldBounds(world);
+  const mapW = bounds.maxX - bounds.minX;
+  const mapD = bounds.maxZ - bounds.minZ;
   const show: Record<Layer, boolean> = { zones: true, places: true, party: true, players: true, monsters: true };
   const gateR = world.wall?.apothem ?? 38;
   const GATES = [
@@ -110,6 +113,7 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     b.append(el("span", "zc"), el("span", "zn", el("b", null, z.name), el("small", null, z.safe ? "Cidade murada: aqui ninguém ataca." : z.monsters)), el("span", "zl", levelText(z)));
     b.onclick = () => {
       if (z.safe) flyTo(0, 0, 4);
+      else if (z.area) flyTo(z.area.x, z.area.z, Math.max(1.2, Math.min(4, 220 / (z.area.r * 3))));
       else flyTo(0, (z.rMin + z.rMax) / 2, Math.max(1.2, Math.min(4, 220 / (z.rMax * 2))));
     };
     zoneList.append(b);
@@ -146,7 +150,7 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
   let waypoint: { x: number; z: number; t: number } | null = null;
   let hover: { x: number; z: number } | null = null;
 
-  const minScale = () => Math.min(view.clientWidth, view.clientHeight) / (world.size * 1.05);
+  const minScale = () => Math.min(view.clientWidth / (mapW * 1.05), view.clientHeight / (mapD * 1.05));
   const toWorld = (px: number, py: number) => ({ x: cx + (px - view.clientWidth / 2) / scale, z: cz - (py - view.clientHeight / 2) / scale });
 
   function zoomBy(f: number, px = view.clientWidth / 2, py = view.clientHeight / 2) {
@@ -212,7 +216,7 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     if (downAt && performance.now() - downAt.t < 400 && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 6) {
       const r = canvas.getBoundingClientRect();
       const w = toWorld(e.clientX - r.left, e.clientY - r.top);
-      if (Math.abs(w.x) < half && Math.abs(w.z) < half) {
+      if (w.x > bounds.minX && w.x < bounds.maxX && w.z > bounds.minZ && w.z < bounds.maxZ) {
         waypoint = { ...w, t: performance.now() };
         d.moveTo(w.x, w.z);
       }
@@ -269,10 +273,13 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
       scale += (fly.s - scale) * 0.14;
       if (Math.abs(fly.x - cx) < 0.3 && Math.abs(fly.z - cz) < 0.3 && Math.abs(fly.s - scale) < 0.01) fly = null;
     }
-    // Não deixa sair muito do mapa.
-    const lim = half - Math.min(W, H) / scale / 2 + 20;
-    cx = clamp(cx, -Math.max(0, lim), Math.max(0, lim));
-    cz = clamp(cz, -Math.max(0, lim), Math.max(0, lim));
+    // Não deixa sair muito do mapa (por eixo: o mapa é mais comprido para o sul).
+    const keep = (c: number, lo: number, hi: number, view: number) => {
+      const m = view / scale / 2 - 20;
+      return lo + m > hi - m ? (lo + hi) / 2 : clamp(c, lo + m, hi - m);
+    };
+    cx = keep(cx, bounds.minX, bounds.maxX, W);
+    cz = keep(cz, bounds.minZ, bounds.maxZ, H);
 
     const sx = (x: number) => W / 2 + (x - cx) * scale;
     const sy = (z: number) => H / 2 - (z - cz) * scale;
@@ -285,10 +292,10 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     // Terreno
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(src, sx(-half), sy(half), world.size * scale, world.size * scale);
+    ctx.drawImage(src, sx(bounds.minX), sy(bounds.maxZ), mapW * scale, mapD * scale);
     // Leve tom de pergaminho
     ctx.fillStyle = "rgba(60,40,10,0.12)";
-    ctx.fillRect(sx(-half), sy(half), world.size * scale, world.size * scale);
+    ctx.fillRect(sx(bounds.minX), sy(bounds.maxZ), mapW * scale, mapD * scale);
 
     // Zonas
     if (show.zones) {
@@ -300,6 +307,31 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
           ctx.lineWidth = 2;
           ctx.setLineDash([]);
           ctx.stroke();
+          continue;
+        }
+        if (z.area) {
+          // Bioma: mancha de borda suave na cor do nível, com o nome no meio.
+          const ax = sx(z.area.x);
+          const ay = sy(z.area.z);
+          const ar = z.area.r * scale;
+          const g = ctx.createRadialGradient(ax, ay, ar * 0.2, ax, ay, ar * 1.15);
+          g.addColorStop(0, `rgba(${z.rgb},0.16)`);
+          g.addColorStop(0.8, `rgba(${z.rgb},0.1)`);
+          g.addColorStop(1, `rgba(${z.rgb},0)`);
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(ax, ay, ar * 1.15, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.setLineDash([7, 6]);
+          ctx.lineWidth = 1.4;
+          ctx.strokeStyle = `rgba(${z.rgb},0.6)`;
+          ctx.beginPath();
+          ctx.arc(ax, ay, ar, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          const fs = clamp(scale * 4.2, 10, 18);
+          label(z.name.toUpperCase(), ax, ay - fs * 0.6, fs * 0.8, "#f4ead2", 700, "Cinzel, Georgia, serif");
+          label(levelText(z), ax, ay + fs * 0.55, fs * 0.72, `rgb(${z.rgb})`, 700);
           continue;
         }
         ctx.beginPath();

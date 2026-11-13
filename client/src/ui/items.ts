@@ -182,6 +182,10 @@ const GLYPHS: Record<string, string> = {
     <path d="M38 14 L34 24 L40 28" stroke="#8a7a64" stroke-width="2" fill="none" ${STROKE}/>`,
   essence: `<path d="M24 22 H40 L44 50 C38 54 26 54 20 50 Z" fill="#f0e8dc" opacity=".3"/>
     <path d="M23 36 C28 30 26 26 32 22 C34 30 42 32 40 40 C38 48 26 48 23 36 Z" fill="#7a4ad0"/><path d="M24 18 H40" stroke="${wood}" stroke-width="4" ${STROKE}/>`,
+  rune_core: `<path d="M32 8 L50 20 L52 40 L36 56 L18 50 L12 28 Z" fill="#7d776e"/>
+    <path d="M32 8 L50 20 L40 30 L24 26 Z" fill="#9a948a"/><path d="M12 28 L24 26 L26 44 L18 50 Z" fill="#5e5952"/>
+    <circle cx="33" cy="36" r="9" fill="#ff8c2a"/><circle cx="33" cy="36" r="4.5" fill="#ffe0a0"/>
+    <path d="M33 27 V20 M42 36 H49 M33 45 V52 M24 36 H17" stroke="#ffb050" stroke-width="2.2" ${STROKE}/>`,
   crown: `<path d="M12 44 L16 20 L26 32 L32 14 L38 32 L48 20 L52 44 Z" fill="#d6b46e"/><path d="M12 44 H52 V50 H12 Z" fill="#a8843a"/>
     <path d="M30 14 L36 50" stroke="#2a2420" stroke-width="2.5"/><circle cx="22" cy="44" r="2.5" fill="#e0453a"/><circle cx="42" cy="44" r="2.5" fill="#3a7ae0"/>`,
   gold: `<ellipse cx="26" cy="42" rx="12" ry="5" fill="#a8843a"/><ellipse cx="26" cy="39" rx="12" ry="5" fill="#e8c260"/>

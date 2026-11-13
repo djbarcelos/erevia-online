@@ -9,8 +9,10 @@ import { dirname, resolve } from 'node:path';
 const here = import.meta.dirname;
 const SIZES = JSON.parse(readFileSync(resolve(here, '../src/world/kit-sizes.json'), 'utf8'));
 
-const SIZE = 300; // lado do mapa (±150)
+const SIZE = 300; // lado do quadrado original (±150); a floresta continua sorteada nele
 const HALF = SIZE / 2;
+// O mapa cresceu só para o sul: o Vale das Pedras Vivas vai de z = -150 até -330.
+const BOUNDS = { minX: -HALF, maxX: HALF, minZ: -330, maxZ: HALF };
 const SAFE_RADIUS = 40; // cidade = zona segura
 const WALL_APOTHEM = 38; // distância do centro ao meio de cada trecho de muralha
 const WALL_SIDES = 20; // múltiplo de 4 (portões nos eixos) com vértices em 45°
@@ -151,7 +153,7 @@ const roads = [
   { x1: WALL_APOTHEM, z1: 0, x2: HALF, z2: 0 },
   { x1: -WALL_APOTHEM, z1: 0, x2: -HALF, z2: 0 },
   { x1: 0, z1: WALL_APOTHEM, x2: 0, z2: HALF },
-  { x1: 0, z1: -WALL_APOTHEM, x2: 0, z2: -HALF },
+  { x1: 0, z1: -WALL_APOTHEM, x2: 0, z2: -206 }, // até a entrada do Vale das Pedras Vivas
 ].map((r) => ({ ...r, w: ROAD_WIDTH }));
 const onRoad = (x, z) => (Math.abs(x) < ROAD_CLEAR || Math.abs(z) < ROAD_CLEAR);
 
@@ -239,8 +241,174 @@ const MOUNTAINS = ['mountain_a_grass_trees', 'mountain_b_grass', 'mountain_c_gra
 for (let t = -HALF - 24; t <= HALF + 24; t += 26) {
   for (const [x, z] of [[t, -HALF - 18], [t, HALF + 18], [-HALF - 18, t], [HALF + 18, t]]) {
     const k = pick(MOUNTAINS);
-    place(k, x + between(-4, 4), z + between(-4, 4), rand() * 6.28, between(20, 30));
+    const px = x + between(-4, 4);
+    const pz = z + between(-4, 4);
+    const rot = rand() * 6.28;
+    const sc = between(20, 30);
+    // A fileira sul ficaria dentro do vale novo (sorteia igual, para não mudar o resto).
+    if (z === -HALF - 18) continue;
+    place(k, px, pz, rot, sc);
   }
+}
+
+// ---------- Vale das Pedras Vivas (sul) ----------
+// Sorteio próprio: nada do que já existia muda de lugar.
+const brand = mulberry32(20261114);
+const bpick = (arr) => arr[Math.floor(brand() * arr.length)];
+const bbetween = (a, b) => a + brand() * (b - a);
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const smoothstep = (a, b, v) => {
+  const t = clamp01((v - a) / (b - a));
+  return t * t * (3 - 2 * t);
+};
+// Borda ondulada entre a floresta e o vale (o cliente pinta o chão com a mesma conta).
+const BIOME = { zFrom: -150, zTo: -205, amp: 14, ph: Array.from({ length: 4 }, () => round(brand() * 6.28)) };
+const biomeNoise = (x, z) =>
+  (Math.sin(x * 0.045 + BIOME.ph[0]) * Math.sin(z * 0.05 + BIOME.ph[1]) +
+    0.5 * Math.sin(x * 0.11 + z * 0.07 + BIOME.ph[2]) +
+    0.3 * Math.sin(x * 0.23 - z * 0.19 + BIOME.ph[3])) / 1.8;
+/** 0 = floresta, 1 = vale de pedra. */
+const rocky = (x, z) => smoothstep(BIOME.zFrom, BIOME.zTo, z + biomeNoise(x, z) * BIOME.amp);
+const VALE = { x: 0, z: -270, r: 52 }; // área dos golens (igual ao servidor)
+const VALE_STONE = { x: 6, z: -198 }; // Pedra de Teleporte (igual ao servidor)
+const clearing = (x, z) => (Math.abs(x) < 6.5 && z > -214) || Math.hypot(x - VALE_STONE.x, z - VALE_STONE.z) < 10;
+const inVale = (x, z) => Math.hypot(x - VALE.x, z - VALE.z) < VALE.r;
+/** Tamanho no chão (maior lado) → escala do item. */
+const sized = (k, meters) => meters / Math.max(SIZES[k][0], SIZES[k][2]);
+
+function scatterSouth(count, zMin, zMax, accept, fn, { spacing = 0, tries = 30, avoidClearing = true } = {}) {
+  let placed = 0;
+  for (let i = 0; i < count * tries && placed < count; i++) {
+    const x = bbetween(BOUNDS.minX + 2, BOUNDS.maxX - 2);
+    const z = bbetween(zMin, zMax);
+    if (avoidClearing && clearing(x, z)) continue;
+    if (!accept(x, z)) continue;
+    if (spacing > 0 && (!farFrom(x, z, spacing) || !freeOfColliders(x, z, spacing))) continue;
+    fn(x, z);
+    if (spacing > 0) taken.push({ x, z, d: spacing });
+    placed++;
+  }
+}
+
+const BARE_ALL = [...BARE, 'tree_bare_1_c', 'tree_bare_2_c'];
+const CLIFF = ['rock_1_k', 'rock_2_f', 'rock_3_g', 'rock_3_j', 'rock_1_h'];
+const BOULDER = ['rock_3_a', 'rock_3_e', 'rock_3_b', 'rock_3_c', 'rock_3_g', 'rock_3_j', 'rock_1_h'];
+const STONE_MID = ['rock_1_a', 'rock_1_c', 'rock_1_e', 'rock_3_b', 'rock_3_c'];
+const GRAVEL = ['rock_2_a', 'rock_2_c', 'rock_1_c'];
+const MIN_Z = BOUNDS.minZ + 3;
+
+// Paredões: cristas de pedras grandes nas laterais e no fundo, com falhas (passagens).
+const RIDGES = [
+  [[-62, -214], [-74, -245], [-88, -280], [-96, -318]],
+  [[60, -218], [76, -250], [92, -286], [102, -320]],
+  [[-58, -323], [-20, -326], [20, -325], [56, -322]],
+  [[-112, -232], [-128, -248], [-141, -266]],
+  [[116, -226], [131, -244], [143, -262]],
+  [[-138, -296], [-120, -312]],
+  [[134, -300], [118, -316]],
+];
+for (const ridge of RIDGES) {
+  for (let i = 0; i < ridge.length - 1; i++) {
+    const [ax, az] = ridge[i];
+    const [bx, bz] = ridge[i + 1];
+    const len = Math.hypot(bx - ax, bz - az);
+    for (let d = 0; d < len; d += bbetween(2.8, 4.2)) {
+      const t = d / len;
+      const k = bpick(CLIFF);
+      const m = bbetween(4, 7.5);
+      const s = sized(k, m);
+      const x = ax + (bx - ax) * t + bbetween(-2, 2);
+      const z = az + (bz - az) * t + bbetween(-2, 2);
+      if (brand() < 0.12 || clearing(x, z)) continue; // falha na crista
+      place(k, x, z, brand() * 6.28, [s * bbetween(1, 1.35), s * bbetween(0.9, 1.5), s]);
+      collide(x, z, m * 0.42);
+      taken.push({ x, z, d: m * 0.4 });
+    }
+  }
+}
+
+// Monólitos rúnicos: círculos antigos, alguns inteiros, outros partidos ou tombados.
+// (desenhados pelo cliente, sem modelo do kit; os tamanhos abaixo são a escala 1)
+SIZES.monolith = [1.1, 2.6, 1.1, 0];
+SIZES.monolith_broken = [1.1, 1.4, 1.1, 0];
+SIZES.monolith_fallen = [2.6, 0.9, 1.1, 0];
+const CIRCLES = [
+  { x: -36, z: -244, r: 6.5, n: 7 },
+  { x: 40, z: -258, r: 7, n: 7 },
+  { x: -10, z: -302, r: 7.5, n: 8 },
+  { x: -104, z: -284, r: 5.5, n: 5 },
+  { x: 108, z: -272, r: 5.5, n: 5 },
+];
+for (const c of CIRCLES) {
+  const a0 = brand() * 6.28;
+  for (let i = 0; i < c.n; i++) {
+    const a = a0 + (i / c.n) * Math.PI * 2 + bbetween(-0.12, 0.12);
+    const x = c.x + Math.cos(a) * c.r;
+    const z = c.z + Math.sin(a) * c.r;
+    if (!freeOfColliders(x, z, 1)) continue;
+    const roll = brand();
+    const k = roll < 0.45 ? 'monolith' : roll < 0.75 ? 'monolith_broken' : 'monolith_fallen';
+    const s = bbetween(0.9, 1.25);
+    // De pé, olha para o centro; tombado, cai para fora.
+    const rot = k === 'monolith_fallen' ? -a + bbetween(-0.4, 0.4) : facing(x, z, c.x, c.z) + bbetween(-0.2, 0.2);
+    place(k, x, z, rot, [s, s * bbetween(0.9, 1.15), s]);
+    collide(x, z, k === 'monolith_fallen' ? 1.1 * s : 0.75 * s);
+    taken.push({ x, z, d: 1.5 });
+  }
+  // Altar no meio: o toco largo de um monólito antigo, partido rente ao chão.
+  const s = bbetween(1.5, 1.8);
+  place('monolith_broken', c.x, c.z, brand() * 6.28, [s, s * 0.6, s]);
+  collide(c.x, c.z, 0.8 * s);
+  taken.push({ x: c.x, z: c.z, d: 2 });
+}
+
+// Transição: a floresta seca e rareia, as pedras aumentam.
+scatterSouth(70, -215, -150, (x, z) => brand() < (1 - rocky(x, z)) * 0.95, (x, z) => {
+  const lush = brand() < 0.22 * (1 - rocky(x, z));
+  const s = bbetween(2.4, 3.2) * (lush ? 1 : 1.15);
+  place(lush ? bpick(LUSH) : bpick(BARE_ALL), x, z, brand() * 6.28, s);
+  collide(x, z, 0.22 * s);
+}, { spacing: 7.5 });
+// Árvores mortas solitárias no vale.
+scatterSouth(16, MIN_Z, -210, () => true, (x, z) => {
+  const s = bbetween(2.8, 3.8);
+  place(bpick(BARE_ALL), x, z, brand() * 6.28, s);
+  collide(x, z, 0.22 * s);
+}, { spacing: 14 });
+// Pedras grandes (menos dentro da área de caça, para dar espaço à luta).
+scatterSouth(120, MIN_Z, -158, (x, z) => brand() < rocky(x, z) * (inVale(x, z) ? 0.3 : 1), (x, z) => {
+  const k = bpick(BOULDER);
+  const m = bbetween(1.6, 4.2);
+  const s = sized(k, m);
+  place(k, x, z, brand() * 6.28, [s, s * bbetween(0.8, 1.25), s]);
+  collide(x, z, m * 0.4);
+}, { spacing: 4 });
+// Pedras médias (as maiores bloqueiam).
+scatterSouth(170, MIN_Z, -155, (x, z) => brand() < 0.15 + rocky(x, z) * 0.85, (x, z) => {
+  const k = bpick(STONE_MID);
+  const m = bbetween(0.6, 1.8);
+  place(k, x, z, brand() * 6.28, sized(k, m));
+  if (m > 1.2) collide(x, z, m * 0.38);
+}, { spacing: 2 });
+// Cascalho (só visual).
+scatterSouth(700, MIN_Z, -152, (x, z) => brand() < rocky(x, z), (x, z) => {
+  const k = bpick(GRAVEL);
+  place(k, x, z, brand() * 6.28, sized(k, bbetween(0.18, 0.55)));
+}, { avoidClearing: false });
+// Arbustos e grama rareando; capim baixo e esparso no vale.
+scatterSouth(40, -210, -150, (x, z) => brand() < (1 - rocky(x, z)) * 0.9, (x, z) => place(bpick(BUSH), x, z, brand() * 6.28, bbetween(2, 3)));
+scatterSouth(340, -232, -150, (x, z) => brand() < (1 - rocky(x, z)) * 0.9 + 0.05, (x, z) => place(bpick(GRASS), x, z, brand() * 6.28, bbetween(0.6, 1.2)), { avoidClearing: false });
+scatterSouth(130, MIN_Z, -215, () => true, (x, z) => place(bpick(GRASS), x, z, brand() * 6.28, bbetween(0.45, 0.85)), { avoidClearing: false });
+
+// Montanhas de rocha nua em volta do vale.
+const ROCK_MOUNTAINS = ['mountain_a', 'mountain_b', 'mountain_c', 'mountain_a_grass', 'hills_a', 'hills_c'];
+for (let z = -176; z >= BOUNDS.minZ - 26; z -= 26) {
+  for (const x of [BOUNDS.minX - 18, BOUNDS.maxX + 18]) {
+    place(bpick(ROCK_MOUNTAINS), x + bbetween(-4, 4), z + bbetween(-4, 4), brand() * 6.28, bbetween(20, 30));
+  }
+}
+for (let x = BOUNDS.minX - 24; x <= BOUNDS.maxX + 24; x += 26) {
+  place(bpick(ROCK_MOUNTAINS), x + bbetween(-4, 4), BOUNDS.minZ - 18 + bbetween(-4, 4), brand() * 6.28, bbetween(22, 32));
 }
 
 // ---------- Tochas (acendem à noite) ----------
@@ -272,6 +440,8 @@ for (const [x, z] of torchCandidates) {
 const world = {
   version: 1,
   size: SIZE,
+  bounds: BOUNDS,
+  biome: { name: 'Vale das Pedras Vivas', ...BIOME, vale: VALE },
   safeRadius: SAFE_RADIUS,
   wall: { apothem: WALL_APOTHEM, sides: WALL_SIDES },
   roads,
