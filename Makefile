@@ -44,7 +44,7 @@ build: ## Gera binário do servidor e build do cliente
 	cd client && npm run build
 
 docker: ## Gera a imagem de produção localmente
-	docker build -t erevia .
+	docker build --build-arg RAILWAY_GIT_COMMIT_SHA=$$(git rev-parse HEAD) -t erevia .
 
 gm: ## Torna GM a conta do personagem no banco local: make gm NAME=Fulano
 	@echo "$(NAME)" | grep -Eq '^[A-Za-z0-9]{3,16}$$' || (echo "Uso: make gm NAME=Personagem" && exit 1)

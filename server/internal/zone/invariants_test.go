@@ -38,7 +38,7 @@ func mustPanicRule(t *testing.T, rule string, f func()) {
 	t.Helper()
 	defer func() {
 		t.Helper()
-		msg, _ := recover().(string)
+		msg := fmt.Sprint(recover())
 		if !strings.Contains(msg, fmt.Sprintf("invariante %q quebrada", rule)) {
 			t.Fatalf("esperava panic da invariante %q, veio %q", rule, msg)
 		}
@@ -373,7 +373,7 @@ func TestInvariantPanicMessage(t *testing.T) {
 	z, p := invZone(t, nil)
 	p.hp = p.stats.MaxHP + 1
 	defer func() {
-		msg, _ := recover().(string)
+		msg := fmt.Sprint(recover())
 		for _, part := range []string{`"hp"`, "personagem 1 (Ana)", fmt.Sprint(p.hp), "posição (30.0, 0.0)"} {
 			if !strings.Contains(msg, part) {
 				t.Fatalf("mensagem %q sem %q", msg, part)

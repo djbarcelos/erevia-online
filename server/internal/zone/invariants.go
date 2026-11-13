@@ -35,6 +35,10 @@ const (
 	invariantReportEvery = 10 * time.Minute
 )
 
+// invariantPanic é o panic do modo estrito. Os recovers da zona (errors.go) deixam passar,
+// para a quebra derrubar o teste ou o servidor de verdade.
+type invariantPanic string
+
 // strictInvariants: invariante quebrada vira panic (testes e DEBUG_INVARIANTS=1).
 var strictInvariants = testing.Testing() || os.Getenv("DEBUG_INVARIANTS") == "1"
 
@@ -118,7 +122,7 @@ func (z *Zone) invariantBroken(p *entity, rule string, bad any, fix func()) {
 		id, name, x, zz = p.id, p.name, p.pos.X, p.pos.Z
 	}
 	if z.invariants.strict() {
-		panic(fmt.Sprintf("invariante %q quebrada: personagem %d (%s), valor %v, posição (%.1f, %.1f)", rule, id, name, bad, x, zz))
+		panic(invariantPanic(fmt.Sprintf("invariante %q quebrada: personagem %d (%s), valor %v, posição (%.1f, %.1f)", rule, id, name, bad, x, zz)))
 	}
 	if z.invariantReportDue(rule, id) {
 		// Anota antes de corrigir: a posição e o valor são os do problema.
@@ -331,7 +335,7 @@ func (z *Zone) checkProgress(p *entity) {
 	if a := p.pl.attrs; !a.Valid() || a.Sum() > game.AttrPointsTotal(lv) {
 		z.invariantBroken(p, "points", fmt.Sprintf("atributos %+v (nível %d dá %d)", a, lv, game.AttrPointsTotal(lv)), nil)
 	}
-	if err := game.ValidateRanks(p.pl.class, lv, p.pl.ranks); err != nil {
+	if err := game.ValidateRanks(p.pl.class, p.pl.spec, lv, p.pl.ranks); err != nil {
 		z.invariantBroken(p, "points", "skills: "+err.Error(), nil)
 	}
 }

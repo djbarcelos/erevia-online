@@ -8,10 +8,12 @@ import {
   PartyCmdKind,
   ServerMessageSchema,
   type FriendCmdKind,
+  type SpecCmdKind,
   type MailCmdKind,
   type ServerMessage,
   type TradeCmdKind,
 } from "../gen/erevia/v1/game_pb";
+import { reportClientError } from "./errors";
 
 const PING_INTERVAL_MS = 2000;
 
@@ -36,7 +38,18 @@ export class Connection {
     };
 
     this.ws.onmessage = (ev: MessageEvent<ArrayBuffer>) => {
-      const msg = fromBinary(ServerMessageSchema, new Uint8Array(ev.data));
+      const bytes = new Uint8Array(ev.data);
+      let msg: ServerMessage;
+      try {
+        msg = fromBinary(ServerMessageSchema, bytes);
+      } catch (err) {
+        // Cliente e servidor fora de sincronia (proto mudou?): relata e descarta a mensagem.
+        reportClientError("decode", `mensagem do servidor não decodifica: ${(err as Error)?.message ?? err}`, {
+          bytes: bytes.length,
+          head: [...bytes.subarray(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+        }, err);
+        return;
+      }
       if (msg.msg.case === "pong") {
         this.ping = Math.round(performance.now() - msg.msg.value.clientTime);
         return;
@@ -169,6 +182,11 @@ export class Connection {
   /** Pede o ranking (a janela Glória, quando abre e o que tem guardado está velho). */
   rankingRequest(): void {
     this.send({ case: "rankingRequest", value: {} });
+  }
+
+  /** Mestra dos Caminhos: falar (anda A Encruzilhada e abre a escolha) ou escolher o caminho. */
+  specCmd(kind: SpecCmdKind, npcId: number, spec = ""): void {
+    this.send({ case: "specCmd", value: { kind, npcId, spec } });
   }
 
   /** Escolhe o título (id da conquista; "" tira). */
