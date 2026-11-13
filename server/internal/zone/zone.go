@@ -384,7 +384,6 @@ func (z *Zone) handle(e event) {
 	case tradeEvent:
 		z.onTrade(e)
 
-
 	case accountGoneEvent:
 		z.onAccountGone(e.d)
 	}
