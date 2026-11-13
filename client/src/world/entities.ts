@@ -874,7 +874,7 @@ export class EntityManager {
       if (sk?.fx === "fireball") {
         launch((a, b) => this.fx.fireball(a, b, travel));
         impact = release + travel * 1000;
-      } else if (sk?.fx === "m_rain") {
+      } else if (sk?.fx === "m_rain" || sk?.fx === "m_inferno") {
         launch(() => this.fx.emberRain(dst.root.position.clone(), sk.splash));
         impact = release + 650;
       } else if (sk?.fx === "m_meteor") {
@@ -977,17 +977,22 @@ export class EntityManager {
     switch (quiet ? "quiet" : sk?.fx) {
       case "quiet":
       case "m_rain":
+      case "m_inferno":
       case "m_meteor":
       case "m_lance":
       case "m_prison":
+      case "m_arcane":
       case "r_mark":
+      case "b_whirl": // 2 golpes por alvo: o giro já mostra o corte (sem faísca dobrada)
         break;
       case "r_flask":
       case "r_plague":
         this.fx.poisonSplash(dst.root.position.clone(), sk?.splash || 1.5, sk?.fx === "r_plague" ? new Color3(0.35, 0.55, 0.2) : new Color3(0.45, 0.9, 0.3));
         break;
       case "k_judg":
+      case "k_horizon":
       case "b_exec":
+      case "b_seismic":
         this.fx.brutalStrike(from, at, mine);
         this.fx.slam(dst.root.position, 1.8, new Color3(1, 0.85, 0.4), mine);
         break;
@@ -996,6 +1001,8 @@ export class EntityManager {
         break;
       case "r_twin":
       case "r_para":
+      case "r_fatal":
+      case "r_shadow":
         this.fx.backstab(from, at, ev.crit);
         break;
       case "shield_bash":
@@ -1008,6 +1015,7 @@ export class EntityManager {
         this.fx.backstab(from, at, ev.crit);
         break;
       case "ice_nova":
+      case "m_zero":
         this.fx.frostHit(at);
         break;
       case "fireball":
@@ -1069,6 +1077,7 @@ export class EntityManager {
   private castFx(src: View, sk: SkillInfo, mine: boolean): void {
     switch (sk.fx) {
       case "ice_nova":
+      case "m_zero":
         this.fx.iceNova(src.root.position, sk.range);
         break;
       case "fortress":
@@ -1091,11 +1100,19 @@ export class EntityManager {
         if (mine) this.fx.shake(6);
         break;
       case "k_spin":
+      case "b_whirl":
         this.fx.whirl(src, sk.range, mine);
         break;
       case "b_quake":
       case "b_stomp":
+      case "b_stone":
         this.fx.slam(src.root.position, sk.range, new Color3(1, 0.7, 0.35), mine);
+        break;
+      case "k_bulwark":
+        this.fx.slam(src.root.position, sk.range, new Color3(0.45, 0.65, 1), mine);
+        break;
+      case "r_miasma":
+        this.fx.poisonSplash(src.root.position.clone(), sk.range, new Color3(0.45, 0.9, 0.3));
         break;
       case "r_smoke":
         this.fx.smokeCloud(src.root.position.clone(), sk.range, (sk.effectMs || 6000) / 1000);
@@ -1523,6 +1540,7 @@ const BOLT_COLOR: Record<string, Color3> = {
   r_mark: new Color3(1, 0.2, 0.2),
   r_flask: new Color3(0.45, 0.95, 0.3),
   r_plague: new Color3(0.35, 0.6, 0.2),
+  m_arcane: new Color3(0.7, 0.45, 1),
 };
 
 const SKILL_NUMBER_COLOR: Record<string, string> = {
@@ -1538,6 +1556,14 @@ const SKILL_NUMBER_COLOR: Record<string, string> = {
   shield_bash: "#cfe0ff",
   brutal_strike: "#ff9a6a",
   backstab: "#e0b4ff",
+  k_horizon: "#ffe9a0",
+  b_seismic: "#ff7a5a",
+  b_whirl: "#ff9a8a",
+  m_inferno: "#ffb14a",
+  m_zero: "#9fe0ff",
+  m_arcane: "#d8b4ff",
+  r_fatal: "#ffd28a",
+  r_shadow: "#e0b4ff",
 };
 
 /** Modelos que atacam com magia à distância. */

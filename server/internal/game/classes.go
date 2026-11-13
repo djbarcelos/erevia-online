@@ -2,8 +2,9 @@
 // dano e progressão. Sem estado e sem I/O, para ser fácil de testar e balancear.
 package game
 
-// MaxLevel é o nível máximo desta fase.
-const MaxLevel = 20
+// MaxLevel é o nível máximo dos jogadores. Do 20 ao 30 a caça é no Vale das Pedras Vivas
+// e a árvore de skills ganha o 5º degrau (nível 20).
+const MaxLevel = 30
 
 // Stats são os atributos de combate de um personagem ou monstro num dado nível.
 type Stats struct {

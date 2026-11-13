@@ -152,7 +152,7 @@ type SpawnPoint struct {
 	Respawn float64
 }
 
-// DefaultSpawns: 3 anéis de caça + chefe + o Vale das Pedras Vivas (golens), no sul.
+// DefaultSpawns: 3 anéis de caça + chefe + o Vale das Pedras Vivas (golens, 20–30), no sul.
 func DefaultSpawns() []Spawn {
 	return []Spawn{
 		{Monster: "skeleton_minion", Count: 30, RMin: 46, RMax: 74, LevelMin: 1, LevelMax: 5, Respawn: 20},
@@ -162,7 +162,10 @@ func DefaultSpawns() []Spawn {
 		{Monster: "skeleton_warrior", Count: 10, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
 		{Monster: "bone_lord", Count: 1, Fixed: true, X: 0, Z: -132, LevelMin: 22, Respawn: 300},
 		// No fim da lista para não mudar os ids dos monstros que já existiam.
-		{Monster: "stone_golem", Count: 12, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 25, Respawn: 60,
+		// Níveis 20 (entrada, ao norte) a 30 (fundo, ao sul): a caça do 25 ao 30 é a metade
+		// funda do vale. Mesma quantidade de golens (o mesmo pico de malhas no cliente), com
+		// renascimento um pouco mais rápido para caber mais gente.
+		{Monster: "stone_golem", Count: 12, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 30, Respawn: 45,
 			Region: "Vale das Pedras Vivas"},
 		// Raid boss no covil da Cripta Esquecida (o renascimento vem da def, em horas).
 		{Monster: "ozrhal", Count: 1, Fixed: true, X: RaidLairX, Z: RaidLairZ, LevelMin: 25},
