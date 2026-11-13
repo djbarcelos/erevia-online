@@ -1663,3 +1663,142 @@
     border-right: 1px solid var(--line);
   }
 }
+
+/* ======================= JOGO: itens por grau, encaixes futuros, skills ======================= */
+
+/* Graus do servidor: 1 comum, 2 bom, 3 raro, 4 épico */
+.slot[data-grade="1"] {
+  --rc: rgba(185, 180, 194, 0.45);
+}
+
+.slot[data-grade="2"] {
+  --rc: var(--r-uncommon);
+  box-shadow:
+    inset 0 0 12px rgba(95, 209, 122, 0.22),
+    inset 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.slot[data-grade="3"] {
+  --rc: var(--r-rare);
+  box-shadow:
+    inset 0 0 12px rgba(79, 157, 255, 0.28),
+    inset 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.slot[data-grade="4"] {
+  --rc: var(--r-epic);
+  box-shadow:
+    inset 0 0 14px rgba(180, 108, 255, 0.32),
+    inset 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+/* Encaixe que ainda não existe no servidor */
+.slot.soon {
+  opacity: 0.45;
+  border-style: dashed;
+}
+
+.slot.soon .soon-lock {
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  color: var(--dim);
+  display: grid;
+}
+
+.inv-hint {
+  margin-right: auto;
+}
+
+/* Skills (tecla K) */
+.skills-win {
+  padding: 14px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.skill-list {
+  display: grid;
+  gap: 10px;
+}
+
+.sk-card {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.sk-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 14px rgba(214, 180, 110, 0.3);
+  cursor: grab;
+  touch-action: none;
+}
+
+.sk-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.sk-body h4 {
+  margin: 0 0 2px;
+  font-family: var(--font-title);
+  color: var(--gold-hi);
+  font-size: 1rem;
+}
+
+.sk-body .sub {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.sk-body .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.sk-body .meta b {
+  color: var(--text);
+}
+
+.sk-body .desc {
+  color: var(--muted);
+  font-style: italic;
+}
+
+@media (max-width: 600px) {
+  .sk-card {
+    grid-template-columns: 52px 1fr;
+  }
+
+  .sk-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  .sk-card > .btn {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Personagem (jogo): sem a coluna de distribuição ainda */
+.char-win .attr-base {
+  justify-content: flex-start;
+}
+
+.char-win .hint-box {
+  margin: 0;
+}

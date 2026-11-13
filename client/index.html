@@ -11,20 +11,8 @@
   <body>
     <canvas id="game"></canvas>
 
-    <div id="hud" hidden>
-      <div><span class="k">FPS</span> <span id="hud-fps">–</span></div>
-      <div><span class="k">Ping</span> <span id="hud-ping">–</span></div>
-      <div><span class="k">Online</span> <span id="hud-online">–</span></div>
-      <div><span class="k">Pos</span> <span id="hud-pos">–</span></div>
-    </div>
-
-    <div id="chat" hidden>
-      <ol id="chat-log" aria-live="polite" aria-label="Mensagens do chat"></ol>
-      <form id="chat-form" autocomplete="off">
-        <input id="chat-input" maxlength="220" placeholder="Enter para falar · /w Nome texto · /r texto"
-               aria-label="Mensagem do chat" />
-      </form>
-    </div>
+    <!-- Painel de desempenho (F3); o HUD do jogo é montado por src/ui/hud.ts -->
+    <div id="hud"></div>
 
     <!-- Telas de entrada (login, personagens, mensagens): montadas por src/ui/screens.ts -->
     <div id="overlay"></div>

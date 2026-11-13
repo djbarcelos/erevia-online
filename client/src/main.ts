@@ -1,29 +1,42 @@
 import { api, ApiError, type CharacterInfo } from "./api";
 import { Color3 } from "@babylonjs/core";
-import { ItemKind, SkillTarget, type ServerMessage, type SkillInfo, type Welcome } from "./gen/erevia/v1/game_pb";
+import { EntityKind, ItemKind, SkillTarget, type SelfStats, type ServerMessage, type SkillInfo, type Welcome } from "./gen/erevia/v1/game_pb";
+import { classInfo } from "./classes";
 import { Connection } from "./net/connection";
 import { Chat } from "./ui/chat";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
-import { Hud, ITEM_KEYS } from "./ui/hud";
-import { Minimap } from "./ui/minimap";
-import { WorldMap } from "./ui/worldmap";
+import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type HotbarEntry, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
-import { InventoryWindow } from "./ui/inventory";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
+import { applyEnvClasses, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
+import { DEFAULT_LOOK } from "./ui/looks";
+import { buildRegions } from "./ui/regions";
+import { buildInventory } from "./ui/windows/inventory";
+import { buildWorldMap } from "./ui/windows/worldmap";
+import { buildSettings } from "./ui/windows/settings";
+import { buildCharacter } from "./ui/windows/character";
+import { buildSkills } from "./ui/windows/skills";
+import { AutoHunt } from "./world/autohunt";
 import { GroundLoot } from "./world/loot";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
+import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
 import { loadEnvironment, type Environment } from "./world/environment";
-import { DayNight, hourLabel, isNight, WorldClock } from "./world/daynight";
+import { DayNight, WorldClock } from "./world/daynight";
 import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
 import { Collision, loadWorldData } from "./world/world-data";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>("game");
+
+// Classes de ambiente (toque, escala da interface, canhoto) seguem as configurações.
+applyEnvClasses();
+settings.on(applyEnvClasses);
+addEventListener("resize", applyEnvClasses);
 
 void boot();
 
@@ -88,10 +101,8 @@ function play(character: CharacterInfo): void {
   };
 
   conn.onClose = (reason) => {
-    $("chat").hidden = true;
-    $("hud").hidden = true;
     game?.dispose();
-    for (const e of document.querySelectorAll(".game-hud, .minimap, .worldmap")) e.remove();
+    for (const e of document.querySelectorAll(".hud, .gwin-layer, .toasts, .tip, [data-menu], [data-sheet]")) e.remove();
     const text = kickedReason || (started ? `A conexão caiu (${reason}).` : `Não foi possível entrar (${reason}).`);
     showMessage(started ? "Desconectado" : "Erro ao entrar", text, "Voltar", () => location.reload());
   };
@@ -105,7 +116,6 @@ interface Game {
 
 async function startGame(conn: Connection, character: CharacterInfo, welcome: Welcome): Promise<Game> {
   showScreen(null);
-  $("hud").hidden = false;
 
   const worldData = await loadWorldData();
   const world = await createWorldScene(canvas, worldData);
@@ -131,53 +141,66 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     .then((models) => entities.setModels(models))
     .catch((err) => console.warn("modelos 3D indisponíveis, usando cápsulas", err));
 
-  const chat = new Chat($("chat"), character.name, (text, to) => conn.chat(text, to));
-  const keys = [...welcome.skills].sort((a, b) => a.key - b.key).map((k) => k.key);
-  const keyText = keys.length > 1 ? `teclas ${keys.slice(0, -1).join(", ")} e ${keys[keys.length - 1]}` : `tecla ${keys[0] ?? 1}`;
-  chat.system(`Bem-vindo a Erevia, ${character.name}! Clique num monstro para atacar; ${keyText} usam suas skills.`);
+  // ---------- Estado do jogador ----------
+  const emblem = DEFAULT_LOOK[character.class]?.emblem ?? "#d6b46e";
+  let lastStats: SelfStats | null = null;
+  const statsListeners = new Set<() => void>();
+  const onStats = (fn: () => void) => {
+    statsListeners.add(fn);
+    return () => statsListeners.delete(fn);
+  };
+  const me = () => ({ myClass: character.class, myLevel: lastStats?.level ?? character.level ?? 1, name: character.name, emblem });
 
   // ---------- Itens ----------
   const store = new ItemStore(welcome.itemCatalog);
   store.setInventory(welcome.inventory);
-  let myLevel = 1;
-  const me = () => ({ myClass: character.class, myLevel });
   const itemTip = new ItemTip(document.body);
   const npcStock = new Map(welcome.npcs.map((n) => [n.id, n.stock]));
   const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId);
   loot.add(welcome.groundItems);
 
-  // Barra de poções (teclas 3–6): o que vai em cada espaço fica salvo neste navegador.
-  const hotbarKey = `erevia.hotbar.${character.id}`;
-  let hotbar: (string | null)[] = ["potion_hp_s", "potion_mp_s", "potion_hp_l", "potion_mp_l"];
-  try {
-    const saved = JSON.parse(localStorage.getItem(hotbarKey) ?? "null");
-    if (Array.isArray(saved) && saved.length === 4) hotbar = saved;
-  } catch {
-    /* sem storage: usa o padrão */
-  }
-  const saveHotbar = () => {
+  // ---------- Barra de atalhos (10 teclas), salva neste navegador ----------
+  // Formato: "skill:<id>" ou "item:<id do item>". Padrão: skills nas teclas 1–2, poções nas 3–6
+  // (o mesmo de antes). A barra antiga só de poções (4 espaços) é aproveitada.
+  const hotbarKey = `erevia.hotbar2.${character.id}`;
+  const loadHotbar = (): HotbarEntry[] => {
     try {
-      localStorage.setItem(hotbarKey, JSON.stringify(hotbar));
+      const saved = JSON.parse(localStorage.getItem(hotbarKey) ?? "null");
+      if (Array.isArray(saved) && saved.length === HOTBAR_SIZE) return saved;
+    } catch {
+      /* sem storage: usa o padrão */
+    }
+    const bar: HotbarEntry[] = Array(HOTBAR_SIZE).fill(null);
+    [...welcome.skills].sort((a, b) => a.key - b.key).forEach((s, i) => (bar[i] = `skill:${s.id}`));
+    let potions: (string | null)[] = ["potion_hp_s", "potion_mp_s", "potion_hp_l", "potion_mp_l"];
+    try {
+      const old = JSON.parse(localStorage.getItem(`erevia.hotbar.${character.id}`) ?? "null");
+      if (Array.isArray(old) && old.length === 4) potions = old;
+    } catch {
+      /* ignora */
+    }
+    potions.forEach((p, i) => (bar[2 + i] = p ? `item:${p}` : null));
+    return bar;
+  };
+  const saveHotbar = (entries: HotbarEntry[]) => {
+    try {
+      localStorage.setItem(hotbarKey, JSON.stringify(entries));
     } catch {
       /* ignora */
     }
   };
-  const refreshHotbar = () =>
-    hud.setItemSlots(
-      hotbar.map((id) => (id ? (store.get(id) ?? null) : null)),
-      hotbar.map((id) => (id ? store.countOf(id) : 0)),
-    );
-  const useHotbar = (i: number) => {
-    const id = hotbar[i];
-    const info = id ? store.get(id) : undefined;
-    if (!info || entities.localDead) return;
+
+  const useItemById = (id: string): "ok" | "cooldown" | "none" => {
+    const info = store.get(id);
+    if (!info || entities.localDead) return "none";
     const slot = store.slotOf(info.id);
     if (slot < 0) {
       chat.system(`Você não tem ${info.name}.`);
-      return;
+      return "none";
     }
-    if (info.cooldownGroup && !hud.itemReady(info.cooldownGroup)) return;
+    if (info.cooldownGroup && !hud.itemReady(info.cooldownGroup)) return "cooldown";
     conn.useItem(PLACE_BAG, slot);
+    return "ok";
   };
 
   // ---------- Alvo e skills ----------
@@ -188,6 +211,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     entities.setTarget(id);
     hud.setTarget(entities.info(id));
   };
+  const attackTarget = (id: number) => {
+    if (entities.localDead || !entities.isEnemy(id)) return;
+    selectTarget(id);
+    pendingShop = 0;
+    conn.attack(id);
+  };
   const useSkill = (s: SkillInfo) => {
     if (entities.localDead) return;
     if (!hud.isReady(s.id)) return;
@@ -196,57 +225,194 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       return;
     }
     if (s.target === SkillTarget.ENEMY && !entities.isEnemy(targetId)) {
-      chat.system("Selecione um monstro como alvo.");
-      return;
+      const n = entities.nearestMonster();
+      if (!n || n.dist > 25) {
+        chat.system("Selecione um monstro como alvo.");
+        return;
+      }
+      selectTarget(n.id);
     }
     conn.useSkill(s.id, targetId);
     // Skill de alvo pode precisar andar até o alcance: fica "na fila" até o servidor usar.
     if (s.target === SkillTarget.ENEMY) hud.setQueued(s.id);
     else hud.startLocalCooldown(s.id);
   };
-  const hud = new Hud(welcome.skills, {
-    onSkill: useSkill,
-    onRespawn: () => conn.respawn(),
-    targetDistance: () => (entities.isEnemy(targetId) ? entities.distanceTo(targetId) : null),
-    onItemSlot: useHotbar,
-    onClearItemSlot: (i) => {
-      hotbar[i] = null;
-      saveHotbar();
-      refreshHotbar();
+  /** Próximo monstro vivo, do mais perto para o mais longe (tecla Tab / botão de alvo). */
+  const cycleTarget = () => {
+    const p = entities.localPosition();
+    if (!p) return;
+    const list: { id: number; d: number }[] = [];
+    entities.forEachMarker((m) => {
+      if (m.kind === EntityKind.MONSTER) list.push({ id: m.id, d: Math.hypot(m.x - p.x, m.z - p.z) });
+    });
+    list.sort((a, b) => a.d - b.d);
+    const near = list.filter((m) => m.d < 30);
+    if (!near.length) return;
+    const i = near.findIndex((m) => m.id === targetId);
+    selectTarget(near[(i + 1) % near.length].id);
+  };
+
+  // ---------- Andar (joystick e WASD) ----------
+  // O servidor anda por destino: o joystick manda um ponto à frente a cada 150 ms.
+  let stick: { x: number; y: number } | null = null;
+  let stickWasOn = false;
+  const stepStick = () => {
+    const p = entities.localPosition();
+    if (!p || entities.localDead) return;
+    if (!stick) {
+      if (stickWasOn) {
+        stickWasOn = false;
+        const dest = entities.predictLocalMove(p.x, p.z);
+        if (dest) conn.moveTo(dest.x, dest.z);
+      }
+      return;
+    }
+    stickWasOn = true;
+    const a = world.camera.alpha;
+    const fx_ = -Math.cos(a);
+    const fz = -Math.sin(a);
+    // Frente = para onde a câmera olha; direita = perpendicular.
+    let vx = fx_ * -stick.y + fz * stick.x;
+    let vz = fz * -stick.y - fx_ * stick.x;
+    const len = Math.hypot(vx, vz) || 1;
+    vx /= len;
+    vz /= len;
+    const dest = entities.predictLocalMove(p.x + vx * 3, p.z + vz * 3);
+    if (dest) {
+      hud.setQueued(0);
+      pendingShop = 0;
+      conn.moveTo(dest.x, dest.z);
+    }
+  };
+  const stickTimer = window.setInterval(stepStick, 150);
+  const keysHeld = new Set<string>();
+  const keyStick = () => {
+    const x = (keysHeld.has("KeyD") ? 1 : 0) - (keysHeld.has("KeyA") ? 1 : 0);
+    const y = (keysHeld.has("KeyS") ? 1 : 0) - (keysHeld.has("KeyW") ? 1 : 0);
+    stick = x || y ? { x, y } : null;
+    stepStick();
+  };
+
+  // ---------- Mapa e regiões ----------
+  const { regions, bosses } = buildRegions(welcome.zones, welcome.safeRadius);
+  const mapSource = {
+    world: worldData,
+    mapCanvas: renderMapCanvas(worldData),
+    forEachMarker: entities.forEachMarker.bind(entities),
+    // A câmera fica em target + (cos α, sin α)·r e olha para o alvo: direção = -(cos α, sin α).
+    cameraHeading: () => Math.atan2(-Math.cos(world.camera.alpha), -Math.sin(world.camera.alpha)),
+  };
+
+  /** Toma uma poção de vida ou mana (primeiro as da barra, depois qualquer uma da bolsa). */
+  const drink = (kind: "hp" | "mp"): "ok" | "cooldown" | "none" => {
+    const ids = hud
+      .getHotbar()
+      .filter((e): e is string => !!e && e.startsWith("item:"))
+      .map((e) => e.slice(5));
+    const all = [...ids, ...store.bag.filter((s) => s).map((s) => s!.info.id)];
+    const id = all.find((i) => {
+      const info = store.get(i);
+      return !!info && store.countOf(i) > 0 && (kind === "hp" ? info.healHp > 0 : info.healMp > 0);
+    });
+    return id ? useItemById(id) : "none";
+  };
+
+  // ---------- Auto-caça ----------
+  const auto = new AutoHunt({
+    dead: () => entities.localDead,
+    stats: () => lastStats,
+    nearestMonster: () => entities.nearestMonster(),
+    targetId: () => targetId,
+    isEnemy: (id) => entities.isEnemy(id),
+    distanceTo: (id) => entities.distanceTo(id),
+    attack: attackTarget,
+    hotbarSkills: () =>
+      hud
+        .getHotbar()
+        .filter((e): e is string => !!e && e.startsWith("skill:"))
+        .map((e) => welcome.skills.find((s) => s.id === Number(e.slice(6))))
+        .filter((s): s is SkillInfo => !!s),
+    skillReady: (s) => hud.isReady(s.id) && hud.hasMana(s),
+    useSkill,
+    drink,
+    lootNearby: (radius) => {
+      const p = entities.localPosition();
+      const near = p ? loot.nearest(p) : null;
+      if (!near || near.dist > radius) return false;
+      const g = loot.info(near.id);
+      if (g && g.ownerId && g.ownerId !== welcome.yourId && g.reservedMs > 0) return false;
+      conn.pickUp(near.id);
+      return true;
     },
-    itemTip,
-    me,
+    goToTown: () => {
+      const dest = entities.predictLocalMove(0, 0);
+      if (dest) conn.moveTo(dest.x, dest.z);
+    },
+    onStop: (reason) => {
+      hud.setAuto(false, false);
+      chat.system(reason);
+      toast(reason, "warn");
+    },
   });
-  refreshHotbar();
-  store.onChange(refreshHotbar);
 
-  const inventory = new InventoryWindow(store, itemTip, {
-    move: (fp, fs, tp, ts) => conn.moveItem(fp, fs, tp, ts),
-    use: (place, slot) => conn.useItem(place, slot),
-    destroy: (slot, count) => conn.destroyItem(slot, count),
-    assignHotbar: (i, id) => {
-      hotbar = hotbar.map((h) => (h === id ? null : h)); // um item em um espaço só
-      hotbar[i] = id;
-      saveHotbar();
-      refreshHotbar();
+  // ---------- HUD ----------
+  const hud = new Hud(welcome.skills, store, {
+    onSkill: useSkill,
+    onItem: (id) => void useItemById(id),
+    onRespawn: () => conn.respawn(),
+    onHotbarChange: saveHotbar,
+    onAuto: (on) => (on ? auto.start() : auto.stop()),
+    openWindow: (id: WindowId) => wm.toggle(id),
+    onAttack: () => {
+      if (entities.isEnemy(targetId)) return attackTarget(targetId);
+      const n = entities.nearestMonster();
+      if (n && n.dist < 30) attackTarget(n.id);
+      else toast("Nenhum monstro por perto.", "warn");
     },
-    sell: (slot) => {
-      const s = store.bag[slot];
-      if (shop.isOpen && s) conn.sell(shop.npcId, slot, s.count);
+    onCycleTarget: cycleTarget,
+    onStick: (v) => {
+      stick = v;
+      if (v) stepStick();
     },
     me,
-  }, hud.element);
-  const shop = new ShopWindow(store, itemTip, {
-    buy: (npc, id, n) => conn.buy(npc, id, n),
-    sell: (npc, slot, n) => conn.sell(npc, slot, n),
-    me,
-    onOpen: () => inventory.open(),
-  }, hud.element);
+    targetDistance: () => (entities.isEnemy(targetId) ? entities.distanceTo(targetId) : null),
+    map: mapSource,
+    regions,
+    stats: () => ({ fps: world.engine.getFps(), ping: conn.ping }),
+    clock: () => clock.phase(),
+  });
+  hud.setIdentity(character.name, classInfo(character.class).label[0], emblem);
+  hud.setHotbar(loadHotbar());
 
-  // Loja: clicar num NPC anda até ele e abre a loja ao chegar.
+  const chat = new Chat(hud.chatRoot, character.name, (text, to) => conn.chat(text, to));
+  chat.system(`Bem-vindo a Erevia, ${character.name}! Clique num monstro para atacar; as teclas 1–0 usam a barra de atalhos.`);
+
+  const toHotbar = (entry: string, index?: number) => {
+    const bar = hud.getHotbar();
+    const i = index ?? (bar.includes(entry) ? bar.indexOf(entry) : bar.findIndex((e) => !e));
+    if (i < 0) {
+      toast("Barra cheia: arraste para um atalho.", "warn");
+      return;
+    }
+    hud.assign(i, entry);
+    toast(`Na tecla ${i === 9 ? 0 : i + 1}.`);
+  };
+
+  // ---------- Loja ----------
   const SHOP_OPEN_DIST = 4.5;
   const SHOP_KEEP_DIST = 7;
   let pendingShop = 0;
+  const shop = new ShopWindow(
+    store,
+    itemTip,
+    {
+      buy: (npc, id, n) => conn.buy(npc, id, n),
+      sell: (npc, slot, n) => conn.sell(npc, slot, n),
+      me,
+      onOpen: () => void wm.show("inventory"),
+    },
+    hud.element,
+  );
   const openShop = (id: number) => {
     const info = entities.info(id);
     const d = entities.distanceTo(id);
@@ -268,50 +434,142 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     pendingShop = id;
   };
 
-  // ---------- Mapa ----------
-  const mapSource = {
-    world: worldData,
-    mapCanvas: renderMapCanvas(worldData),
-    forEachMarker: entities.forEachMarker.bind(entities),
-    // A câmera fica em target + (cos α, sin α)·r e olha para o alvo: direção = -(cos α, sin α).
-    cameraHeading: () => Math.atan2(-Math.cos(world.camera.alpha), -Math.sin(world.camera.alpha)),
+  // ---------- Janelas ----------
+  const keys = () => settings.get().keys;
+  const defs = new Map<string, WindowDef>();
+  const reg = (d: WindowDef) => defs.set(d.id, d);
+  reg({
+    id: "inventory",
+    title: "Inventário",
+    hotkey: keys().inventory,
+    width: 880,
+    height: 640,
+    build: () =>
+      buildInventory({
+        store,
+        me,
+        stats: () => lastStats,
+        onStats,
+        move: (fp, fs, tp, ts) => conn.moveItem(fp, fs, tp, ts),
+        use: (place, slot) => conn.useItem(place, slot),
+        destroy: (slot, count) => conn.destroyItem(slot, count),
+        toHotbar: (id, i) => toHotbar(`item:${id}`, i),
+        sell: (slot) => {
+          const s = store.bag[slot];
+          if (!shop.isOpen || !s || s.info.sellPrice <= 0) return false;
+          conn.sell(shop.npcId, slot, s.count);
+          return true;
+        },
+        shopOpen: () => shop.isOpen,
+      }),
+    onClose: () => shop.isOpen && shop.close(),
+  });
+  reg({
+    id: "character",
+    title: "Personagem",
+    hotkey: keys().character,
+    width: 900,
+    height: 600,
+    build: () => buildCharacter({ store, me, stats: () => lastStats, onStats }),
+  });
+  reg({
+    id: "skills",
+    title: "Skills",
+    hotkey: keys().skills,
+    width: 640,
+    height: 560,
+    build: () => buildSkills({ skills: welcome.skills, toHotbar: (id, i) => toHotbar(`skill:${id}`, i) }),
+  });
+  reg({
+    id: "map",
+    title: "Mapa do mundo",
+    hotkey: keys().map,
+    width: 1080,
+    height: 740,
+    build: () =>
+      buildWorldMap({
+        map: mapSource,
+        regions,
+        bosses,
+        nameOf: (id) => entities.info(id)?.name ?? "",
+        moveTo: (x, z) => {
+          hud.setQueued(0);
+          pendingShop = 0;
+          const dest = entities.predictLocalMove(x, z);
+          if (dest) conn.moveTo(dest.x, dest.z);
+        },
+      }),
+  });
+  reg({
+    id: "settings",
+    title: "Configurações",
+    hotkey: keys().settings,
+    width: 820,
+    height: 640,
+    build: (close) =>
+      buildSettings({
+        close,
+        exit: () => location.reload(),
+        logout: async () => {
+          await api.logout().catch(() => undefined);
+          location.reload();
+        },
+        info: () => ({ account: "", character: character.name, level: me().myLevel, ping: conn.ping, online: entities.count }),
+      }),
+  });
+  const wm = new WindowManager(defs);
+  wm.onChange = () => {
+    for (const id of defs.keys()) hud.setWindowOpen(id, wm.isOpen(id));
   };
-  const worldMap = new WorldMap(mapSource, welcome.zones, welcome.safeRadius);
-  const minimap = new Minimap(mapSource, () => worldMap.toggle());
 
+  // ---------- Teclado ----------
   const onKey = (ev: KeyboardEvent) => {
-    if (document.activeElement instanceof HTMLInputElement) return; // digitando no chat
-    if (ev.key === "m" || ev.key === "M") {
-      ev.preventDefault();
-      worldMap.toggle();
+    const typing = (ev.target as HTMLElement | null)?.closest?.("input, textarea, select");
+    if (typing || document.querySelector(".rebinding")) return;
+    if (["KeyW", "KeyA", "KeyS", "KeyD"].includes(ev.code)) {
+      if (!keysHeld.has(ev.code)) {
+        keysHeld.add(ev.code);
+        keyStick();
+      }
       return;
     }
-    if (ev.key === "i" || ev.key === "I") {
+    const k = keys();
+    if (ev.code === k.settings) {
       ev.preventDefault();
-      inventory.toggle();
-      return;
-    }
-    if (ev.key === "Escape") {
-      // Esc fecha as janelas antes de limpar o alvo.
       if (shop.isOpen) shop.close();
-      else if (inventory.isOpen) inventory.close();
-      else if (worldMap.isOpen) worldMap.close();
-      else selectTarget(0);
+      else if (wm.closeTop()) return;
+      else if (targetId) selectTarget(0);
+      else wm.toggle("settings");
       return;
     }
-    const itemIdx = ITEM_KEYS.indexOf(Number(ev.key));
-    if (itemIdx >= 0) {
+    const slot = HOTBAR_KEYS.indexOf(ev.code);
+    if (slot >= 0) {
       ev.preventDefault();
-      useHotbar(itemIdx);
+      hud.useSlot(slot);
       return;
     }
-    const s = welcome.skills.find((k) => String(k.key) === ev.key);
-    if (s) {
+    const actions: Record<string, () => void> = {
+      [k.inventory]: () => wm.toggle("inventory"),
+      [k.skills]: () => wm.toggle("skills"),
+      [k.character]: () => wm.toggle("character"),
+      [k.map]: () => wm.toggle("map"),
+      [k.auto]: () => hud.setAuto(!hud.autoOn, true),
+      [k.target]: cycleTarget,
+      [k.potion]: () => {
+        if (drink("hp") === "none") toast("Sem poção de vida.", "warn");
+      },
+    };
+    const fn = actions[ev.code];
+    if (fn) {
       ev.preventDefault();
-      useSkill(s);
+      fn();
     }
+  };
+  const onKeyUp = (ev: KeyboardEvent) => {
+    if (keysHeld.delete(ev.code)) keyStick();
   };
   window.addEventListener("keydown", onKey);
+  window.addEventListener("keyup", onKeyUp);
 
   setupInput(world.scene, world.ground, {
     onGround: (x, z) => {
@@ -339,6 +597,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     isEnemy: (id) => entities.isEnemy(id),
   });
+  const stopTouchCamera = setupTouchCamera(canvas, world.camera);
 
   // A câmera segue o jogador local.
   world.scene.onBeforeRenderObservable.add(() => {
@@ -365,26 +624,18 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     }
   });
 
-  // Painel de diagnóstico + quadro do alvo
-  const fpsEl = $("hud-fps");
-  const pingEl = $("hud-ping");
-  const onlineEl = $("hud-online");
-  const posEl = $("hud-pos");
+  // Efeitos (buffs) e status da auto-caça
   const effectsTimer = window.setInterval(() => {
     hud.setEffects(entities.effectsOf(welcome.yourId), targetId ? entities.effectsOf(targetId) : []);
+    if (auto.on) hud.setAutoStatus(auto.status());
+    hud.setAttacking(entities.isEnemy(targetId));
   }, 100);
-  const statsTimer = window.setInterval(() => {
-    fpsEl.textContent = world.engine.getFps().toFixed(0);
-    pingEl.textContent = `${conn.ping} ms`;
-    onlineEl.textContent = String(entities.count);
-    const p = entities.localPosition();
-    posEl.textContent = p ? `${p.x.toFixed(1)}, ${p.z.toFixed(1)}` : "–";
-    const phase = clock.phase();
-    minimap.setClock(hourLabel(phase), isNight(phase), dayNight.night);
-  }, 500);
   setupPerfPanel(world.scene, world.gui, $("hud"));
 
   canvas.focus();
+  if (settings.get().touchMode !== "off" && matchMedia("(pointer: coarse)").matches) {
+    toast("Joystick à esquerda · toque num monstro para atacar · AUTO caça sozinho");
+  }
 
   // Só em desenvolvimento: ganchos para testes automatizados no navegador.
   if (import.meta.env.DEV) {
@@ -396,16 +647,17 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       nearestMonster: () => entities.nearestMonster(),
       scene: world.scene,
       env: () => env,
-      minimap,
-      worldMap,
       /** Fixa a hora do dia (0–1) ou volta ao relógio do servidor (null). */
       setTime: (p: number | null) => clock.setFixed(p),
       phase: () => clock.phase(),
       fx,
       store,
       loot,
-      inventory,
       shop,
+      hud,
+      wm,
+      auto,
+      stats: () => lastStats,
       pickUp: (id: number) => conn.pickUp(id),
       nearestLoot: () => {
         const p = entities.localPosition();
@@ -419,24 +671,24 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         entities.predictLocalMove(x, z);
         conn.moveTo(x, z);
       },
-      attack: (id: number) => {
-        selectTarget(id);
-        conn.attack(id);
-      },
+      attack: (id: number) => attackTarget(id),
     };
   }
 
+  let lastXp: bigint | null = null;
   return {
     dispose() {
+      auto.stop();
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
       window.clearInterval(effectsTimer);
-      window.clearInterval(statsTimer);
+      window.clearInterval(stickTimer);
+      stopTouchCamera();
+      wm.closeAll();
+      wm.layer.remove();
       hud.dispose();
-      inventory.dispose();
       shop.dispose();
       itemTip.root.remove();
-      minimap.dispose();
-      worldMap.dispose();
     },
     apply(msg: ServerMessage) {
       switch (msg.msg.case) {
@@ -455,17 +707,28 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           for (const ev of snap.casts) entities.onSkillCast(ev);
           for (const ev of snap.effects) entities.onEffect(ev);
           for (const ev of snap.effectEnds) entities.onEffectEnd(ev);
-          for (const id of snap.deaths) entities.onDeath(id);
+          for (const id of snap.deaths) {
+            entities.onDeath(id);
+            auto.onDeath(id);
+          }
           for (const r of snap.revives) entities.onRevive(r);
-          for (const l of snap.levelUps) entities.onLevelUp(l);
+          for (const l of snap.levelUps) {
+            entities.onLevelUp(l);
+            if (l.id === welcome.yourId) hud.levelBanner(l.level);
+          }
           if (targetId) hud.setTarget(entities.info(targetId));
           break;
         }
-        case "selfStats":
-          hud.setStats(msg.msg.value);
-          inventory.setStats(msg.msg.value);
-          myLevel = msg.msg.value.level;
+        case "selfStats": {
+          const s = msg.msg.value;
+          // XP ganha vira um aviso no canto (só subidas; morrer perde um pouco).
+          if (lastXp !== null && s.xp > lastXp && s.level === lastStats?.level) hud.lootLine(`+${(s.xp - lastXp).toLocaleString("pt-BR")} XP`, "xp");
+          lastXp = s.xp;
+          lastStats = s;
+          hud.setStats(s);
+          for (const fn of statsListeners) fn();
           break;
+        }
         case "inventory":
           store.setInventory(msg.msg.value);
           break;
@@ -484,6 +747,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
               const color = Color3.FromHexString(info.kind === ItemKind.GOLD ? "#f3d488" : (GRADE_COLOR[info.grade] ?? "#e8e1d4"));
               fx.pickup(at, color);
               if (head) fx.damageNumber(head, `+${itemLabel(info, g.count)}`, color.toHexString(), false);
+              hud.lootLine(itemLabel(info, g.count));
             }
           }
           loot.remove(ids);

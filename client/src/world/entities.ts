@@ -74,6 +74,8 @@ export interface EntityInfo {
   dead: boolean;
   /** NPC: função ("Mercadora"). */
   title: string;
+  /** Chefe (marcador e quadro do alvo diferentes). */
+  boss?: boolean;
 }
 
 /** O que o mapa precisa saber de cada entidade. */

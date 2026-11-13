@@ -6,7 +6,13 @@ MMORPG 3D no navegador. Cliente em **TypeScript + Babylon.js**, servidor em **Go
 
 Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
-## Estado atual: Fase 3 (itens e economia)
+## Estado atual: Fase 3 (itens e economia) + interface nova
+- **Interface nova** (protótipo aprovado em `/prototipo.html`, agora no jogo):
+  - Telas de login e de personagens com o modelo 3D num pedestal (girar arrastando, zoom com a roda ou a pinça).
+  - HUD: personagem no canto superior esquerdo; minimapa no direito (clique abre o mapa) com zoom, X/Y, FPS e ping; barra de **10 atalhos** (teclas 1–0, skills e poções, arraste para trocar; botão direito tira) ao lado do botão **AUTO** e dos botões das janelas; chat com abas; avisos de saque, XP e nível.
+  - Janelas (arrastáveis no PC, tela cheia no celular): **Inventário (I)** com a miniatura 3D do equipamento, **Personagem (C)**, **Skills (K)**, **Mapa do mundo (M)** com regiões, chefes, lojas e clique para andar, e **Configurações (Esc)** com teclas configuráveis, áudio/gráficos e as opções da auto-caça.
+  - **Celular:** joystick, botão de ataque com as skills em volta, poção, trocar alvo, AUTO e menu ☰; arrastar o dedo gira a câmera e a pinça dá zoom. Liga sozinho em telas de toque (ou em Configurações → Controles).
+  - **Auto-caça (F ou AUTO):** escolhe o monstro mais perto no raio configurado, ataca, usa as skills da barra, toma poção abaixo do limite, pega o saque e volta à cidade sem poção. Roda no navegador e só manda os comandos normais (o servidor valida tudo).
 - **Itens e moedas:** cerca de 40 itens em 4 raridades (comum, bom, raro e épico): armas de cada classe, escudos, armaduras, elmos, poções e materiais. A arma e o escudo aparecem na mão do personagem; armas raras e épicas brilham.
 - **Drops:** monstros deixam moedas e itens no chão (saquinho com o nome; feixe de luz nos itens bons). Por 15 s, só quem causou mais dano pode pegar; depois fica livre, e some em 60 s. Clicar no item faz o personagem andar até ele e pegar.
 - **Inventário (tecla I):** 40 espaços e 4 encaixes (arma, mão secundária, armadura, elmo), com os atributos ao lado. Arrastar e soltar move, troca, equipa e destrói; duplo clique usa ou equipa.

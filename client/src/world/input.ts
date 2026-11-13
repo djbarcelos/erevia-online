@@ -91,11 +91,18 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
     marker.visibility = 1;
   };
 
+  let tap: { x: number; y: number; t: number; id: number } | null = null;
   scene.onPointerObservable.add((info) => {
     const ev = info.event as PointerEvent;
     switch (info.type) {
       case PointerEventTypes.POINTERDOWN: {
         if (ev.button !== 0) return;
+        // No toque, arrastar o dedo gira a câmera (world/touch-camera.ts): só um toque
+        // rápido, sem arrastar, conta como clique (decidido no POINTERUP).
+        if (ev.pointerType === "touch") {
+          tap = { x: ev.clientX, y: ev.clientY, t: performance.now(), id: ev.pointerId };
+          return;
+        }
         const hit = pickThing();
         if (hit?.entity !== undefined) {
           h.onEntity(hit.entity);
@@ -115,6 +122,16 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers): void {
         break;
       }
       case PointerEventTypes.POINTERUP:
+        if (ev.pointerType === "touch") {
+          const t = tap;
+          tap = null;
+          if (!t || t.id !== ev.pointerId || performance.now() - t.t > 350 || Math.hypot(ev.clientX - t.x, ev.clientY - t.y) > 12) return;
+          const hit = pickThing();
+          if (hit?.entity !== undefined) h.onEntity(hit.entity);
+          else if (hit?.loot !== undefined) h.onLoot(hit.loot);
+          else moveToCursor(true);
+          return;
+        }
         if (ev.button === 0) holdingGround = false;
         break;
     }

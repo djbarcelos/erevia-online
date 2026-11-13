@@ -1649,3 +1649,91 @@ button.mm-frame:focus-visible .mm-open {
     display: none;
   }
 }
+
+/* ======================= JOGO: chat real, estados dos atalhos ======================= */
+
+/* Linhas do chat do jogo (classes de ui/chat.ts) */
+.chat-log li.general {
+  color: var(--text);
+}
+
+.chat-log li.whisper {
+  color: var(--whisper);
+}
+
+.chat-log li.system {
+  color: var(--warn);
+}
+
+.chat-log .from {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-log .from:hover {
+  text-decoration: underline;
+}
+
+.chat-log[data-filter="general"] li:not(.general),
+.chat-log[data-filter="whisper"] li:not(.whisper),
+.chat-log[data-filter="system"] li:not(.system) {
+  display: none;
+}
+
+.cb-text.whisper {
+  color: var(--whisper);
+}
+
+.cb-text.system {
+  color: var(--warn);
+}
+
+/* Estados dos atalhos */
+.hb-slot.far .art,
+.act-skill.far .art {
+  filter: brightness(0.7);
+}
+
+.hb-slot.far::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(255, 107, 91, 0.6);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.hb-slot.none-left .art {
+  filter: grayscale(1) brightness(0.45);
+}
+
+.hb-slot.ready-flash::before,
+.act-skill.ready-flash::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow: 0 0 14px var(--gold-hi);
+  animation: ready 0.5s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes ready {
+  to {
+    opacity: 0;
+  }
+}
+
+.hud-target.npc .t-name {
+  color: #a8e6a0;
+}
+
+.hud-target.npc .t-name b {
+  color: #c8f0c0;
+}
+
+.me-crest {
+  border: 2px solid var(--emblem);
+  color: inherit;
+  padding: 0;
+}

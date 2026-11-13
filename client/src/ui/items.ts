@@ -184,22 +184,9 @@ export interface TipContext {
   side?: boolean;
 }
 
-/** Uma dica flutuante compartilhada por inventário, loja e barra. */
-export class ItemTip {
-  readonly root = el("div", "skill-tip item-tip");
-
-  constructor(parent: HTMLElement) {
-    this.root.hidden = true;
-    parent.append(this.root);
-  }
-
-  hide(): void {
-    this.root.hidden = true;
-  }
-
-  show(info: ItemInfo, anchor: HTMLElement, ctx: TipContext): void {
-    const t = this.root;
-    t.replaceChildren();
+/** Conteúdo da dica de um item (usado pela dica flutuante e pelas janelas novas). */
+export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
+    const t = el("div", "item-tip-body");
     const head = el("div", "tip-head");
     const icon = el("div", "tip-icon");
     icon.innerHTML = itemIcon(info);
@@ -249,7 +236,25 @@ export class ItemTip {
       }
     }
     if (ctx.hint) t.append(el("p", "tip-key", ctx.hint));
+    return t;
+}
 
+/** Uma dica flutuante compartilhada por inventário, loja e barra. */
+export class ItemTip {
+  readonly root = el("div", "skill-tip item-tip");
+
+  constructor(parent: HTMLElement) {
+    this.root.hidden = true;
+    parent.append(this.root);
+  }
+
+  hide(): void {
+    this.root.hidden = true;
+  }
+
+  show(info: ItemInfo, anchor: HTMLElement, ctx: TipContext): void {
+    const t = this.root;
+    t.replaceChildren(...buildItemTip(info, ctx).childNodes);
     t.hidden = false;
     const r = anchor.getBoundingClientRect();
     const w = t.offsetWidth;

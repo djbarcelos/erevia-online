@@ -11,10 +11,10 @@ export interface ShopActions {
 
 /** Janela da loja de um NPC: comprar da lista dele ou vender o que está na bolsa. */
 export class ShopWindow {
-  readonly root = el("div", "shop-panel");
+  readonly root = el("div", "shop-panel frame");
   private title = el("h2");
   private list = el("div", "shop-list");
-  private goldEl = el("span", "inv-gold-value");
+  private goldEl = el("span", "shop-gold-value");
   private tabs: HTMLButtonElement[] = [];
   private mode: "buy" | "sell" = "buy";
   private stock: ItemInfo[] = [];
@@ -32,7 +32,7 @@ export class ShopWindow {
     this.root.dataset.drop = "sell"; // soltar um item da bolsa aqui = vender
 
     const head = el("div", "panel-head");
-    const close = el("button", "minimap-btn", "✕");
+    const close = el("button", "x-btn", "✕");
     close.type = "button";
     close.title = "Fechar (Esc)";
     close.onclick = () => this.close();
@@ -47,12 +47,12 @@ export class ShopWindow {
       this.tabs.push(b);
     }
 
-    const foot = el("div", "inv-foot");
-    const gold = el("div", "inv-gold");
-    const gi = el("span", "inv-gold-icon");
+    const foot = el("div", "shop-foot");
+    const gold = el("div", "shop-gold");
+    const gi = el("span", "shop-gold-icon");
     gi.innerHTML = goldIcon();
     gold.append(gi, this.goldEl);
-    foot.append(gold, el("span", "inv-hint", "Arraste itens da bolsa para cá para vender"));
+    foot.append(gold, el("span", "shop-hint", "Arraste itens da bolsa para cá para vender"));
 
     this.root.append(head, tabs, this.list, foot);
     parent.append(this.root);
@@ -119,7 +119,7 @@ export class ShopWindow {
     row.dataset.price = String(price);
     const icon = el("div", "shop-icon");
     icon.innerHTML = itemIcon(info);
-    if (have > 1) icon.append(el("span", "inv-count", String(have)));
+    if (have > 1) icon.append(el("span", "qty", String(have)));
     const name = el("div", "shop-name");
     const n = el("strong", "", info.name);
     n.style.color = GRADE_COLOR[info.grade] ?? GRADE_COLOR[1];
