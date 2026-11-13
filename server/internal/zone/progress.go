@@ -16,7 +16,7 @@ const HotbarSize = 10
 
 type progressEvent struct {
 	id  uint32
-	msg any // *pb.AllocateAttrs, *pb.LearnSkills, *pb.SetHotbar
+	msg any // *pb.AllocateAttrs, *pb.LearnSkills, *pb.SetHotbar, *pb.SpecCmd
 }
 
 func (progressEvent) isEvent() {}
@@ -38,6 +38,8 @@ func (z *Zone) onProgress(e progressEvent) {
 		z.learnSkills(p, m.Ranks)
 	case *pb.SetHotbar:
 		z.setHotbar(p, m.Slots)
+	case *pb.SpecCmd:
+		z.onSpecCmd(p, m)
 	}
 }
 
@@ -45,10 +47,11 @@ func (z *Zone) onProgress(e progressEvent) {
 // Atributos de combate
 // ---------------------------------------------------------------------------------------
 
-// computeStats: classe no nível → atributos → equipamento → passivas → regeneração.
+// computeStats: classe no nível → atributos (com o bônus da especialização) →
+// equipamento → passivas → regeneração.
 func (z *Zone) computeStats(p *entity, spent game.Attrs) game.Stats {
 	cls := p.pl.class
-	total := game.ClassBaseAttrs[cls].Add(spent)
+	total := game.ClassBaseAttrs[cls].Add(spent).Add(game.SpecBonus(cls, p.pl.spec))
 	s := game.ClassStats(cls, p.level)
 	s = game.ApplyAttrs(s, cls, p.level, total)
 	s = s.AddBonus(p.pl.inv.bonus())
@@ -130,6 +133,7 @@ func (z *Zone) progressPB(p *entity) *pb.Progress {
 		Spent:           attrsPB(p.pl.attrs),
 		FreeAttrPoints:  uint32(freeAttrPoints(p)),
 		FreeSkillPoints: uint32(freeSkillPoints(p)),
+		Spec:            p.pl.spec,
 	}
 	ids := make([]uint32, 0, len(p.pl.ranks))
 	for id := range p.pl.ranks {
@@ -199,7 +203,7 @@ func (z *Zone) learnSkills(p *entity, want []*pb.SkillRank) {
 		}
 		next[w.SkillId] = int(w.Rank)
 	}
-	if err := game.ValidateRanks(p.pl.class, p.level, next); err != nil {
+	if err := game.ValidateRanks(p.pl.class, p.pl.spec, p.level, next); err != nil {
 		z.system(p, "Não foi possível aprender: "+err.Error()+".")
 		z.sendProgress(p)
 		return
@@ -222,7 +226,7 @@ func validHotbarEntry(p *entity, e string) bool {
 			return false
 		}
 		s := game.Skills[uint32(id)]
-		return s != nil && s.Class == p.pl.class && !s.IsPassive() && p.pl.rank(s.ID) > 0
+		return s != nil && s.Class == p.pl.class && (s.Spec == "" || s.Spec == p.pl.spec) && !s.IsPassive() && p.pl.rank(s.ID) > 0
 	case strings.HasPrefix(e, "item:"):
 		d := game.Items[e[5:]]
 		return d != nil && (d.HealHP > 0 || d.HealMP > 0)
@@ -262,14 +266,15 @@ func DefaultHotbar(class string) []string {
 }
 
 // loadProgress normaliza o que veio do banco: árvore vazia (personagem antigo) ganha as
-// skills iniciais; ranks inválidos são descartados; barra vazia ganha o padrão.
-func loadProgress(class string, level int, attrs game.Attrs, ranks map[uint32]int, hotbar []string) (game.Attrs, map[uint32]int, []string) {
+// skills iniciais; ranks inválidos (ou de outro caminho que não spec) são descartados;
+// barra vazia ganha o padrão.
+func loadProgress(class, spec string, level int, attrs game.Attrs, ranks map[uint32]int, hotbar []string) (game.Attrs, map[uint32]int, []string) {
 	if !attrs.Valid() || attrs.Sum() > game.AttrPointsTotal(level) {
 		attrs = game.Attrs{}
 	}
 	clean := map[uint32]int{}
 	for id, r := range ranks {
-		if s := game.Skills[id]; s != nil && s.Class == class && r > 0 {
+		if s := game.Skills[id]; s != nil && s.Class == class && (s.Spec == "" || s.Spec == spec) && r > 0 {
 			clean[id] = min(r, s.MaxRank)
 		}
 	}
@@ -278,7 +283,7 @@ func loadProgress(class string, level int, attrs game.Attrs, ranks map[uint32]in
 			clean[id] = r
 		}
 	}
-	if game.ValidateRanks(class, level, clean) != nil {
+	if game.ValidateRanks(class, spec, level, clean) != nil {
 		clean = game.StarterRanks(class)
 	}
 	if len(hotbar) == 0 {

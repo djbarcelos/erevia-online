@@ -97,7 +97,9 @@ type JoinInfo struct {
 	// Conquistas desbloqueadas/progresso e a conquista do título em uso ("" = nenhum).
 	Achievements game.AchievementState
 	Title        string
-	Peer         Peer
+	// Especialização (segunda classe; "" = nenhuma).
+	Spec string
+	Peer Peer
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -120,6 +122,7 @@ type SavedState struct {
 	// Conquistas e título (id da conquista), salvos junto com o personagem.
 	Achievements game.AchievementState
 	Title        string
+	Spec         string // especialização ("" = nenhuma)
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -481,12 +484,17 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Look = st.Look
 		info.Quests = st.Quests
 		info.Achievements, info.Title = st.Achievements, st.Title
+		info.Spec = st.Spec
 		delete(z.recent, info.ID)
 	}
 
 	level := game.LevelForXP(info.XP)
 	pos := z.freeSpot(clampToZone(Vec2{X: info.X, Z: info.Z}, z.bounds()))
-	attrs, ranks, hotbar := loadProgress(info.Class, level, info.Attrs, info.Ranks, info.Hotbar)
+	spec := ""
+	if game.SpecFor(info.Class, info.Spec) != nil {
+		spec = info.Spec
+	}
+	attrs, ranks, hotbar := loadProgress(info.Class, spec, level, info.Attrs, info.Ranks, info.Hotbar)
 	inv, skipped := loadInventory(info.Gold, info.Items)
 	if skipped > 0 {
 		z.log.Warn("items skipped on load", "id", info.ID, "count", skipped)
@@ -502,7 +510,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 			cooldowns:  map[uint32]float64{},
 			moveTokens: z.cfg.MaxMovesPerSec, chatTokens: z.cfg.ChatBurst,
 			inv:   inv,
-			attrs: attrs, ranks: ranks, hotbar: hotbar,
+			attrs: attrs, ranks: ranks, hotbar: hotbar, spec: spec,
 			accountID: info.AccountID,
 			karma:     max(0, info.Karma), pks: max(0, info.PKs), pvpKills: max(0, info.PvPKills),
 			gm: info.GM, mutedUntil: info.MutedUntil, userAgent: truncateRunes(info.UserAgent, maxUserAgent),
@@ -541,6 +549,12 @@ func (z *Zone) onJoin(info JoinInfo) {
 	for _, s := range game.ClassTree(info.Class) {
 		skills = append(skills, skillInfoPB(s))
 	}
+	// E as dos dois caminhos da classe (a janela da Mestra mostra as duas; a árvore, a escolhida).
+	for _, sp := range game.ClassSpecs(info.Class) {
+		for _, s := range game.SpecTree(sp.ID) {
+			skills = append(skills, skillInfoPB(s))
+		}
+	}
 	var branches []*pb.SkillBranch
 	if c := game.Classes[info.Class]; c != nil {
 		for _, b := range c.Branches {
@@ -569,6 +583,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Clan:         z.clanPB(p),
 		Enchant:      enchantRulesPB(),
 		Bosses:       z.bossList(),
+		Specs:        specCatalog(),
 	}}})
 	z.sendSelfStats(p)
 	z.sendQuests(p, "")
@@ -850,7 +865,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
-		Achievements: p.pl.ach.state(), Title: p.pl.ach.title,
+		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
@@ -958,6 +973,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		out.PvpState = z.pvpState(e)
 		out.ClanName = z.clanName(e)
 		out.Title = e.pl.ach.titleText()
+		out.Spec = e.pl.spec
 	}
 	if e.npc != nil {
 		out.Title = e.npc.title

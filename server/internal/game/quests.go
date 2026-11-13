@@ -16,6 +16,8 @@ const (
 	GoalBuy                            // comprar numa loja
 	GoalLevel                          // chegar ao nível Count
 	GoalTeleport                       // viajar com uma Pedra de Teleporte
+	GoalTalk                           // falar com um NPC (Target: TalkMaster…)
+	GoalSpec                           // escolher a especialização (segunda classe)
 )
 
 // QuestStep é um objetivo: chegar a Count no Goal.
@@ -61,6 +63,8 @@ type QuestDef struct {
 	Steps  []QuestStep
 	Reward QuestReward
 	Next   string // próxima da sequência ("" = fim)
+	// Unlock > 0: a missão chega sozinha ao atingir este nível (fora de qualquer sequência).
+	Unlock int
 }
 
 // QuestState é o que fica salvo: progresso das missões ativas e as concluídas.
@@ -133,7 +137,29 @@ var questList = []*QuestDef{
 		Steps:  []QuestStep{{Goal: GoalKill, Target: "skeleton_warrior|skeleton_rogue", Count: 5, Text: "Derrotar Esqueletos Guerreiros ou Ladinos"}},
 		Reward: QuestReward{XP: 1500, Gold: 200, Items: []QuestItem{{ID: "scroll_ench_weapon", Count: 1}, {ID: "scroll_return", Count: 2}}},
 	},
+	// Segunda classe: chega no nível 20 e termina na escolha do caminho.
+	{
+		ID: SpecQuest, Title: "A Encruzilhada", Unlock: SpecLevel,
+		Text: "Ninguém chega tão longe por acaso. Ysolde, a Mestra dos Caminhos, espera na praça de Vel'Aran " +
+			"para mostrar os dois caminhos da sua classe. A escolha é para sempre.",
+		Steps: []QuestStep{
+			{Goal: GoalTalk, Target: TalkMaster, Count: 1, Text: "Falar com a Mestra Ysolde, na praça"},
+			{Goal: GoalSpec, Count: 1, Text: "Escolher o seu caminho"},
+		},
+		Reward: QuestReward{Gold: 1000, Items: []QuestItem{{ID: "scroll_return", Count: 3}}},
+	},
 }
+
+// QuestsByUnlock: as missões que chegam sozinhas com o nível, na ordem da lista.
+var QuestsByUnlock = func() []*QuestDef {
+	var out []*QuestDef
+	for _, q := range questList {
+		if q.Unlock > 0 {
+			out = append(out, q)
+		}
+	}
+	return out
+}()
 
 // Quests: as missões por id.
 var Quests = func() map[string]*QuestDef {
