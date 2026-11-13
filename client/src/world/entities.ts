@@ -940,6 +940,12 @@ export class EntityManager {
     return this.local?.root.position;
   }
 
+  /** Ponto onde o jogador local está de fato (posição prevista, à frente da desenhada). */
+  localMovePosition(): { x: number; z: number } | undefined {
+    const v = this.local;
+    return v ? { x: v.server.x, z: v.server.z } : undefined;
+  }
+
   /** Entidades vivas para o mapa (posição desenhada, não a do servidor). */
   forEachMarker(cb: (m: MapMarker) => void): void {
     for (const v of this.views.values()) {

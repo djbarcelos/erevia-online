@@ -378,7 +378,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (!stick) {
       if (stickWasOn) {
         stickWasOn = false;
-        const dest = entities.predictLocalMove(p.x, p.z);
+        // Para na posição prevista, não na desenhada: a desenhada vem um pouco atrás
+        // e mandar parar nela faria o personagem virar e dar um passo para trás.
+        const stop = entities.localMovePosition();
+        const dest = stop && entities.predictLocalMove(stop.x, stop.z);
         if (dest) conn.moveTo(dest.x, dest.z);
       }
       return;
