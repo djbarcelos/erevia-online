@@ -296,7 +296,7 @@ func (z *Zone) partyPB(pt *party) *pb.PartyState {
 		out.Members = append(out.Members, &pb.PartyMember{
 			Id: m.id, Name: m.name, Class: m.pl.class, Level: uint32(m.level),
 			Hp: uint32(m.hpInt()), MaxHp: uint32(m.maxHPInt()),
-			Mp: uint32(math.Floor(m.mp)), MaxMp: uint32(math.Round(m.stats.MaxMP)),
+			Mp: uint32(m.mpInt()), MaxMp: uint32(m.maxMPInt()),
 			X: float32(m.pos.X), Z: float32(m.pos.Z), Dead: m.dead,
 		})
 	}

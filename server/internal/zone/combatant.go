@@ -272,8 +272,20 @@ func (e *entity) pruneEffects(now float64) (expired []game.EffectKind) {
 	return expired
 }
 
-func (e *entity) hpInt() int    { return int(math.Ceil(e.hp)) }
+// Vida e mana como inteiros (snapshot, SelfStats, grupo, nível, renascer, salvamento).
+// Uma regra só para todas as mensagens: o máximo é o valor arredondado (o mesmo que a
+// janela do personagem mostra) e o valor atual nunca passa dele. A vida arredonda para
+// cima (vivo com 0,3 aparece com 1, nunca 0) e a mana para baixo (o que aparece dá para
+// gastar), mas mana cheia aparece cheia. Ex.: máximo 408,4 e vida cheia = 408 / 408.
 func (e *entity) maxHPInt() int { return int(math.Round(e.stats.MaxHP)) }
+func (e *entity) hpInt() int    { return min(max(0, int(math.Ceil(e.hp))), e.maxHPInt()) }
+func (e *entity) maxMPInt() int { return int(math.Round(e.stats.MaxMP)) }
+func (e *entity) mpInt() int {
+	if e.mp >= e.stats.MaxMP {
+		return e.maxMPInt()
+	}
+	return min(max(0, int(math.Floor(e.mp))), e.maxMPInt())
+}
 
 func (e *entity) clearAction() { e.act = action{} }
 
