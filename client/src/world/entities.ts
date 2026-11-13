@@ -31,6 +31,7 @@ import {
   type SkillCast,
   type SkillInfo,
 } from "../gen/erevia/v1/game_pb";
+import { gameAudio } from "../audio";
 import { AnimController } from "./anim";
 import { toBodyLook, type BodyLook } from "./body-look";
 import type { Fx, FxBody, FxHandle } from "./fx";
@@ -853,6 +854,7 @@ export class EntityManager {
     if (ev.skillId >= RAID_HIT_BASE) {
       this.at(Math.max(now, dst.impactUntil), dst.id, () => {
         if (ev.damage > 0) this.fx.damageNumber(dst.head, String(ev.damage), "#d68cff", ev.crit);
+        gameAudio.hit("raid", ev.crit, false, dst.root.position, ev.targetId === this.localId);
         dst.anim?.play("hit");
       });
       return;
@@ -888,9 +890,10 @@ export class EntityManager {
       const bolt = BOLT_COLOR[sk?.fx ?? ""];
       // O projétil sai da mão no instante da soltura, do lugar onde cada um estiver.
       const launch = (fn: (from: Vector3, to: Vector3) => void) =>
-        this.at(release, dst.id, () =>
-          fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0))),
-        );
+        this.at(release, dst.id, () => {
+          gameAudio.launch(sk?.fx, src.root.position, ev.sourceId === this.localId || ev.targetId === this.localId);
+          fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0)));
+        });
       if (sk?.fx === "fireball") {
         launch((a, b) => this.fx.fireball(a, b, travel));
         impact = release + travel * 1000;
@@ -989,8 +992,10 @@ export class EntityManager {
     const onMe = ev.targetId === this.localId;
     if (ev.miss) {
       this.fx.damageNumber(dst.head, "Errou", "#b9b4c2", false);
+      if (!quiet) gameAudio.miss(dst.root.position, mine || onMe);
       return;
     }
+    if (!quiet) gameAudio.hit(sk?.fx, ev.crit, !sk && !!src && isCaster(src.model), dst.root.position, mine || onMe);
     // Impacto (a Bola de Fogo e a magia básica já explodiram ao chegar).
     const at = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
     const from = src ? src.root.position.add(new Vector3(0, 1 * src.scale, 0)) : at;
@@ -1075,10 +1080,13 @@ export class EntityManager {
       const color = BOLT_COLOR[sk.fx] ?? new Color3(0.8, 0.8, 1);
       // O efeito no alvo (veneno, marca…) só aparece quando o projétil chega.
       dst.impactUntil = Math.max(dst.impactUntil, release + travel * 1000);
+      const local = ev.sourceId === this.localId || ev.targetId === this.localId;
       this.at(release, dst.id, () => {
         const a = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
         const b = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
+        gameAudio.cast(sk.fx, src.root.position, local);
         this.fx.bolt(a, b, travel, color, () => {
+          gameAudio.hit(sk.fx, false, false, dst.root.position, local);
           if (sk.fx === "r_flask" || sk.fx === "r_plague") this.fx.poisonSplash(dst.root.position.clone(), sk.splash || 1.5, color);
         });
       });
@@ -1095,6 +1103,7 @@ export class EntityManager {
 
   /** Visual de uma skill em si mesmo ou em área. */
   private castFx(src: View, sk: SkillInfo, mine: boolean): void {
+    gameAudio.cast(sk.fx, src.root.position, mine);
     switch (sk.fx) {
       case "ice_nova":
       case "m_zero":
@@ -1249,6 +1258,7 @@ export class EntityManager {
       v.hp = 0;
       this.showDead(v, true);
       this.refreshHpBar(v);
+      gameAudio.death(v.model, v.kind === EntityKind.MONSTER, v.boss, v.root.position, id === this.localId);
     });
   }
 
@@ -1289,6 +1299,7 @@ export class EntityManager {
     this.refreshLabel(v);
     this.refreshHpBar(v);
     this.fx.levelUp(v.root);
+    gameAudio.levelUp(v.root.position, l.id === this.localId);
   }
 
   /** Chamado a cada frame. */

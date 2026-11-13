@@ -80,6 +80,8 @@ export interface Settings {
   vMusic: number;
   vSfx: number;
   vAmbient: number;
+  /** Som desligado (os volumes ficam guardados). */
+  muted: boolean;
   touchMode: "auto" | "on" | "off";
   joySize: number;
   joyOpacity: number;
@@ -121,6 +123,7 @@ const DEFAULT_SETTINGS: Settings = {
   vMusic: 55,
   vSfx: 75,
   vAmbient: 60,
+  muted: false,
   touchMode: "auto",
   joySize: 100,
   joyOpacity: 80,
