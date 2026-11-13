@@ -36,7 +36,24 @@ message ClientMessage {
     TradeCmd trade_cmd = 26;
     Craft craft = 27;
     ClientStats client_stats = 28;
+    RankingRequest ranking_request = 31;
+    AchievementCmd achievement_cmd = 32;
   }
+}
+
+// ---------- Ranking, conquistas e títulos ----------
+
+// Pede o ranking (as três listas de uma vez). O servidor responde com Ranking.
+message RankingRequest {}
+
+enum AchievementCmdKind {
+  ACHIEVEMENT_CMD_UNSPECIFIED = 0;
+  ACHIEVEMENT_CMD_SET_TITLE = 1; // id = conquista cujo título usar ("" = sem título)
+}
+
+message AchievementCmd {
+  AchievementCmdKind kind = 1;
+  string id = 2;
 }
 
 // Amostra de desempenho do cliente (a cada ~60 s; o FPS é medido 1×/s, nunca por quadro).
@@ -312,7 +329,63 @@ message ServerMessage {
     BossStatus boss_status = 26;
     QuestLog quest_log = 27;
     TradeState trade = 28;
+    Ranking ranking = 31;
+    Achievements achievements = 32;
   }
+}
+
+// Ranking calculado no banco a cada poucos minutos (o servidor guarda em memória).
+message Ranking {
+  repeated RankEntry level = 1; // top 50 por nível (desempate: XP)
+  repeated RankEntry pvp = 2; // top 50 por vitórias PvP
+  repeated ClanRankEntry clans = 3; // top 50 clãs pela soma dos níveis dos membros
+  int64 updated_at_ms = 4; // quando foi calculado (Unix, ms; 0 = ainda não calculado)
+  uint32 refresh_ms = 5; // intervalo entre os cálculos
+  // Posição do próprio personagem (e do clã dele) no último cálculo (0 = fora do ranking).
+  uint32 my_level_pos = 6;
+  uint32 my_pvp_pos = 7;
+  uint32 my_clan_pos = 8;
+}
+
+message RankEntry {
+  uint32 pos = 1;
+  uint64 character_id = 2;
+  string name = 3;
+  string class = 4;
+  uint32 level = 5;
+  uint32 pvp_kills = 6;
+  string clan_name = 7;
+  string title = 8;
+}
+
+message ClanRankEntry {
+  uint32 pos = 1;
+  uint64 id = 2;
+  string name = 3;
+  uint32 members = 4;
+  uint32 level_sum = 5;
+  float level_avg = 6;
+  string leader = 7;
+}
+
+// Conquistas do próprio personagem. Ao entrar vai o catálogo inteiro (full); depois, só
+// o que mudou (progresso, desbloqueio ou título escolhido).
+message Achievements {
+  bool full = 1;
+  repeated AchievementInfo list = 2; // full: todas; senão, só as que mudaram (id, count, unlocked)
+  string title_id = 3; // conquista cujo título está em uso ("" = nenhum)
+  string unlocked = 4; // nome da conquista que acabou de ser desbloqueada ("" = nenhuma)
+}
+
+message AchievementInfo {
+  string id = 1;
+  string name = 2;
+  string text = 3; // o que fazer
+  string title = 4; // título que ela dá
+  bool unlocked = 5;
+  uint32 count = 6; // progresso (conquistas de contagem)
+  uint32 need = 7;
+  int64 unlocked_at_ms = 8;
 }
 
 // Janela de troca: enviada aos dois a cada mudança; open = false fecha a janela.
@@ -424,6 +497,7 @@ message PlayerStatus {
   uint32 id = 1;
   PvpState pvp_state = 2;
   string clan_name = 3;
+  string title = 4; // título escolhido (de uma conquista; "" = nenhum)
 }
 
 // PvP do próprio personagem.
@@ -888,7 +962,7 @@ message Entity {
   string weapon = 16; // modelo da arma (jogadores)
   string offhand = 17; // modelo da outra mão
   uint32 weapon_grade = 18;
-  string title = 19; // NPC: função (ex.: "Mercadora")
+  string title = 19; // NPC: função (ex.: "Mercadora"); jogador: título escolhido (conquista)
   string emblem = 20; // jogadores: cor do emblema (#rrggbb), pinta o nome e o anel no chão
   PvpState pvp_state = 21;
   string clan_name = 22;

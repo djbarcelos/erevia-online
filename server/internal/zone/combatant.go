@@ -110,6 +110,10 @@ type playerState struct {
 	quests   questLog
 	trade    *trade    // troca aberta (nil = nenhuma)
 	joinedAt time.Time // telemetria: início da sessão
+
+	// Conquistas, título escolhido e quando pode pedir o ranking de novo.
+	ach         achievements
+	rankingNext float64
 }
 
 // rank da skill (0 = não aprendida).

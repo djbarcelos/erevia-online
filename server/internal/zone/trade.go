@@ -243,6 +243,7 @@ func (z *Zone) executeTrade(t *trade) {
 		z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Trade{Trade: &pb.TradeState{}}})
 		z.system(p, "Troca concluída.")
 		z.inventoryChanged(p, false)
+		z.achEvent(p, game.AchTrade, "")
 	}
 	// Os dois na mesma leva = mesma transação no banco: a troca nunca fica salva pela metade.
 	z.save([]SavedState{z.savedState(a), z.savedState(b)}, false)

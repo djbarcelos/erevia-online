@@ -133,6 +133,7 @@ func (z *Zone) questUpdate(p *entity, f func(s game.QuestStep, cur int) int) {
 // finishQuest entrega a recompensa e começa a próxima missão da sequência.
 func (z *Zone) finishQuest(p *entity, def *game.QuestDef) {
 	p.pl.quests.done[def.ID] = true
+	z.achEvent(p, game.AchQuest, def.ID)
 	r := def.Reward
 	z.system(p, fmt.Sprintf("Missão concluída: %s. Recompensa: %s.", def.Title, rewardText(r)))
 	if r.Gold > 0 {
