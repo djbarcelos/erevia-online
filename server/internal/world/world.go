@@ -68,6 +68,9 @@ type World struct {
 	pool       sync.Pool // *astarScratch: memória do A* reaproveitada (seguro entre goroutines)
 }
 
+// fileFormat é o que o servidor lê do world.json. Os biomas (`biomes[]`, ou o `biome`
+// único do formato antigo) só servem ao cliente, que pinta o chão com eles: a colisão
+// e os limites vêm dos campos de cima, iguais nos dois formatos.
 type fileFormat struct {
 	Size       float64    `json:"size"`
 	Bounds     *Bounds    `json:"bounds"`
@@ -93,7 +96,7 @@ var embeddedMaps embed.FS
 const StarterMap = "starter"
 
 // Load lê o mapa embutido no binário.
-func Load() (*World, error) { return parse("world.json", embedded) }
+func Load() (*World, error) { return parse(embedded) }
 
 // LoadMap lê um mapa pelo id ("starter" ou "" = o principal; senão maps/<id>.json).
 func LoadMap(id string) (*World, error) {
@@ -104,10 +107,12 @@ func LoadMap(id string) (*World, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mapa %q: %w", id, err)
 	}
-	return parse(id+".json", data)
+	return parseNamed(id+".json", data)
 }
 
-func parse(name string, data []byte) (*World, error) {
+func parse(data []byte) (*World, error) { return parseNamed("world.json", data) }
+
+func parseNamed(name string, data []byte) (*World, error) {
 	var f fileFormat
 	if err := json.Unmarshal(data, &f); err != nil {
 		return nil, fmt.Errorf("%s: %w", name, err)
