@@ -104,6 +104,9 @@ type chaosSession struct {
 	channel    bool
 	asked      uint32 // último convidado para trocar (o bot fica perto dele)
 	askedAt    time.Time
+	// O Quadro de Contratos (ContractState.board_id) e os contratos dele hoje.
+	board     uint32
+	contracts []string
 }
 
 // ---------- Passos ----------
@@ -390,6 +393,12 @@ func (b *chaosBot) read(s *chaosSession) {
 				for _, ml := range m.Mails {
 					s.mails = append(s.mails, ml.Id)
 				}
+			}
+		case *pb.ServerMessage_Contracts:
+			s.board = v.Contracts.BoardId
+			s.contracts = s.contracts[:0]
+			for _, c := range v.Contracts.Contracts {
+				s.contracts = append(s.contracts, c.Id)
 			}
 		case *pb.ServerMessage_Achievements:
 			if v.Achievements.Full {

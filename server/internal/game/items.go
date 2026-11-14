@@ -136,6 +136,7 @@ type ItemDef struct {
 	HealMP      float64
 	Scroll      ScrollKind // pergaminhos: o que faz
 	Blessed     bool       // encantar: falhar não quebra (volta a +0)
+	RepOnly     bool       // só na loja de reputação (reputation.go): não cai de monstro
 }
 
 // SellPrice é quanto a loja paga por uma unidade.
@@ -439,6 +440,7 @@ var Items = func() map[string]*ItemDef {
 		{ID: GoldID, Name: "Moedas de ouro", Kind: KindGold, Grade: GradeCommon, Stack: math.MaxInt32, Icon: "gold",
 			Description: "Dinheiro corrente em Erevia."},
 	}
+	list = append(list, RepItems...) // as capas das facções (reputation.go)
 	m := make(map[string]*ItemDef, len(list))
 	for _, d := range list {
 		m[d.ID] = d
@@ -527,7 +529,7 @@ var gearByGrade = func() map[Grade][]*ItemDef {
 	m := map[Grade][]*ItemDef{}
 	for _, id := range ItemIDs() {
 		d := Items[id]
-		if d.Equippable() {
+		if d.Equippable() && !d.RepOnly { // as da loja de reputação não caem
 			m[d.Grade] = append(m[d.Grade], d)
 		}
 	}

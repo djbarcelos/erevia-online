@@ -19,6 +19,7 @@ const (
 	AchPvPWin                     // vencer jogadores em combate (vitórias PvP)
 	AchRaid                       // participar (com dano) da morte do raid boss Target
 	AchDefense                    // defender a cidade numa invasão vencida (zone/invasion.go)
+	AchRepBuy                     // comprar o título Target na loja de reputação (reputation.go)
 )
 
 // AchievementDef é uma conquista do catálogo.
@@ -63,7 +64,7 @@ type AchievementState struct {
 const skeletons = "skeleton_minion|skeleton_warrior|skeleton_rogue|skeleton_mage|bone_guard|bone_lord|ozrhal"
 
 // AchievementList: o catálogo, na ordem em que o cliente mostra.
-var AchievementList = []*AchievementDef{
+var AchievementList = append([]*AchievementDef{
 	{ID: "first_kill", Name: "Primeiro Sangue", Text: "Derrotar o primeiro monstro.", Title: "Caçador Novato", Goal: AchKill, Count: 1},
 	{ID: "tutorial", Name: "Primeiros Passos", Text: "Terminar o tutorial (Os Campos dos Ossos).", Title: "Recruta de Vel'Aran", Goal: AchQuest, Target: "tut_bones", Count: 1},
 	{ID: "bones_100", Name: "Quebra-Ossos", Text: "Derrotar 100 esqueletos.", Title: "Quebra-Ossos", Goal: AchKill, Target: skeletons, Count: 100},
@@ -77,7 +78,7 @@ var AchievementList = []*AchievementDef{
 	{ID: "first_trade", Name: "Negócio Fechado", Text: "Concluir uma troca com outro jogador.", Title: "Mercador", Goal: AchTrade, Count: 1},
 	{ID: "craft_legend", Name: "Forja Lendária", Text: "Criar um item lendário no Ferreiro.", Title: "Mestre Ferreiro", Goal: AchCraft, Count: int(GradeLegendary)},
 	{ID: "pvp_win", Name: "Duelista", Text: "Vencer um jogador em combate (que estava lutando).", Title: "Duelista", Goal: AchPvPWin, Count: 1},
-}
+}, RepTitleAchievements...) // os títulos da loja de reputação no fim (reputation.go)
 
 // Achievements: as conquistas por id.
 var Achievements = func() map[string]*AchievementDef {

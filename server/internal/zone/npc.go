@@ -58,6 +58,7 @@ func (z *Zone) spawnNPCs() {
 	z.spawnStones(npcIDBase + uint32(len(townNPCs)))
 	z.spawnKeeper(npcIDBase + uint32(len(townNPCs)+len(teleportStones)))
 	z.spawnMaster(npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1))
+	z.spawnBoard(boardID) // o Quadro de Contratos (contracts.go)
 }
 
 // storageKeeper: o Guarda do Armazém, na praça, do lado oeste do poço.

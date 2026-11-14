@@ -108,6 +108,9 @@ type JoinInfo struct {
 	Spec string
 	// Maestria (nível 30): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
+	// Contratos do quadro e reputação com as facções (contracts.go).
+	Contracts  game.ContractState
+	Reputation game.ReputationState
 	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
 	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
 	LoadedAt time.Time
@@ -136,6 +139,9 @@ type SavedState struct {
 	Title        string
 	Spec         string // especialização ("" = nenhuma)
 	Mastery      game.MasteryState
+	// Contratos aceitos hoje e nesta semana e a reputação com as facções.
+	Contracts  game.ContractState
+	Reputation game.ReputationState
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -524,6 +530,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Achievements, info.Title = st.Achievements, st.Title
 		info.Spec = st.Spec
 		info.Mastery = st.Mastery
+		info.Contracts, info.Reputation = st.Contracts, st.Reputation
 		delete(z.recent, info.ID)
 	}
 
@@ -558,6 +565,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 			mastery: loadMastery(info.Mastery),
 		},
 	}
+	p.pl.contracts = loadContracts(info.Contracts, info.Reputation)
 	p.pl.sentPvp = z.pvpState(p)
 	p.hp, p.mp = math.MaxFloat64, math.MaxFloat64
 	z.refreshStats(p) // classe + atributos + equipamento + passivas; limita a vida/mana ao máximo
@@ -630,6 +638,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
 	z.achOnJoin(p)
 	z.masteryOnJoin(p)
+	z.contractsOnJoin(p)
 	z.eventsOnJoin(p)
 	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
@@ -938,6 +947,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
 		Mastery: p.pl.mastery.save(),
 	}
+	s.Contracts, s.Reputation = p.pl.contracts.save()
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
 	}
