@@ -184,7 +184,7 @@ func TestContractsArriveNearTheLevel(t *testing.T) {
 	want := []string{game.ContractID(28), game.ContractID(29), game.ContractID(30)}
 	got := []string{}
 	for _, id := range ids {
-		if game.Quests[id].Unlock >= game.ContractFrom && id != game.SpecQuest {
+		if game.Quests[id].Unlock >= game.ContractFrom && id != game.SpecQuest && id != game.SubclassQuestCall {
 			got = append(got, id)
 		}
 	}

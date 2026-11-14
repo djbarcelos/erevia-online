@@ -108,6 +108,9 @@ type JoinInfo struct {
 	Spec string
 	// Maestria (nível máximo): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
+	// Classes: subclasse (subclass.go). Class é a principal (a do corpo); XP, Attrs, Ranks,
+	// Hotbar e Spec são da classe ativa (Classes.Active; vazio = a principal).
+	Classes game.ClassSet
 	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
 	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
 	LoadedAt time.Time
@@ -136,6 +139,7 @@ type SavedState struct {
 	Title        string
 	Spec         string // especialização ("" = nenhuma)
 	Mastery      game.MasteryState
+	Classes      game.ClassSet // subclasse: todas as classes, com a ativa atualizada
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -524,16 +528,20 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Achievements, info.Title = st.Achievements, st.Title
 		info.Spec = st.Spec
 		info.Mastery = st.Mastery
+		info.Classes = st.Classes
 		delete(z.recent, info.ID)
 	}
 
 	level := game.LevelForXP(info.XP)
 	pos := z.freeSpot(clampToZone(Vec2{X: info.X, Z: info.Z}, z.bounds()))
+	// info.Class é a principal (corpo e visual); a progressão que veio é da classe ativa.
+	classes := game.NormalClassSet(info.Class, info.Classes)
+	class := classes.Active
 	spec := ""
-	if game.SpecFor(info.Class, info.Spec) != nil {
+	if game.SpecFor(class, info.Spec) != nil {
 		spec = info.Spec
 	}
-	attrs, ranks, hotbar := loadProgress(info.Class, spec, level, info.Attrs, info.Ranks, info.Hotbar)
+	attrs, ranks, hotbar := loadProgress(class, spec, level, info.Attrs, info.Ranks, info.Hotbar)
 	inv, skipped := loadInventory(info.Gold, info.Items)
 	if skipped > 0 {
 		z.log.Warn("items skipped on load", "id", info.ID, "count", skipped)
@@ -544,7 +552,8 @@ func (z *Zone) onJoin(info JoinInfo) {
 		pos: pos, dest: pos,
 		lastCombat: -math.MaxFloat64 / 2,
 		pl: &playerState{
-			peer: info.Peer, class: info.Class, xp: info.XP, emblem: game.EmblemOr(info.Class, info.Emblem),
+			peer: info.Peer, class: class, mainClass: info.Class, classes: classes,
+			xp: info.XP, emblem: game.EmblemOr(info.Class, info.Emblem),
 			look:       game.NormalAppearance(info.Class, info.Look),
 			cooldowns:  map[uint32]float64{},
 			moveTokens: z.cfg.MaxMovesPerSec, chatTokens: z.cfg.ChatBurst,
@@ -584,23 +593,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	for _, o := range z.objects {
 		entities = append(entities, z.entityPB(o))
 	}
-	// A árvore inteira da classe (ativas e passivas); o cliente sabe o rank por Progress.
-	var skills []*pb.SkillInfo
-	for _, s := range game.ClassTree(info.Class) {
-		skills = append(skills, skillInfoPB(s))
-	}
-	// E as dos dois caminhos da classe (a janela da Mestra mostra as duas; a árvore, a escolhida).
-	for _, sp := range game.ClassSpecs(info.Class) {
-		for _, s := range game.SpecTree(sp.ID) {
-			skills = append(skills, skillInfoPB(s))
-		}
-	}
-	var branches []*pb.SkillBranch
-	if c := game.Classes[info.Class]; c != nil {
-		for _, b := range c.Branches {
-			branches = append(branches, &pb.SkillBranch{Name: b.Name, Description: b.Description, Color: b.Color})
-		}
-	}
+	skills, branches := classTreePB(class)
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		YourId:       p.id,
 		TickRate:     uint32(z.cfg.TickRate),
@@ -630,6 +623,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
 	z.achOnJoin(p)
 	z.masteryOnJoin(p)
+	z.subclassOnJoin(p)
 	z.eventsOnJoin(p)
 	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
@@ -936,7 +930,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
-		Mastery: p.pl.mastery.save(),
+		Mastery: p.pl.mastery.save(), Classes: classSnapshot(p),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
@@ -1053,6 +1047,9 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		out.ClanName = z.clanName(e)
 		out.Title = e.pl.ach.titleText()
 		out.Spec = e.pl.spec
+		if e.pl.class != e.model {
+			out.ActiveClass = e.pl.class
+		}
 	}
 	if e.npc != nil {
 		out.Title = e.npc.title

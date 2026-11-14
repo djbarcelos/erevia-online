@@ -97,7 +97,7 @@ func (s *Store) Rankings(ctx context.Context, limit int) (Rankings, error) {
 
 // rankRows: as primeiras limit linhas, com o clã e o título.
 func rankRows(ctx context.Context, tx pgx.Tx, where, order string, limit int) ([]RankRow, error) {
-	rows, err := tx.Query(ctx, `SELECT c.id, c.name, c.class, c.level, c.pvp_kills, coalesce(cl.name, ''), c.title, c.mastery_level`+rankFrom+`
+	rows, err := tx.Query(ctx, `SELECT c.id, c.name, `+activeClassSQL+`, c.level, c.pvp_kills, coalesce(cl.name, ''), c.title, c.mastery_level`+rankFrom+`
 		LEFT JOIN clan_members m ON m.character_id = c.id
 		LEFT JOIN clans cl ON cl.id = m.clan_id`+rankWhere+where+`
 		ORDER BY `+order+` LIMIT $1`, limit)

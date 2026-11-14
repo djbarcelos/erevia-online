@@ -13,6 +13,14 @@ Como escrever (o client/scripts/build-changelog.mjs lê exatamente este formato)
 O rascunho sai de "node client/scripts/changelog-draft.mjs" (PRs mergeados desde a última versão).
 -->
 
+## 2026-11-14 · Subclasse
+
+### Novidades
+- **Subclasse:** com a sua classe no nível 30, fale com **Edrian, o Guardião das Sendas**, na praça (ao sul do poço). Depois da prova e do juramento, escolha uma **outra classe** para o mesmo personagem: ela começa no **nível 20** e sobe do zero, com skills, atributos, barra de atalhos e caminho próprios.
+- **Troque de classe com o Edrian** quando quiser, fora de combate e a cada 10 minutos. O equipamento, a bolsa, o ouro, as missões, as conquistas e a Maestria são do personagem e ficam com você; o que a outra classe não pode usar vai para a bolsa.
+- **Duas Sendas:** com a subclasse no 30, ganhe o título **Duas Sendas** e **+5% de XP** na classe que estiver mais baixa.
+- A classe em uso aparece no quadro do alvo, no ranking e na tela de personagens.
+
 ## 2026-11-13.2 · Nível 40
 
 ### Novidades

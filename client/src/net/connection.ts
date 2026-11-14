@@ -9,6 +9,7 @@ import {
   ServerMessageSchema,
   type FriendCmdKind,
   type SpecCmdKind,
+  type SubclassCmdKind,
   type MasteryCmdKind,
   type MailCmdKind,
   type ServerMessage,
@@ -188,6 +189,11 @@ export class Connection {
   /** Mestra dos Caminhos: falar (anda A Encruzilhada e abre a escolha) ou escolher o caminho. */
   specCmd(kind: SpecCmdKind, npcId: number, spec = ""): void {
     this.send({ case: "specCmd", value: { kind, npcId, spec } });
+  }
+
+  /** Guardião das Sendas (subclasse): falar, escolher a subclasse ou trocar a classe ativa. */
+  subclassCmd(kind: SubclassCmdKind, npcId: number, cls = ""): void {
+    this.send({ case: "subclassCmd", value: { kind, npcId, class: cls } });
   }
 
   /** Maestria (nível máximo): pedir a árvore e o estado, gastar 1 ponto no nó ou redistribuir. */

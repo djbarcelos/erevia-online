@@ -631,6 +631,12 @@
   margin: 10px 0 6px;
 }
 
+/* ---------- Guardião das Sendas: subclasse (usa os cartões da Mestra) ---------- */
+
+.spec-card.sub-option {
+  border-style: dashed;
+}
+
 @media (max-width: 767px), (max-height: 520px) {
   .shop-panel.spec-panel {
     width: auto;

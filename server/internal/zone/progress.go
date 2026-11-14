@@ -16,7 +16,7 @@ const HotbarSize = 10
 
 type progressEvent struct {
 	id  uint32
-	msg any // *pb.AllocateAttrs, *pb.LearnSkills, *pb.SetHotbar, *pb.SpecCmd
+	msg any // *pb.AllocateAttrs, *pb.LearnSkills, *pb.SetHotbar, *pb.SpecCmd, *pb.MasteryCmd, *pb.SubclassCmd
 }
 
 func (progressEvent) isEvent() {}
@@ -42,6 +42,8 @@ func (z *Zone) onProgress(e progressEvent) {
 		z.onSpecCmd(p, m)
 	case *pb.MasteryCmd:
 		z.onMasteryCmd(p, m)
+	case *pb.SubclassCmd:
+		z.onSubclassCmd(p, m)
 	}
 }
 

@@ -102,6 +102,7 @@ func (z *Zone) checkPlayer(p *entity, deep bool) {
 	z.checkGold(p)
 	z.checkItems(p, deep)
 	z.checkProgress(p)
+	z.checkClasses(p)
 	z.checkPosition(p)
 	z.checkPvP(p)
 	z.checkParty(p)
@@ -337,6 +338,35 @@ func (z *Zone) checkProgress(p *entity) {
 	}
 	if err := game.ValidateRanks(p.pl.class, p.pl.spec, lv, p.pl.ranks); err != nil {
 		z.invariantBroken(p, "points", "skills: "+err.Error(), nil)
+	}
+}
+
+// checkClasses: subclasse (subclass.go). A classe ativa é a dos campos do jogador (as
+// regras de nível, XP, pontos, skills e equipamento acima já olham só ela, então trocar de
+// classe não acusa nada); aqui, que ela é uma das classes do personagem, que a principal
+// é a do corpo e que cada classe guardada tem o nível da própria XP.
+func (z *Zone) checkClasses(p *entity) {
+	set := &p.pl.classes
+	switch {
+	case len(set.List) == 0 || set.List[0].Class != p.pl.mainClass || set.Main != p.pl.mainClass:
+		z.invariantBroken(p, "classes", fmt.Sprintf("principal %q, lista %+v", p.pl.mainClass, set.List), nil)
+		return
+	case set.Active != p.pl.class || !set.Has(p.pl.class):
+		z.invariantBroken(p, "classes", fmt.Sprintf("ativa %q no jogador e %q na lista", p.pl.class, set.Active), nil)
+		return
+	case len(set.List) > 1+game.MaxSubclasses:
+		z.invariantBroken(p, "classes", fmt.Sprintf("%d subclasses (máximo %d)", set.Subclasses(), game.MaxSubclasses), nil)
+	}
+	for i := range set.List {
+		c := &set.List[i]
+		if c.Class == p.pl.class {
+			continue // a ativa está nos campos do jogador (checkProgress)
+		}
+		if lv := game.LevelForXP(c.XP); c.Level != lv || c.XP < 0 {
+			z.invariantBroken(p, "classes", fmt.Sprintf("%s nível %d com XP %d", c.Class, c.Level, c.XP), func() {
+				c.Level = lv
+			})
+		}
 	}
 }
 

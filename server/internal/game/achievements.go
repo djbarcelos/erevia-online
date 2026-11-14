@@ -10,15 +10,16 @@ import "strings"
 type AchGoal int
 
 const (
-	AchKill    AchGoal = iota + 1 // derrotar monstros (Target: ids separados por "|"; vazio = qualquer)
-	AchLevel                      // chegar ao nível Count
-	AchEnchant                    // encantar um item a +Count
-	AchTrade                      // concluir trocas com jogadores
-	AchCraft                      // criar um item de raridade Count ou maior
-	AchQuest                      // concluir a missão Target
-	AchPvPWin                     // vencer jogadores em combate (vitórias PvP)
-	AchRaid                       // participar (com dano) da morte do raid boss Target
-	AchDefense                    // defender a cidade numa invasão vencida (zone/invasion.go)
+	AchKill     AchGoal = iota + 1 // derrotar monstros (Target: ids separados por "|"; vazio = qualquer)
+	AchLevel                       // chegar ao nível Count
+	AchEnchant                     // encantar um item a +Count
+	AchTrade                       // concluir trocas com jogadores
+	AchCraft                       // criar um item de raridade Count ou maior
+	AchQuest                       // concluir a missão Target
+	AchPvPWin                      // vencer jogadores em combate (vitórias PvP)
+	AchRaid                        // participar (com dano) da morte do raid boss Target
+	AchDefense                     // defender a cidade numa invasão vencida (zone/invasion.go)
+	AchSubclass                    // levar uma subclasse ao nível Count (o maior nível entre elas)
 )
 
 // AchievementDef é uma conquista do catálogo.
@@ -35,7 +36,7 @@ type AchievementDef struct {
 // Threshold: o acontecimento traz um valor (nível, +N, raridade) comparado com Count; as
 // outras conquistas contam acontecimentos até Count.
 func (a *AchievementDef) Threshold() bool {
-	return a.Goal == AchLevel || a.Goal == AchEnchant || a.Goal == AchCraft
+	return a.Goal == AchLevel || a.Goal == AchEnchant || a.Goal == AchCraft || a.Goal == AchSubclass
 }
 
 // Matches diz se o alvo do acontecimento vale para esta conquista.
@@ -71,6 +72,8 @@ var AchievementList = []*AchievementDef{
 	{ID: "level_20", Name: "Veterano", Text: "Chegar ao nível 20.", Title: "Veterano", Goal: AchLevel, Count: 20},
 	{ID: "level_30", Name: "Lenda Viva", Text: "Chegar ao nível 30.", Title: "Lenda Viva", Goal: AchLevel, Count: 30},
 	{ID: "level_40", Name: "Lenda de Erevia", Text: "Chegar ao nível 40.", Title: "Lenda de Erevia", Goal: AchLevel, Count: MaxLevel},
+	// Subclasse (tunnel#156): o título do bônus Duas Sendas (o +5% de XP fica em ClassSet.XPMult).
+	{ID: "two_paths", Name: "Duas Sendas", Text: "Levar uma subclasse ao nível 30.", Title: "Duas Sendas", Goal: AchSubclass, Count: SubclassBonusLevel},
 	{ID: "bone_lord", Name: "O Senhor Caiu", Text: "Derrotar o Senhor dos Ossos.", Title: "Algoz do Senhor dos Ossos", Goal: AchKill, Target: "bone_lord", Count: 1},
 	{ID: "raid_ozrhal", Name: "Regicida", Text: "Participar da morte de Ozrhal, o Rei Ossário.", Title: "Regicida", Goal: AchRaid, Target: "ozrhal", Count: 1},
 	{ID: "invasion", Name: "A Cidade Resiste", Text: "Ajudar a cidade a resistir a uma invasão de esqueletos.", Title: "Defensor de Vel'Aran", Goal: AchDefense, Count: 1},

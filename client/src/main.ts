@@ -21,6 +21,7 @@ import {
   SelfPvpSchema,
   SkillTarget,
   SpecCmdKind,
+  SubclassCmdKind,
   MasteryCmdKind,
   type AchievementInfo,
   type MasteryState,
@@ -54,6 +55,7 @@ import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules 
 import { ShopWindow } from "./ui/shop";
 import { TeleportWindow } from "./ui/teleport";
 import { SpecWindow } from "./ui/spec";
+import { SubclassWindow } from "./ui/subclass";
 import { setSpecs } from "./ui/specs";
 import { BarberWindow } from "./ui/barber";
 import { toBodyLook } from "./world/body-look";
@@ -245,8 +247,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     statsListeners.add(fn);
     return () => statsListeners.delete(fn);
   };
+  // Subclasse: a classe ativa decide skills, atributos e o que dá para equipar; o corpo
+  // (modelo e visual) é sempre o da principal (character.class). Muda num SubclassState.
+  let activeClass: string = character.activeClass ?? character.class;
   const me = () => ({
-    myClass: character.class,
+    myClass: activeClass,
+    bodyClass: character.class as string,
     myLevel: lastStats?.level ?? character.level ?? 1,
     name: character.name,
     emblem,
@@ -692,7 +698,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     stats: () => ({ fps: world.engine.getFps(), ping: conn.ping }),
     clock: () => clock.phase(),
   });
-  hud.setIdentity(character.name, classInfo(character.class).label[0], emblem);
+  hud.setIdentity(character.name, classInfo(activeClass).label[0], emblem);
   hud.setHotbar(welcome.hotbar?.slots ?? []);
   migrateLocalHotbar();
   /** Pontos livres viram uma bolinha nos botões de Personagem e Skills. */
@@ -797,7 +803,14 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma, discount: () => mastery?.teleportDiscount ?? 0 }, hud.element);
   const specWin = new SpecWindow(
     store,
-    { choose: (npc, spec) => conn.specCmd(SpecCmdKind.SPEC_CMD_CHOOSE, npc, spec), myClass: () => character.class, skills: () => welcome.skills },
+    { choose: (npc, spec) => conn.specCmd(SpecCmdKind.SPEC_CMD_CHOOSE, npc, spec), myClass: () => activeClass, skills: () => welcome.skills },
+    hud.element,
+  );
+  const subWin = new SubclassWindow(
+    {
+      choose: (npc, cls) => conn.subclassCmd(SubclassCmdKind.SUBCLASS_CMD_CHOOSE, npc, cls),
+      switchTo: (npc, cls) => conn.subclassCmd(SubclassCmdKind.SUBCLASS_CMD_SWITCH, npc, cls),
+    },
     hud.element,
   );
   const barberWin = new BarberWindow(
@@ -808,7 +821,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         const m = me();
         const w = store.equip[0]?.info;
         const o = store.equip[1]?.info;
-        return { myClass: m.myClass, body: m.body, look: { right: w?.model || null, left: o?.model || w?.offModel || null, emblem: m.emblem } };
+        return { myClass: m.bodyClass, body: m.body, look: { right: w?.model || null, left: o?.model || w?.offModel || null, emblem: m.emblem } };
       },
     },
     hud.element,
@@ -855,9 +868,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       storageWin.close();
       barberWin.close();
       specWin.close();
+      subWin.close();
       if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
       // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
       else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
+      // O Guardião das Sendas responde com SubclassState (abre a janela) ou com um conselho.
+      else if (npc?.role === NpcRole.SUBCLASS) conn.subclassCmd(SubclassCmdKind.SUBCLASS_CMD_TALK, id);
       else if (npc?.role === NpcRole.TELEPORT) {
         // Indo pela pedra com o "Ir": o destino da missão vem destacado (quem escolhe é o jogador).
         const o = questGo.phase === "toStone" && questGo.offer?.npcId === id ? questGo.offer : null;
@@ -1218,6 +1234,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (hud.channeling) conn.cancelChannel();
       else if (teleportWin.isOpen) teleportWin.close();
       else if (specWin.isOpen) specWin.close();
+      else if (subWin.isOpen) subWin.close();
       else if (storageWin.isOpen) storageWin.close();
       else if (tradeWin.isOpen) conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL);
       else if (barberWin.isOpen) barberWin.close();
@@ -1483,6 +1500,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       shop.dispose();
       teleportWin.dispose();
       specWin.dispose();
+      subWin.dispose();
       storageWin.dispose();
       tradeWin.dispose();
       barberWin.dispose();
@@ -1706,6 +1724,28 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           const c = msg.msg.value;
           const info = entities.info(c.npcId);
           specWin.open(info ? `${info.title} · ${info.name}` : "Mestra dos Caminhos", c);
+          break;
+        }
+        case "subclass": {
+          const s = msg.msg.value;
+          if (s.switched) {
+            // Trocou de classe: a árvore nova chega antes do Progress e da barra.
+            activeClass = s.active;
+            welcome.skills = s.skills;
+            welcome.branches = s.branches;
+            entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
+            hud.setIdentity(character.name, classInfo(activeClass).label[0], emblem);
+            lastXp = null; // a XP é a da outra classe: não é "+XP"
+            // Janelas montadas com a classe de antes são refeitas na próxima vez que abrirem.
+            for (const id of ["skills", "character"]) wm.close(id);
+            specWin.close();
+            selectSkillsTab = null;
+            toast(`Agora você é ${classInfo(activeClass).label}.`);
+          } else if (s.active) activeClass = s.active;
+          if (s.npcId) {
+            const info = entities.info(s.npcId);
+            subWin.open(info ? `${info.title} · ${info.name}` : "Guardião das Sendas", s);
+          } else subWin.update(s);
           break;
         }
         case "playerStatus":
