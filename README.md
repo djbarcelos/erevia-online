@@ -16,11 +16,14 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Som:** golpes (acerto, crítico, erro), skills por tipo, mortes, passos, interface (janelas, cliques, compra e venda, moedas, itens, nível, poção, encantamento), ambiente (floresta, cidade com o ferreiro, grilos à noite, vento nas terras mortas) e uma música por região (cidade, ermos, terras sombrias e a Cripta), trocando com crossfade. Segue os volumes e o "Sem som" de Configurações → Áudio na hora; no celular começa no primeiro toque. No máximo 8 efeitos juntos (ganham os mais perto/do próprio jogador), e só se ouve os outros até 25 m. Tudo CC0 (créditos em `client/public/audio/CREDITS.md`), ~3 MB, com música e ambiente carregados só ao entrar na região.
 - **Visual do personagem:** na criação, além da arma e do emblema, escolha o rosto e o cabelo (5 cabeças: Nobre, Selvagem, Sábio, Astuto e Andarilho, que qualquer classe pode usar), o tom de pele, a cor do cabelo e a cor da roupa (8 de cada, ou a original da classe) e se o elmo/gorro/chapéu aparece. Depois, Teodoro, o **Barbeiro** (ao norte do poço), muda o visual por 300 moedas, com prévia 3D. Todos veem o visual novo na hora.
 
-### Nível 30 e o 5º degrau da árvore
-- O nível máximo agora é **30**. Do 20 em diante, cada nível pede 10% a mais de XP por nível acima do 19 (até o 19 a curva não mudou), e a caça é no **Vale das Pedras Vivas**: os golens vão do nível 20, na entrada (norte), ao 30, no fundo (sul). No **nível 20** a árvore (tecla K) ganha um 5º degrau, uma skill por ramo (3 por classe, até rank 3): Baluarte, Corte do Horizonte e Égide da Ordem (cavaleiro); Machadada Sísmica, Redemoinho Sangrento e Pele de Pedra (bárbaro); Inferno, Zero Absoluto e Rajada Arcana (mago); Golpe Fatal, Golpe das Sombras e Miasma (ladino).
+### Nível 40, a curva longa e o 5º degrau da árvore
+- O nível máximo agora é **40** (tunnel#149), com ~150 h de caça teórica até lá: ~3 h até o 10, ~15 h do 10 ao 20, ~40 h do 20 ao 30 e ~90 h do 30 ao 40. A XP de cada nível é a tabela `xpTable` de `server/internal/game/formulas.go`; a conta (abates e horas por nível, a 25 s por abate) está em [`docs/progressao.md`](docs/progressao.md), gerada do código. **Contratos de caça** (um por nível do 5 ao 39, gerados dos dados) dão ~30% da XP de cada faixa.
+- **Conversão:** a XP salva na curva de antes vira, ao carregar o personagem, a mesma fração do mesmo nível na curva nova (`characters.xp_curve`, migração 00019, e `game.ConvertXP`). Quem estava no 30 continua no 30 e começa o 30 → 31 do zero.
+- Caça do 20 ao 30 no **Vale das Pedras Vivas** (os golens vão do 20, na entrada, ao 30, no fundo). Do 30 ao 40, conteúdo provisório com os modelos de hoje (elites com cor própria e avisos no chão), até as áreas do `docs/roadmap-areas.md`: **Fundo do Vale** (Golem Ancestral, 30–35), **Vigília Ossária** ao lado da Cripta (Cavaleiro e Devoto do Ossário, 33–38) e **Confins Partidos** nos três cantos vazios (Ceifador e Arcanista Partido, 35–40). O Ozrhal passou a nível 35. Elas deixam cair o **equipamento ponte** (`game/bridge.go`): arma e armadura de cada classe nos níveis 30 (Rúnicas) e 35 (da Partição), comum e Desperta (raro), fora do sorteio por raridade.
+- Pontos de skill vão até o 30 (`game.SkillPointMaxLevel`); do 31 ao 40 só os 3 de atributo por nível. Morrer do 30 em diante tira 2% da XP do nível (antes, 4%). No **nível 20** a árvore (tecla K) ganha um 5º degrau, uma skill por ramo (3 por classe, até rank 3): Baluarte, Corte do Horizonte e Égide da Ordem (cavaleiro); Machadada Sísmica, Redemoinho Sangrento e Pele de Pedra (bárbaro); Inferno, Zero Absoluto e Rajada Arcana (mago); Golpe Fatal, Golpe das Sombras e Miasma (ladino).
 
-### Maestria (depois do nível 30)
-- No **30** a XP (de monstro, missão e invasão, com as regras de sempre: grupo, diferença de nível, noite e XP em dobro) enche a **barra de Maestria**, roxa, no lugar da barra de XP do HUD ("Maestria N"). Cada barra cheia dá **1 ponto**; uma barra custa 263.873 de XP, o mesmo que o 29 → 30 (`game.MasteryPointXP`, a rever com a curva nova). Morrer no 30 tira 4% da barra, sem tirar ponto (com karma, o dobro; para outro jogador ou defendendo a cidade, nada).
+### Maestria (no nível máximo, 40)
+- No **40** a XP (de monstro, missão e invasão, com as regras de sempre: grupo, diferença de nível, noite e XP em dobro) enche a **barra de Maestria**, roxa, no lugar da barra de XP do HUD ("Maestria N"). Cada barra cheia dá **1 ponto**; uma barra custa 45.200.000 de XP, o mesmo que o 39 → 40 (`game.MasteryPointXP`). Quem ganhou pontos quando o máximo era 30 fica com eles e continua gastando e redistribuindo do 30 ao 39, mas só ganha pontos novos no 40. Morrer no 40 tira 2% da barra, sem tirar ponto (com karma, o dobro; para outro jogador ou defendendo a cidade, nada).
 - **Bônus diário** (como o Enlightenment do ESO): a primeira barra de cada dia (meia-noite de Brasília) sai **4× mais rápido**, e quem fica fora guarda até **7 dias**. A dica da barra mostra quanto ainda resta.
 - **Árvore** (aba **Maestria** da janela de skills, K, ou clique na barra): 3 ramos, 4 nós cada, até 5 pontos por nó com retorno decrescente (40%, 25%, 15%, 12% e 8% do total do nó); os nós do meio e do fim pedem 5 e 10 pontos no ramo. Teto: Maestria 60 (a árvore inteira).
   - **Caça:** Alquimia de Campo (poções curam +20%), Bolsa Farta (+15% de moedas dos monstros), Olho do Coletor (15% de chance de 1 material a mais de monstros comuns; 5 pts), Instinto do Caçador (+2% de dano; 10 pts).
@@ -28,7 +31,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
   - **Utilidade:** Passo Leve (+4% de velocidade fora de combate, o teto), Viajante (Pedras de Teleporte −30%), Leitura Rápida (pedra e Pergaminho de Retorno −40% de tempo; 5 pts), Caminho de Casa (recarga do Pergaminho de Retorno −50%; 10 pts).
   - **Teto de combate:** tudo o que mexe no combate (dano, defesa, vida, crítico, velocidade de ataque), com a árvore inteira, soma no máximo **5%** (hoje 3,5%; `TestMasteryCombatCap` e `TestMasteryCombatCapOnRealStats` travam).
   - **Redistribuir:** grátis, 1 vez por dia.
-- O ranking de nível mostra a Maestria ao lado do nível (e ela desempata no 30). Cada ponto ganho vira um evento `mastery` na telemetria. Tudo fica salvo em `characters.mastery` e `characters.mastery_level` (migração 00017); nada roda por tick: só muda quando o jogador ganha XP, morre, gasta ou redistribui. GM: `/maestria xp N [Nome]` e `/maestria dia [Nome]` (simula a virada do dia). Dados em `server/internal/game/mastery.go`.
+- O ranking de nível mostra a Maestria ao lado do nível (e ela desempata no mesmo nível). Cada ponto ganho vira um evento `mastery` na telemetria. Tudo fica salvo em `characters.mastery` e `characters.mastery_level` (migração 00017); nada roda por tick: só muda quando o jogador ganha XP, morre, gasta ou redistribui. GM: `/maestria xp N [Nome]` e `/maestria dia [Nome]` (simula a virada do dia). Dados em `server/internal/game/mastery.go`.
 
 ### Criação de itens (Ferreiro)
 - A aba **Criar** do Ferreiro Bruno transforma materiais que caem dos monstros + moedas em equipamento que a loja não vende: 24 receitas, de raro (ossos e crânios dos esqueletos) a épico (Essência Sombria) e lendário (Núcleo Rúnico dos golens), mais pergaminhos de encantar (inclusive os abençoados). A lista mostra quanto você tem de cada material; o botão só liga quando dá.
@@ -56,7 +59,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
 ### Ranking, conquistas e títulos (tecla H)
 - A janela **Glória** (H ou o troféu no menu) tem duas abas. **Ranking:** top 50 de nível (desempate pela XP), de vitórias PvP e de clãs (soma dos níveis dos membros, com a média), mais a sua posição e a do seu clã. Um worker calcula no banco a cada 5 min (contas banidas ficam de fora) e a zona guarda em memória; a janela pede quando abre e guarda a resposta por 2 min. A zona nunca consulta o banco.
-- **Conquistas** (13, dados em `server/internal/game/achievements.go`): Primeiro Sangue, Primeiros Passos (tutorial), Quebra-Ossos (100 esqueletos), níveis 10, 20 e 30, O Senhor Caiu (Senhor dos Ossos), Regicida (participar da morte de Ozrhal), A Cidade Resiste (defender uma invasão vencida), Mão Firme (+7), Negócio Fechado (primeira troca), Forja Lendária (criar um lendário) e Duelista (vitória PvP). Andam com o que o servidor já valida (abate, nível, encantamento, troca, criação, missão, PvP, raid boss e invasão); quem já tinha cumprido (nível, vitórias, tutorial) ganha ao entrar. Desbloquear avisa no chat e com um toast.
+- **Conquistas** (14, dados em `server/internal/game/achievements.go`): Primeiro Sangue, Primeiros Passos (tutorial), Quebra-Ossos (100 esqueletos), níveis 10, 20 e 30, O Senhor Caiu (Senhor dos Ossos), Regicida (participar da morte de Ozrhal), A Cidade Resiste (defender uma invasão vencida), Mão Firme (+7), Negócio Fechado (primeira troca), Forja Lendária (criar um lendário), Duelista (vitória PvP) e Caçador de Raros (os 4 monstros raros, cada um uma vez: `AchievementDef.Each`, com o progresso salvo como um conjunto de bits em `counts`). Andam com o que o servidor já valida (abate, nível, encantamento, troca, criação, missão, PvP, raid boss e invasão); quem já tinha cumprido (nível, vitórias, tutorial) ganha ao entrar. Desbloquear avisa no chat e com um toast.
 - Cada conquista dá um **título**: escolha na aba Conquistas e ele aparece sob o seu nome, em lilás, para todos (texto fixo no nome, que só muda quando você troca de título). Conquistas e título ficam salvos no personagem (`characters.achievements` e `characters.title`).
 
 ### Bestiário (tecla B)
@@ -72,6 +75,21 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **XP em dobro:** a XP de monstros (inclusive grupo e raid) dobra nos dias de `XP2_DAYS` (sábado e domingo por padrão, no horário de Brasília) ou com `/evento xp2 horas` (GM, até 168 h); `/evento xp2 off` desliga, inclusive o horário do dia (até o fim da sequência de dias). Ligar e desligar avisa todos; enquanto dura, um selo **XP ×2** fica embaixo do minimapa (a invasão mostra ali a onda, os vivos e o tempo). O que o GM liga ou desliga fica na tabela `server_events` (migração 00016) e vale depois de um reinício.
 - **Desempenho:** sem invasão o tick não piora (`go test ./internal/zone -run x -bench TickCrowd`: ~2,7 → ~2,5 ms, porque a busca de alvo dos monstros agora descarta pela distância antes). Com a invasão no limite de 20 vivos e 100 dos 400 jogadores na praça, o tick sobe uns 0,25 ms (de ~4,0 para ~4,25 ms, num orçamento de 50 ms; `BenchmarkTickCrowdInvasion`). No cliente não há efeito novo: são os monstros de sempre, entregues pela AOI, e o selo do HUD só muda de texto 2×/s.
 - `/evento` mostra o estado; `/evento invasao agora` pula o aviso e `/evento invasao parar` encerra sem recompensa. Tudo fica no `gm_log`.
+
+### Monstros raros (named)
+- Um **raro** nasce no lugar de um monstro comum (o **hospedeiro**) quando ele renasce, com uma chance pequena (2–3%), e só onde e quando a condição deixa (período e parte de uma área). É o mesmo monstro (mesmo id e mesma casa), com **nível +2** (nunca abaixo do da tabela), **vida ×4**, **1,2× maior**, XP ×4, moedas garantidas ×2, o **nome dourado** (e o selo **RARO** no quadro do alvo; `Entity.rare`, campo 40) e um **saque garantido**. No renascimento seguinte ele volta a ser o hospedeiro.
+- **Um de cada no mundo e no mínimo 45 min** (relógio de parede) entre o fim de uma aparição e a próxima (morrer, adormecer na troca dia/noite do hospedeiro ou ir embora acabam a aparição; o raro noturno some no amanhecer, fora de combate). A hora fica na tabela dos chefes (`world_bosses`, id `rare:<raro>`, `respawn_at` = quando pode nascer de novo; sem migração nova): reiniciar o servidor não zera.
+- Ao nascer, quem está a até **60 m** lê no chat de sistema "Algo grande se move no bosque…" (cada raro tem o seu texto). Matar conta como o hospedeiro nas missões. Telemetria: `rare_spawn` (sem personagem, com a posição) e `rare_kill` (um por quem levou a XP) em `game_events`.
+- Os 4 primeiros (roadmap, tabela 5.9):
+
+| Raro | Hospedeiro (chance) | Condição | Mecânica | Saque garantido |
+|---|---|---|---|---|
+| Ossudo, o Teimoso (nível 6+) | Esqueleto Lacaio (3%) | Arredores (anel 46–74), sempre | levanta 1× ao morrer, com 30% da vida | 3 Crânios Rachados |
+| Capitão Ossudo (nível 14) | Esqueleto Guerreiro (2%) | Campos dos Ossos (anel 80–108), só à noite | "Formação!" a 50% da vida: 2 Escudeiros Ossudos com escudo (50% da vida, 20 s), uma vez por luta | Insígnia do Capitão e Elmo de Osso (raro, nível 13, 20%) |
+| Vossk, o Cinzento (nível 21+) | Esqueleto Mago (2%) | oeste dos Ermos (setor 135°–225°), só à noite | Chuva de Ossos mirim: 2 círculos de 3 m, 1,5 s de aviso | 2 Essências Sombrias |
+| Ômrun, Golem Ancião (nível 31+) | Golem de Pedra (2%) | metade sul do Vale das Pedras Vivas, sempre | pisão: anel de 3 a 7 m, 2,0 s de aviso (além da pancada do golem) | 2 Núcleos Rúnicos |
+
+- Os avisos no chão são as habilidades por dados (`MonsterDef.Abilities`, `zone/abilities.go`). Teste (só com `DEV_LOGIN`): `/raro` lista o estado de cada um; `/raro ossudo|capitao|vossk|omrun [ir]` transforma o hospedeiro livre mais perto, sem chance, condição nem espera (e "ir" leva você até ele). Código em `server/internal/game/rares.go` e `server/internal/zone/rares.go`.
 
 ### Segunda classe (especialização, nível 20)
 - No **nível 20** chega a missão **A Encruzilhada**: falar com Ysolde, a **Mestra dos Caminhos** (praça, a leste do poço), abre a janela com os dois caminhos da classe, e escolher conclui a missão (1.000 moedas e 3 Pergaminhos de Retorno). Quem já passou do 20 recebe a missão ao entrar. A escolha é definitiva; trocar depois custa **50.000 moedas** e devolve os pontos das skills do caminho antigo.
@@ -229,6 +247,8 @@ client/
   scripts/build-models.mjs   personagens/monstros/animações a partir dos zips KayKit
   scripts/build-scenery.mjs  kits de cenário (um .glb por pacote)
   scripts/build-world.mjs    layout do mapa + colisores → public/world.json e server/internal/world/
+  scripts/world-gen.mjs      motor do gerador do mapa (fases, sorteio por bioma, saída)
+  scripts/biomes/            um arquivo por bioma (ver [Como criar um bioma](#como-criar-um-bioma))
   scripts/build-changelog.mjs  CHANGELOG.md → public/novidades.json (roda no npm run build)
   scripts/changelog-draft.mjs  rascunho do changelog com os PRs mergeados (via gh)
   src/net/                   conexão com o servidor
@@ -237,6 +257,41 @@ e2e/                         testes de navegador (Playwright): e2e/tests/jogo.sp
 infra/docker-compose.yml     Postgres local
 Dockerfile, .railway/        publicação (Railway: infraestrutura como código)
 ```
+
+## Como criar um bioma
+O mapa (`world.json`) sai de `client/scripts/biomes/`: cada bioma é **um arquivo** `<id>.mjs`, e o `node scripts/build-world.mjs` (em `client/`) acha todos sozinho. Hoje são três: `floresta.mjs` (a cidade, as estradas, a floresta em anéis e as montanhas da borda), `vale.mjs` (o Vale das Pedras Vivas, com a regra de transição e a pintura do chão) e `cripta.mjs` (o covil do raid boss).
+
+Um bioma exporta:
+
+| Export | |
+|---|---|
+| `name` | Nome do bioma |
+| `seed` | Semente do sorteio, só dele (repetir a de outro bioma é erro): nada dos outros biomas muda de lugar |
+| `order` | Ordem entre os biomas (floresta 10, vale 20, cripta 30). Quem vem depois enxerga o que os de antes puseram |
+| `bounds` | `{ minX, maxX, minZ, maxZ }`. O mapa é a união dos `bounds` dos biomas: um bioma a leste de x = 150 cresce o mapa (e a colisão do servidor) para leste |
+| `build(ctx)` | Fase 1: o cenário. O que devolver entra na entrada do bioma em `biomes[]` do `world.json`, ao lado de `id`, `name` e `bounds` (o Vale devolve a borda ondulada) |
+| `lights(ctx)` | Fase 2: tochas, que evitam o que todos os biomas já puseram no chão |
+| `overlay(ctx)` | Fase 3: lugares que limpam a área (`ctx.clear(x, z, r)`) e se constroem por cima, como a Cripta |
+| `paint(g, bioma, h)` | Opcional: a camada do chão do bioma no cliente (`client/src/world/map-painter.ts` a acha pelo nome do arquivo). Fica no mesmo arquivo para a regra de transição (o `transition` do Vale) ser uma só no gerador e no chão |
+
+O bioma não importa nada. O `ctx` traz o sorteio do bioma (`rand`, `pick`, `between`, `scatter`), `place(k, x, z, rot, escala)`, `collide(x, z, r)`, `collideItem`, `torch`, `clear`, `sized`, `facing`, `alongX` e as listas `objects`, `colliders`, `torches`, `roads` e `taken` (as de todos os biomas). Um bioma mínimo:
+
+```js
+// client/scripts/biomes/clareira.mjs
+export const name = 'Clareira';
+export const seed = 20261201;
+export const order = 40;
+export const bounds = { minX: 150, maxX: 210, minZ: -150, maxZ: 60 };
+export function build(ctx) {
+  ctx.scatter(40, { x: [155, 205], z: [-140, 50], spacing: 4 }, (x, z) => {
+    const s = ctx.between(2.4, 3.2);
+    ctx.place(ctx.pick(['tree_1_a', 'tree_2_a']), x, z, ctx.rand() * 6.28, s);
+    ctx.collide(x, z, 0.3 * s);
+  });
+}
+```
+
+Depois de mexer num bioma, rode `node scripts/build-world.mjs` e commite os dois `world.json` (o do cliente e o do servidor). O CI roda o gerador e falha se o `world.json` commitado for diferente. O `npm run test:unit` confere que os biomas de hoje geram, no formato antigo (`biome`, só o Vale), byte a byte o mapa de antes da divisão em biomas; que o formato novo (`biomes[]`) tem os mesmos colisores, instâncias e pintura do chão; e que um bioma novo não muda nada do resto. Durante a transição, o cliente (`worldBiomes` em `world-data.ts`) e o servidor aceitam os dois formatos.
 
 ## Variáveis do servidor
 | Variável | Padrão | |
@@ -421,7 +476,7 @@ FROM client_errors WHERE kind = 'client_invariant' AND last_seen > now() - inter
 A versão no ar vem de `RAILWAY_GIT_COMMIT_SHA` (a Railway define; local aparece `dev`).
 
 ## Telemetria
-O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem travar a zona): ouro que entra e sai (e de onde), itens que entram e saem do jogo, abates, mortes, subidas de nível, sessões e o FPS dos jogadores (o cliente mede 1×/s e manda a média a cada 60 s, com o tipo de aparelho). O "painel" são views prontas; abra na aba **Data** do Postgres da Railway ou com `psql`:
+O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem travar a zona): ouro que entra e sai (e de onde), itens que entram e saem do jogo, abates, mortes, subidas de nível, sessões, os monstros raros (`rare_spawn` e `rare_kill`, com `ref` = o raro) e o FPS dos jogadores (o cliente mede 1×/s e manda a média a cada 60 s, com o tipo de aparelho). O "painel" são views prontas; abra na aba **Data** do Postgres da Railway ou com `psql`:
 
 | View | Mostra |
 |---|---|

@@ -81,7 +81,10 @@ func (z *Zone) achUpdate(p *entity, goal game.AchGoal, target string, f func(def
 		}
 		cur := a.counts[def.ID]
 		next := f(def, cur)
-		if next >= def.Count {
+		if def.Each {
+			next = def.Mark(cur, target) // cada alvo conta uma vez (Caçador de Raros)
+		}
+		if def.Progress(next) >= def.Count {
 			delete(a.counts, def.ID)
 			a.unlocked[def.ID] = z.cfg.Clock().UnixMilli()
 			unlocked = append(unlocked, def)
@@ -123,7 +126,7 @@ func (z *Zone) achUpdate(p *entity, goal game.AchGoal, target string, f func(def
 // achInfo: full = com os textos (catálogo); senão só id, progresso e desbloqueio.
 func (z *Zone) achInfo(p *entity, def *game.AchievementDef, full bool) *pb.AchievementInfo {
 	a := &p.pl.ach
-	info := &pb.AchievementInfo{Id: def.ID, Need: uint32(def.Count), Count: uint32(min(a.counts[def.ID], def.Count))}
+	info := &pb.AchievementInfo{Id: def.ID, Need: uint32(def.Count), Count: uint32(min(def.Progress(a.counts[def.ID]), def.Count))}
 	if at, ok := a.unlocked[def.ID]; ok {
 		info.Unlocked, info.UnlockedAtMs, info.Count = true, at, uint32(def.Count)
 	}

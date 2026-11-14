@@ -13,6 +13,9 @@ const townSpawnRadius = 5.0
 
 // kill trata a morte de qualquer entidade.
 func (z *Zone) kill(dead, killer *entity) {
+	if dead.mon != nil && z.rareRise(dead) {
+		return // Ossudo, o Teimoso, levanta uma vez (rares.go)
+	}
 	dead.dead = true
 	dead.hp = 0
 	z.spreadPlague(dead)
@@ -53,6 +56,7 @@ func (z *Zone) kill(dead, killer *entity) {
 			z.bossChanged(dead)
 		}
 		z.shareMonsterXP(dead, takers)
+		z.rareKilled(dead, takers)
 		return
 	}
 
@@ -91,7 +95,7 @@ func (z *Zone) kill(dead, killer *entity) {
 	}
 	var barLost int64
 	if losses > 0 && dead.level >= game.MasteryLevel {
-		barLost = z.masteryDeath(dead, losses) // no 30, sai da barra de Maestria (sem tirar ponto)
+		barLost = z.masteryDeath(dead, losses) // no máximo, sai da barra de Maestria (sem tirar ponto)
 	}
 	z.tallyXP(dead, xpDeath, dead.pl.xp-before) // telemetria (xptally.go)
 	dead.pl.statsDirty = true

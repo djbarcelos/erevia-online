@@ -57,7 +57,7 @@ function playerRow(r: RankEntry, board: Board, localId: number): HTMLElement {
       el("small", null, [info.label, r.clanName ? `‹${r.clanName}›` : ""].filter(Boolean).join(" · ")),
     ),
     board === "pvp" ? el("span", "rk-val", el("b", null, fmt.format(r.pvpKills)), el("small", null, "vitórias")) : "",
-    // No 30, o nível de Maestria ao lado do nível (também desempata a ordem).
+    // No nível máximo, o nível de Maestria ao lado do nível (também desempata a ordem).
     el("span", "rk-val", el("b", null, `Nv ${r.level}`), r.mastery > 0 ? el("small", "rk-mastery", `Maestria ${r.mastery}`) : ""),
   );
   row.style.setProperty("--cc", info.color);

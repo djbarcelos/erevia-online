@@ -101,6 +101,9 @@ func (z *Zone) progressPB(p *entity) *pb.Progress {
 		FreeAttrPoints:  uint32(freeAttrPoints(p)),
 		FreeSkillPoints: uint32(freeSkillPoints(p)),
 		Spec:            p.pl.spec,
+		MaxLevel:        game.MaxLevel,
+		// Do 31 ao 40 só sobem os atributos (game.SkillPointMaxLevel).
+		SkillPointMaxLevel: game.SkillPointMaxLevel,
 	}
 	ids := make([]uint32, 0, len(p.pl.ranks))
 	for id := range p.pl.ranks {

@@ -129,7 +129,7 @@ type playerState struct {
 	ach         achievements
 	bst         bestiary // abates por monstro e famílias (bestiary.go)
 	rankingNext float64
-	// Maestria (nível 30): barra, pontos da árvore e a soma dos efeitos (ver mastery.go).
+	// Maestria (nível máximo): barra, pontos da árvore e a soma dos efeitos (ver mastery.go).
 	mastery masteryState
 }
 

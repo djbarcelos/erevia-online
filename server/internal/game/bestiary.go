@@ -45,10 +45,10 @@ const BestiaryMaxKills = 1_000_000_000
 // de quem já usa uma cor do bestiário). A ordem de BestiaryFamilies só cresce no fim.
 const BestiaryOutfitBase = 100
 
-// BestiaryOneKill: 1 abate abre a entrada inteira. Quando os monstros raros existirem
-// (tunnel#133, MonsterDef.Rare), basta acrescentar `|| m.Rare` aqui.
+// BestiaryOneKill: 1 abate abre a entrada inteira (chefes, raid e os monstros raros da
+// tunnel#133, MonsterDef.Rare).
 func BestiaryOneKill(m *MonsterDef) bool {
-	return m.Boss || m.Raid
+	return m.Boss || m.Raid || m.Rare != nil
 }
 
 // BestiaryFamilyDef é uma família do bestiário.

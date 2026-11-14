@@ -36,7 +36,7 @@ const (
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
 		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
-		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, bestiary"
+		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, bestiary, xp_curve"
 )
 
 var (
@@ -94,9 +94,10 @@ type Character struct {
 	Spec string `json:"spec"`
 	// Bestiário: abates por monstro e famílias completas (migração 00031).
 	Bestiary game.BestiaryState `json:"-"`
-	// Maestria (nível 30): barra, bônus diário e pontos de cada nó.
+	// Maestria (nível máximo): barra, bônus diário e pontos de cada nó.
 	Mastery  game.MasteryState `json:"-"`
 	kitGiven bool
+	xpCurve  int16 // versão da curva em que a XP foi salva (game.XPCurve)
 }
 
 // StorageState é o armazém de uma conta: moedas e itens (Equipped é sempre false).
@@ -391,6 +392,9 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 		if c, err = pgx.CollectExactlyOneRow(rows, scanCharacter); err != nil {
 			return err
 		}
+		if err := convertXPCurve(ctx, tx, &c); err != nil {
+			return err
+		}
 		if !c.kitGiven { // personagem de antes do kit: recebe o padrão da classe
 			if err := giveStarterKit(ctx, tx, &c, game.StarterKit(c.Class)); err != nil {
 				return err
@@ -614,7 +618,7 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
 		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
 		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat, &quests,
-		&achievements, &c.Title, &c.Spec, &mastery, &bestiary)
+		&achievements, &c.Title, &c.Spec, &mastery, &bestiary, &c.xpCurve)
 	if err != nil {
 		return c, err
 	}
@@ -647,6 +651,45 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	c.Attrs = game.Attrs{Str: int(a[0]), Dex: int(a[1]), Con: int(a[2]), Int: int(a[3]), Wis: int(a[4]), Spi: int(a[5])}
 	c.Ranks, c.Hotbar, err = parseProgress(ranks, hotbar)
 	return c, err
+}
+
+// convertXPCurve: a XP salva numa curva antiga vira a da curva de hoje (o mesmo nível e a
+// mesma fração dele, game.ConvertXP) e já fica salva, na transação que carrega o personagem
+// (a linha está travada com FOR UPDATE). Roda uma vez por personagem.
+//
+// Guarda do deploy: a Railway sobe o servidor novo antes de derrubar o antigo, e o antigo,
+// ao desligar, grava todo mundo com a XP da curva 1 sem mexer em xp_curve. Se o jogador já
+// tinha reconectado no novo, a linha está marcada na curva de hoje com XP da curva 1. O
+// save sempre grava a coluna level (nos dois servidores, e a conversão não muda o nível),
+// então a XP é conferida contra ela (game.CheckSavedXP): XP da curva 1 é convertida de
+// novo; XP que não cabe em nenhuma fica no início do nível salvo e vira um evento
+// "invariant" (ref "xp_curve") na telemetria. O nível salvo nunca desce.
+func convertXPCurve(ctx context.Context, tx pgx.Tx, c *Character) error {
+	var xp int64
+	level := c.Level
+	if int(c.xpCurve) < game.XPCurve {
+		xp = game.ConvertXP(c.XP, int(c.xpCurve))
+		level = game.LevelForXP(xp)
+	} else {
+		var how game.XPRepair
+		if xp, how = game.CheckSavedXP(c.XP, c.Level); how == game.XPOK {
+			return nil
+		}
+		level = max(game.LevelForXP(xp), min(c.Level, game.MaxLevel))
+		if how == game.XPClamped {
+			if err := insertEvents(ctx, tx, []GameEvent{{At: time.Now(), Kind: "invariant", CharacterID: c.ID, AccountID: c.AccountID,
+				Level: level, Ref: "xp_curve", Extra: map[string]any{
+					"value": fmt.Sprintf("nível %d com XP %d", c.Level, c.XP), "fixed": true, "xp": xp, "where": "load"}}}); err != nil {
+				return fmt.Errorf("registrar a XP inválida: %w", err)
+			}
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE characters SET xp = $2, level = $3, xp_curve = $4 WHERE id = $1`,
+		c.ID, xp, level, game.XPCurve); err != nil {
+		return fmt.Errorf("converter a XP: %w", err)
+	}
+	c.XP, c.Level, c.xpCurve = xp, level, game.XPCurve
+	return nil
 }
 
 // progressJSON: ranks como {"id": rank} e a barra como lista (JSONB).

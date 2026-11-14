@@ -2221,7 +2221,7 @@ func (x *MasteryCmd) GetNode() string {
 // morrer e quando a árvore muda. No 30 a barra de XP do HUD vira esta barra.
 type MasteryState struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	Active           bool                   `protobuf:"varint,1,opt,name=active,proto3" json:"active,omitempty"`                        // nível 30: a barra enche e os pontos podem ser gastos
+	Active           bool                   `protobuf:"varint,1,opt,name=active,proto3" json:"active,omitempty"`                        // nível máximo (open_level): a barra enche e os pontos podem ser gastos
 	Level            uint32                 `protobuf:"varint,2,opt,name=level,proto3" json:"level,omitempty"`                          // pontos ganhos no total ("Maestria N")
 	Free             uint32                 `protobuf:"varint,3,opt,name=free,proto3" json:"free,omitempty"`                            // pontos para gastar
 	Xp               uint64                 `protobuf:"varint,4,opt,name=xp,proto3" json:"xp,omitempty"`                                // XP na barra atual
@@ -2234,8 +2234,11 @@ type MasteryState struct {
 	RespecReady      bool                   `protobuf:"varint,11,opt,name=respec_ready,json=respecReady,proto3" json:"respec_ready,omitempty"`                 // o Redistribuir de hoje está livre
 	MaxLevel         uint32                 `protobuf:"varint,12,opt,name=max_level,json=maxLevel,proto3" json:"max_level,omitempty"`                          // teto da Maestria (a árvore inteira)
 	TeleportDiscount float32                `protobuf:"fixed32,13,opt,name=teleport_discount,json=teleportDiscount,proto3" json:"teleport_discount,omitempty"` // Viajante: desconto nas Pedras de Teleporte (0–1)
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Nível em que a Maestria abre (o máximo). Abaixo dele, quem já tem pontos (ganhos quando o
+	// máximo era 30) ainda gasta e redistribui, mas a barra não enche.
+	OpenLevel     uint32 `protobuf:"varint,14,opt,name=open_level,json=openLevel,proto3" json:"open_level,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MasteryState) Reset() {
@@ -2355,6 +2358,13 @@ func (x *MasteryState) GetMaxLevel() uint32 {
 func (x *MasteryState) GetTeleportDiscount() float32 {
 	if x != nil {
 		return x.TeleportDiscount
+	}
+	return 0
+}
+
+func (x *MasteryState) GetOpenLevel() uint32 {
+	if x != nil {
+		return x.OpenLevel
 	}
 	return 0
 }
@@ -5339,7 +5349,7 @@ type ServerMessage_EventStatus struct {
 }
 
 type ServerMessage_Mastery struct {
-	Mastery *MasteryState `protobuf:"bytes,54,opt,name=mastery,proto3,oneof"` // Maestria (nível 30): barra, pontos e árvore do jogador
+	Mastery *MasteryState `protobuf:"bytes,54,opt,name=mastery,proto3,oneof"` // Maestria (nível máximo): barra, pontos e árvore do jogador
 }
 
 type ServerMessage_MasteryTree struct {
@@ -8325,10 +8335,12 @@ type Progress struct {
 	FreeSkillPoints uint32                 `protobuf:"varint,5,opt,name=free_skill_points,json=freeSkillPoints,proto3" json:"free_skill_points,omitempty"`
 	// O que +1 ponto em cada atributo muda agora (ordem: for, des, con, int, sab, esp).
 	// As fórmulas são lineares nos atributos: dá para prever qualquer distribuição somando.
-	PerPoint      []*StatBlock `protobuf:"bytes,6,rep,name=per_point,json=perPoint,proto3" json:"per_point,omitempty"`
-	Spec          string       `protobuf:"bytes,7,opt,name=spec,proto3" json:"spec,omitempty"` // especialização escolhida ("" = nenhuma); o bônus dela já está nos atributos
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PerPoint           []*StatBlock `protobuf:"bytes,6,rep,name=per_point,json=perPoint,proto3" json:"per_point,omitempty"`
+	Spec               string       `protobuf:"bytes,7,opt,name=spec,proto3" json:"spec,omitempty"`                                                            // especialização escolhida ("" = nenhuma); o bônus dela já está nos atributos
+	MaxLevel           uint32       `protobuf:"varint,8,opt,name=max_level,json=maxLevel,proto3" json:"max_level,omitempty"`                                   // nível máximo dos jogadores
+	SkillPointMaxLevel uint32       `protobuf:"varint,9,opt,name=skill_point_max_level,json=skillPointMaxLevel,proto3" json:"skill_point_max_level,omitempty"` // último nível que dá ponto de skill (depois, só atributos)
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Progress) Reset() {
@@ -8408,6 +8420,20 @@ func (x *Progress) GetSpec() string {
 		return x.Spec
 	}
 	return ""
+}
+
+func (x *Progress) GetMaxLevel() uint32 {
+	if x != nil {
+		return x.MaxLevel
+	}
+	return 0
+}
+
+func (x *Progress) GetSkillPointMaxLevel() uint32 {
+	if x != nil {
+		return x.SkillPointMaxLevel
+	}
+	return 0
 }
 
 // Atributos de combate (valores finais ou diferenças).
@@ -10789,6 +10815,8 @@ type Entity struct {
 	Look          *BodyLook              `protobuf:"bytes,24,opt,name=look,proto3" json:"look,omitempty"`  // jogadores: visual do corpo
 	Raid          bool                   `protobuf:"varint,25,opt,name=raid,proto3" json:"raid,omitempty"` // raid boss (barra no topo da tela)
 	Spec          string                 `protobuf:"bytes,26,opt,name=spec,proto3" json:"spec,omitempty"`  // jogadores: especialização (SpecInfo.id; "" = nenhuma)
+	Tint          string                 `protobuf:"bytes,27,opt,name=tint,proto3" json:"tint,omitempty"`  // monstros: cor da variante (#rrggbb; "" = a do modelo)
+	Rare          bool                   `protobuf:"varint,40,opt,name=rare,proto3" json:"rare,omitempty"` // monstro raro (named): nome dourado e selo no quadro do alvo
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11003,6 +11031,20 @@ func (x *Entity) GetSpec() string {
 		return x.Spec
 	}
 	return ""
+}
+
+func (x *Entity) GetTint() string {
+	if x != nil {
+		return x.Tint
+	}
+	return ""
+}
+
+func (x *Entity) GetRare() bool {
+	if x != nil {
+		return x.Rare
+	}
+	return false
 }
 
 type EntityState struct {
@@ -12596,7 +12638,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\n" +
 	"MasteryCmd\x12-\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x19.erevia.v1.MasteryCmdKindR\x04kind\x12\x12\n" +
-	"\x04node\x18\x02 \x01(\tR\x04node\"\x88\x03\n" +
+	"\x04node\x18\x02 \x01(\tR\x04node\"\xa7\x03\n" +
 	"\fMasteryState\x12\x16\n" +
 	"\x06active\x18\x01 \x01(\bR\x06active\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\rR\x05level\x12\x12\n" +
@@ -12614,7 +12656,9 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	" \x03(\v2\x16.erevia.v1.MasteryRankR\x05ranks\x12!\n" +
 	"\frespec_ready\x18\v \x01(\bR\vrespecReady\x12\x1b\n" +
 	"\tmax_level\x18\f \x01(\rR\bmaxLevel\x12+\n" +
-	"\x11teleport_discount\x18\r \x01(\x02R\x10teleportDiscount\"5\n" +
+	"\x11teleport_discount\x18\r \x01(\x02R\x10teleportDiscount\x12\x1d\n" +
+	"\n" +
+	"open_level\x18\x0e \x01(\rR\topenLevel\"5\n" +
 	"\vMasteryRank\x12\x12\n" +
 	"\x04node\x18\x01 \x01(\tR\x04node\x12\x12\n" +
 	"\x04rank\x18\x02 \x01(\rR\x04rank\"\xb3\x01\n" +
@@ -13093,7 +13137,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\f\n" +
 	"\x01x\x18\x03 \x01(\x02R\x01x\x12\f\n" +
 	"\x01z\x18\x04 \x01(\x02R\x01z\x12\x14\n" +
-	"\x05price\x18\x05 \x01(\rR\x05price\"\xa1\x02\n" +
+	"\x05price\x18\x05 \x01(\rR\x05price\"\xf1\x02\n" +
 	"\bProgress\x12$\n" +
 	"\x04base\x18\x01 \x01(\v2\x10.erevia.v1.AttrsR\x04base\x12&\n" +
 	"\x05spent\x18\x02 \x01(\v2\x10.erevia.v1.AttrsR\x05spent\x12(\n" +
@@ -13101,7 +13145,9 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x05ranks\x18\x04 \x03(\v2\x14.erevia.v1.SkillRankR\x05ranks\x12*\n" +
 	"\x11free_skill_points\x18\x05 \x01(\rR\x0ffreeSkillPoints\x121\n" +
 	"\tper_point\x18\x06 \x03(\v2\x14.erevia.v1.StatBlockR\bperPoint\x12\x12\n" +
-	"\x04spec\x18\a \x01(\tR\x04spec\"\x80\x03\n" +
+	"\x04spec\x18\a \x01(\tR\x04spec\x12\x1b\n" +
+	"\tmax_level\x18\b \x01(\rR\bmaxLevel\x121\n" +
+	"\x15skill_point_max_level\x18\t \x01(\rR\x12skillPointMaxLevel\"\x80\x03\n" +
 	"\tStatBlock\x12\x15\n" +
 	"\x06max_hp\x18\x01 \x01(\x02R\x05maxHp\x12\x15\n" +
 	"\x06max_mp\x18\x02 \x01(\x02R\x05maxMp\x12\x13\n" +
@@ -13331,7 +13377,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\vweapon_type\x18\x15 \x01(\tR\n" +
 	"weaponType\x12-\n" +
 	"\x06scroll\x18\x16 \x01(\x0e2\x15.erevia.v1.ScrollKindR\x06scroll\x12\x18\n" +
-	"\ablessed\x18\x17 \x01(\bR\ablessed\"\x9a\x05\n" +
+	"\ablessed\x18\x17 \x01(\bR\ablessed\"\xc2\x05\n" +
 	"\x06Entity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\f\n" +
@@ -13359,7 +13405,9 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x0eweapon_enchant\x18\x17 \x01(\rR\rweaponEnchant\x12'\n" +
 	"\x04look\x18\x18 \x01(\v2\x13.erevia.v1.BodyLookR\x04look\x12\x12\n" +
 	"\x04raid\x18\x19 \x01(\bR\x04raid\x12\x12\n" +
-	"\x04spec\x18\x1a \x01(\tR\x04spec\"\xa1\x01\n" +
+	"\x04spec\x18\x1a \x01(\tR\x04spec\x12\x12\n" +
+	"\x04tint\x18\x1b \x01(\tR\x04tint\x12\x12\n" +
+	"\x04rare\x18( \x01(\bR\x04rare\"\xa1\x01\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +

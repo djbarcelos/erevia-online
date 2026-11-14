@@ -35,6 +35,13 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
   // Nível que libera cada degrau (o mesmo para as 3 skills dele).
   const tierLevels = Array.from({ length: tiers }, (_, t) => classTree.find((s) => s.tier === t)?.levelReq ?? 1);
   const saved = (): Map<number, number> => new Map((d.progress()?.ranks ?? []).map((r) => [r.skillId, r.rank]));
+  /** "Cada nível até o 30 dá 1 ponto de skill." (o último nível com ponto vem do servidor). */
+  const pointRule = (): string => {
+    const p = d.progress();
+    const last = p?.skillPointMaxLevel ?? 0;
+    if (!last || last >= (p?.maxLevel ?? 0)) return "Cada nível dá 1 ponto de skill.";
+    return `Cada nível até o ${last} dá 1 ponto de skill; depois, só pontos de atributo.`;
+  };
   let pending = saved();
   let selected: SkillInfo | null = null;
 
@@ -188,7 +195,7 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
         el(
           "ul",
           "how small muted",
-          el("li", null, "Cada nível dá 1 ponto de skill."),
+          el("li", null, pointRule()),
           el("li", null, "Clique numa skill para gastar 1 ponto; botão direito desfaz um ponto ainda não confirmado."),
           el("li", null, `Os degraus liberam nos níveis ${listPt(tierLevels)}, e cada um exige a skill de cima no mesmo ramo.`),
           el("li", null, "Arraste skills ativas para a barra de atalhos."),
@@ -260,7 +267,7 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
     const changed = [...pending].some(([id, r]) => r !== (cur.get(id) ?? 0)) || [...cur].some(([id, r]) => r !== (pending.get(id) ?? 0));
     undo.disabled = !changed;
     confirm.disabled = !changed;
-    note.textContent = `Nível ${d.level()}: 1 ponto de skill por nível.${changed ? " Há mudanças não confirmadas." : ""}`;
+    note.textContent = `Nível ${d.level()}: ${pointRule().toLowerCase()}${changed ? " Há mudanças não confirmadas." : ""}`;
     renderDetail();
   }
 
