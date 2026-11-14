@@ -7434,22 +7434,27 @@ func (x *Welcome) GetSpecs() []*SpecInfo {
 	return nil
 }
 
-// Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
+// Zona de caça: um anel (ou setor de anel) ao redor da cidade, um disco próprio ou um ponto
+// fixo (chefe).
 type MapZone struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // nomes dos monstros
-	RMin          float32                `protobuf:"fixed32,2,opt,name=r_min,json=rMin,proto3" json:"r_min,omitempty"`
-	RMax          float32                `protobuf:"fixed32,3,opt,name=r_max,json=rMax,proto3" json:"r_max,omitempty"`
-	LevelMin      uint32                 `protobuf:"varint,4,opt,name=level_min,json=levelMin,proto3" json:"level_min,omitempty"`
-	LevelMax      uint32                 `protobuf:"varint,5,opt,name=level_max,json=levelMax,proto3" json:"level_max,omitempty"`
-	Fixed         bool                   `protobuf:"varint,6,opt,name=fixed,proto3" json:"fixed,omitempty"` // ponto fixo em (x, z)
-	X             float32                `protobuf:"fixed32,7,opt,name=x,proto3" json:"x,omitempty"`
-	Z             float32                `protobuf:"fixed32,8,opt,name=z,proto3" json:"z,omitempty"`
-	Boss          bool                   `protobuf:"varint,9,opt,name=boss,proto3" json:"boss,omitempty"`
-	Area          bool                   `protobuf:"varint,10,opt,name=area,proto3" json:"area,omitempty"` // área de caça própria (disco de centro x, z e raio radius)
-	Radius        float32                `protobuf:"fixed32,11,opt,name=radius,proto3" json:"radius,omitempty"`
-	Region        string                 `protobuf:"bytes,12,opt,name=region,proto3" json:"region,omitempty"` // nome da região ("Vale das Pedras Vivas")
-	Raid          bool                   `protobuf:"varint,13,opt,name=raid,proto3" json:"raid,omitempty"`    // raid boss (covil próprio)
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Name     string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // nomes dos monstros
+	RMin     float32                `protobuf:"fixed32,2,opt,name=r_min,json=rMin,proto3" json:"r_min,omitempty"`
+	RMax     float32                `protobuf:"fixed32,3,opt,name=r_max,json=rMax,proto3" json:"r_max,omitempty"`
+	LevelMin uint32                 `protobuf:"varint,4,opt,name=level_min,json=levelMin,proto3" json:"level_min,omitempty"`
+	LevelMax uint32                 `protobuf:"varint,5,opt,name=level_max,json=levelMax,proto3" json:"level_max,omitempty"`
+	Fixed    bool                   `protobuf:"varint,6,opt,name=fixed,proto3" json:"fixed,omitempty"` // ponto fixo em (x, z)
+	X        float32                `protobuf:"fixed32,7,opt,name=x,proto3" json:"x,omitempty"`
+	Z        float32                `protobuf:"fixed32,8,opt,name=z,proto3" json:"z,omitempty"`
+	Boss     bool                   `protobuf:"varint,9,opt,name=boss,proto3" json:"boss,omitempty"`
+	Area     bool                   `protobuf:"varint,10,opt,name=area,proto3" json:"area,omitempty"` // área de caça própria (disco de centro x, z e raio radius)
+	Radius   float32                `protobuf:"fixed32,11,opt,name=radius,proto3" json:"radius,omitempty"`
+	Region   string                 `protobuf:"bytes,12,opt,name=region,proto3" json:"region,omitempty"` // nome da região ("Vale das Pedras Vivas")
+	Raid     bool                   `protobuf:"varint,13,opt,name=raid,proto3" json:"raid,omitempty"`    // raid boss (covil próprio)
+	// Setor de anel (r_min–r_max), em graus: 0° = leste (+x), crescendo para o norte (+z).
+	// angle_max > angle_min no setor (passa de 360 quando cruza o 0°); os dois 0 = anel inteiro.
+	AngleMin      float32 `protobuf:"fixed32,40,opt,name=angle_min,json=angleMin,proto3" json:"angle_min,omitempty"`
+	AngleMax      float32 `protobuf:"fixed32,41,opt,name=angle_max,json=angleMax,proto3" json:"angle_max,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7573,6 +7578,20 @@ func (x *MapZone) GetRaid() bool {
 		return x.Raid
 	}
 	return false
+}
+
+func (x *MapZone) GetAngleMin() float32 {
+	if x != nil {
+		return x.AngleMin
+	}
+	return 0
+}
+
+func (x *MapZone) GetAngleMax() float32 {
+	if x != nil {
+		return x.AngleMax
+	}
+	return 0
 }
 
 type Spawn struct {
@@ -11504,7 +11523,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x04clan\x18\x13 \x01(\v2\x14.erevia.v1.ClanStateR\x04clan\x121\n" +
 	"\aenchant\x18\x14 \x01(\v2\x17.erevia.v1.EnchantRulesR\aenchant\x12-\n" +
 	"\x06bosses\x18\x15 \x03(\v2\x15.erevia.v1.BossStatusR\x06bosses\x12)\n" +
-	"\x05specs\x18\x16 \x03(\v2\x13.erevia.v1.SpecInfoR\x05specs\"\x9f\x02\n" +
+	"\x05specs\x18\x16 \x03(\v2\x13.erevia.v1.SpecInfoR\x05specs\"\xd9\x02\n" +
 	"\aMapZone\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x13\n" +
 	"\x05r_min\x18\x02 \x01(\x02R\x04rMin\x12\x13\n" +
@@ -11519,7 +11538,9 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	" \x01(\bR\x04area\x12\x16\n" +
 	"\x06radius\x18\v \x01(\x02R\x06radius\x12\x16\n" +
 	"\x06region\x18\f \x01(\tR\x06region\x12\x12\n" +
-	"\x04raid\x18\r \x01(\bR\x04raid\"2\n" +
+	"\x04raid\x18\r \x01(\bR\x04raid\x12\x1b\n" +
+	"\tangle_min\x18( \x01(\x02R\bangleMin\x12\x1b\n" +
+	"\tangle_max\x18) \x01(\x02R\bangleMax\"2\n" +
 	"\x05Spawn\x12)\n" +
 	"\x06entity\x18\x01 \x01(\v2\x11.erevia.v1.EntityR\x06entity\"\x19\n" +
 	"\aDespawn\x12\x0e\n" +
