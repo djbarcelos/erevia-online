@@ -29,8 +29,9 @@ type vitalityState struct {
 	sentPct int     // % inteiro do último estado mandado (-1 = nunca)
 }
 
-// vitalityOnJoin: enche o que passou fora do jogo, avisa e manda o estado.
-func (z *Zone) vitalityOnJoin(p *entity, v game.VitalityState) {
+// vitalityOnJoin: enche o que passou fora do jogo, avisa e manda o estado. Pelo portão
+// (hop) o estado vem da outra zona, sem tempo fora e sem repetir os avisos.
+func (z *Zone) vitalityOnJoin(p *entity, v game.VitalityState, hop bool) {
 	before := game.ClampVitality(v.Stored, p.level)
 	p.pl.vit = vitalityState{
 		stored:  game.VitalityOffline(v.Stored, p.level, v.LastSeen, z.cfg.Clock()),
@@ -39,6 +40,10 @@ func (z *Zone) vitalityOnJoin(p *entity, v game.VitalityState) {
 		sentPct: -1,
 	}
 	st := &p.pl.vit
+	if hop {
+		z.sendVitality(p)
+		return
+	}
 	if st.stored > 0 {
 		msg := fmt.Sprintf("Vitalidade: %s.", pctText(game.VitalityPercent(st.stored, p.level)))
 		if st.stored > before {
@@ -164,8 +169,12 @@ func (z *Zone) vitalityLevelUp(p *entity) {
 }
 
 // updateVitalityTown: a cada vitalityTownEvery segundos, enche um pouco a de quem está na
-// cidade de verdade (área segura sem invasão), vivo e fora de combate.
+// cidade de verdade (área segura sem invasão), vivo e fora de combate. Só na zona que tem
+// a cidade (a Clareira de Testes não tem).
 func (z *Zone) updateVitalityTown() {
+	if z.cfg.NoTown {
+		return
+	}
 	for _, p := range z.players {
 		if p.dead || !z.pveSafe(p.pos) || z.now-p.lastCombat <= outOfCombatAfter {
 			continue

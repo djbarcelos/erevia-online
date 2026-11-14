@@ -1,7 +1,9 @@
 package zone
 
 import (
+	"context"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -305,5 +307,60 @@ func TestGMVitalityCommand(t *testing.T) {
 	z.command(other, "/vitalidade 100")
 	if other.pl.vit.stored != 10 {
 		t.Fatal("só GM")
+	}
+}
+
+// Com várias zonas: o login pelo gerente enche o que passou fora do jogo e lê o maior
+// nível da conta; o portão leva a vitalidade junto (sem encher e sem repetir avisos); só
+// a zona com a cidade enche (a Clareira de Testes não tem).
+func TestVitalityAcrossZones(t *testing.T) {
+	m, a, b := twoZones(t, nil)
+	p := &routedFake{}
+	m.Join(context.Background(), JoinInfo{ID: 1, Name: "Ana", Class: "knight", X: 0, Z: -14, AccountID: 1, Peer: p,
+		XP: game.XPLevelStart(10), Vitality: game.VitalityState{LastSeen: noon.Add(-10 * time.Hour), AccountTop: game.MaxLevel}})
+	pump(m.Zones()...)
+	ana := a.players[1]
+	if ana == nil {
+		t.Fatal("não entrou")
+	}
+	want := int64(float64(game.VitalityCap(10)) * 0.15)
+	if ana.pl.vit.stored != want || !ana.pl.vit.catchup {
+		t.Fatalf("login pelo gerente: estoque %d (esperava %d), recuperação %v", ana.pl.vit.stored, want, ana.pl.vit.catchup)
+	}
+
+	// Na praça do Vale enche.
+	a.updateVitalityTown()
+	if ana.pl.vit.stored <= want {
+		t.Fatal("a praça do Vale não encheu")
+	}
+	stored := ana.pl.vit.stored
+
+	useGate(m, p, 1)
+	got := b.players[1]
+	if got == nil {
+		t.Fatal("não atravessou")
+	}
+	if got.pl.vit.stored != stored || got.pl.vit.top != game.MaxLevel || !got.pl.vit.catchup {
+		t.Fatalf("depois do portão: %+v, esperava estoque %d", got.pl.vit, stored)
+	}
+	p.mu.Lock()
+	rested := 0
+	for _, msg := range p.msgs {
+		if c := msg.GetChat(); c != nil && strings.Contains(c.Text, "descansou") {
+			rested++
+		}
+	}
+	p.mu.Unlock()
+	if rested != 1 {
+		t.Fatalf("o aviso do descanso saiu %d vezes (o portão não repete)", rested)
+	}
+
+	// Na clareira não há cidade: parado perto do portão, não enche.
+	got.pos = Vec2{}
+	for range 360 {
+		b.updateVitalityTown()
+	}
+	if got.pl.vit.stored != stored {
+		t.Fatalf("a clareira encheu a vitalidade: %d → %d", stored, got.pl.vit.stored)
 	}
 }

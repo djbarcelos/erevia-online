@@ -1,6 +1,9 @@
 package game
 
-import "strings"
+import (
+	"math/bits"
+	"strings"
+)
 
 // Conquistas: definidas por dados, como as missões. Cada uma anda com um acontecimento
 // que o servidor já valida (abate, nível, encantamento, troca, criação, missão, PvP e
@@ -19,6 +22,7 @@ const (
 	AchPvPWin                     // vencer jogadores em combate (vitórias PvP)
 	AchRaid                       // participar (com dano) da morte do raid boss Target
 	AchDefense                    // defender a cidade numa invasão vencida (zone/invasion.go)
+	AchRepBuy                     // comprar o título Target na loja de reputação (reputation.go)
 )
 
 // AchievementDef é uma conquista do catálogo.
@@ -30,6 +34,27 @@ type AchievementDef struct {
 	Goal   AchGoal
 	Target string
 	Count  int
+	// Each: cada alvo de Target conta uma vez só (Count = quantos alvos). O progresso fica
+	// salvo como um conjunto de bits (o bit i é o i-ésimo alvo); ver Mark e Progress.
+	Each bool
+}
+
+// Mark: o progresso depois de um acontecimento com o alvo target (Each: liga o bit dele).
+func (a *AchievementDef) Mark(cur int, target string) int {
+	for i, t := range strings.Split(a.Target, "|") {
+		if t == target {
+			return cur | 1<<i
+		}
+	}
+	return cur
+}
+
+// Progress: quanto do Count já foi feito (Each: quantos alvos diferentes).
+func (a *AchievementDef) Progress(cur int) int {
+	if a.Each {
+		return bits.OnesCount(uint(cur))
+	}
+	return cur
 }
 
 // Threshold: o acontecimento traz um valor (nível, +N, raridade) comparado com Count; as
@@ -60,10 +85,11 @@ type AchievementState struct {
 }
 
 // skeletons: monstros que contam para "Quebra-Ossos".
-const skeletons = "skeleton_minion|skeleton_warrior|skeleton_rogue|skeleton_mage|bone_guard|bone_lord|ozrhal"
+const skeletons = "skeleton_minion|skeleton_warrior|skeleton_rogue|skeleton_mage|bone_guard|bone_lord|ozrhal|" +
+	"rare_ossudo|rare_captain|rare_vossk|captain_guard"
 
 // AchievementList: o catálogo, na ordem em que o cliente mostra.
-var AchievementList = []*AchievementDef{
+var AchievementList = append([]*AchievementDef{
 	{ID: "first_kill", Name: "Primeiro Sangue", Text: "Derrotar o primeiro monstro.", Title: "Caçador Novato", Goal: AchKill, Count: 1},
 	{ID: "tutorial", Name: "Primeiros Passos", Text: "Terminar o tutorial (Os Campos dos Ossos).", Title: "Recruta de Vel'Aran", Goal: AchQuest, Target: "tut_bones", Count: 1},
 	{ID: "bones_100", Name: "Quebra-Ossos", Text: "Derrotar 100 esqueletos.", Title: "Quebra-Ossos", Goal: AchKill, Target: skeletons, Count: 100},
@@ -78,7 +104,9 @@ var AchievementList = []*AchievementDef{
 	{ID: "first_trade", Name: "Negócio Fechado", Text: "Concluir uma troca com outro jogador.", Title: "Mercador", Goal: AchTrade, Count: 1},
 	{ID: "craft_legend", Name: "Forja Lendária", Text: "Criar um item lendário no Ferreiro.", Title: "Mestre Ferreiro", Goal: AchCraft, Count: int(GradeLegendary)},
 	{ID: "pvp_win", Name: "Duelista", Text: "Vencer um jogador em combate (que estava lutando).", Title: "Duelista", Goal: AchPvPWin, Count: 1},
-}
+	{ID: "rare_hunter", Name: "Caçador de Raros", Text: "Derrotar os 4 monstros raros: Ossudo, o Teimoso; Capitão Ossudo; Vossk, o Cinzento; e Ômrun, Golem Ancião.",
+		Title: "Caçador de Raros", Goal: AchKill, Target: "rare_ossudo|rare_captain|rare_vossk|rare_omrun", Count: 4, Each: true},
+}, RepTitleAchievements...) // os títulos da loja de reputação no fim (reputation.go)
 
 // Achievements: as conquistas por id.
 var Achievements = func() map[string]*AchievementDef {
@@ -103,5 +131,5 @@ func TitleOf(id string) string {
 	if a := Achievements[id]; a != nil {
 		return a.Title
 	}
-	return ""
+	return BestiaryTitle(id) // títulos de família do bestiário ("bst:<família>")
 }

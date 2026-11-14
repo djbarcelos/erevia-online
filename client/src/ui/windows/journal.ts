@@ -14,11 +14,16 @@ import { bar, button, el, settings, tabs, toast, tooltip } from "../kit";
 import { MAX_PINS } from "../quest-pins";
 import { questStepTarget, type QuestTracker } from "../quest-nav";
 import "../../styles/journal.css";
+import type { ContractsStore } from "../contracts";
+import { renderReputation } from "./reputation";
 
 export interface JournalDeps {
   quests: QuestTracker;
   /** Botão "Ir": rastreia e anda até o passo (world/questgo.ts). */
   go(questId: string): void;
+  /** Aba Reputação: facções e contratos (contracts.ts). */
+  contracts?: ContractsStore;
+  level?(): number;
 }
 
 /** Ordem dos grupos no Diário. */
@@ -73,7 +78,7 @@ function rewardChips(reward: string): HTMLElement {
 export function buildJournal(d: JournalDeps): HTMLElement {
   const root = el("div", "journal-win");
   const body = el("div", "journal-body");
-  let tab: "active" | "done" = "active";
+  let tab: "active" | "done" | "rep" = "active";
   /** Missões abertas (corpo inteiro). Começa com a rastreada. */
   const open = new Set<string>();
   const first = d.quests.tracked()?.id;
@@ -174,6 +179,7 @@ export function buildJournal(d: JournalDeps): HTMLElement {
       [
         { id: "active", label: "Ativas", icon: ui("scroll", 16), count: String(d.quests.list().length) },
         { id: "done", label: "Concluídas", icon: ui("sparkle", 16), count: String(d.quests.doneList().length) },
+        ...(d.contracts ? [{ id: "rep", label: "Reputação", icon: ui("trophy", 16) }] : []),
       ],
       tab,
       (id) => {
@@ -182,6 +188,7 @@ export function buildJournal(d: JournalDeps): HTMLElement {
       },
     );
     if (tab === "active") renderActive();
+    else if (tab === "rep" && d.contracts) body.replaceChildren(...renderReputation(d.contracts, d.level?.() ?? 0));
     else renderDone();
     root.replaceChildren(nav.root, body);
   };
@@ -189,6 +196,8 @@ export function buildJournal(d: JournalDeps): HTMLElement {
 
   const off = d.quests.onPanel(render);
   root.addEventListener("win-close", off);
+  const offRep = d.contracts?.onChange(() => tab === "rep" && render());
+  if (offRep) root.addEventListener("win-close", offRep);
   return root;
 }
 

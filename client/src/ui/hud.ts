@@ -54,7 +54,7 @@ export const HOTBAR_KEYS = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "D
 /** Um atalho: "skill:<id>" ou "item:<id do item>". */
 export type HotbarEntry = string | null;
 
-export type WindowId = "character" | "inventory" | "skills" | "quests" | "party" | "clan" | "social" | "glory" | "map" | "settings";
+export type WindowId = "character" | "inventory" | "skills" | "quests" | "party" | "clan" | "social" | "glory" | "bestiary" | "map" | "settings";
 
 /** Ações sobre um jogador selecionado (quadro do alvo). */
 export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade" | "friend";
@@ -130,6 +130,7 @@ const MENU: { id: WindowId; icon: string; label: string; key: string }[] = [
   { id: "clan", icon: "clan", label: "Clã", key: "clan" },
   { id: "social", icon: "mail", label: "Social", key: "social" },
   { id: "glory", icon: "trophy", label: "Glória", key: "glory" },
+  { id: "bestiary", icon: "skull", label: "Bestiário", key: "bestiary" },
   { id: "map", icon: "map", label: "Mapa", key: "map" },
   { id: "settings", icon: "gear", label: "Configurações", key: "settings" },
 ];
@@ -447,8 +448,13 @@ export class Hud {
       this.autoBtn.querySelector("kbd")!.textContent = keyLabel(settings.get().keys.auto);
     };
     applyEnv();
-    this.offSettings = settings.on(applyEnv);
+    const offEnv = settings.on(applyEnv);
     addEventListener("resize", applyEnv);
+    // Saída e troca de mapa: nada do HUD velho continua ouvindo.
+    this.offSettings = () => {
+      offEnv();
+      removeEventListener("resize", applyEnv);
+    };
 
     this.renderSlots();
     store.onChange(() => this.renderSlots());
@@ -910,12 +916,13 @@ export class Hud {
         this.partyRows.set(m.id, row);
       }
       const lead = m.id === state.leaderId ? el("span", "m-lead", "♛") : "";
-      row.name.replaceChildren(lead, document.createTextNode(m.name), el("small", null, ` Nv ${m.level}`));
+      // Em outro mapa (zonas): o nome do mapa no lugar do nível; a vida é de até 1 s atrás.
+      row.name.replaceChildren(lead, document.createTextNode(m.name), el("small", null, m.map ? ` · ${m.map}` : ` Nv ${m.level}`));
       row.hp.set(m.hp, m.maxHp, "");
       row.mp.set(m.mp, m.maxMp, "");
       row.root.classList.toggle("dead", m.dead);
-      row.root.classList.toggle("far", !near(m.id));
-      row.root.title = m.dead ? `${m.name} (morto)` : `Selecionar ${m.name}`;
+      row.root.classList.toggle("far", !!m.map || !near(m.id));
+      row.root.title = m.map ? `${m.name} está em ${m.map}` : m.dead ? `${m.name} (morto)` : `Selecionar ${m.name}`;
     }
     for (const [id, row] of this.partyRows) {
       if (!seen.has(id)) {
@@ -953,11 +960,12 @@ export class Hud {
     }
     this.target.classList.toggle("dead", info.dead);
     this.target.classList.toggle("boss", !!info.boss);
+    this.target.classList.toggle("rare", !!info.rare);
     // Jogador com especialização: o nome do caminho, na cor dele, depois do nível.
     const spec = pc ? specInfo(info.spec) : undefined;
     const specEl = spec ? el("span", "t-spec", ` · ${spec.name}`) : "";
     if (spec && specEl) specEl.style.color = spec.color;
-    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}`), specEl, info.boss ? el("em", null, "CHEFE") : "");
+    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}`), specEl, info.boss ? el("em", null, "CHEFE") : "", info.rare ? el("em", "t-rare", "RARO") : "");
     this.tHp.root.hidden = npc;
     this.tHp.set(info.hp, info.maxHp, info.dead ? "Morto" : undefined);
   }

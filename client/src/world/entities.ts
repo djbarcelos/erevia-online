@@ -131,6 +131,8 @@ export interface EntityInfo {
   title: string;
   /** Chefe (marcador e quadro do alvo diferentes). */
   boss?: boolean;
+  /** Monstro raro (named): nome dourado e selo "RARO" no quadro do alvo. */
+  rare?: boolean;
   /** Jogadores: normal, em combate (roxo) ou com karma (vermelho). */
   pvpState: PvpState;
   /** Jogadores: nome do clã ("" = sem clã). */
@@ -157,6 +159,7 @@ export const NAME_COLORS = {
   party: "#7fd0ff",
   clan: "#e8cf8a",
   title: "#cdb8f2",
+  rare: "#ffcf4a",
 } as const;
 
 /** O que o mapa precisa saber de cada entidade. */
@@ -504,13 +507,16 @@ export class EntityManager {
       : isLocal
         ? "#f0d79a"
         : e.kind === EntityKind.MONSTER
-        ? "#ffb4a8"
+        ? e.rare
+          ? NAME_COLORS.rare
+          : "#ffb4a8"
         : e.kind === EntityKind.NPC
           ? "#a8e6a0"
           : e.kind === EntityKind.OBJECT
             ? "#bcd4ff"
             : "#e6ecff";
     nameText.color = baseColor;
+    if (e.rare) nameText.fontWeight = "bold"; // raro: nome dourado, em negrito
     // Contorno em vez de shadowBlur: o desfoque do canvas 2D é caro e a GUI redesenha muito.
     nameText.outlineWidth = 3;
     nameText.outlineColor = "rgba(0,0,0,0.85)";
@@ -555,7 +561,7 @@ export class EntityManager {
 
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
-      model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
+      model: e.model, boss: e.boss, rare: e.rare, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
       weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, baseColor, clanText, titleText, pkRing: null,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
@@ -1580,6 +1586,11 @@ export class EntityManager {
   /** Todas as entidades, para as invariantes do cliente (net/invariants.ts, 1×/s). */
   forEachProbe(cb: (e: EntityProbe) => void): void {
     for (const v of this.views.values()) cb(v);
+  }
+
+  /** Nó raiz de cada entidade (medição de FPS, ?bench=1: separa o que é cenário do que é entidade). */
+  forEachRoot(cb: (e: { root: TransformNode; kind: EntityKind; name: string; local: boolean }) => void): void {
+    for (const v of this.views.values()) cb({ root: v.root, kind: v.kind, name: v.name, local: v.id === this.localId });
   }
 
   /** Pontos que a câmera precisa enxergar (meio do corpo do jogador e do alvo). */

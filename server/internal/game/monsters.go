@@ -39,7 +39,8 @@ type MonsterDef struct {
 	LeashRadius float64      // distância máxima do ponto de origem (0 = a padrão da zona)
 	// Renascimento do raid em segundos de relógio, sorteado entre os dois.
 	RespawnMin, RespawnMax float64
-	NoGear                 bool // nunca deixa cair equipamento (invocações)
+	NoGear                 bool     // nunca deixa cair equipamento (invocações)
+	Rare                   *RareDef // monstro raro (rares.go): nome dourado e saque garantido
 	// Drops: moedas (por nível do monstro) e itens.
 	GoldChance       float64
 	GoldMin, GoldMax float64

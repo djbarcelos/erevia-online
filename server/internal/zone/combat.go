@@ -98,6 +98,7 @@ func (z *Zone) hitInput(src, dst *entity, magic bool, mult, extraCrit float64) g
 		Crit: src.stats.Crit + extraCrit, CritMult: src.stats.CritDamage,
 		Accuracy: src.accuracy(z.now), Evasion: dst.stats.Evasion,
 	}
+	in.Mult *= 1 + z.bestiaryBonus(src, dst) // Bestiário: +1% contra o tipo no 500º abate (bestiary.go)
 	// Saindo da invisibilidade: o primeiro golpe é crítico garantido.
 	if src.pl != nil && src.pl.ambushCrit {
 		in.ForceCrit = true

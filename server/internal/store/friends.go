@@ -205,7 +205,8 @@ func (s *Store) MarkMailRead(ctx context.Context, characterID, mailID int64) err
 // sair da janela de uma hora do limite de envio; as antigas do mesmo dono somem de vez.
 func (s *Store) DeleteMail(ctx context.Context, characterID, mailID int64, at time.Time) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `UPDATE mail SET deleted_at = $3 WHERE id = $1 AND to_id = $2 AND deleted_at IS NULL`,
+		if _, err := tx.Exec(ctx, `UPDATE mail SET deleted_at = $3 WHERE id = $1 AND to_id = $2 AND deleted_at IS NULL
+			AND NOT EXISTS (SELECT 1 FROM mail_attachments a WHERE a.mail_id = mail.id AND a.claimed_at IS NULL)`,
 			mailID, characterID, at); err != nil {
 			return err
 		}

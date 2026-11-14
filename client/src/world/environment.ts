@@ -31,9 +31,9 @@ export interface Environment {
  * tipo de item com thin instances — milhares de objetos em poucas dezenas de draw calls.
  */
 export async function loadEnvironment(scene: Scene, world: WorldData, shadows: ShadowGenerator): Promise<Environment> {
-  const containers = await Promise.all(
-    ["/models/env-forest.glb", "/models/env-town.glb"].map((f) => LoadAssetContainerAsync(f, scene)),
-  );
+  // Os kits do mapa (o principal usa os dois; os outros dizem quais no world.json).
+  const kits = world.kits ?? ["/models/env-forest.glb", "/models/env-town.glb"];
+  const containers = await Promise.all(kits.map((f) => LoadAssetContainerAsync(f, scene)));
 
   // nome do item → malha (já sem a hierarquia do glTF, com o transform aplicado nos vértices)
   const protos = new Map<string, Mesh>();
@@ -211,14 +211,34 @@ export class TreeFader {
     for (const [t, copy] of this.faded) {
       const occluding = this.seen.has(t);
       copy.visibility += ((occluding ? FADED_VISIBILITY : 1) - copy.visibility) * k;
-      if (!occluding && copy.visibility > 0.98) {
-        // Voltou ao normal: devolve a árvore ao buffer e a cópia ao estoque.
-        t.kind.proto.thinInstanceSetMatrixAt(t.index, t.matrix, true);
-        copy.setEnabled(false);
-        t.kind.pool.push(copy);
-        this.faded.delete(t);
-      }
+      if (!occluding && copy.visibility > 0.98) this.restore(t, copy);
     }
+  }
+
+  /** Voltou ao normal: devolve a árvore ao buffer e a cópia ao estoque. */
+  private restore(t: Tree, copy: Mesh): void {
+    t.kind.proto.thinInstanceSetMatrixAt(t.index, t.matrix, true);
+    copy.setEnabled(false);
+    t.kind.pool.push(copy);
+    this.faded.delete(t);
+  }
+
+  /**
+   * Termina na hora as transições do último update (medição de FPS, ?bench=1): sem isso, quantas
+   * cópias ainda estão voltando ao normal depende do FPS, e o número de malhas ativas também.
+   */
+  settle(): void {
+    for (const [t, copy] of this.faded) {
+      if (this.seen.has(t)) copy.visibility = FADED_VISIBILITY;
+      else this.restore(t, copy);
+    }
+  }
+
+  /** Cópias guardadas no estoque (desligadas): quantas são depende de quantas já se precisou. */
+  pooled(): Mesh[] {
+    const out: Mesh[] = [];
+    for (const k of this.kinds.values()) out.push(...k.pool);
+    return out;
   }
 
   private collect(a: Vector3, b: Vector3): void {

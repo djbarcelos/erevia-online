@@ -18,6 +18,8 @@ type fakeSocial struct {
 	mails   []fakeMail
 	seq     int64
 	sends   int // chamadas a SendMail que chegaram ao "banco"
+	// locked: carta com anexo não retirado (casa de leilões), que o banco não deixa apagar.
+	locked func(mailID int64) bool
 }
 
 type fakeMail struct {
@@ -123,7 +125,7 @@ func (f *fakeSocial) MarkMailRead(_ context.Context, id uint32, mailID int64) er
 
 func (f *fakeSocial) DeleteMail(_ context.Context, id uint32, mailID int64, _ time.Time) error {
 	for i := range f.mails {
-		if f.mails[i].ID == mailID && f.mails[i].to == id {
+		if f.mails[i].ID == mailID && f.mails[i].to == id && (f.locked == nil || !f.locked(mailID)) {
 			f.mails[i].deleted = true
 		}
 	}

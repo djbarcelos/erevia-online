@@ -54,6 +54,15 @@ type Config struct {
 	XP2Days        []time.Weekday // dias de XP em dobro pelo horário (nil = só por GM)
 	EventLocation  *time.Location // fuso desses dias (nil = Brasília, UTC−3)
 	Events         []EventData    // eventos de GM salvos (carregados na partida)
+	// Zonas (manager.go): id e nome do mapa, portões (gate.go) e mapa sem a cidade (sem
+	// os NPCs da praça, as pedras de teleporte e o armazém).
+	Map      string // "" = starter
+	MapTitle string
+	Gates    []GateDef
+	NoTown   bool
+	// NoRares: sem monstros raros (rares.go). Eles são do mapa principal: a área de cada um
+	// está nas coordenadas dele e a hora da próxima aparição é uma linha só no banco.
+	NoRares bool
 }
 
 func DefaultConfig() Config {
@@ -108,12 +117,20 @@ type JoinInfo struct {
 	Spec string
 	// Maestria (nível máximo): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
+	// Contratos do quadro e reputação com as facções (contracts.go).
+	Contracts  game.ContractState
+	Reputation game.ReputationState
+	// Bestiário: abates por monstro e famílias completas (bestiary.go).
+	Bestiary game.BestiaryState
 	// Vitalidade: o estoque, a última saída e o maior nível da conta (vitality.go).
 	Vitality game.VitalityState
 	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
 	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
 	LoadedAt time.Time
 	Peer     Peer
+	// Zone: o mapa gravado no banco (o gerente escolhe a zona; "" = starter).
+	Zone string
+	hop  *hopIn // só na entrega do portão (gate.go)
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -138,11 +155,20 @@ type SavedState struct {
 	Title        string
 	Spec         string // especialização ("" = nenhuma)
 	Mastery      game.MasteryState
+	// Contratos aceitos hoje e nesta semana e a reputação com as facções.
+	Contracts  game.ContractState
+	Reputation game.ReputationState
+	Bestiary   game.BestiaryState
 	Vitality     int64 // XP bônus da vitalidade (vitality.go)
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
+	// Auction: operações da casa de leilões ainda sem confirmação do banco (vão na mesma
+	// transação; o banco aplica cada uma uma vez só; ver auction.go).
+	Auction []AuctionOp
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
 	Seq int64
+	// Zone: o mapa onde o personagem está (no portão, o de destino).
+	Zone string
 }
 
 // recentState é o último estado de quem saiu. Ao voltar, vale mais que o banco (o
@@ -281,8 +307,13 @@ type Zone struct {
 	eventBackend EventBackend
 	eventJobs    chan EventData
 
-	paths []*entity // fila de caminhos longos (ver pathqueue.go)
-	adm *adminState // portal de administração (admin_actions.go e admin_ops.go)
+	paths []*entity   // fila de caminhos longos (ver pathqueue.go)
+	adm   *adminState // portal de administração (admin_actions.go e admin_ops.go)
+
+	auction auctionHouse // casa de leilões (auction.go)
+	rares   rareWorld    // monstros raros (rares.go)
+
+	mgr *Manager // zonas do processo e barramento (nil = zona sozinha, como nos testes)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -324,7 +355,10 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 	}
 	z.night = game.IsNight(game.DayPhase(z.cfg.Clock()))
 	z.spawnMonsters()
-	z.spawnNPCs()
+	if !cfg.NoTown {
+		z.spawnNPCs()
+	}
+	z.spawnGates()
 	z.loadClans(cfg.Clans)
 	z.loadEvents(cfg.Events)
 	return z
@@ -345,7 +379,8 @@ func (z *Zone) Chat(ctx context.Context, id uint32, text, to string, channel pb.
 }
 
 // Social repassa um pedido de grupo, clã, resposta a convite, amigos ou correio
-// (*pb.PartyCmd, *pb.ClanCmd, *pb.InviteReply, *pb.FriendCmd, *pb.MailCmd).
+// (*pb.PartyCmd, *pb.ClanCmd, *pb.InviteReply, *pb.FriendCmd, *pb.MailCmd) ou da casa de
+// leilões (*pb.AuctionCmd).
 func (z *Zone) Social(ctx context.Context, id uint32, msg any) {
 	z.post(ctx, socialEvent{id: id, msg: msg})
 }
@@ -403,6 +438,7 @@ func (z *Zone) Run(ctx context.Context) {
 	z.goWorker(ctx, "social", z.runSocialWorker)
 	z.goWorker(ctx, "ranking", z.runRankingWorker)
 	z.goWorker(ctx, "event", z.runEventWorker)
+	z.goWorker(ctx, "auction", z.runAuctionWorker)
 
 	for {
 		select {
@@ -517,6 +553,10 @@ func (z *Zone) onJoin(info JoinInfo) {
 	}
 
 	// O estado de quem acabou de sair (ainda salvando) vale mais que o do banco.
+	var aucOps []AuctionOp // casa de leilões: operações ainda sem confirmação
+	if info.hop != nil {
+		aucOps = info.hop.auction // portão: as que a zona de origem ainda não viu confirmadas
+	}
 	if r, ok := z.recent[info.ID]; ok {
 		st := r.state
 		info.X, info.Z, info.XP, info.HP, info.MP, info.Gold, info.Items = st.X, st.Z, st.XP, st.HP, st.MP, st.Gold, st.Items
@@ -527,6 +567,9 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Achievements, info.Title = st.Achievements, st.Title
 		info.Spec = st.Spec
 		info.Mastery = st.Mastery
+		info.Contracts, info.Reputation = st.Contracts, st.Reputation
+		aucOps = st.Auction
+		info.Bestiary = st.Bestiary
 		info.Vitality.Stored, info.Vitality.LastSeen = st.Vitality, r.at
 		delete(z.recent, info.ID)
 	}
@@ -560,8 +603,11 @@ func (z *Zone) onJoin(info JoinInfo) {
 			quests:  loadQuests(info.Quests, level),
 			ach:     loadAchievements(info.Achievements, info.Title),
 			mastery: loadMastery(info.Mastery),
+			bst:     loadBestiary(info.Bestiary),
+			hop:     hopState{arrived: info.hop != nil},
 		},
 	}
+	p.pl.contracts = loadContracts(info.Contracts, info.Reputation)
 	p.pl.sentPvp = z.pvpState(p)
 	p.hp, p.mp = math.MaxFloat64, math.MaxFloat64
 	z.refreshStats(p) // classe + atributos + equipamento + passivas; limita a vida/mana ao máximo
@@ -577,6 +623,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.byName[strings.ToLower(p.name)] = p.id
 	z.clanOnJoin(p, info.ClanLeftAt)
 	z.storageOnJoin(p, info.Storage)
+	z.auctionOnJoin(p, aucOps)
 
 	// Os outros ficam sabendo pela AOI (updateAOI, no fim do tick), só quem está perto.
 	z.aoiDirty = true
@@ -628,13 +675,18 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Enchant:      enchantRulesPB(),
 		Bosses:       z.bossList(),
 		Specs:        specCatalog(),
+		Map:          z.mapID(),
+		MapTitle:     z.mapTitle(),
 	}}})
 	z.sendSelfStats(p)
 	z.sendQuests(p, "")
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
+	// Bestiário antes das conquistas: pode tirar um título de família que não vale.
+	z.bestiaryOnJoin(p)
 	z.achOnJoin(p)
 	z.masteryOnJoin(p)
-	z.vitalityOnJoin(p, info.Vitality)
+	z.contractsOnJoin(p)
+	z.vitalityOnJoin(p, info.Vitality, info.hop != nil)
 	z.eventsOnJoin(p)
 	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
@@ -644,8 +696,14 @@ func (z *Zone) onJoin(info JoinInfo) {
 	}
 
 	p.pl.joinedAt = z.cfg.Clock()
+	if info.hop != nil { // chegou pelo portão: a sessão é a mesma
+		p.pl.joinedAt = info.hop.joinedAt
+	}
 	z.socialOnJoin(p)
-	z.track(p, "session", "start", 0, nil)
+	if info.hop == nil {
+		z.track(p, "session", "start", 0, nil)
+	}
+	z.zonesOnJoin(p) // barramento e grupo entre zonas (gate.go)
 	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
 
@@ -712,16 +770,18 @@ func (z *Zone) onChat(e chatEvent) {
 	}
 
 	to := strings.TrimSpace(e.to)
-	if to == "" {
-		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
+	if to == "" { // todas as zonas (bus.go)
+		z.broadcastAll(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
 			Channel: pb.ChatChannel_CHAT_CHANNEL_GENERAL, FromId: p.id, FromName: p.name, Text: text,
-		}}}, 0)
+		}}})
 		return
 	}
 
 	targetID, ok := z.byName[strings.ToLower(to)]
 	if !ok {
-		z.system(p, to+" não está online.")
+		if !z.whisperElsewhere(p, to, text) {
+			z.system(p, to+" não está online.")
+		}
 		return
 	}
 	target := z.players[targetID]
@@ -748,6 +808,7 @@ func (z *Zone) removePlayer(id uint32) {
 	if !ok {
 		return
 	}
+	hop := z.hopping(p) // saindo pelo portão: sessão e grupo continuam (gate.go)
 	delete(z.players, id)
 	z.saveCooldowns(p)
 	if z.byName[strings.ToLower(p.name)] == id {
@@ -755,19 +816,26 @@ func (z *Zone) removePlayer(id uint32) {
 	}
 	z.forgetTarget(id)
 	z.endXPTally(p)
-	z.track(p, "session", "end", int64(z.cfg.Clock().Sub(p.pl.joinedAt).Seconds()), nil)
+	if !hop {
+		z.track(p, "session", "end", int64(z.cfg.Clock().Sub(p.pl.joinedAt).Seconds()), nil)
+	}
 	if p.pl.trade != nil {
 		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
 	}
-	z.partyLeave(p, "")
+	if !hop {
+		z.partyLeave(p, "")
+	}
 	z.dropInvites(id)
 	z.clanOnLeave(p)
 	z.socialOnLeave(p)
 	if !z.dropAfterPanic(p) { // caiu por panic: não grava o estado atual (ver errors.go)
 		st := z.savedState(p)
-		z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
+		if !z.handOff(p, &st) { // portão: o estado segue para a outra zona, não para o recent
+			z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
+		}
 		z.save([]SavedState{st}, false)
 	}
+	z.zonesOnLeave(p, hop)
 	// Quem o conhecia recebe o Despawn pela AOI no fim do tick.
 	p.gone = true
 	z.aoiDirty = true
@@ -944,11 +1012,15 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
-		Mastery: p.pl.mastery.save(),
+		Mastery: p.pl.mastery.save(), Bestiary: p.pl.bst.state(), Auction: z.auctionSave(p), Zone: z.mapID(),
 	}
+	s.Contracts, s.Reputation = p.pl.contracts.save()
 	s.Vitality = p.pl.vit.stored
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
+		if z.cfg.NoTown {
+			s.Zone = world.StarterMap
+		}
 	}
 	if s.HP >= p.maxHPInt() {
 		s.HP = -1
@@ -969,7 +1041,7 @@ func (z *Zone) saveAll(blocking bool) {
 	wall := z.cfg.Clock()
 	z.pruneStorages()
 	for id, r := range z.recent {
-		if wall.Sub(r.at) > recentKeep {
+		if wall.Sub(r.at) > recentKeep && !keepRecent(r) {
 			delete(z.recent, id)
 		}
 	}
@@ -1012,6 +1084,11 @@ func (z *Zone) save(batch []SavedState, blocking bool) {
 			if old, ok := z.pending[s.ID]; ok && s.Storage == nil && old.Storage != nil {
 				batch[i].Storage = old.Storage
 			}
+			// Operações da casa de leilões: o mais novo já leva todas as sem confirmação; o que
+			// só o pendente tem vai junto (o banco ignora as repetidas).
+			if old, ok := z.pending[s.ID]; ok {
+				batch[i].Auction = mergeOps(batch[i].Auction, old.Auction)
+			}
 		}
 		for id, s := range z.pending {
 			if !newer[id] {
@@ -1048,6 +1125,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		Dead: e.dead, Scale: float32(e.scale),
 		Boss: e.mon != nil && e.mon.def.Boss,
 		Raid: e.mon != nil && e.mon.def.Raid,
+		Rare: e.mon != nil && e.mon.def.Rare != nil,
 	}
 	if e.mon != nil {
 		out.Tint = e.mon.def.Tint
