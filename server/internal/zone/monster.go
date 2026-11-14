@@ -26,7 +26,7 @@ type monsterState struct {
 	nextWander float64
 	respawnAt  float64
 	corpseEnd  float64
-	hidden     bool // corpo já sumiu; aguardando respawn
+	hidden     bool       // corpo já sumiu; aguardando respawn
 	raid       *raidState // raid boss (nil nos outros)
 	summon     bool       // invocação: não renasce e some ao morrer
 	// Chefes mortos: janela de renascimento mostrada no mapa (relógio de parede).
@@ -35,6 +35,11 @@ type monsterState struct {
 	// a recompensa. leash > 0 troca a coleira padrão.
 	invader bool
 	leash   float64
+	// Habilidades com aviso no chão (abilities.go): quando cada uma fica pronta, a geração
+	// (muda ao desistir da luta: cancela os avisos pendentes) e se a luta já começou.
+	abilNext  []float64
+	abilGen   int
+	abilFight bool
 }
 
 func (z *Zone) spawnMonsters() {
@@ -82,6 +87,9 @@ func (z *Zone) think(m *entity) {
 			if m.act.kind != actAttack || m.act.target != t.id {
 				m.act = action{kind: actAttack, target: t.id}
 			}
+			if ms.raid == nil {
+				z.thinkAbilities(m)
+			}
 			return
 		}
 	}
@@ -114,8 +122,12 @@ func (z *Zone) think(m *entity) {
 		if m.act.kind == actNone || m.act.target != top {
 			m.act = action{kind: actAttack, target: top}
 		}
+		if ms.raid == nil {
+			z.thinkAbilities(m)
+		}
 		return
 	}
+	ms.abilFight = false // sem alvo: a próxima luta espera o First das habilidades
 
 	if m.act.kind != actNone {
 		m.clearAction()
@@ -159,6 +171,7 @@ func (z *Zone) resetMonster(m *entity) {
 		z.raidReset(m)
 	}
 	m.mon.hate = map[uint32]float64{}
+	m.mon.stopAbilities()
 	m.mon.returning = true
 	m.clearAction()
 	m.repathAt = 0
@@ -194,6 +207,7 @@ func (z *Zone) reviveMonster(m *entity) {
 	ms.hidden = false
 	ms.returning = false
 	ms.hate = map[uint32]float64{}
+	ms.stopAbilities()
 	ms.windowStart, ms.windowEnd = time.Time{}, time.Time{}
 	m.pos, m.dest, m.path = ms.home, ms.home, nil
 	m.hp = m.stats.MaxHP

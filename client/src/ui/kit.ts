@@ -96,6 +96,8 @@ export interface Settings {
   showHelm: boolean;
   /** Missão rastreada no minimapa, no mapa e na seta da borda da tela. */
   questMarkers: boolean;
+  /** "Ir" das missões: seguir andando mesmo levando dano (desligado: para ao ser atacado). */
+  goKeepIfHit: boolean;
   language: "pt-BR" | "en" | "es";
   autoRadius: number;
   autoSkills: boolean;
@@ -161,6 +163,7 @@ const DEFAULT_SETTINGS: Settings = {
   cameraShake: true,
   showHelm: true,
   questMarkers: true,
+  goKeepIfHit: false,
   language: "pt-BR",
   autoRadius: 25,
   autoSkills: true,

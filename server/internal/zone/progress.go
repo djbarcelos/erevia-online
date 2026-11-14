@@ -40,6 +40,8 @@ func (z *Zone) onProgress(e progressEvent) {
 		z.setHotbar(p, m.Slots)
 	case *pb.SpecCmd:
 		z.onSpecCmd(p, m)
+	case *pb.MasteryCmd:
+		z.onMasteryCmd(p, m)
 	}
 }
 
@@ -51,7 +53,8 @@ func (z *Zone) onProgress(e progressEvent) {
 // equipamento → passivas → regeneração (a conta fica em game.CharacterStats, que o
 // simulador de balanceamento também usa).
 func (z *Zone) computeStats(p *entity, spent game.Attrs) game.Stats {
-	return game.CharacterStats(p.pl.class, p.pl.spec, p.level, spent, p.pl.inv.bonus(), p.pl.ranks, p.pl.inv.weaponType())
+	s := game.CharacterStats(p.pl.class, p.pl.spec, p.level, spent, p.pl.inv.bonus(), p.pl.ranks, p.pl.inv.weaponType())
+	return applyMasteryStats(s, p) // vida e dano da Maestria (teto de 5% no combate)
 }
 
 // refreshStats recalcula os atributos (nível, pontos, equipamento ou passivas mudaram).

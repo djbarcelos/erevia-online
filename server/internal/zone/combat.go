@@ -341,6 +341,13 @@ func (z *Zone) applyEffect(src, e *entity, def *game.EffectDef) {
 	if e.dead || (e.mon != nil && e.mon.def.ImmuneTo(def.Kind)) {
 		return
 	}
+	if e.pl != nil && (def.Kind == game.EffectStun || def.Kind == game.EffectSlow) {
+		if v := e.pl.mastery.of(game.MStatCCResist); v > 0 { // Firmeza (Maestria)
+			short := *def
+			short.Duration *= 1 - v
+			def = &short
+		}
+	}
 	e.addEffect(def, z.now, src.id)
 	z.frame.effects = append(z.frame.effects, &pb.EffectEvent{
 		TargetId: e.id, Effect: pb.Effect(def.Kind), DurationMs: uint32(def.Duration * 1000),
@@ -493,6 +500,10 @@ func (z *Zone) regen(e *entity, dt float64) {
 	if calm {
 		hp *= calmRegenMult
 		mp *= calmMPRegenMult
+		if e.pl != nil { // Fôlego (Maestria)
+			v := 1 + e.pl.mastery.of(game.MStatCalmRegen)
+			hp, mp = hp*v, mp*v
+		}
 	}
 	if v, ok := e.effect(game.EffectCourage, z.now); ok {
 		hp += v

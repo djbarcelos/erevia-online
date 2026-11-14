@@ -171,8 +171,9 @@ func (z *Zone) drink(p *entity, slot int, def *game.ItemDef) {
 	}
 	p.pl.inv.take(slot, 1)
 	z.questEvent(p, game.GoalPotion, def.ID)
-	p.hp = math.Min(p.stats.MaxHP, p.hp+def.HealHP)
-	p.mp = math.Min(p.stats.MaxMP, p.mp+def.HealMP)
+	heal := 1 + p.pl.mastery.of(game.MStatPotion) // Alquimia de Campo (Maestria)
+	p.hp = math.Min(p.stats.MaxHP, p.hp+def.HealHP*heal)
+	p.mp = math.Min(p.stats.MaxMP, p.mp+def.HealMP*heal)
 	p.pl.cooldowns[key] = z.now + game.CooldownSeconds(def.Cooldown)
 	p.pl.statsDirty = true
 	z.sendItemCooldown(p, def.Cooldown, game.CooldownSeconds(def.Cooldown))
@@ -194,7 +195,7 @@ func (z *Zone) destroyItem(p *entity, slot, count int) {
 
 func (z *Zone) sendItemCooldown(p *entity, group int, seconds float64) {
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_ItemCooldown{ItemCooldown: &pb.ItemCooldown{
-		Group: uint32(group), ReadyInMs: uint32(math.Max(0, seconds) * 1000), TotalMs: uint32(game.CooldownSeconds(group) * 1000),
+		Group: uint32(group), ReadyInMs: uint32(math.Max(0, seconds) * 1000), TotalMs: uint32(z.itemCooldown(p, group) * 1000),
 	}}})
 }
 

@@ -157,9 +157,10 @@ func TestSnapshotBytesDecodeAndOnlyCarryKnownEntities(t *testing.T) {
 	stale := &entity{id: 3, encTick: 6, encState: encField(snapFieldStates, &pb.EntityState{Id: 3})}
 	p := &entity{id: 5, pl: &playerState{known: map[uint32]knownEntity{1: {e: known}, 3: {e: stale}}}}
 	_ = stranger
+	// Avisos no chão: só os do monstro (ou do marcado) que o jogador conhece.
 	all := &pb.Snapshot{
 		Combat:     []*pb.CombatEvent{{SourceId: 1, TargetId: 9}, {SourceId: 8, TargetId: 9}},
-		Telegraphs: []*pb.Telegraph{{Id: 4}},
+		Telegraphs: []*pb.Telegraph{{Id: 4, SourceId: 1}, {Id: 5, SourceId: 2}, {Id: 6, SourceId: 8, FollowId: 1}},
 	}
 	var buf []byte
 	data := snapshotBytes(p, 7, []uint32{2, 1}, encodeFrame(all), &buf)
@@ -171,7 +172,7 @@ func TestSnapshotBytesDecodeAndOnlyCarryKnownEntities(t *testing.T) {
 	if s.Tick != 7 || len(s.States) != 1 || s.States[0].Id != 1 || s.States[0].X != 3 {
 		t.Fatalf("states = %+v", s.States)
 	}
-	if len(s.Hp) != 1 || s.Hp[0].Hp != 40 || len(s.Combat) != 1 || len(s.Telegraphs) != 1 {
+	if len(s.Hp) != 1 || s.Hp[0].Hp != 40 || len(s.Combat) != 1 || len(s.Telegraphs) != 2 || s.Telegraphs[0].Id != 4 || s.Telegraphs[1].Id != 6 {
 		t.Fatalf("hp/combat/telegraphs = %+v %+v %+v", s.Hp, s.Combat, s.Telegraphs)
 	}
 	if len(s.Deaths) != 1 || s.Deaths[0] != 1 {
