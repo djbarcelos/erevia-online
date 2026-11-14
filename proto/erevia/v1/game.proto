@@ -62,7 +62,7 @@ message MasteryCmd {
 // Estado da Maestria (só para o dono). Sai ao entrar no 30, a cada XP ganha no 30, ao
 // morrer e quando a árvore muda. No 30 a barra de XP do HUD vira esta barra.
 message MasteryState {
-  bool active = 1; // nível 30: a barra enche e os pontos podem ser gastos
+  bool active = 1; // nível máximo (open_level): a barra enche e os pontos podem ser gastos
   uint32 level = 2; // pontos ganhos no total ("Maestria N")
   uint32 free = 3; // pontos para gastar
   uint64 xp = 4; // XP na barra atual
@@ -75,6 +75,9 @@ message MasteryState {
   bool respec_ready = 11; // o Redistribuir de hoje está livre
   uint32 max_level = 12; // teto da Maestria (a árvore inteira)
   float teleport_discount = 13; // Viajante: desconto nas Pedras de Teleporte (0–1)
+  // Nível em que a Maestria abre (o máximo). Abaixo dele, quem já tem pontos (ganhos quando o
+  // máximo era 30) ainda gasta e redistribui, mas a barra não enche.
+  uint32 open_level = 14;
 }
 
 message MasteryRank {
@@ -432,7 +435,7 @@ message ServerMessage {
     Achievements achievements = 32;
     SpecChoice spec_choice = 50;
     EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
-    MasteryState mastery = 54; // Maestria (nível 30): barra, pontos e árvore do jogador
+    MasteryState mastery = 54; // Maestria (nível máximo): barra, pontos e árvore do jogador
     MasteryTree mastery_tree = 55; // a árvore da Maestria (resposta ao MASTERY_CMD_GET)
   }
 }
@@ -798,6 +801,8 @@ message Progress {
   // As fórmulas são lineares nos atributos: dá para prever qualquer distribuição somando.
   repeated StatBlock per_point = 6;
   string spec = 7; // especialização escolhida ("" = nenhuma); o bônus dela já está nos atributos
+  uint32 max_level = 8; // nível máximo dos jogadores
+  uint32 skill_point_max_level = 9; // último nível que dá ponto de skill (depois, só atributos)
 }
 
 // Atributos de combate (valores finais ou diferenças).
@@ -1145,6 +1150,7 @@ message Entity {
   BodyLook look = 24; // jogadores: visual do corpo
   bool raid = 25; // raid boss (barra no topo da tela)
   string spec = 26; // jogadores: especialização (SpecInfo.id; "" = nenhuma)
+  string tint = 27; // monstros: cor da variante (#rrggbb; "" = a do modelo)
 }
 
 message EntityState {

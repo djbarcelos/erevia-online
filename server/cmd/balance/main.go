@@ -1,6 +1,6 @@
 // Comando balance: o simulador de balanceamento. Para cada classe e caminho, cada nível e o
 // equipamento típico da faixa (+0 e +3), calcula o dano por segundo, o tempo para matar e
-// para morrer contra o monstro do nível, a XP por hora e o tempo até cada nível e até o 30,
+// para morrer contra o monstro do nível, a XP por hora e o tempo até cada nível e até o máximo,
 // com as fórmulas reais do pacote game. Determinístico (média por fórmula).
 //
 //	go run ./cmd/balance          # tabelas em markdown

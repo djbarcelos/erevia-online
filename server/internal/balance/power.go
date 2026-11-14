@@ -1,6 +1,7 @@
 package balance
 
 import (
+	"fmt"
 	"math"
 	"slices"
 	"sort"
@@ -123,12 +124,24 @@ func Gear() []*game.ItemDef {
 	return out
 }
 
-// family: as peças que disputam o mesmo encaixe para a mesma classe (armas por classe).
+// family: as peças que disputam o mesmo encaixe para a mesma classe (armas por classe), na
+// mesma faixa de nível. A escada de raridades do jogo de antes (comum no 1, boa no 6, rara no
+// 13, épica no 18, lendária no 20) é uma faixa só; o equipamento ponte do 30 ao 40
+// (game/bridge.go) tem uma escada própria em cada nível (comum → rara no 30 e no 35, e o
+// mesmo encaixe da classe: a armadura ponte é de classe). Assim a regra "a raridade de cima
+// vale mais" compara peças do mesmo nível, e não a épica do 18 com a comum do 35.
 func family(d *game.ItemDef) string {
-	if d.Kind == game.KindWeapon && len(d.Classes) == 1 {
-		return "weapon:" + d.Classes[0]
+	f := "kind:" + kindName(d.Kind)
+	if (d.Kind == game.KindWeapon || d.Bridge) && len(d.Classes) == 1 {
+		f = kindName(d.Kind) + ":" + d.Classes[0]
+		if d.Kind == game.KindWeapon {
+			f = "weapon:" + d.Classes[0]
+		}
 	}
-	return "kind:" + kindName(d.Kind)
+	if d.Bridge {
+		f += fmt.Sprintf(":nv%d", d.ReqLevel)
+	}
+	return f
 }
 
 // Ladder: a escada de uma família, uma peça por raridade (a de maior poder, ver better), da
