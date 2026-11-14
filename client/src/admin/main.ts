@@ -2,6 +2,7 @@
 
 import "./admin.css";
 import { AdminError, adminApi, type GMLogEntry, type Overview, type ProgressionTable } from "./api";
+import { mountPanelsNav, PANELS } from "./panels";
 import { mountOps } from "./ops";
 import { mountPlayers } from "./players";
 
@@ -108,6 +109,7 @@ function current(): Section {
 
 let refreshTimer = 0;
 let tickTimer = 0;
+let panelCleanup: (() => void) | undefined;
 
 /** Seções com tela própria (#seção ou #seção/…): montam em main e devolvem a limpeza. */
 const PAGES: Record<string, (main: HTMLElement) => () => void> = { jogadores: mountPlayers, operacao: mountOps };
@@ -123,11 +125,14 @@ function route(): void {
   document.title = `${s.label} · Administração · Erevia`;
   clearInterval(refreshTimer);
   clearInterval(tickTimer);
+  panelCleanup?.();
+  panelCleanup = undefined;
   leavePage?.();
   leavePage = null;
   main.replaceChildren();
   if (s.id === "inicio") home();
   else if (s.id === "progressao") progression();
+  else if (PANELS[s.id]) panelCleanup = PANELS[s.id](main);
   else if (PAGES[s.id]) leavePage = PAGES[s.id](main);
   else soon(s);
 }
@@ -326,6 +331,7 @@ function progression(): void {
 // ---------- Início do app ----------
 
 shell();
+mountPanelsNav(nav);
 window.addEventListener("hashchange", route);
 route();
 adminApi

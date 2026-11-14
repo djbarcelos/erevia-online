@@ -14,6 +14,9 @@ type tickStats struct {
 	worst  time.Duration
 	events int
 	slow   int // ticks acima do orçamento (ver checkSlowTick)
+
+	// last: o retrato do último período fechado (o portal mostra; ver admin_metrics.go).
+	last TickSnapshot
 }
 
 func (s *tickStats) add(d time.Duration) {
@@ -40,5 +43,5 @@ func (z *Zone) flushTickStats(now time.Time) {
 		"events_per_s", int(float64(s.events)/secs),
 		"slow_ticks", s.slow,
 		"players", len(z.players), "monsters", len(z.monsters), "ground", len(z.ground))
-	*s = tickStats{since: now}
+	*s = tickStats{since: now, last: s.snapshot(now, z.cfg.TickRate)}
 }
