@@ -42,7 +42,24 @@ message ClientMessage {
     AchievementCmd achievement_cmd = 32;
     SpecCmd spec_cmd = 50;
     MasteryCmd mastery_cmd = 54; // Maestria: pedir o estado, gastar ponto, redistribuir
+    UseGate use_gate = 60; // zonas: atravessar o portão para outro mapa
   }
+}
+
+// ---------- Zonas (vários mapas no mesmo servidor) ----------
+
+// Usa o portão (NPC com role NPC_ROLE_GATE) perto do jogador.
+message UseGate {
+  uint32 npc_id = 1;
+}
+
+// O personagem saiu desta zona pelo portão: o cliente mostra a tela de carregamento,
+// descarta o mapa atual e espera o Welcome da zona de destino (a mesma conexão).
+message ZoneChange {
+  string map = 1; // id do mapa de destino ("starter", "teste"...)
+  string title = 2; // nome do mapa ("Clareira de Testes")
+  float x = 3; // ponto de chegada
+  float z = 4;
 }
 
 // ---------- Maestria (depois do nível 30) ----------
@@ -434,6 +451,7 @@ message ServerMessage {
     EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
     MasteryState mastery = 54; // Maestria (nível 30): barra, pontos e árvore do jogador
     MasteryTree mastery_tree = 55; // a árvore da Maestria (resposta ao MASTERY_CMD_GET)
+    ZoneChange zone_change = 60; // saiu pelo portão: o próximo Welcome é o do outro mapa
   }
 }
 
@@ -697,6 +715,7 @@ message PartyMember {
   float x = 9;
   float z = 10;
   bool dead = 11;
+  string map = 12; // em outro mapa: o nome dele ("" = no mesmo mapa que você; vida e posição não valem)
 }
 
 // Seu grupo (members vazio = sem grupo).
@@ -779,6 +798,7 @@ enum NpcRole {
   NPC_ROLE_STORAGE = 2;
   NPC_ROLE_BARBER = 3;
   NPC_ROLE_MASTER = 4; // Mestra dos Caminhos (especialização)
+  NPC_ROLE_GATE = 5; // portão para outro mapa (UseGate)
 }
 
 // Atributos e skills aprendidas do jogador.
@@ -848,6 +868,8 @@ message Welcome {
   EnchantRules enchant = 20;
   repeated BossStatus bosses = 21; // chefes fixos (vivos ou com a janela de renascimento)
   repeated SpecInfo specs = 22; // as especializações de todas as classes
+  string map = 23; // id do mapa desta zona ("" ou "starter" = o mapa de sempre, /world.json)
+  string map_title = 24; // nome do mapa (minimapa e mapa do mundo)
 }
 
 // Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
@@ -1012,6 +1034,7 @@ message NpcInfo {
   NpcRole role = 3;
   repeated TeleportDest dests = 4; // pedras de teleporte: destinos
   repeated RecipeInfo recipes = 5; // Ferreiro: o que dá para criar
+  string gate_to = 6; // portão: nome do mapa de destino
 }
 
 message RecipeInfo {
