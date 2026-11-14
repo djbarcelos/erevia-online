@@ -43,6 +43,7 @@ import { specInfo } from "../ui/specs";
 import { GRADE_COLOR } from "../ui/items";
 import { settings } from "../ui/kit";
 import { skillFxColors } from "../ui/skill-themes";
+import type { EntityProbe } from "../net/invariants";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -1552,6 +1553,11 @@ export class EntityManager {
         party: this.partyIds.has(v.id),
       });
     }
+  }
+
+  /** Todas as entidades, para as invariantes do cliente (net/invariants.ts, 1×/s). */
+  forEachProbe(cb: (e: EntityProbe) => void): void {
+    for (const v of this.views.values()) cb(v);
   }
 
   /** Pontos que a câmera precisa enxergar (meio do corpo do jogador e do alvo). */
