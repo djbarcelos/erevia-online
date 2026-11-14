@@ -157,6 +157,36 @@ func ConvertXP(xp int64, from int) int64 {
 	return XPLevelStart(l) + into*XPToNext(l)/span
 }
 
+// XPRepair diz o que CheckSavedXP fez com a XP salva.
+type XPRepair int
+
+const (
+	XPOK      XPRepair = iota // a XP cabe no nível salvo pela curva de hoje
+	XPFromV1                  // era XP da curva 1 numa linha marcada na de hoje: convertida
+	XPClamped                 // não cabia em nenhuma curva: presa no início do nível salvo
+)
+
+// CheckSavedXP confere a XP de uma linha já marcada na curva de hoje contra o nível salvo
+// junto (characters.level). No deploy, o servidor antigo ainda grava quem estava nele com
+// a XP da curva 1 (e o nível certo) quando o novo já converteu e marcou a linha; pela curva
+// nova essa XP derrubaria o nível. Então:
+//   - cabe no nível salvo pela curva de hoje: fica como está;
+//   - cabe no nível salvo pela curva 1: converte de novo (ConvertXP);
+//   - não cabe em nenhuma: fica no início do nível salvo.
+//
+// O nível salvo nunca desce. Onde as duas curvas se sobrepõem (níveis bem baixos), vale a
+// de hoje.
+func CheckSavedXP(xp int64, level int) (int64, XPRepair) {
+	l := min(max(level, 1), MaxLevel)
+	if xp >= XPLevelStart(l) && (l == MaxLevel || xp < XPLevelStart(l+1)) {
+		return xp, XPOK
+	}
+	if l <= xpV1Max && xp >= xpLevelStartV1(l) && (l == xpV1Max || xp < xpLevelStartV1(l+1)) {
+		return ConvertXP(xp, 1), XPFromV1
+	}
+	return XPLevelStart(l), XPClamped
+}
+
 // MonsterXP é a XP de um monstro, reduzida se o jogador for muito mais forte.
 func MonsterXP(m *MonsterDef, monsterLevel, playerLevel int) int64 {
 	xp := m.XPBase * math.Pow(float64(monsterLevel), monsterXPExp)

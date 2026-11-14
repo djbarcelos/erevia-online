@@ -451,3 +451,35 @@ func TestStoneGolemIsSlowTankInSouthValley(t *testing.T) {
 		t.Error("golem deveria derrubar Núcleo Rúnico")
 	}
 }
+
+// Guarda do deploy: XP da curva 1 numa linha marcada na curva de hoje (o servidor antigo
+// gravou depois do novo converter) é convertida de novo pelo nível salvo; XP legítima não
+// muda; o que não cabe em nenhuma fica no início do nível salvo. O nível nunca desce.
+func TestCheckSavedXP(t *testing.T) {
+	for _, c := range []struct {
+		level int
+		xp    int64
+	}{{30, xpLevelStartV1(30)}, {30, xpLevelStartV1(30) + 99_999}, {15, xpLevelStartV1(15) + xpToNextV1(15)/2}} {
+		got, how := CheckSavedXP(c.xp, c.level)
+		if how != XPFromV1 || got != ConvertXP(c.xp, 1) || LevelForXP(got) != c.level {
+			t.Fatalf("XP %d da curva 1 no nível %d: %d (%v), nível %d", c.xp, c.level, got, how, LevelForXP(got))
+		}
+	}
+	for _, l := range []int{1, 15, 30, 39, MaxLevel} {
+		for _, xp := range []int64{XPLevelStart(l), XPLevelStart(l) + XPToNext(l)/2, XPLevelStart(l+1) - 1} {
+			if l == MaxLevel {
+				xp = XPLevelStart(l)
+			}
+			if got, how := CheckSavedXP(xp, l); how != XPOK || got != xp {
+				t.Fatalf("XP legítima %d no nível %d mudou: %d (%v)", xp, l, got, how)
+			}
+		}
+	}
+	// Nem uma curva nem a outra: no início do nível salvo, sem descer (35 não existe na 1).
+	if got, how := CheckSavedXP(5_000_000, 35); how != XPClamped || got != XPLevelStart(35) {
+		t.Fatalf("XP sem curva no 35: %d (%v)", got, how)
+	}
+	if got, how := CheckSavedXP(XPLevelStart(38), 33); how != XPClamped || got != XPLevelStart(33) {
+		t.Fatalf("XP acima do nível salvo: %d (%v)", got, how)
+	}
+}

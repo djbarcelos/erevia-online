@@ -110,3 +110,78 @@ func TestCharacterXPConvertsFromOldCurve(t *testing.T) {
 		t.Fatalf("personagem novo: %d, %v", got.XP, err)
 	}
 }
+
+// Deploy: o servidor antigo, ao desligar, grava a XP da curva 1 (com o nível certo) numa
+// linha que o novo já converteu e marcou na curva 2. A carga confere a XP contra o nível
+// salvo: converte de novo a XP da curva 1, não mexe na XP legítima e prende no início do
+// nível o que não cabe em nenhuma curva, com um evento de invariante.
+func TestCharacterXPGuardAgainstOldServerSave(t *testing.T) {
+	s, url := storetest.NewWithURL(t)
+	ctx := context.Background()
+	db, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close(ctx)
+	acc, err := s.LoginIdentity(ctx, "dev", "deploy", "deploy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	acc2, err := s.LoginIdentity(ctx, "dev", "deploy2", "deploy2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// XP da curva 1 (docs/progressao.md de antes): início do 30 + 50 mil, meio do 15.
+	const v1At30, v1Mid15 = 1_839_820 + 50_000, 129_930 + 15_469
+	legit := game.XPLevelStart(33) + game.XPToNext(33)/3
+	cases := []struct {
+		acc         int64
+		name        string
+		level       int
+		xp, wantXP  int64
+		wantInvalid bool
+	}{
+		{acc, "Trinta", 30, v1At30, game.XPLevelStart(30), false},
+		{acc, "Quinze", 15, v1Mid15, game.ConvertXP(v1Mid15, 1), false},
+		{acc, "Legitima", 33, legit, legit, false},
+		{acc2, "Torta", 36, 5_000_000, game.XPLevelStart(36), true},
+	}
+	for _, c := range cases {
+		ch, err := s.CreateCharacter(ctx, c.acc, c.name, "rogue", game.DefaultLook("rogue"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		// O save do servidor antigo: level e xp, sem tocar em xp_curve (que já está em 2).
+		if err := s.SaveStates(ctx, []store.CharacterState{{CharacterID: ch.ID, Level: c.level, XP: c.xp, HP: -1, MP: -1, Seq: 1}}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.CharacterForAccount(ctx, c.acc, ch.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.XP != c.wantXP || got.Level != c.level || game.LevelForXP(got.XP) != c.level {
+			t.Fatalf("%s: XP %d, nível %d (pela XP %d), quero XP %d no %d", c.name, got.XP, got.Level, game.LevelForXP(got.XP), c.wantXP, c.level)
+		}
+		if c.name == "Quinze" {
+			frac := float64(got.XP-game.XPLevelStart(15)) / float64(game.XPToNext(15))
+			if math.Abs(frac-0.5) > 0.01 {
+				t.Fatalf("meio do 15 virou %.3f do nível", frac)
+			}
+		}
+		var saved int64
+		var curve int
+		if err := db.QueryRow(ctx, `SELECT xp, xp_curve FROM characters WHERE id = $1`, ch.ID).Scan(&saved, &curve); err != nil {
+			t.Fatal(err)
+		}
+		if saved != c.wantXP || curve != game.XPCurve {
+			t.Fatalf("%s: salvo %d na curva %d", c.name, saved, curve)
+		}
+		var n int
+		if err := db.QueryRow(ctx, `SELECT count(*) FROM game_events WHERE kind = 'invariant' AND ref = 'xp_curve' AND character_id = $1`, ch.ID).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if (n == 1) != c.wantInvalid || n > 1 {
+			t.Fatalf("%s: %d eventos de invariante", c.name, n)
+		}
+	}
+}

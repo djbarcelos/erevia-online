@@ -173,6 +173,14 @@ salva na 2, na mesma transação:
 - quem estava no **30** (o máximo de antes, com a barra cheia ou travada) continua no 30 e
   começa o 30 → 31 do zero; a Maestria dele (pontos, nós e barra) fica como estava.
 
+**Guarda do deploy.** A Railway sobe o servidor novo antes de derrubar o antigo, e o antigo,
+ao desligar, grava todo mundo com a XP da curva 1 (o save grava `level` e `xp`, não
+`xp_curve`). Se o jogador já tinha reconectado no novo, a linha fica marcada na 2 com XP
+da 1. Por isso a carga confere toda linha da curva 2 contra o nível salvo
+(`game.CheckSavedXP`): se a XP cabe no nível pela curva 2, fica; se cabe pela curva 1,
+converte de novo; se não cabe em nenhuma, fica no início do nível salvo e vira um evento
+`invariant` (ref `xp_curve`) em `game_events`. O nível salvo nunca desce.
+
 ## O que é medido
 
 Tudo vai para `game_events` (migração 00011) e é lido por views da migração 00018:
