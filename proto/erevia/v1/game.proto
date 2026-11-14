@@ -537,6 +537,11 @@ message TradeItem {
 message QuestLog {
   repeated QuestInfo quests = 1;
   string completed = 2; // título da missão que acabou de ser concluída ("" = nenhuma)
+  // Concluídas (aba do Diário): só id, título e categoria, nada do texto. Vão inteiras no
+  // primeiro QuestLog da sessão e quando uma missão termina (done_full = true); nos outros
+  // QuestLog ficam vazias e o cliente guarda as últimas.
+  repeated QuestDone done = 3;
+  bool done_full = 4;
 }
 
 message QuestInfo {
@@ -545,6 +550,7 @@ message QuestInfo {
   string text = 3;
   repeated QuestStepInfo steps = 4;
   string reward = 5; // resumo da recompensa ("120 XP · 30 moedas")
+  QuestCategory category = 6; // grupo no Diário (QuestCategory, no fim do arquivo)
 }
 
 // Onde fica um objetivo: o minimapa, o mapa e a seta da borda da tela apontam para lá.
@@ -872,7 +878,8 @@ message Welcome {
   string map_title = 24; // nome do mapa (minimapa e mapa do mundo)
 }
 
-// Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
+// Zona de caça: um anel (ou setor de anel) ao redor da cidade, um disco próprio ou um ponto
+// fixo (chefe).
 message MapZone {
   string name = 1; // nomes dos monstros
   float r_min = 2;
@@ -887,6 +894,10 @@ message MapZone {
   float radius = 11;
   string region = 12; // nome da região ("Vale das Pedras Vivas")
   bool raid = 13; // raid boss (covil próprio)
+  // Setor de anel (r_min–r_max), em graus: 0° = leste (+x), crescendo para o norte (+z).
+  // angle_max > angle_min no setor (passa de 360 quando cruza o 0°); os dois 0 = anel inteiro.
+  float angle_min = 40;
+  float angle_max = 41;
 }
 
 message Spawn {
@@ -1380,4 +1391,22 @@ enum EmoteKind {
 message Emote {
   uint32 id = 1;
   EmoteKind kind = 2;
+}
+
+// ---------- Diário de missões (J) ----------
+
+// Grupo da missão no Diário (J).
+enum QuestCategory {
+  QUEST_CATEGORY_UNSPECIFIED = 0; // o cliente mostra como história
+  QUEST_CATEGORY_STORY = 1; // história
+  QUEST_CATEGORY_REGION = 2; // missões de uma região
+  QUEST_CATEGORY_DAILY = 3; // diárias
+  QUEST_CATEGORY_TUTORIAL = 4; // os primeiros passos
+}
+
+// Missão concluída: o título vem dos dados do servidor (não fica no save).
+message QuestDone {
+  string id = 1;
+  string title = 2;
+  QuestCategory category = 3;
 }

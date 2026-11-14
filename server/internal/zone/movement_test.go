@@ -96,3 +96,34 @@ func TestStopAfterWalkingNeverGoesBack(t *testing.T) {
 		}
 	}
 }
+
+// Achado pelo teste de caos (loadbot -chaos): MoveTo com NaN passava pelo clampToZone (min e
+// max de NaN dão NaN), virava o destino e, no tick seguinte, a posição do jogador. Com
+// DEBUG_INVARIANTS=1 a invariante "position" derrubava o servidor inteiro.
+// NaN é ignorado (não move); ±Inf o clamp leva para a borda. Nos dois casos a posição e o
+// destino continuam finitos (o caos achou o NaN derrubando o servidor com DEBUG_INVARIANTS).
+func TestMoveToNaNOrInfIsIgnored(t *testing.T) {
+	z := newTestZone(nil)
+	join(z, 1, "Ana")
+	p := z.players[1]
+	start := p.pos
+	send := func(x, zz float64) {
+		p.pl.moveTokens = z.cfg.MaxMovesPerSec
+		z.handle(moveEvent{id: 1, x: x, z: zz})
+		for range 20 { // 1 s: a checagem das invariantes passa por todo mundo
+			z.update(0.05)
+		}
+		if !finite(p.pos.X) || !finite(p.pos.Z) || !finite(p.dest.X) || !finite(p.dest.Z) {
+			t.Fatalf("MoveTo(%v, %v): posição %v, destino %v", x, zz, p.pos, p.dest)
+		}
+	}
+	for _, v := range [][2]float64{{math.NaN(), 0}, {0, math.NaN()}, {math.NaN(), math.NaN()}} {
+		send(v[0], v[1])
+	}
+	if p.pos != start {
+		t.Fatalf("MoveTo com NaN não deveria mover: de %v para %v", start, p.pos)
+	}
+	for _, v := range [][2]float64{{math.Inf(1), 3}, {2, math.Inf(-1)}} {
+		send(v[0], v[1])
+	}
+}

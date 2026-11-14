@@ -177,6 +177,9 @@ func (z *Zone) handOff(p *entity, st *SavedState) bool {
 		Quests: pl.quests.state(), Achievements: pl.ach.state(), Title: pl.ach.title,
 		Spec: pl.spec, Mastery: pl.mastery.save(), Peer: pl.peer,
 		hop: &hopIn{from: z.mapID(), seq: st.Seq, joinedAt: pl.joinedAt, cooldowns: z.savedCooldowns[p.id]},
+		// O estado é o da memória agora (já com o que o portal mudou enquanto ele estava
+		// online): a recusa de Join "carregado antes de uma mudança" não vale para ele.
+		LoadedAt: time.Now(),
 	}
 	if s := z.storageOf(p); s != nil {
 		info.Storage = &StorageData{Gold: s.gold, Items: s.records()}

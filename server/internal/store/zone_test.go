@@ -9,7 +9,7 @@ import (
 	"erevia/server/internal/store/storetest"
 )
 
-// characters.zone (migração 00030): o personagem novo nasce no mapa principal, o portão
+// characters.zone (migração 00050): o personagem novo nasce no mapa principal, o portão
 // grava o mapa de destino e um salvamento sem zona não muda a gravada.
 func TestZoneRoundTrip(t *testing.T) {
 	s := storetest.New(t)

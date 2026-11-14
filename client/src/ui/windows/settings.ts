@@ -27,6 +27,8 @@ export interface SettingsOpts {
   info(): { account: string; character: string; level: number; ping: number; online: number };
   /** Abre a janela "O que há de novo". */
   news(): void;
+  /** Abre a caixinha "Relatar problema" (o mesmo que /bug no chat). */
+  reportBug(): void;
 }
 
 const pct = (v: number) => `${v}%`;
@@ -55,6 +57,7 @@ const set = <K extends keyof Settings>(k: K) => (v: Settings[K]) => settings.set
 const ACTIONS: { id: string; label: string }[] = [
   { id: "inventory", label: "Inventário" },
   { id: "skills", label: "Árvore de skills" },
+  { id: "quests", label: "Diário de missões" },
   { id: "party", label: "Grupo" },
   { id: "clan", label: "Clã" },
   { id: "social", label: "Social (amigos e correio)" },
@@ -284,6 +287,14 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "div",
         "set-page about",
         el("div", "about-logo", el("span", "logo-word small-logo", "EREVIA"), el("span", "muted small", "Fase 3 · interface nova")),
+        group(
+          "Ajuda",
+          row(
+            "Relatar problema",
+            button("Relatar", "btn btn-sm btn-gold", opts.reportBug),
+            "Algo deu errado? Conte o que aconteceu: vai com um print da tela do jogo, o FPS e o ping (o mesmo que /bug no chat).",
+          ),
+        ),
         group("Novidades", row("O que há de novo", button("Abrir", "btn btn-sm", opts.news), "O que mudou nas últimas versões do jogo.")),
         group(
           "Conexão",

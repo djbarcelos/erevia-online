@@ -48,7 +48,7 @@ export const HOTBAR_KEYS = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "D
 /** Um atalho: "skill:<id>" ou "item:<id do item>". */
 export type HotbarEntry = string | null;
 
-export type WindowId = "character" | "inventory" | "skills" | "party" | "clan" | "social" | "glory" | "map" | "settings";
+export type WindowId = "character" | "inventory" | "skills" | "quests" | "party" | "clan" | "social" | "glory" | "map" | "settings";
 
 /** Ações sobre um jogador selecionado (quadro do alvo). */
 export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade" | "friend";
@@ -89,6 +89,8 @@ export interface HudCallbacks {
   /** Joystick (direção relativa à câmera) ou null ao soltar. */
   onStick(v: { x: number; y: number } | null): void;
   me(): { myClass: string; myLevel: number };
+  /** Personagem (as missões fixadas ficam guardadas por personagem). */
+  characterId: number;
   /** Distância do jogador até o alvo atual (null = sem alvo inimigo). */
   targetDistance(): number | null;
   map: MapSource;
@@ -117,6 +119,7 @@ const MENU: { id: WindowId; icon: string; label: string; key: string }[] = [
   { id: "character", icon: "user", label: "Personagem", key: "character" },
   { id: "inventory", icon: "bag", label: "Inventário", key: "inventory" },
   { id: "skills", icon: "book", label: "Skills", key: "skills" },
+  { id: "quests", icon: "scroll", label: "Diário de missões", key: "quests" },
   { id: "party", icon: "users", label: "Grupo", key: "party" },
   { id: "clan", icon: "clan", label: "Clã", key: "clan" },
   { id: "social", icon: "mail", label: "Social", key: "social" },
@@ -197,8 +200,8 @@ export class Hud {
   private questsEl = el("section", "quests");
   private questList = el("div", "quest-list");
   private questBoxes = new Map<string, HTMLElement>();
-  /** Missão rastreada: guia o minimapa, o mapa do mundo e a seta da borda. */
-  readonly quests = new QuestTracker();
+  /** Missões fixadas e a rastreada (guia o minimapa, o mapa do mundo e a seta da borda). */
+  readonly quests: QuestTracker;
   private questArrow = new QuestArrow();
   private lastArrow = 0;
   /** Última posição do jogador vista pelo minimapa (a seta reaproveita). */
@@ -244,6 +247,7 @@ export class Hud {
     private cb: HudCallbacks,
   ) {
     for (const s of skills) this.skills.set(s.id, { info: s, readyAt: 0, span: 1 });
+    this.quests = new QuestTracker(cb.characterId);
 
     // ---------- Personagem (topo esquerdo) ----------
     const crest = el("button", "me-crest", el("span", "me-initial"), this.meLevel);
@@ -259,12 +263,15 @@ export class Hud {
     pHead.onclick = () => this.partyEl.classList.toggle("collapsed");
     this.partyEl.append(pHead, this.partyList);
     this.partyEl.hidden = true;
-    // ---------- Missões (abaixo do grupo; some sem missão ativa) ----------
+    // ---------- Missões (abaixo do grupo; só as fixadas; some sem missão ativa) ----------
     const qHead = el("button", "side-head");
     qHead.type = "button";
     qHead.innerHTML = `${ui("scroll", 16)}<span>Missões</span><i>▾</i>`;
     qHead.onclick = () => this.questsEl.classList.toggle("collapsed");
-    this.questsEl.append(qHead, this.questList);
+    const journal = button("Diário", "q-journal");
+    journal.onclick = () => cb.openWindow("quests");
+    tooltip(journal, () => `<b>Diário de missões</b> <span class="muted">(${keyLabel(settings.get().keys.quests)})</span><br>Todas as missões; fixe até 3 aqui no painel.`);
+    this.questsEl.append(el("div", "q-panel-head", qHead, journal), this.questList);
     this.questsEl.hidden = true;
     const left = el("div", "hud-left", this.meEl, el("div", "hud-side", this.partyEl, this.questsEl));
 
@@ -408,6 +415,7 @@ export class Hud {
 
     this.root.append(left, mini, this.target, topRight, this.chatRoot, bottom, this.xpBar.root, this.autoPill, this.loot, touch, this.questArrow.el, this.bannerEl, this.channelEl, this.death);
     this.quests.onChange(() => this.markTracked());
+    this.quests.onPanel(() => this.renderQuests());
     document.body.append(this.root);
 
     const applyEnv = () => {
@@ -733,17 +741,31 @@ export class Hud {
     return `<h4>XP em dobro</h4>Monstros dão o dobro de experiência ${when}.`;
   }
 
-  /** Painel de missões: redesenhado só quando o servidor manda um QuestLog (nada por quadro).
-   *  Clicar numa missão a torna a rastreada. */
+  /** QuestLog novo: o rastreador avisa o painel (e o Diário, se aberto). */
   setQuests(log: QuestLog): void {
-    this.questsEl.hidden = log.quests.length === 0;
+    this.quests.setLog(log);
+  }
+
+  /** Painel de missões: só as fixadas (até 3) e, por alguns segundos, a recém-aceita com o
+   *  "Fixar". Redesenhado só quando chega o QuestLog ou muda a fixação (nada por quadro).
+   *  Clicar numa missão a torna a rastreada. */
+  private renderQuests(): void {
+    const all = this.quests.list();
+    this.questsEl.hidden = all.length === 0;
     this.questBoxes.clear();
+    const shown = this.quests.panel();
+    if (!shown.length) {
+      this.questList.replaceChildren(el("p", "q-empty", `Nenhuma missão fixada. Abra o Diário (${keyLabel(settings.get().keys.quests)}) para fixar.`));
+      return;
+    }
     this.questList.replaceChildren(
-      ...log.quests.map((q) => {
+      ...shown.map((q) => {
+        const temp = this.quests.isTemp(q.id);
         // Caixa clicável (rastreia) com o botão "Ir" dentro: div com papel de botão, porque
         // botão dentro de botão não vale.
         const head = el("div", "q-head", el("b", null, q.title));
-        const box = el("div", "quest", head);
+        const box = el("div", temp ? "quest temp" : "quest", head);
+        if (temp) box.style.setProperty("--q-left", `${this.quests.tempLeft(q.id)}ms`);
         box.tabIndex = 0;
         box.setAttribute("role", "button");
         box.onclick = () => this.quests.track(q.id);
@@ -753,7 +775,16 @@ export class Hud {
             this.quests.track(q.id);
           }
         };
-        if (questStepTarget(q)) {
+        if (temp) {
+          // Recém-aceita com o painel cheio: some sozinha se não for fixada.
+          const pin = button("Fixar", "btn btn-sm btn-gold q-go", (ev) => {
+            ev.stopPropagation();
+            const out = this.quests.pin(q.id);
+            if (out) toast(`${out} saiu do painel (continua no Diário).`);
+          });
+          pin.title = `Fixar no painel (fica no lugar de ${this.quests.wouldEvict() ?? "outra"})`;
+          head.append(pin);
+        } else if (questStepTarget(q)) {
           const go = button("Ir", "btn btn-sm btn-gold q-go", (ev) => {
             ev.stopPropagation();
             this.quests.track(q.id);
@@ -768,7 +799,7 @@ export class Hud {
           if (s.count >= s.need) row.classList.add("done");
           box.append(row);
         }
-        box.append(el("small", null, q.text));
+        box.append(el("small", null, temp ? "Nova missão: fixe para manter no painel." : q.text));
         tooltip(box, () => {
           const hint = !settings.get().questMarkers
             ? ""
@@ -780,7 +811,7 @@ export class Hud {
         return box;
       }),
     );
-    this.quests.setLog(log); // avisa o markTracked
+    this.markTracked();
   }
 
   /** Destaque da missão rastreada no painel (só com os marcadores ligados). */

@@ -27,6 +27,8 @@ type BugReport struct {
 	Version       string
 	UserAgent     string
 	Text          string
+	// Context é o contexto do cliente (objeto JSON; nil = relato pelo chat, sem contexto).
+	Context []byte
 }
 
 // accountOfCharacter acha a conta dona do personagem (nome sem diferenciar maiúsculas).
@@ -73,13 +75,26 @@ func (s *Store) LogGM(ctx context.Context, e GMEntry) error {
 
 // SaveBugReport grava um relato de /bug.
 func (s *Store) SaveBugReport(ctx context.Context, b BugReport) error {
+	_, err := s.CreateBugReport(ctx, b)
+	return err
+}
+
+// CreateBugReport grava um relato de /bug (com o contexto do cliente, se houver) e
+// devolve o id dele.
+func (s *Store) CreateBugReport(ctx context.Context, b BugReport) (int64, error) {
 	var charID *int64
 	if b.CharacterID > 0 {
 		charID = &b.CharacterID
 	}
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO bug_reports (account_id, character_id, character_name, level, x, z, version, user_agent, text)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		b.AccountID, charID, b.CharacterName, b.Level, float32(b.X), float32(b.Z), b.Version, b.UserAgent, b.Text)
-	return err
+	var bugCtx *string // jsonb vai como texto (nil = NULL)
+	if len(b.Context) > 0 {
+		c := string(b.Context)
+		bugCtx = &c
+	}
+	var id int64
+	err := s.pool.QueryRow(ctx,
+		`INSERT INTO bug_reports (account_id, character_id, character_name, level, x, z, version, user_agent, text, context)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb) RETURNING id`,
+		b.AccountID, charID, b.CharacterName, b.Level, float32(b.X), float32(b.Z), b.Version, b.UserAgent, b.Text, bugCtx).Scan(&id)
+	return id, err
 }

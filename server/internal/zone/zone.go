@@ -114,7 +114,10 @@ type JoinInfo struct {
 	Spec string
 	// Maestria (nível 30): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
-	Peer    Peer
+	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
+	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
+	LoadedAt time.Time
+	Peer     Peer
 	// Zone: o mapa gravado no banco (o gerente escolhe a zona; "" = starter).
 	Zone string
 	hop  *hopIn // só na entrega do portão (gate.go)
@@ -286,7 +289,8 @@ type Zone struct {
 	eventBackend EventBackend
 	eventJobs    chan EventData
 
-	paths []*entity // fila de caminhos longos (ver pathqueue.go)
+	paths []*entity   // fila de caminhos longos (ver pathqueue.go)
+	adm   *adminState // portal de administração (admin_actions.go e admin_ops.go)
 
 	mgr *Manager // zonas do processo e barramento (nil = zona sozinha, como nos testes)
 }
@@ -513,7 +517,7 @@ func (z *Zone) get(id uint32) *entity {
 }
 
 func (z *Zone) onJoin(info JoinInfo) {
-	if z.refuseGone(info) {
+	if z.refuseGone(info) || z.refuseAdminStale(info) {
 		return
 	}
 	// Mesmo personagem conectado em outro lugar: derruba a sessão antiga.
@@ -646,6 +650,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.achOnJoin(p)
 	z.masteryOnJoin(p)
 	z.eventsOnJoin(p)
+	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
 			z.sendAnyCooldown(p, id, ready-z.now)
@@ -667,6 +672,11 @@ func (z *Zone) onJoin(info JoinInfo) {
 func (z *Zone) onMove(e moveEvent) {
 	p, ok := z.players[e.id]
 	if !ok || p.dead || !z.spendAction(p) {
+		return
+	}
+	// NaN passa pelo clamp (min/max com NaN dão NaN) e deixaria o personagem fora do mapa
+	// para sempre; ±Inf o clamp já leva para a borda.
+	if math.IsNaN(e.x) || math.IsNaN(e.z) {
 		return
 	}
 	p.clearAction() // clicar no chão cancela o ataque
@@ -840,6 +850,7 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysTrades, z.checkTrades)
 		z.runSystem(sysXP2, z.updateXP2)
 		z.runSystem(sysXPTally, z.flushXPTallies)
+		z.runSystem(sysAdminOps, z.updateAdminOps)
 		if len(z.pending) > 0 {
 			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}
@@ -1024,8 +1035,12 @@ func (z *Zone) save(batch []SavedState, blocking bool) {
 	if len(z.pending) > 0 {
 		merged := make([]SavedState, 0, len(z.pending)+len(batch))
 		newer := map[uint32]bool{}
-		for _, s := range batch {
+		for i, s := range batch {
 			newer[s.ID] = true
+			// O armazém só vai no salvamento em que mudou: o mais novo herda o do pendente.
+			if old, ok := z.pending[s.ID]; ok && s.Storage == nil && old.Storage != nil {
+				batch[i].Storage = old.Storage
+			}
 		}
 		for id, s := range z.pending {
 			if !newer[id] {

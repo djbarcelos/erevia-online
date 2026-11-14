@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"erevia/server/internal/alerts"
 	"erevia/server/internal/api"
 	gamenet "erevia/server/internal/net"
 	"erevia/server/internal/store"
@@ -141,6 +142,21 @@ func run(log *slog.Logger) error {
 		}()
 	}
 	log.Info("zones", "maps", strings.Join(maps, ","))
+	// Anúncios agendados pelo portal que ainda não saíram (sobrevivem ao reinício): cada
+	// zona avisa os seus jogadores na hora.
+	lctx, lcancel = context.WithTimeout(ctx, 30*time.Second)
+	scheduled, err := st.PendingAnnouncements(lctx)
+	lcancel()
+	if err != nil {
+		return fmt.Errorf("load scheduled announcements: %w", err)
+	}
+	pending := make([]zone.ScheduledAnnouncement, len(scheduled))
+	for i, s := range scheduled {
+		pending[i] = zone.ScheduledAnnouncement{ID: s.ID, At: s.At, Title: s.Title, Text: s.Text, By: s.ByName}
+	}
+	m.LoadScheduled(pending)
+	// Portal: personagem offline vai para a zona gravada no banco (a do próximo login).
+	m.SetZoneLookup(func(ctx context.Context, id uint32) (string, error) { return st.CharacterZone(ctx, int64(id)) })
 
 	// Conta apagada: o banco já apagou tudo; a zona derruba quem estiver online e acerta os
 	// clãs em memória do jeito que o banco deixou.
@@ -155,9 +171,14 @@ func run(log *slog.Logger) error {
 	})
 	zoneDone := make(chan struct{})
 	go func() { m.Run(ctx); close(zoneDone) }()
+	// Alertas no Discord (ALERT_WEBHOOK_URL; sem ela, só log): worker próprio que só lê o
+	// banco, fora da zona; um panic nele vira server_error e ele recomeça.
+	alertsDone := alerts.Start(ctx, alerts.FromEnv(publicURL, zcfg.Version, log), st, m, log.With("worker", "alerts"))
 
-	// Portal de administração (/admin e /api/admin/*): só GM; "online agora" vem das zonas pelo canal.
+	// Portal de administração (/admin e /api/admin/*): só GM; "online agora" vem das zonas
+	// pelo canal, e as ações sobre um personagem vão para a zona dona dele (zone.Manager).
 	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: m})
+	httpAPI.SetBugZone(m)
 	mux := http.NewServeMux()
 	httpAPI.Register(mux)
 	mux.Handle("/ws", gamenet.NewServer(m, &wsBackend{api: httpAPI, store: st}, log, origins))
@@ -212,6 +233,10 @@ func run(log *slog.Logger) error {
 		case <-limit:
 			log.Warn("telemetry did not finish in time")
 		}
+	}
+	select { // os alertas anotam o desligamento normal (o próximo aviso de subida não fala em queda)
+	case <-alertsDone:
+	case <-time.After(3 * time.Second):
 	}
 	log.Info("bye")
 	return nil

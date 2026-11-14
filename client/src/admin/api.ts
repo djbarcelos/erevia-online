@@ -51,7 +51,7 @@ export class AdminError extends Error {
  * Todo pedido leva o cabeçalho X-Erevia-Admin: o servidor exige nos de escrita (contra
  * CSRF: outra origem não consegue mandá-lo sem preflight) e ignora nos de leitura.
  */
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { "X-Erevia-Admin": "1" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   let res: Response;

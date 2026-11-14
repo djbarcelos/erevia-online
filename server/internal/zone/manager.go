@@ -43,7 +43,8 @@ type Manager struct {
 	mu  sync.Mutex
 	ctx context.Context // o do Run: as entregas do portão desistem quando o processo para
 
-	hops atomic.Int64 // travessias de portão desde a partida
+	hops   atomic.Int64 // travessias de portão desde a partida
+	lookup ZoneLookup   // mapa gravado no banco (portal: personagem offline)
 }
 
 // Hops: travessias de portão desde a partida.
