@@ -627,6 +627,10 @@ func (z *Zone) onMove(e moveEvent) {
 	if !ok || p.dead || !z.spendAction(p) {
 		return
 	}
+	// NaN passa pelo clampToZone (min/max de NaN é NaN) e viraria a posição do jogador.
+	if !finite(e.x) || !finite(e.z) {
+		return
+	}
 	p.clearAction() // clicar no chão cancela o ataque
 	z.cancelChannel(p, "Você se moveu: viagem cancelada.")
 	if p.stunned(z.now) {
