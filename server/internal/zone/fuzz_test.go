@@ -110,6 +110,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.Social(ctx, id, m.RankingRequest)
 	case *pb.ClientMessage_AchievementCmd:
 		z.Social(ctx, id, m.AchievementCmd)
+	case *pb.ClientMessage_MasteryCmd:
+		z.ProgressAction(ctx, id, m.MasteryCmd)
 	case *pb.ClientMessage_SpecCmd:
 		z.ProgressAction(ctx, id, m.SpecCmd)
 	case *pb.ClientMessage_TradeCmd:
@@ -392,12 +394,20 @@ func newFuzzHarness(t *testing.T, r *fuzzReader) *fuzzHarness {
 				spec = cs[r.pick(len(cs))].ID
 			}
 		}
+		// Maestria como veio do banco: sem pontos, alguns, todos ou absurdos, e às vezes um
+		// nó com rank fora do limite (game.NormalMastery tem que dar conta).
+		var mastery game.MasteryState
+		if k := r.pick(4); k > 0 {
+			mastery.Points = []int{0, 5, game.MasteryMaxPoints, 1000}[k]
+			node := game.MasteryNodes[r.pick(len(game.MasteryNodes))].ID
+			mastery.Ranks = map[string]int{node: []int{1, 3, game.MasteryNodeMax, 99}[r.pick(4)]}
+		}
 		h.peers[i] = &fuzzPeer{}
 		h.z.handle(joinEvent{info: JoinInfo{
 			ID: h.ids[i], Name: h.names[i], Class: class, X: pos.X, Z: pos.Z,
 			XP: game.XPLevelStart(level), Gold: fuzzGold[r.pick(len(fuzzGold))], Items: items,
 			AccountID: h.accts[i], Karma: karma, Storage: st, GM: h.gm && i == 0,
-			Spec: spec, Peer: h.peers[i],
+			Spec: spec, Mastery: mastery, Peer: h.peers[i],
 		}})
 	}
 	h.pump()
@@ -759,7 +769,7 @@ func fuzzSpotFor(msg *pb.ClientMessage) byte {
 }
 
 // fuzzFixedSetup: os bytes de newFuzzHarness para uma zona fixa: mapa real, sem limite
-// de ações, os dois perto do lugar spot de fuzzSpots; Ana (cavaleira, nível 10) com
+// de ações, os dois perto do lugar spot de fuzzSpots; Ana (cavaleira, nível 30, com Maestria) com
 // pergaminho, poções e materiais, armazém com moedas e item; Beto (mago, com karma).
 func fuzzFixedSetup(spot byte) []byte {
 	idx := func(list []string, v string) byte { return byte(slices.Index(list, v)) }
@@ -767,15 +777,15 @@ func fuzzFixedSetup(spot byte) []byte {
 		return []byte{idx(fuzzItemIDs, id), byte(slices.Index(fuzzCounts, count)), byte(slices.Index(fuzzEnch, ench))}
 	}
 	b := []byte{0b00000101, spot}
-	b = append(b, idx(fuzzClasses, "knight"), byte(slices.Index(fuzzLevels, 20)), 4)
+	b = append(b, idx(fuzzClasses, "knight"), byte(slices.Index(fuzzLevels, 30)), 4)
 	b = append(b, item("scroll_ench_weapon", 2, 0)...)
 	b = append(b, item("potion_hp_s", 15, 0)...)
 	b = append(b, item("bone_old", 50, 0)...)
 	b = append(b, item("skull_cracked", 15, 0)...)
 	b = append(b, 1, 3, 1)
 	b = append(b, item("scroll_return", 2, 0)...)
-	b = append(b, 0, 0, 5) // karma, especialização, ouro
-	b = append(b, idx(fuzzClasses, "mage"), 3, 1, 0, 0, 3, 0, 3)
+	b = append(b, 0, 0, 1, 0, 0, 5) // karma, especialização, Maestria (5 pontos, 1 no 1º nó), ouro
+	b = append(b, idx(fuzzClasses, "mage"), 3, 1, 0, 0, 3, 0, 0, 3)
 	return b
 }
 
@@ -824,6 +834,10 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		// Mestra dos Caminhos: falar (anda a missão da especialização) e escolher o caminho.
 		{Msg: &pb.ClientMessage_SpecCmd{SpecCmd: &pb.SpecCmd{Kind: pb.SpecCmdKind_SPEC_CMD_TALK, NpcId: fuzzMasterID}}},
 		{Msg: &pb.ClientMessage_SpecCmd{SpecCmd: &pb.SpecCmd{Kind: pb.SpecCmdKind_SPEC_CMD_CHOOSE, NpcId: fuzzMasterID, Spec: "herald"}}},
+		// Maestria (nível 30): pedir o estado, gastar 1 ponto num nó e redistribuir.
+		{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: &pb.MasteryCmd{Kind: pb.MasteryCmdKind_MASTERY_CMD_GET}}},
+		{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: &pb.MasteryCmd{Kind: pb.MasteryCmdKind_MASTERY_CMD_SPEND, Node: game.MasteryNodes[0].ID}}},
+		{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: &pb.MasteryCmd{Kind: pb.MasteryCmdKind_MASTERY_CMD_RESPEC}}},
 	}
 	return out
 }
@@ -1142,6 +1156,8 @@ func (g *fuzzGen) named(fd protoreflect.FieldDescriptor) (protoreflect.Value, bo
 			return str(fuzzRecipeIDs[r.pick(len(fuzzRecipeIDs))])
 		case "id": // AchievementCmd
 			return str(fuzzAchIDs[r.pick(len(fuzzAchIDs))])
+		case "node": // MasteryCmd
+			return str(game.MasteryNodes[r.pick(len(game.MasteryNodes))].ID)
 		case "spec":
 			return str(game.SpecList[r.pick(len(game.SpecList))].ID)
 		case "name", "to":
