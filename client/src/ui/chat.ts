@@ -15,6 +15,8 @@ export class Chat {
   private lastWhisperFrom = "";
   /** /convidar Nome (grupo). */
   onPartyInvite: (name: string) => void = () => {};
+  /** Troca de mapa: o chat velho para de ouvir o Enter (e não segura o HUD velho). */
+  dispose: () => void;
 
   constructor(
     root: HTMLElement,
@@ -35,12 +37,14 @@ export class Chat {
         this.input.blur();
       }
     });
-    window.addEventListener("keydown", (ev) => {
+    const onEnter = (ev: KeyboardEvent) => {
       if (ev.key === "Enter" && document.activeElement !== this.input && !root.hidden) {
         ev.preventDefault();
         this.input.focus();
       }
-    });
+    };
+    window.addEventListener("keydown", onEnter);
+    this.dispose = () => window.removeEventListener("keydown", onEnter);
     // Clicar no nome de alguém prepara um sussurro.
     this.log.addEventListener("click", (ev) => {
       const name = (ev.target as HTMLElement).dataset.name;

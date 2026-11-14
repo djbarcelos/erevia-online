@@ -1439,6 +1439,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       window.clearInterval(channelFx);
       raid.dispose();
       raidUi.dispose();
+      chat.dispose();
       itemTip.root.remove();
     },
     apply(msg: ServerMessage) {

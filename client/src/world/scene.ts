@@ -186,6 +186,10 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
       window.removeEventListener("resize", onResize);
       engine.stopRenderLoop(render);
       scene.dispose();
+      // Os shaders compilados ficam no engine (cache por nome e defines); sem soltar, cada
+      // ida e volta somava programas WebGL da cena velha. O mapa novo compila na tela de
+      // carregamento.
+      engine.releaseEffects();
     },
   };
 }
