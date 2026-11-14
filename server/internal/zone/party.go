@@ -428,6 +428,7 @@ func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64
 	total *= partyBonus[min(len(takers), len(partyBonus))-1] * frac
 	for _, m := range takers {
 		if xp := int64(math.Round(total * float64(m.level) / float64(sum))); xp > 0 {
+			z.tallyMonsterXP(m, xp, z.night, z.xpEventMult(), len(takers) > 1) // telemetria (xptally.go)
 			z.grantXP(m, xp)
 		}
 		z.burnKarma(m, dead.level)

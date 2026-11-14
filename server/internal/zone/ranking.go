@@ -28,6 +28,7 @@ type RankRow struct {
 	PvPKills    int
 	ClanName    string
 	TitleID     string // conquista do título em uso
+	Mastery     int    // nível de Maestria (pontos ganhos no 30)
 }
 
 // ClanRankRow é uma linha do ranking de clãs.
@@ -105,6 +106,7 @@ func (z *Zone) setRanking(d RankingData) {
 			out[i] = &pb.RankEntry{
 				Pos: uint32(i + 1), CharacterId: uint64(r.CharacterID), Name: r.Name, Class: r.Class,
 				Level: uint32(r.Level), PvpKills: uint32(r.PvPKills), ClanName: r.ClanName, Title: game.TitleOf(r.TitleID),
+				Mastery: uint32(max(0, r.Mastery)),
 			}
 		}
 		return out

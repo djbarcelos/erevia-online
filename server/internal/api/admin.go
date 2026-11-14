@@ -92,6 +92,7 @@ func (a *API) registerAdmin(mux *http.ServeMux) {
 	m.HandleFunc("GET /api/admin/overview", a.handleAdminOverview)
 	m.HandleFunc("GET /api/admin/gm-log", a.handleAdminGMLog)
 	a.registerAdminBugReports(m)
+	m.HandleFunc("GET /api/admin/progression", a.handleAdminProgression)
 	mux.Handle("/api/admin/", a.AdminOnly(m))
 }
 
@@ -287,4 +288,16 @@ func (a *API) handleAdminGMLog(w http.ResponseWriter, r *http.Request) {
 		rows = []store.GMLogRow{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"entries": rows})
+}
+
+// handleAdminProgression: as views da progressão (docs/progressao.md), só leitura.
+func (a *API) handleAdminProgression(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	tables, err := a.store.ProgressionReport(ctx)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tables": tables})
 }

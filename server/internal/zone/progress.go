@@ -40,6 +40,8 @@ func (z *Zone) onProgress(e progressEvent) {
 		z.setHotbar(p, m.Slots)
 	case *pb.SpecCmd:
 		z.onSpecCmd(p, m)
+	case *pb.MasteryCmd:
+		z.onMasteryCmd(p, m)
 	}
 }
 
@@ -48,48 +50,11 @@ func (z *Zone) onProgress(e progressEvent) {
 // ---------------------------------------------------------------------------------------
 
 // computeStats: classe no nível → atributos (com o bônus da especialização) →
-// equipamento → passivas → regeneração.
+// equipamento → passivas → regeneração (a conta fica em game.CharacterStats, que o
+// simulador de balanceamento também usa).
 func (z *Zone) computeStats(p *entity, spent game.Attrs) game.Stats {
-	cls := p.pl.class
-	total := game.ClassBaseAttrs[cls].Add(spent).Add(game.SpecBonus(cls, p.pl.spec))
-	s := game.ClassStats(cls, p.level)
-	s = game.ApplyAttrs(s, cls, p.level, total)
-	s = s.AddBonus(p.pl.inv.bonus())
-	s = applyPassives(s, p)
-	s = game.FinishRegen(s, cls, total)
-	if r := p.pl.rank(game.SkillClearMind); r > 0 {
-		s.MPRegen *= 1 + game.Skills[game.SkillClearMind].PValue.At(r)
-	}
-	return s
-}
-
-func applyPassives(s game.Stats, p *entity) game.Stats {
-	for id, r := range p.pl.ranks {
-		sk := game.Skills[id]
-		if sk == nil || r < 1 || !sk.IsPassive() {
-			continue
-		}
-		v := sk.PValue.At(r)
-		switch sk.Passive {
-		case game.PassivePDefPct:
-			s.PDef *= 1 + v
-		case game.PassiveSwordPAtk:
-			if p.pl.inv.weaponType() == game.WeaponSword {
-				s.PAtk *= 1 + v
-			}
-		case game.PassiveCritDamage:
-			s.CritDamage += v
-		case game.PassiveMaxHPPct:
-			s.MaxHP *= 1 + v
-		case game.PassiveOverload:
-			s.MAtk *= 1 + v
-		case game.PassiveCrit:
-			s.Crit += v
-		case game.PassiveEvasion:
-			s.Evasion += v
-		}
-	}
-	return s
+	s := game.CharacterStats(p.pl.class, p.pl.spec, p.level, spent, p.pl.inv.bonus(), p.pl.ranks, p.pl.inv.weaponType())
+	return applyMasteryStats(s, p) // vida e dano da Maestria (teto de 5% no combate)
 }
 
 // refreshStats recalcula os atributos (nível, pontos, equipamento ou passivas mudaram).
