@@ -73,7 +73,7 @@ export interface HudCallbacks {
   onHotbarChange(entries: HotbarEntry[]): void;
   onAuto(on: boolean): void;
   openWindow(id: WindowId): void;
-  /** Barra de Maestria (nível 30): abre a aba Maestria da janela de skills. */
+  /** Barra de Maestria (nível máximo): abre a aba Maestria da janela de skills. */
   openMastery(): void;
   /** Botão de ataque do toque: ataca o alvo ou o inimigo mais próximo. */
   onAttack(): void;
@@ -575,13 +575,13 @@ export class Hud {
     if (s.dead && !wasDead && this.auto) this.setAuto(false, false);
   }
 
-  /** Maestria (nível 30): a barra de XP do HUD vira a barra de Maestria. */
+  /** Maestria (nível máximo): a barra de XP do HUD vira a barra de Maestria. */
   setMastery(m: MasteryState): void {
     this.mastery = m;
     this.renderXp();
   }
 
-  /** Barra da borda: XP do nível ou, no 30, a de Maestria (outra cor, com o bônus diário). */
+  /** Barra da borda: XP do nível ou, no máximo, a de Maestria (outra cor, com o bônus diário). */
   private renderXp(): void {
     const m = this.mastery;
     const s = this.self;

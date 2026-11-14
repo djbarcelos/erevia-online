@@ -78,6 +78,7 @@ import { loadNews } from "./news";
 import { InvitePrompt } from "./ui/invite";
 import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
+import { MonsterVariants } from "./world/variants";
 import { AutoHunt } from "./world/autohunt";
 import { nearestAllowed, QuestGo, type GoTarget, type StoneInfo } from "./world/questgo";
 import { GoPill } from "./ui/quest-go-pill";
@@ -240,6 +241,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   setSpecs(welcome.specs);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
   for (const e of welcome.entities) entities.add(e);
+  // Elites do 30 ao 40: os modelos de hoje com outra cor (tingidos uma vez, ao carregar).
+  const variants = new MonsterVariants(entities);
+  for (const e of welcome.entities) variants.add(e.id, e.tint);
 
   // Cenário (árvores, cidade, montanhas) em segundo plano.
   let env: Environment | null = null;
@@ -353,7 +357,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     return () => progressListeners.delete(fn);
   };
   const rankOf = (id: number) => progress?.ranks.find((r) => r.skillId === id)?.rank ?? 0;
-  // ---------- Maestria (nível 30): barra, pontos e árvore (só mudam quando chega mensagem) ----------
+  // ---------- Maestria (nível máximo): barra, pontos e árvore (só mudam quando chega mensagem) ----------
   let mastery: MasteryState | null = null;
   let masteryTree: MasteryTree | null = null;
   const masteryListeners = new Set<() => void>();
@@ -1036,7 +1040,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hotkey: keys().skills,
     width: 1000,
     height: 820, // 5 degraus (a janela nunca passa da altura da tela)
-    // Duas abas: a árvore da classe e a Maestria (nível 30).
+    // Duas abas: a árvore da classe e a Maestria (nível máximo).
     build: () => {
       const w = skillsWithMastery({
         tree: buildSkills({
@@ -1056,6 +1060,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
             request: () => conn.masteryCmd(MasteryCmdKind.MASTERY_CMD_GET),
             spend: (node) => conn.masteryCmd(MasteryCmdKind.MASTERY_CMD_SPEND, node),
             respec: () => conn.masteryCmd(MasteryCmdKind.MASTERY_CMD_RESPEC),
+            maxLevel: () => progress?.maxLevel ?? 0,
           }),
         tab: skillsTab,
         onTab: (t) => (skillsTab = t),
@@ -1518,6 +1523,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       barberWin.dispose();
       window.clearInterval(channelFx);
       raid.dispose();
+      variants.dispose();
       raidUi.dispose();
       chat.dispose();
       itemTip.root.remove();
@@ -1529,6 +1535,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           if (e) {
             invariants.noteSpawn(e.id, entities.info(e.id) !== undefined, e.kind);
             entities.add(e, true);
+            variants.add(e.id, e.tint);
             raid.onSpawn(e.id, e.model, e.x, e.z);
           }
           break;
@@ -1718,7 +1725,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           const prev = mastery;
           mastery = m;
           hud.setMastery(m);
-          // XP ganha no 30 vira o aviso do canto, e o ponto ganho, o banner (o chat avisa também).
+          // XP ganha no nível máximo vira o aviso do canto, e o ponto ganho, o banner (o chat avisa também).
           if (prev?.active && m.active) {
             if (m.level > prev.level) hud.masteryBanner(m.level);
             else if (m.xp > prev.xp) hud.lootLine(`+${(m.xp - prev.xp).toLocaleString("pt-BR")} XP de Maestria`, "xp");

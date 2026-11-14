@@ -28,7 +28,7 @@ type RankRow struct {
 	PvPKills    int
 	ClanName    string
 	TitleID     string // conquista do título em uso
-	Mastery     int    // nível de Maestria (pontos ganhos no 30)
+	Mastery     int    // nível de Maestria (pontos ganhos no nível máximo)
 }
 
 // ClanRankRow é uma linha do ranking de clãs.

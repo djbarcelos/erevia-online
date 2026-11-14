@@ -112,7 +112,7 @@ type JoinInfo struct {
 	Title        string
 	// Especialização (segunda classe; "" = nenhuma).
 	Spec string
-	// Maestria (nível 30): barra, bônus diário e pontos da árvore.
+	// Maestria (nível máximo): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
 	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
 	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
@@ -1077,6 +1077,9 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		Dead: e.dead, Scale: float32(e.scale),
 		Boss: e.mon != nil && e.mon.def.Boss,
 		Raid: e.mon != nil && e.mon.def.Raid,
+	}
+	if e.mon != nil {
+		out.Tint = e.mon.def.Tint
 	}
 	if e.pl != nil {
 		w, o, g := e.pl.inv.look()

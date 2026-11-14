@@ -61,7 +61,7 @@ type Character struct {
 	Achievements game.AchievementState
 	Title        string
 	Spec         string            // especialização ("" = nenhuma)
-	Mastery      game.MasteryState // Maestria (nível 30)
+	Mastery      game.MasteryState // Maestria (nível máximo)
 	Zone         string            // mapa onde está ("" = starter)
 }
 

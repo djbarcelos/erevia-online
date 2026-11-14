@@ -86,3 +86,24 @@ func TestHuntPlaceAvoidsRaidLair(t *testing.T) {
 		t.Fatalf("hunt circle (%.1f, %.1f) overlaps the raid lair (d = %.1f)", pl.X, pl.Z, d)
 	}
 }
+
+// A navegação das missões leva às áreas do 30 ao 40 pelo nível do jogador.
+func TestHuntPlaceLateAreas(t *testing.T) {
+	sp := DefaultSpawns()
+	for _, c := range []struct {
+		level  int
+		x, z   float64
+		region string
+	}{{32, 0, -250, "Fundo do Vale"}, {34, 120, 90, "Vigília Ossária"}, {36, -100, 100, "Confins Partidos"}, {39, 100, -100, "Confins Partidos"}} {
+		pl, ok := HuntPlace(sp, nil, c.level, c.x, c.z)
+		if !ok || pl.Name != c.region {
+			t.Errorf("nível %d em (%.0f, %.0f): %+v, quero %s", c.level, c.x, c.z, pl, c.region)
+		}
+	}
+	// O contrato do 37 manda para o canto mais perto.
+	q := Quests[ContractID(37)]
+	pl, ok := HuntPlace(sp, q.Steps[0].Monsters(), 37, 100, -100)
+	if !ok || pl.Name != "Confins Partidos" || pl.X < 0 || pl.Z > 0 {
+		t.Fatalf("contrato do 37: %+v", pl)
+	}
+}

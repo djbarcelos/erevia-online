@@ -91,7 +91,7 @@ func (z *Zone) kill(dead, killer *entity) {
 	}
 	var barLost int64
 	if losses > 0 && dead.level >= game.MasteryLevel {
-		barLost = z.masteryDeath(dead, losses) // no 30, sai da barra de Maestria (sem tirar ponto)
+		barLost = z.masteryDeath(dead, losses) // no máximo, sai da barra de Maestria (sem tirar ponto)
 	}
 	z.tallyXP(dead, xpDeath, dead.pl.xp-before) // telemetria (xptally.go)
 	dead.pl.statsDirty = true
