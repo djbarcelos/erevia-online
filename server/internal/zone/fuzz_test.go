@@ -828,7 +828,6 @@ func fuzzSpotFor(msg *pb.ClientMessage) byte {
 		return 0
 	}
 	id := uint32(inner.Get(nf).Uint())
-	if n := id - npcIDBase; id >= npcIDBase && n <= boardID-npcIDBase {
 	if n := id - npcIDBase; id >= npcIDBase && n <= fuzzAuctioneerID-npcIDBase {
 		return byte(n)
 	}
