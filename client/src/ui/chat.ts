@@ -15,6 +15,8 @@ export class Chat {
   private lastWhisperFrom = "";
   /** /convidar Nome (grupo). */
   onPartyInvite: (name: string) => void = () => {};
+  /** /bug texto: o relato completo (ui/bug-report.ts). Sem ele, vai ao servidor pelo chat. */
+  onBug: ((text: string) => void) | null = null;
 
   constructor(
     root: HTMLElement,
@@ -133,13 +135,16 @@ export class Chat {
         // Comandos de teste do raid boss (o servidor só aceita em desenvolvimento).
         case "/raid":
           return this.onSend(raw, "");
+        case "/bug":
+          if (this.onBug) return this.onBug(rest.join(" "));
+          return this.onSend(raw, "");
         case "/convidar":
         case "/invite": {
           if (!rest[0]) return this.system("Uso: /convidar Nome");
           return this.onPartyInvite(rest[0]);
         }
         default:
-          // /bug e os comandos de GM: quem decide é o servidor (responde no canal de sistema).
+          // Os comandos de GM: quem decide é o servidor (responde no canal de sistema).
           return this.onSend(raw, "");
       }
     }

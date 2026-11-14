@@ -64,7 +64,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
 ### Base para crescer (moderação, /bug, reconexão e CI)
 - **Comandos de GM** (contas com `accounts.gm`, ver [Moderação](#moderação)): `/gm` lista os comandos; `/kick Nome [motivo]`, `/mute Nome minutos [motivo]` e `/unmute Nome`, `/ban Nome [motivo]` (vale para a conta inteira, mesmo offline, e derruba quem está online) e `/unban Nome`, `/tp X Z`, `/goto Nome`, `/summon Nome`, `/give Nome item|moedas [qtd]`, `/anuncio texto`, `/online` e `/evento` (invasão e XP em dobro, ver [Eventos](#eventos-invasão-da-cidade-e-xp-em-dobro)). Para quem não é GM, eles aparecem como comando desconhecido. Toda ação fica no `gm_log`. O silêncio vale em todos os canais e continua depois de relogar.
-- **`/bug texto`:** qualquer jogador (mesmo silenciado), um a cada 30 s. Vai para `bug_reports` com o personagem, o nível, a posição, a versão do servidor (commit do deploy) e o navegador.
+- **`/bug texto`:** qualquer jogador (mesmo silenciado), um a cada 30 s. Vai para `bug_reports` com o personagem, o nível, a posição, a versão do servidor (commit do deploy) e o navegador. O cliente manda junto o contexto (erros recentes, FPS, ping, região, hora do jogo, últimas mensagens do servidor) e um print pequeno da tela do jogo; no celular, **Configurações → Sobre → Relatar problema** faz o mesmo sem teclado (ver [/bug completo](#bug-completo)).
 - **Reconexão automática:** se a conexão cair, o jogo espera o servidor responder e volta sozinho ao mesmo personagem (desiste depois de 2 min com o servidor fora do ar ou de 5 recargas). Quem foi expulso ou banido não volta.
 - **CI:** cada push e pull request roda os testes no GitHub Actions (servidor com Postgres e `-race`, tipos e build do cliente). A Railway só publica a `main` com o CI verde.
 
@@ -111,7 +111,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Páginas legais:** [`/privacidade.html`](client/privacidade.html) e [`/termos.html`](client/termos.html), linkadas na tela de login e na de personagens. Por enquanto o responsável, o CNPJ, o e-mail (`contato@erevia.example`) e o foro são **fictícios** e precisam ser trocados pelos reais antes de abrir ao público.
 - **O que o banco guarda do login:** só o provedor, o id da conta nele e o nome de exibição (Google `openid profile`, Discord `identify`). Sem e-mail. O único cookie é o de sessão (`HttpOnly`); o chat não é gravado.
 - **Apagar a conta:** tela de personagens → **Conta** → digitar `APAGAR`. O servidor (`DELETE /api/account`, com `{"confirm":"APAGAR"}`, JSON e mesma origem como os outros pedidos de escrita) apaga numa transação a conta, identidades, sessões, personagens, itens, armazém e participação em clãs, e tira o nome dos personagens do registro dos raid bosses. O clã liderado por alguém da conta passa ao membro de cargo mais alto (o mais antigo no empate) ou é desfeito se ficar vazio; o banco não deixa apagar um líder sem isso (migração 00020). Depois a zona derruba quem estiver online com a conta (aviso "Esta conta foi apagada."), esquece o estado em memória e recusa um Join atrasado; salvamentos atrasados não acham a linha e não recriam nada.
-- **Telemetria e correio ao apagar:** os `game_events` da conta ficam anônimos (sem `account_id` e `character_id`), para as estatísticas agregadas continuarem. Um lote de eventos que chega depois da exclusão (ex.: o fim de sessão de quem foi derrubado) também entra anônimo: `InsertEvents` trava as contas do lote (`FOR KEY SHARE`) e zera as que não existem mais. As cartas enviadas ficam com quem recebeu, assinadas "Personagem apagado". O `gm_log` (moderação) é mantido.
+- **Telemetria e correio ao apagar:** os `game_events` da conta ficam anônimos (sem `account_id` e `character_id`), para as estatísticas agregadas continuarem. Um lote de eventos que chega depois da exclusão (ex.: o fim de sessão de quem foi derrubado) também entra anônimo: `InsertEvents` trava as contas do lote (`FOR KEY SHARE`) e zera as que não existem mais. As cartas enviadas ficam com quem recebeu, assinadas "Personagem apagado". O `gm_log` (moderação) é mantido. Os relatos de `/bug` da conta somem com ela, junto com o contexto e o print (cascata de `bug_reports`).
 - **Backups:** diário guardado 6 dias e semanal guardado 27 dias, então dados apagados podem ficar até 27 dias nas cópias. Se restaurar uma cópia, apague de novo as contas excluídas depois dela.
 
 ## Novidades (changelog)
@@ -211,7 +211,41 @@ UPDATE bug_reports SET resolved = true WHERE id = 1;
 
 -- Últimas ações de GM
 SELECT at, gm_name, command, target, detail FROM gm_log ORDER BY at DESC LIMIT 50;
+
+-- /bug completo: o contexto do cliente e se tem print
+SELECT b.id, b.at, b.character_name, b.text, b.context->>'region' AS regiao, b.context->'fps' AS fps,
+       b.context->'invariants' AS invariantes, s.report_id IS NOT NULL AS tem_print
+FROM bug_reports b LEFT JOIN bug_report_shots s ON s.report_id = b.id ORDER BY b.at DESC LIMIT 20;
 ```
+
+### /bug completo
+O relato feito pelo jogo (`/bug texto` no chat ou **Configurações → Sobre → Relatar problema**, uma caixinha para quem joga no celular sem teclado) leva o contexto do cliente e um print da tela do jogo (só o canvas 3D, sem a interface). Código: `client/src/ui/bug-report.ts`, `server/internal/api/bug_reports.go` e `server/internal/zone/bugreport.go`.
+
+1. `POST /api/bug-reports` com `{"text", "characterId", "context"}` (JSON até 40 KB; texto até 1000 caracteres; contexto: um objeto de até 32 KB). A zona confere, pelo canal, que o personagem está online e é da conta da sessão, aplica as regras do `/bug` do chat (8 caracteres no mínimo e um a cada 30 s, contado junto nos dois caminhos) e carimba nome, nível, posição, versão e navegador; a API grava e responde `201 {"id": N}`. Erros: 400 (curto ou contexto inválido), 409 (personagem fora do jogo), 413, 429 (intervalo, com `Retry-After`) e 503 (zona ocupada).
+2. `POST /api/bug-reports/{id}/shot` com o JPEG cru (`Content-Type: image/jpeg`, até 100 KB e 1280 px no lado maior; o cliente manda 640 px no lado maior, qualidade 0,6, abaixo de 80 KB). Só a conta dona, um print por relato (409 no segundo) e até 10 min depois do relato; relato de outra conta, inexistente ou vencido dão o mesmo 404. Responde 204.
+3. Limite por conta: 3 relatos e 3 prints de uma vez, depois 1 a cada 30 s (429).
+4. Servidor sem a rota, fora do ar ou com a zona ocupada: o cliente cai no `/bug` do chat (só o texto, como antes). Clientes antigos e bots continuam usando o chat.
+
+**Por que o HTTP faz o relato inteiro** (e não o chat responder com o id): o id volta direto na resposta, sem mudar o protocolo do jogo nem casar mensagens do chat com pedidos HTTP, e o dono do relato é a sessão do cookie, a mesma que autoriza o print. A zona continua sendo a única que lê o estado do jogador (pelo canal, com prazo).
+
+**Onde fica:** o contexto em `bug_reports.context` (JSONB, migração 00026; `NULL` nos relatos pelo chat). O print em `bug_report_shots` (`report_id`, `at`, `width`, `height`, `jpeg`), à parte para as listagens não arrastarem o JPEG. Os dois somem com a conta (cascata de `bug_reports.account_id`). O portal lê o print em `GET /api/admin/bug-reports/{id}/shot` (atrás do `AdminOnly`: quem não é GM vê 404; `image/jpeg`, `no-store`); no código, `store.BugReportShot(id)` e `store.BugReportContext(id)`.
+
+**Formato do contexto** (`v: 1`; campos novos podem aparecer, e quem lê ignora o que não conhece):
+
+| Campo | O quê |
+|---|---|
+| `v` | Versão do formato (1) |
+| `client` | Commit do build do cliente (`dev` local) |
+| `at` | Hora do navegador (ISO 8601) |
+| `fps` | `{avg, min, samples}`: média e mínimo do último minuto, 1 amostra por segundo (`samples` < 60 logo depois de entrar) |
+| `ping` | Último ping, em ms |
+| `region`, `x`, `z` | Região e posição do personagem (`null` se não havia) |
+| `gameTime` | `{phase, hour, night}`: fase do ciclo (0–1), hora do jogo (`"14:10"`) e se é noite |
+| `screen` | `{w, h, dpr, touch, quality, shadows, viewDistance}`: janela, densidade, toque e gráficos |
+| `players` | Jogadores na tela |
+| `invariants` | Regras das [invariantes do cliente](#invariantes-do-cliente) quebradas na sessão |
+| `errors` | Os últimos 20 erros e avisos da sessão (`recentClientErrors()`): `{level, kind, message, at, count, stack?, extra?}`, com a stack nas 3 primeiras linhas e o `extra` até 600 caracteres (cortados se o contexto passar de 30 KB) |
+| `messages` | As últimas 30 mensagens recebidas do servidor, da mais velha à mais nova: `{t, type, id?, n?}`, com `t` em segundos antes do relato (negativo), `type` o tipo da mensagem (`spawn`, `selfStats`, `chat`…; do snapshot, só `snapshot.deaths`, `.revives`, `.levelUps` e `.telegraphs`), `id` da entidade quando a mensagem tem um e `n` repetições seguidas. Só tipos e ids: nunca o texto do chat nem quem falou |
 
 ## Erros do cliente
 Todo erro de JavaScript no navegador de um jogador chega à tabela `client_errors` (`client/src/net/errors.ts` → `POST /api/client-errors`): `window.onerror`, promessas rejeitadas sem tratamento, perda do contexto WebGL, mensagens do servidor que não decodificam e modelos 3D que não carregam. Erros iguais (mensagem + primeira linha da stack) viram **uma linha por versão** do cliente, com a contagem, a primeira e a última vez, e o contexto da última ocorrência (navegador, conta, personagem, região, posição, FPS e ping). O cliente manda em lote a cada 10 s ou ao esconder/fechar a aba, no máximo 20 erros distintos por sessão; o servidor aceita até 30 lotes por minuto por IP e por conta. Apagar a conta tira a conta e o personagem das linhas dela.
@@ -245,6 +279,34 @@ node scripts/resolve-stack.mjs < stack.txt                  # com os .map de um 
 Os nomes dos `.js` levam o hash do conteúdo: se o arquivo da stack não estiver na pasta dos maps, o build é outro, e o script avisa (e tenta o de mesmo nome base).
 
 Para o código do jogo relatar algo: `reportClientError(kind, mensagem, extra?, erro?)` (vai ao servidor), `reportClientWarning(kind, mensagem, extra?)` (só em memória) e `recentClientErrors()` (os últimos 20 erros e avisos da sessão, para anexar ao /bug).
+
+### Invariantes do cliente
+O cliente percebe quando mostra algo impossível e relata com `reportClientError("client_invariant", regra, contexto)` (`client/src/net/invariants.ts`): a regra é a `message` em `client_errors` e o contexto vai no `extra`. As checagens rodam 1×/s num `setInterval` (fora do render; o HUD é conferido quando o `SelfStats` chega), e cada regra é relatada **uma vez por sessão**. As quebradas também vão no `/bug` (`invariants` do contexto).
+
+| Regra | Quando | Contexto (`extra`) |
+|---|---|---|
+| `hud_hp` / `hud_mp` | Vida ou mana acima do máximo, negativa ou não numérica | valor, máximo, nível, morto |
+| `hud_xp` | XP antes do começo do nível ou depois do próximo | XP, começo e fim da faixa, nível |
+| `entity_duplicate_id` | Spawn de um id que já está na tela | id, tipo, se é o próprio jogador |
+| `entity_no_mesh` | Entidade sem nenhuma malha viva em duas checagens seguidas | id, tipo, malhas |
+| `entity_bad_position` | Posição NaN ou Infinity | id, tipo, x, y, z |
+| `monster_dead_moving` | Monstro morto que andou mais de 1 m entre duas checagens | id, de onde, para onde |
+| `entity_server_drift` | Entidade a mais de 6 m de onde o servidor a põe (o último estado, andando até o destino como no Go) por mais de 2 s | id, distância, desenhada × servidor, idade do snapshot |
+| `camera_bad_target` | Alvo, posição ou ângulos da câmera NaN/Infinity | alvo, posição, ângulos |
+| `camera_below_ground` | Alvo ou posição da câmera abaixo do chão (y < −0,5) | alvo, posição |
+| `low_fps` | FPS abaixo de 15 por mais de 10 s (com a aba visível) | FPS, segundos, último minuto, região, entidades, jogadores, monstros, draw calls de um quadro, malhas ativas, qualidade, escala |
+| `texture_failed` | Textura que não carregou (qualquer uma, inclusive as de dentro dos .glb) | url, erro |
+| `glb_failed` | .glb que não carregou e que ninguém relatava (o saco do saque) | url, erro |
+
+Os .glb de personagens, armas e animações (`models.ts`) e o cenário continuam saindo como `kind = 'model'` e não entram de novo aqui. Os draw calls do `low_fps` são contados só naquele quadro (o contador do engine, sem `SceneInstrumentation` ligada o tempo todo).
+
+**Provocar cada regra (desenvolvimento):** com `npm run dev`, no console do jogo: `__erevia.invariants.rules` lista as regras, `__erevia.invariants.provoke("hud_hp")` provoca uma, `provokeAll()` provoca todas e `broken()` diz quais já foram relatadas. Cada uma passa pelo caminho de verdade da checagem: dados de mentira na entrada (`SelfStats`, spawn repetido, entidade sem malha, em NaN, morta andando ou longe do servidor, FPS lido como 5 por 13 s) ou uma falha real (textura e .glb que não existem; câmera com NaN só durante a checagem, sem chegar a desenhar). `window.__erevia` só existe em `import.meta.env.DEV`.
+
+```sql
+-- Invariantes do cliente quebradas na última semana
+SELECT message AS regra, count, last_seen, left(version, 7) AS versao, region, extra
+FROM client_errors WHERE kind = 'client_invariant' AND last_seen > now() - interval '7 days' ORDER BY count DESC;
+```
 
 ## Portal de administração
 `/admin` é o portal dos GMs, no mesmo servidor e no visual do jogo. Hoje tem a página inicial (online agora, versão no ar, uptime, contas, personagens e relatos de /bug nas últimas 24 h, e as últimas ações de GM) e o menu com Jogadores, Relatos, Métricas, Economia e Operação, ainda "em breve".
