@@ -2,6 +2,9 @@ package zone
 
 import (
 	"context"
+	"encoding/json"
+	"math"
+	"strings"
 	"testing"
 
 	"erevia/server/internal/game"
@@ -100,5 +103,32 @@ func TestClientStatsRecordsFPS(t *testing.T) {
 	evs := drainEvents(z)
 	if len(evs) != 1 || evs[0].Kind != "fps" || evs[0].Amount != 58 || evs[0].Extra["device"] != "mobile android" || evs[0].X != 30 {
 		t.Fatalf("fps events = %+v", evs)
+	}
+}
+
+// Achado pelo teste de caos: o cliente manda o FPS, e um NaN, um infinito ou um NUL no
+// aparelho iam para o extra do evento. O lote da telemetria é gravado de uma vez, e
+// json.Marshal (NaN/Inf) ou o JSONB do Postgres (\u0000) recusavam o lote inteiro: perdiam-se
+// junto o ouro e os itens de todo mundo daquele lote, e a conferência da economia não fechava.
+func TestClientStatsNeverBreaksTheTelemetryBatch(t *testing.T) {
+	z := newCombatZone()
+	z.SetEventSink(nopSink{})
+	p, _ := joinAt(z, 1, "knight", 30, 0, 0)
+	drainEvents(z)
+	nan, inf := float32(math.NaN()), float32(math.Inf(1))
+	for _, m := range []*pb.ClientStats{
+		{FpsAvg: nan, FpsLow: 10}, {FpsAvg: inf}, {FpsAvg: 60, FpsLow: nan}, {FpsAvg: 60, FpsLow: inf},
+		{FpsAvg: 60, FpsLow: float32(math.Inf(-1))},
+		{FpsAvg: 60, FpsLow: 30, Device: "mobile\x00\x00" + strings.Repeat("é", 30)},
+	} {
+		z.handle(clientStatsEvent{id: p.id, msg: m})
+	}
+	evs := drainEvents(z)
+	if len(evs) != 1 {
+		t.Fatalf("só a última amostra é válida; eventos = %+v", evs)
+	}
+	b, err := json.Marshal(evs[0].Extra)
+	if err != nil || strings.Contains(string(b), `\u0000`) {
+		t.Fatalf("extra do fps não pode quebrar o lote: %s, %v", b, err)
 	}
 }
