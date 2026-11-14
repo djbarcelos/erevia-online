@@ -158,9 +158,13 @@ func TestFifthTierSkills(t *testing.T) {
 				t.Errorf("%s: sem custo ou recarga", s.Name)
 			}
 		}
-		// No nível 30 ainda não dá para aprender tudo: escolher continua valendo.
-		if SkillPointsTotal(MaxLevel) >= total {
+		// No nível máximo ainda não dá para aprender tudo: escolher continua valendo. Os
+		// pontos de skill param no 30 (do 31 ao 40 só os de atributo sobem).
+		if SkillPointsTotal(MaxLevel) >= total || SkillPointsTotal(MaxLevel) != SkillPointsTotal(SkillPointMaxLevel) {
 			t.Errorf("%s: %d pontos no nível máximo para %d ranks", id, SkillPointsTotal(MaxLevel), total)
+		}
+		if AttrPointsTotal(MaxLevel) <= AttrPointsTotal(SkillPointMaxLevel) {
+			t.Errorf("os pontos de atributo continuam por nível depois do %d", SkillPointMaxLevel)
 		}
 	}
 }
@@ -258,33 +262,79 @@ func TestXPCurve(t *testing.T) {
 	if LevelForXP(math.MaxInt64/2) != MaxLevel {
 		t.Error("huge xp should cap at max level")
 	}
-	// Ritmo: matar monstros do próprio nível sobe de nível com ~5–40 abates (esqueletos até
-	// o 19; do 20 ao 30 só há golens, que valem mais e demoram mais para cair).
+	// Ritmo: abates do próprio nível (no grupo de monstros que se caça em cada nível, sem
+	// contar a XP das missões) para subir. Cresce com o nível e fica dentro de cada faixa:
+	// ~25 min por nível no começo, ~10 h no fim (25 s por abate).
+	limits := map[int][2]float64{1: {2, 200}, 10: {150, 500}, 20: {400, 1300}, 30: {1100, 2700}}
+	prev := 0.0
 	for l := 1; l < MaxLevel; l++ {
-		m := Monsters["skeleton_warrior"]
-		if l >= 20 {
-			m = Monsters["stone_golem"]
+		perKill, _ := huntXP(l)
+		kills := float64(XPToNext(l)) / perKill
+		lim := limits[l/10*10]
+		if l < 10 {
+			lim = limits[1]
 		}
-		kills := float64(XPToNext(l)) / float64(MonsterXP(m, l, l))
-		if kills < 4 || kills > 45 {
-			t.Errorf("level %d needs %.0f kills", l, kills)
+		if kills < lim[0] || kills > lim[1] || kills < prev*0.95 {
+			t.Errorf("nível %d pede %.0f abates (faixa %v, o anterior pedia %.0f)", l, kills, lim, prev)
 		}
+		prev = kills
 	}
-	// Até o 19 a curva não mudou (a XP salva continua no mesmo nível); do 20 em diante cada
-	// nível pede mais, e o fim (20→30) pesa mais que o começo inteiro (1→20).
-	if MaxLevel != 30 {
+	if MaxLevel != 40 {
 		t.Fatalf("MaxLevel = %d", MaxLevel)
-	}
-	if XPToNext(19) != int64(math.Round(80*math.Pow(19, 2.2))) || XPLevelStart(20) != 335517 {
-		t.Errorf("curva até o 20 mudou: %d, início do 20 = %d", XPToNext(19), XPLevelStart(20))
 	}
 	for l := 2; l < MaxLevel; l++ {
 		if XPToNext(l) <= XPToNext(l-1) {
 			t.Errorf("XPToNext(%d) = %d não cresce", l, XPToNext(l))
 		}
 	}
-	if late, early := XPLevelStart(30)-XPLevelStart(20), XPLevelStart(20); late < 3*early || late > 6*early {
-		t.Errorf("20→30 pede %d de XP, 1→20 pede %d", late, early)
+	// O peso fica no fim, como no Lineage 2: cada faixa de 10 níveis pede bem mais XP que
+	// tudo o que veio antes dela.
+	for _, f := range []int{20, 30, 40} {
+		if band, before := XPLevelStart(f)-XPLevelStart(f-10), XPLevelStart(f-10); band < 2*before {
+			t.Errorf("%d → %d pede %d de XP, 1 → %d pede %d", f-10, f, band, f-10, before)
+		}
+	}
+}
+
+// A curva 1 (a de antes) continua igual para converter a XP salva: 1.839.820 até o 30 e
+// 335.517 até o 20.
+func TestXPCurveV1(t *testing.T) {
+	if xpLevelStartV1(30) != 1_839_820 || xpLevelStartV1(20) != 335_517 || xpToNextV1(30) != 0 ||
+		xpToNextV1(19) != int64(math.Round(80*math.Pow(19, 2.2))) {
+		t.Fatalf("curva 1: início do 30 = %d, do 20 = %d", xpLevelStartV1(30), xpLevelStartV1(20))
+	}
+}
+
+// Ninguém perde nível nem progresso: a XP salva na curva 1 vira a mesma fração do mesmo
+// nível na curva 2. No 30 (o máximo de antes) a barra estava cheia ou travada: começa o
+// 30 → 31 do zero.
+func TestConvertXPKeepsLevelAndFraction(t *testing.T) {
+	for _, l := range []int{1, 19, 20, 29} {
+		for _, frac := range []float64{0, 0.5, 0.999} {
+			old := xpLevelStartV1(l) + int64(frac*float64(xpToNextV1(l)))
+			got := ConvertXP(old, 1)
+			if lv := LevelForXP(got); lv != l {
+				t.Fatalf("nível %d, %.1f%%: virou o nível %d", l, frac*100, lv)
+			}
+			had := float64(old-xpLevelStartV1(l)) / float64(xpToNextV1(l))
+			now := float64(got-XPLevelStart(l)) / float64(XPToNext(l))
+			// Até 1 de XP de arredondamento (o nível 1 → 2 pede só 43).
+			if math.Abs(had-now) > 1/float64(XPToNext(l))+1e-4 {
+				t.Fatalf("nível %d: fração %.5f virou %.5f", l, had, now)
+			}
+		}
+	}
+	for _, xp := range []int64{xpLevelStartV1(30), xpLevelStartV1(30) + 123_456, 1 << 40} {
+		if got := ConvertXP(xp, 1); got != XPLevelStart(30) || LevelForXP(got) != 30 {
+			t.Fatalf("no 30 da curva 1 (%d de XP): %d, nível %d", xp, got, LevelForXP(got))
+		}
+	}
+	if ConvertXP(0, 1) != 0 || ConvertXP(-5, 1) != 0 {
+		t.Fatal("XP zero continua zero")
+	}
+	// Já na curva de hoje: não mexe.
+	if x := XPLevelStart(33) + 7; ConvertXP(x, XPCurve) != x {
+		t.Fatal("a curva de hoje não converte de novo")
 	}
 }
 
@@ -311,6 +361,11 @@ func TestDeathNeverDropsLevel(t *testing.T) {
 	want := mid - int64(math.Round(float64(XPToNext(5))*DeathXPLoss))
 	if got := XPAfterDeath(mid, 5); got != want {
 		t.Fatalf("XPAfterDeath = %d, want %d", got, want)
+	}
+	// Do 30 em diante a morte tira 2% (um nível leva de 6 a 12 h).
+	late := XPLevelStart(35) + XPToNext(35)/2
+	if got := XPAfterDeath(late, 35); got != late-int64(math.Round(float64(XPToNext(35))*DeathXPLossLate)) {
+		t.Fatalf("XPAfterDeath no 35 = %d", got)
 	}
 }
 

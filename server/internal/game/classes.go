@@ -2,9 +2,11 @@
 // dano e progressão. Sem estado e sem I/O, para ser fácil de testar e balancear.
 package game
 
-// MaxLevel é o nível máximo dos jogadores. Do 20 ao 30 a caça é no Vale das Pedras Vivas
-// e a árvore de skills ganha o 5º degrau (nível 20).
-const MaxLevel = 30
+// MaxLevel é o nível máximo dos jogadores (tunnel#149). Do 20 ao 30 a caça é no Vale das
+// Pedras Vivas e a árvore de skills ganha o 5º degrau (nível 20); do 30 ao 40, no fundo do
+// Vale, em volta da Cripta e nos Confins Partidos (conteúdo provisório até as áreas novas do
+// docs/roadmap-areas.md). A Maestria abre no MaxLevel.
+const MaxLevel = 40
 
 // Stats são os atributos de combate de um personagem ou monstro num dado nível.
 type Stats struct {

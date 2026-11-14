@@ -36,7 +36,7 @@ const (
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
 		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
-		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery"
+		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, xp_curve"
 )
 
 var (
@@ -92,9 +92,10 @@ type Character struct {
 	Title        string                `json:"-"`
 	// Especialização (segunda classe, nível 20; "" = nenhuma).
 	Spec string `json:"spec"`
-	// Maestria (nível 30): barra, bônus diário e pontos de cada nó.
+	// Maestria (nível máximo): barra, bônus diário e pontos de cada nó.
 	Mastery  game.MasteryState `json:"-"`
 	kitGiven bool
+	xpCurve  int16 // versão da curva em que a XP foi salva (game.XPCurve)
 }
 
 // StorageState é o armazém de uma conta: moedas e itens (Equipped é sempre false).
@@ -387,6 +388,9 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 		if c, err = pgx.CollectExactlyOneRow(rows, scanCharacter); err != nil {
 			return err
 		}
+		if err := convertXPCurve(ctx, tx, &c); err != nil {
+			return err
+		}
 		if !c.kitGiven { // personagem de antes do kit: recebe o padrão da classe
 			if err := giveStarterKit(ctx, tx, &c, game.StarterKit(c.Class)); err != nil {
 				return err
@@ -605,7 +609,7 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
 		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
 		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat, &quests,
-		&achievements, &c.Title, &c.Spec, &mastery)
+		&achievements, &c.Title, &c.Spec, &mastery, &c.xpCurve)
 	if err != nil {
 		return c, err
 	}
@@ -633,6 +637,23 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	c.Attrs = game.Attrs{Str: int(a[0]), Dex: int(a[1]), Con: int(a[2]), Int: int(a[3]), Wis: int(a[4]), Spi: int(a[5])}
 	c.Ranks, c.Hotbar, err = parseProgress(ranks, hotbar)
 	return c, err
+}
+
+// convertXPCurve: a XP salva numa curva antiga vira a da curva de hoje (o mesmo nível e a
+// mesma fração dele, game.ConvertXP) e já fica salva, na transação que carrega o personagem
+// (a linha está travada com FOR UPDATE). Roda uma vez por personagem.
+func convertXPCurve(ctx context.Context, tx pgx.Tx, c *Character) error {
+	if int(c.xpCurve) >= game.XPCurve {
+		return nil
+	}
+	xp := game.ConvertXP(c.XP, int(c.xpCurve))
+	level := game.LevelForXP(xp)
+	if _, err := tx.Exec(ctx, `UPDATE characters SET xp = $2, level = $3, xp_curve = $4 WHERE id = $1`,
+		c.ID, xp, level, game.XPCurve); err != nil {
+		return fmt.Errorf("converter a XP: %w", err)
+	}
+	c.XP, c.Level, c.xpCurve = xp, level, game.XPCurve
+	return nil
 }
 
 // progressJSON: ranks como {"id": rank} e a barra como lista (JSONB).

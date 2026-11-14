@@ -430,7 +430,7 @@ func (z *Zone) invRewards(v *invasion, won bool) string {
 		z.inventoryChanged(p, false)
 		bar := game.XPToNext(p.level)
 		if p.level >= game.MasteryLevel {
-			bar = game.MasteryPointXP // no 30, a recompensa enche a barra de Maestria
+			bar = game.MasteryPointXP // no máximo, a recompensa enche a barra de Maestria
 		}
 		xp := int64(math.Round(float64(bar) * invRewardXP * w * mult))
 		if xp > 0 {

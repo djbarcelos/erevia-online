@@ -782,8 +782,15 @@ func ClassSkills(class string) []*SkillDef {
 	return []*SkillDef{Skills[c.Skills[0]], Skills[c.Skills[1]]}
 }
 
-// SkillPointsTotal: 1 por nível + 1 (as 2 skills iniciais já usam 2 no nível 1).
-func SkillPointsTotal(level int) int { return level + 1 }
+// SkillPointMaxLevel: o último nível que dá ponto de skill. Do 31 ao 40 só os atributos
+// sobem (3 pontos por nível): com 1 ponto por nível até o 40, a árvore da classe (43 a 45
+// ranks) ficaria quase cheia, e escolher deixaria de valer. Skills novas depois do 30 ficam
+// para os graus de equipamento e as áreas novas (tunnel#153 e docs/roadmap-areas.md).
+const SkillPointMaxLevel = 30
+
+// SkillPointsTotal: 1 por nível até o SkillPointMaxLevel + 1 (as 2 skills iniciais já usam
+// 2 no nível 1).
+func SkillPointsTotal(level int) int { return min(level, SkillPointMaxLevel) + 1 }
 
 // StarterRanks: o que um personagem novo (ou antigo, sem árvore salva) já sabe.
 func StarterRanks(class string) map[uint32]int {

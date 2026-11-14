@@ -6,18 +6,45 @@ import (
 )
 
 const (
-	CritMult    = 2.0
-	DeathXPLoss = 0.04 // fração da XP do nível perdida ao morrer
-	xpCurveBase = 80.0
-	xpCurveExp  = 2.2
-	// Do nível 20 em diante, cada nível pede 10% a mais por nível acima do 19 (o 20 pede
-	// ×1,1, o 29 pede ×2): sem isso, os 10 níveis do fim passariam rápido demais. Até o 19
-	// a curva é a de sempre (a XP salva dos personagens continua no mesmo nível).
-	xpLateFrom    = 20
-	xpLateStep    = 0.10
-	monsterXPExp  = 1.6
-	freeLevelDiff = 5 // até 5 níveis abaixo, XP cheia
+	CritMult = 2.0
+	// DeathXPLoss: fração da XP do nível perdida ao morrer. Do DeathLossLateLevel em diante
+	// a perda cai para DeathXPLossLate: um nível do 30 ao 40 leva de 6 a 12 h de caça, e 4%
+	// disso seriam até meia hora por morte.
+	DeathXPLoss        = 0.04
+	DeathXPLossLate    = 0.02
+	DeathLossLateLevel = 30
+	monsterXPExp       = 1.6
+	freeLevelDiff      = 5 // até 5 níveis abaixo, XP cheia
 )
+
+// XPCurve é a versão da curva de XP. A XP fica salva no personagem (characters.xp) e o
+// nível sai dela; quando a curva muda, quem foi salvo na versão antiga é convertido ao
+// carregar (ConvertXP), para ficar no mesmo nível e na mesma fração dele.
+//   - 1: 80·l^2,2 (×1,1 a ×2 do 20 ao 29), nível máximo 30;
+//   - 2: xpTable, nível máximo 40 (tunnel#149).
+const XPCurve = 2
+
+// xpTable: XP para sair de cada nível (índice 0 = nível 1), da curva 2. Saiu dos tempos-
+// alvo do tunnel#149 (1→10 em ~3 h, 10→20 em ~15 h, 20→30 em ~40 h e 30→40 em ~90 h, a
+// 25 s por abate, com ~30% da XP vindo de missões): o tempo de cada nível cresce devagar
+// e sem degrau, e a XP é esse tempo vezes a XP dos monstros que se caça no nível. Por isso
+// ela salta no 20 (o golem vale 2,5× um esqueleto) e não no tempo. Arredondada em 3
+// algarismos; o docs/progressao.md mostra os abates e as horas de cada nível.
+var xpTable = [MaxLevel - 1]int64{
+	43, 265, 1_060, 3_460, 10_300, 23_700, 39_300, 63_100, 98_600, // 1 → 10
+	124_000, 158_000, 200_000, 265_000, 328_000, 403_000, 491_000, 594_000, 715_000, 857_000, // 10 → 20
+	2_620_000, 3_080_000, 3_620_000, 4_230_000, 4_940_000, 5_740_000, 6_660_000, 7_710_000, 8_900_000, 10_300_000, // 20 → 30
+	13_400_000, 15_300_000, 17_500_000, 20_700_000, 23_500_000, 27_700_000, 31_400_000, 35_500_000, 40_100_000, 45_200_000, // 30 → 40
+}
+
+// xpStarts: XP total no início de cada nível (índice 0 = nível 1), somada uma vez.
+var xpStarts = func() [MaxLevel]int64 {
+	var out [MaxLevel]int64
+	for l := 1; l < MaxLevel; l++ {
+		out[l] = out[l-1] + xpTable[l-1]
+	}
+	return out
+}()
 
 // Hit é o resultado de um golpe.
 type Hit struct {
@@ -61,23 +88,15 @@ func RollHit(rng *rand.Rand, in HitInput) Hit {
 
 // XPToNext é a XP necessária para sair do nível l para l+1.
 func XPToNext(l int) int64 {
-	if l >= MaxLevel {
+	if l < 1 || l >= MaxLevel {
 		return 0
 	}
-	xp := xpCurveBase * math.Pow(float64(l), xpCurveExp)
-	if l >= xpLateFrom {
-		xp *= 1 + xpLateStep*float64(l-xpLateFrom+1)
-	}
-	return int64(math.Round(xp))
+	return xpTable[l-1]
 }
 
 // XPLevelStart é a XP total acumulada no início do nível l.
 func XPLevelStart(l int) int64 {
-	var total int64
-	for i := 1; i < l && i < MaxLevel; i++ {
-		total += XPToNext(i)
-	}
-	return total
+	return xpStarts[min(max(l, 1), MaxLevel)-1]
 }
 
 // LevelForXP devolve o nível correspondente a uma XP total.
@@ -89,6 +108,55 @@ func LevelForXP(xp int64) int {
 	return l
 }
 
+// Curva 1 (até o tunnel#149): só para converter a XP salva.
+const (
+	xpV1Max      = 30
+	xpV1Base     = 80.0
+	xpV1Exp      = 2.2
+	xpV1LateFrom = 20
+	xpV1LateStep = 0.10
+)
+
+// xpToNextV1 é o XPToNext da curva 1.
+func xpToNextV1(l int) int64 {
+	if l < 1 || l >= xpV1Max {
+		return 0
+	}
+	xp := xpV1Base * math.Pow(float64(l), xpV1Exp)
+	if l >= xpV1LateFrom {
+		xp *= 1 + xpV1LateStep*float64(l-xpV1LateFrom+1)
+	}
+	return int64(math.Round(xp))
+}
+
+// xpLevelStartV1 é o XPLevelStart da curva 1.
+func xpLevelStartV1(l int) int64 {
+	var total int64
+	for i := 1; i < l && i < xpV1Max; i++ {
+		total += xpToNextV1(i)
+	}
+	return total
+}
+
+// ConvertXP leva a XP salva na curva from para a curva de hoje: o mesmo nível e a mesma
+// fração dele. No 30 da curva 1 a barra estava cheia ou travada (era o máximo), então quem
+// estava lá começa o 30 → 31 do zero. Roda uma vez por personagem, ao carregar.
+func ConvertXP(xp int64, from int) int64 {
+	if from >= XPCurve || xp <= 0 {
+		return max(xp, 0)
+	}
+	l := 1
+	for l < xpV1Max && xp >= xpLevelStartV1(l+1) {
+		l++
+	}
+	if l >= xpV1Max {
+		return XPLevelStart(xpV1Max)
+	}
+	into, span := xp-xpLevelStartV1(l), xpToNextV1(l)
+	// into < span ≤ 263.873 e XPToNext ≤ 45,2 milhões: o produto cabe folgado em int64.
+	return XPLevelStart(l) + into*XPToNext(l)/span
+}
+
 // MonsterXP é a XP de um monstro, reduzida se o jogador for muito mais forte.
 func MonsterXP(m *MonsterDef, monsterLevel, playerLevel int) int64 {
 	xp := m.XPBase * math.Pow(float64(monsterLevel), monsterXPExp)
@@ -98,9 +166,17 @@ func MonsterXP(m *MonsterDef, monsterLevel, playerLevel int) int64 {
 	return int64(math.Max(1, math.Round(xp)))
 }
 
+// DeathLossShare: a fração da XP do nível (ou da barra de Maestria) que uma morte tira.
+func DeathLossShare(level int) float64 {
+	if level >= DeathLossLateLevel {
+		return DeathXPLossLate
+	}
+	return DeathXPLoss
+}
+
 // XPAfterDeath aplica a perda por morte sem derrubar o nível.
 func XPAfterDeath(xp int64, level int) int64 {
-	loss := int64(math.Round(float64(XPToNext(level)) * DeathXPLoss))
+	loss := int64(math.Round(float64(XPToNext(level)) * DeathLossShare(level)))
 	floor := XPLevelStart(level)
 	if xp-loss < floor {
 		return floor
