@@ -262,11 +262,19 @@ func TestBugReportsListResolveAndExtra(t *testing.T) {
 	if err != nil || len(extra) != 0 {
 		t.Fatalf("extra before = %v %v", extra, err)
 	}
-	mustExec(t, db, `ALTER TABLE bug_reports ADD COLUMN context JSONB, ADD COLUMN screenshot BYTEA`)
+	// O contexto do /bug completo (00026) e uma coluna futura grande (uma imagem, por exemplo).
+	mustExec(t, db, `ALTER TABLE bug_reports ADD COLUMN screenshot BYTEA`)
 	mustExec(t, db, `UPDATE bug_reports SET context = '{"fps": 41, "ping": 80}', screenshot = decode(repeat('ab', 20000), 'hex') WHERE id = $1`, first.ID)
-	_, extra, err = s.BugDetail(ctx, first.ID)
+	mustExec(t, db, `INSERT INTO bug_report_shots (report_id, width, height, jpeg) VALUES ($1, 320, 180, '\xffd8ffd9')`, first.ID)
+	withShot, extra, err := s.BugDetail(ctx, first.ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if withShot.Shot == nil || withShot.Shot.Width != 320 || withShot.Shot.Height != 180 {
+		t.Fatalf("shot = %+v", withShot.Shot)
+	}
+	if r := list(store.BugFilter{Status: "all"}); r[len(r)-1].Shot == nil || r[0].Shot != nil {
+		t.Fatalf("shot in list = %+v / %+v", r[len(r)-1].Shot, r[0].Shot)
 	}
 	var ctxVal map[string]float64
 	var shot struct {

@@ -42,16 +42,31 @@ type BugRow struct {
 	ResolvedBy     *int64     `json:"resolvedBy"`
 	ResolvedByName string     `json:"resolvedByName"`
 	ResolvedNote   string     `json:"resolvedNote"`
+	// Shot: o print do /bug completo (bug_report_shots, migração 00026); nil sem print.
+	Shot *BugShotInfo `json:"shot"`
+}
+
+// BugShotInfo é o tamanho do print de um relato (a imagem sai por
+// GET /api/admin/bug-reports/{id}/shot).
+type BugShotInfo struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
 }
 
 const bugCols = `id, at, account_id, character_id, character_name, level, x, z, erevia_region(x, z), version,
-	user_agent, text, resolved, resolved_at, resolved_by, resolved_by_name, resolved_note`
+	user_agent, text, resolved, resolved_at, resolved_by, resolved_by_name, resolved_note,
+	(SELECT s.width FROM bug_report_shots s WHERE s.report_id = bug_reports.id),
+	(SELECT s.height FROM bug_report_shots s WHERE s.report_id = bug_reports.id)`
 
 func scanBug(r pgx.CollectableRow) (BugRow, error) {
 	var b BugRow
 	var x, z float32
+	var sw, sh *int
 	err := r.Scan(&b.ID, &b.At, &b.AccountID, &b.CharacterID, &b.CharacterName, &b.Level, &x, &z, &b.Region,
-		&b.Version, &b.UserAgent, &b.Text, &b.Resolved, &b.ResolvedAt, &b.ResolvedBy, &b.ResolvedByName, &b.ResolvedNote)
+		&b.Version, &b.UserAgent, &b.Text, &b.Resolved, &b.ResolvedAt, &b.ResolvedBy, &b.ResolvedByName, &b.ResolvedNote, &sw, &sh)
+	if sw != nil && sh != nil {
+		b.Shot = &BugShotInfo{Width: *sw, Height: *sh}
+	}
 	b.X, b.Z = float64(x), float64(z)
 	return b, err
 }

@@ -136,9 +136,10 @@ function taskText(b: Bug, extra: Record<string, unknown>): string {
   ];
   const keys = Object.keys(extra);
   if (keys.length) {
-    lines.push("", "**Contexto do relato:**");
+    lines.push("", "**Contexto do cliente:**");
     for (const k of keys) lines.push(`- ${k}: ${JSON.stringify(extra[k]).slice(0, 400)}`);
   }
+  if (b.shot) lines.push("", `**Print:** /api/admin/bug-reports/${b.id}/shot (${b.shot.width}×${b.shot.height}, no portal)`);
   lines.push(
     "",
     "**Passos para reproduzir:**",
@@ -153,7 +154,27 @@ function taskText(b: Bug, extra: Record<string, unknown>): string {
   return lines.join("\n");
 }
 
-/** Campos extras do relato (o /bug completo acrescenta contexto e print). */
+/** O print da tela do jogo que o /bug completo manda (só o canvas 3D). */
+function shotFigure(b: Bug): HTMLElement | null {
+  if (!b.shot) return null;
+  const src = `/api/admin/bug-reports/${b.id}/shot`;
+  const img = h("img", {
+    src,
+    alt: `Print da tela do jogo no relato #${b.id}`,
+    width: String(b.shot.width),
+    height: String(b.shot.height),
+    class: "adm-shot",
+    loading: "lazy",
+  });
+  return h(
+    "figure",
+    { class: "adm-shotfig" },
+    h("a", { href: src, target: "_blank", rel: "noopener" }, img),
+    h("figcaption", {}, `Print do jogo (${b.shot.width}×${b.shot.height}). Toque para abrir em tamanho real.`),
+  );
+}
+
+/** Campos extras do relato (o contexto do /bug completo e o que outra migração acrescentar). */
 function extraFields(extra: Record<string, unknown>): HTMLElement | null {
   const keys = Object.keys(extra);
   if (!keys.length) return null;
@@ -173,7 +194,7 @@ function extraFields(extra: Record<string, unknown>): HTMLElement | null {
     }
     return h("div", { class: "adm-kv" }, h("dt", {}, k), h("dd", {}, body));
   });
-  return h("section", { class: "adm-extra" }, h("h3", {}, "Contexto do relato"), h("dl", {}, ...items));
+  return h("section", { class: "adm-extra" }, h("h3", {}, "Contexto do cliente"), h("dl", {}, ...items));
 }
 
 // ---------- Página ----------
@@ -259,7 +280,11 @@ function bugsTab(root: HTMLElement, alive: () => boolean): void {
         h("span", { class: b.resolved ? "adm-pill is-ok" : "adm-pill" }, b.resolved ? "resolvido" : "aberto"),
       ),
       h("span", { class: "adm-bug-text" }, b.text),
-      h("span", { class: "adm-bug-meta" }, `${fmtTime(b.at)} · nível ${b.level} · ${b.region} · ${shortVersion(b.version)}`),
+      h(
+        "span",
+        { class: "adm-bug-meta" },
+        `${fmtTime(b.at)} · nível ${b.level} · ${b.region} · ${shortVersion(b.version)}${b.shot ? " · com print" : ""}`,
+      ),
     );
     li.addEventListener("click", () => {
       selected = b.id;
@@ -352,6 +377,7 @@ function bugsTab(root: HTMLElement, alive: () => boolean): void {
       h("blockquote", { class: "adm-quote" }, b.text),
       meta,
       b.userAgent ? h("p", { class: "adm-ua" }, b.userAgent) : null,
+      shotFigure(b),
       minimap(b.x, b.z, `${b.region} (x ${b.x.toFixed(0)}, z ${b.z.toFixed(0)})`),
       extraFields(extra),
       resolvedInfo,

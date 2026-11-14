@@ -571,6 +571,21 @@ tr.is-alert td {
   border-radius: var(--radius);
 }
 
+.adm-shotfig {
+  margin: 0;
+}
+
+.adm-shotfig img {
+  width: 100%;
+  height: auto;
+}
+
+.adm-shotfig figcaption {
+  margin-top: 4px;
+  color: var(--dim);
+  font-size: 0.78rem;
+}
+
 .adm-resolved {
   margin: 0;
   padding: 8px 12px;

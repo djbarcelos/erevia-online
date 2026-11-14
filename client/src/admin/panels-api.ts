@@ -53,6 +53,8 @@ export interface Bug {
   resolvedBy: number | null;
   resolvedByName: string;
   resolvedNote: string;
+  /** Print do /bug completo (a imagem sai de /api/admin/bug-reports/{id}/shot). */
+  shot: { width: number; height: number } | null;
 }
 
 export interface Facet {
