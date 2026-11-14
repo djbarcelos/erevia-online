@@ -233,6 +233,8 @@ client/
   scripts/build-models.mjs   personagens/monstros/animações a partir dos zips KayKit
   scripts/build-scenery.mjs  kits de cenário (um .glb por pacote)
   scripts/build-world.mjs    layout do mapa + colisores → public/world.json e server/internal/world/
+  scripts/world-gen.mjs      motor do gerador do mapa (fases, sorteio por bioma, saída)
+  scripts/biomes/            um arquivo por bioma (ver [Como criar um bioma](#como-criar-um-bioma))
   scripts/build-changelog.mjs  CHANGELOG.md → public/novidades.json (roda no npm run build)
   scripts/changelog-draft.mjs  rascunho do changelog com os PRs mergeados (via gh)
   src/net/                   conexão com o servidor
@@ -241,6 +243,41 @@ e2e/                         testes de navegador (Playwright): e2e/tests/jogo.sp
 infra/docker-compose.yml     Postgres local
 Dockerfile, .railway/        publicação (Railway: infraestrutura como código)
 ```
+
+## Como criar um bioma
+O mapa (`world.json`) sai de `client/scripts/biomes/`: cada bioma é **um arquivo** `<id>.mjs`, e o `node scripts/build-world.mjs` (em `client/`) acha todos sozinho. Hoje são três: `floresta.mjs` (a cidade, as estradas, a floresta em anéis e as montanhas da borda), `vale.mjs` (o Vale das Pedras Vivas, com a regra de transição e a pintura do chão) e `cripta.mjs` (o covil do raid boss).
+
+Um bioma exporta:
+
+| Export | |
+|---|---|
+| `name` | Nome do bioma |
+| `seed` | Semente do sorteio, só dele (repetir a de outro bioma é erro): nada dos outros biomas muda de lugar |
+| `order` | Ordem entre os biomas (floresta 10, vale 20, cripta 30). Quem vem depois enxerga o que os de antes puseram |
+| `bounds` | `{ minX, maxX, minZ, maxZ }`. O mapa é a união dos `bounds` dos biomas: um bioma a leste de x = 150 cresce o mapa (e a colisão do servidor) para leste |
+| `build(ctx)` | Fase 1: o cenário. O que devolver entra na entrada do bioma em `biomes[]` do `world.json`, ao lado de `id`, `name` e `bounds` (o Vale devolve a borda ondulada) |
+| `lights(ctx)` | Fase 2: tochas, que evitam o que todos os biomas já puseram no chão |
+| `overlay(ctx)` | Fase 3: lugares que limpam a área (`ctx.clear(x, z, r)`) e se constroem por cima, como a Cripta |
+| `paint(g, bioma, h)` | Opcional: a camada do chão do bioma no cliente (`client/src/world/map-painter.ts` a acha pelo nome do arquivo). Fica no mesmo arquivo para a regra de transição (o `transition` do Vale) ser uma só no gerador e no chão |
+
+O bioma não importa nada. O `ctx` traz o sorteio do bioma (`rand`, `pick`, `between`, `scatter`), `place(k, x, z, rot, escala)`, `collide(x, z, r)`, `collideItem`, `torch`, `clear`, `sized`, `facing`, `alongX` e as listas `objects`, `colliders`, `torches`, `roads` e `taken` (as de todos os biomas). Um bioma mínimo:
+
+```js
+// client/scripts/biomes/clareira.mjs
+export const name = 'Clareira';
+export const seed = 20261201;
+export const order = 40;
+export const bounds = { minX: 150, maxX: 210, minZ: -150, maxZ: 60 };
+export function build(ctx) {
+  ctx.scatter(40, { x: [155, 205], z: [-140, 50], spacing: 4 }, (x, z) => {
+    const s = ctx.between(2.4, 3.2);
+    ctx.place(ctx.pick(['tree_1_a', 'tree_2_a']), x, z, ctx.rand() * 6.28, s);
+    ctx.collide(x, z, 0.3 * s);
+  });
+}
+```
+
+Depois de mexer num bioma, rode `node scripts/build-world.mjs` e commite os dois `world.json` (o do cliente e o do servidor). O CI roda o gerador e falha se o `world.json` commitado for diferente. O `npm run test:unit` confere que os biomas de hoje geram, no formato antigo (`biome`, só o Vale), byte a byte o mapa de antes da divisão em biomas; que o formato novo (`biomes[]`) tem os mesmos colisores, instâncias e pintura do chão; e que um bioma novo não muda nada do resto. Durante a transição, o cliente (`worldBiomes` em `world-data.ts`) e o servidor aceitam os dois formatos.
 
 ## Variáveis do servidor
 | Variável | Padrão | |
