@@ -204,7 +204,7 @@ func (z *Zone) questUnlock(p *entity) bool {
 	}
 	added := false
 	for _, def := range game.QuestsByUnlock {
-		if p.level < def.Unlock || p.pl.quests.done[def.ID] || p.pl.quests.has(def.ID) {
+		if p.level < def.Unlock || def.Until > 0 && p.level > def.Until || p.pl.quests.done[def.ID] || p.pl.quests.has(def.ID) {
 			continue
 		}
 		p.pl.quests.active = append(p.pl.quests.active, &activeQuest{def: def, progress: make([]int, len(def.Steps))})

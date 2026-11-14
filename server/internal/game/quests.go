@@ -1,6 +1,10 @@
 package game
 
-import "strings"
+import (
+	"fmt"
+	"math"
+	"strings"
+)
 
 // Missões: definidas por dados. Cada missão tem objetivos que andam juntos; quando
 // todos completam, o jogador recebe a recompensa e a próxima missão da sequência (Next).
@@ -68,6 +72,8 @@ type QuestDef struct {
 	Next   string // próxima da sequência ("" = fim)
 	// Unlock > 0: a missão chega sozinha ao atingir este nível (fora de qualquer sequência).
 	Unlock int
+	// Until > 0: a missão de nível só chega até este nível (quem já passou dele não recebe).
+	Until int
 }
 
 // QuestState é o que fica salvo: progresso das missões ativas e as concluídas.
@@ -83,8 +89,9 @@ const TutorialStart = "tut_gate"
 // tutorial (personagens de antes das missões).
 const TutorialSkipLevel = 5
 
-// questList: o tutorial dos primeiros ~15 minutos, em ordem.
-var questList = []*QuestDef{
+// questList: o tutorial dos primeiros ~15 minutos, em ordem, a segunda classe e os
+// contratos de caça.
+var questList = append([]*QuestDef{
 	{
 		ID: "tut_gate", Title: "Além das muralhas",
 		Text:   "Vel'Aran está segura atrás das muralhas, mas a sua jornada começa lá fora. Saia por qualquer portão.",
@@ -151,6 +158,56 @@ var questList = []*QuestDef{
 		},
 		Reward: QuestReward{Gold: 1000, Items: []QuestItem{{ID: "scroll_return", Count: 3}}},
 	},
+}, contractQuests()...)
+
+// Contratos de caça (tunnel#149): um por nível, do ContractFrom ao 39, gerados dos dados.
+// Cada um pede uma parte dos abates do nível nos monstros que se caçam nele e paga
+// ContractXPShare da XP do nível: com o tutorial, ~30% da XP de cada faixa vem de missões.
+const (
+	ContractFrom     = 5
+	ContractXPShare  = 0.30
+	contractKillPart = 0.25 // fração dos abates do nível que o contrato pede
+	// ContractWindow: o contrato do nível L só chega até o L+ContractWindow. Quem já passou
+	// (os personagens de antes dos contratos) não recebe uma pilha de contratos velhos.
+	ContractWindow = 2
+)
+
+// ContractID: o id do contrato do nível.
+func ContractID(level int) string { return fmt.Sprintf("contrato_%02d", level) }
+
+// ringRegions: o nome dos anéis em volta da cidade, pelo nível de começo (o mesmo do mapa).
+var ringRegions = map[int]string{1: "Arredores", 6: "Campos dos Ossos", 13: "Ermos Partidos"}
+
+func contractQuests() []*QuestDef {
+	var out []*QuestDef
+	for l := ContractFrom; l < MaxLevel; l++ {
+		group := huntGroup(l)
+		perKill, _ := huntXP(l)
+		if len(group) == 0 || perKill <= 0 {
+			continue
+		}
+		region := group[0].Region
+		if region == "" {
+			region = ringRegions[group[0].LevelMin]
+		}
+		ids := huntMonsters(l)
+		names := make([]string, len(ids))
+		for i, id := range ids {
+			names[i] = Monsters[id].Name
+		}
+		who := strings.Join(names, " ou ")
+		xp := int64(math.Round(float64(XPToNext(l)) * ContractXPShare))
+		kills := float64(XPToNext(l)-xp) / perKill
+		count := max(5, int(math.Round(kills*contractKillPart/5))*5)
+		out = append(out, &QuestDef{
+			ID: ContractID(l), Title: fmt.Sprintf("Contrato: %s (nível %d)", region, l), Unlock: l, Until: l + ContractWindow,
+			Text: fmt.Sprintf("O quadro de contratos da praça de Vel'Aran paga por cada caçada que mantém as estradas abertas. "+
+				"Derrote %d %s (%s), perto do nível %d.", count, who, region, l),
+			Steps:  []QuestStep{{Goal: GoalKill, Target: strings.Join(ids, "|"), Count: count, Text: "Derrotar " + who}},
+			Reward: QuestReward{XP: xp},
+		})
+	}
+	return out
 }
 
 // QuestsByUnlock: as missões que chegam sozinhas com o nível, na ordem da lista.

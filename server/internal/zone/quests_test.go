@@ -37,9 +37,10 @@ func TestNewCharacterStartsTutorialAndVeteransDoNot(t *testing.T) {
 		t.Fatalf("join should send the quest log, got %+v", log)
 	}
 
+	// O veterano não recebe o tutorial, só o contrato de caça do nível dele.
 	vet, _ := joinAt(z, 2, "mage", 0, 0, game.XPLevelStart(game.TutorialSkipLevel))
-	if len(vet.pl.quests.active) != 0 {
-		t.Fatalf("veteran without history got %v", activeIDs(vet))
+	if ids := activeIDs(vet); len(ids) != 1 || ids[0] != game.ContractID(game.TutorialSkipLevel) {
+		t.Fatalf("veteran without history got %v", ids)
 	}
 }
 
@@ -171,5 +172,31 @@ func TestQuestProgressSurvivesRelog(t *testing.T) {
 	}
 	if log := peer.lastQuestLog(); log.Quests[0].Steps[0].Count != 2 {
 		t.Fatalf("restored log = %+v", log)
+	}
+}
+
+// Contratos de caça: quem entra recebe só os do próprio nível (até ContractWindow para
+// trás), e concluir paga a XP do contrato.
+func TestContractsArriveNearTheLevel(t *testing.T) {
+	z := newCombatZone()
+	p, _ := joinAt(z, 1, "knight", 0, 0, game.XPLevelStart(30))
+	ids := activeIDs(p)
+	want := []string{game.ContractID(28), game.ContractID(29), game.ContractID(30)}
+	got := []string{}
+	for _, id := range ids {
+		if game.Quests[id].Unlock >= game.ContractFrom && id != game.SpecQuest {
+			got = append(got, id)
+		}
+	}
+	if len(got) != len(want) || got[0] != want[0] || got[2] != want[2] {
+		t.Fatalf("contratos ao entrar no 30: %v", ids)
+	}
+	def := game.Quests[game.ContractID(30)]
+	before := p.pl.xp
+	for range def.Steps[0].Count {
+		z.questEvent(p, game.GoalKill, def.Steps[0].Monsters()[0])
+	}
+	if !p.pl.quests.done[def.ID] || p.pl.xp-before != def.Reward.XP {
+		t.Fatalf("contrato concluído: done %v, XP +%d (want %d)", p.pl.quests.done[def.ID], p.pl.xp-before, def.Reward.XP)
 	}
 }

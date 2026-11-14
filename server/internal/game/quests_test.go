@@ -1,6 +1,7 @@
 package game
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -64,5 +65,28 @@ func TestQuestStepMatches(t *testing.T) {
 	}
 	if !(QuestStep{Goal: GoalBuy, Count: 1}).Matches(GoalBuy, "potion_hp_s") {
 		t.Fatal("empty target should match anything of the same goal")
+	}
+}
+
+// Contratos de caça: um por nível do 5 ao 39, nos monstros do nível, pagando 30% da XP dele,
+// e só para quem ainda está perto do nível (Until).
+func TestContracts(t *testing.T) {
+	for l := ContractFrom; l < MaxLevel; l++ {
+		q := Quests[ContractID(l)]
+		if q == nil {
+			t.Fatalf("sem contrato no %d", l)
+		}
+		if q.Unlock != l || q.Until != l+ContractWindow || q.Reward.XP <= 0 || q.Reward.XP >= XPToNext(l) {
+			t.Errorf("%s: %+v", q.ID, q)
+		}
+		hunted := huntMonsters(l)
+		for _, m := range q.Steps[0].Monsters() {
+			if !slices.Contains(hunted, m) {
+				t.Errorf("%s pede %s, que não se caça no %d", q.ID, m, l)
+			}
+		}
+	}
+	if Quests[ContractID(ContractFrom-1)] != nil || Quests[ContractID(MaxLevel)] != nil {
+		t.Fatal("contrato fora da faixa")
 	}
 }
