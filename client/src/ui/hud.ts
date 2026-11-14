@@ -73,7 +73,7 @@ export interface HudCallbacks {
   onHotbarChange(entries: HotbarEntry[]): void;
   onAuto(on: boolean): void;
   openWindow(id: WindowId): void;
-  /** Barra de Maestria (nível 30): abre a aba Maestria da janela de skills. */
+  /** Barra de Maestria (nível máximo): abre a aba Maestria da janela de skills. */
   openMastery(): void;
   /** Botão de ataque do toque: ataca o alvo ou o inimigo mais próximo. */
   onAttack(): void;
@@ -570,13 +570,13 @@ export class Hud {
     if (s.dead && !wasDead && this.auto) this.setAuto(false, false);
   }
 
-  /** Maestria (nível 30): a barra de XP do HUD vira a barra de Maestria. */
+  /** Maestria (nível máximo): a barra de XP do HUD vira a barra de Maestria. */
   setMastery(m: MasteryState): void {
     this.mastery = m;
     this.renderXp();
   }
 
-  /** Barra da borda: XP do nível ou, no 30, a de Maestria (outra cor, com o bônus diário). */
+  /** Barra da borda: XP do nível ou, no máximo, a de Maestria (outra cor, com o bônus diário). */
   private renderXp(): void {
     const m = this.mastery;
     const s = this.self;
@@ -878,11 +878,12 @@ export class Hud {
     }
     this.target.classList.toggle("dead", info.dead);
     this.target.classList.toggle("boss", !!info.boss);
+    this.target.classList.toggle("rare", !!info.rare);
     // Jogador com especialização: o nome do caminho, na cor dele, depois do nível.
     const spec = pc ? specInfo(info.spec) : undefined;
     const specEl = spec ? el("span", "t-spec", ` · ${spec.name}`) : "";
     if (spec && specEl) specEl.style.color = spec.color;
-    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}`), specEl, info.boss ? el("em", null, "CHEFE") : "");
+    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}`), specEl, info.boss ? el("em", null, "CHEFE") : "", info.rare ? el("em", "t-rare", "RARO") : "");
     this.tHp.root.hidden = npc;
     this.tHp.set(info.hp, info.maxHp, info.dead ? "Morto" : undefined);
   }

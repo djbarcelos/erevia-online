@@ -142,7 +142,11 @@ export function sectorCenter(g: Region): { x: number; z: number } {
 export function regionAt(regions: Region[], x: number, z: number): Region {
   const areas = regions.filter((g) => g.area);
   const dist = (g: Region) => Math.hypot(x - g.area!.x, z - g.area!.z);
-  const inArea = areas.find((g) => dist(g) < g.area!.r * AREA_FRINGE);
+  // Áreas dentro de áreas (o Fundo do Vale no Vale): vale a menor que contém o ponto de
+  // verdade; a folga só conta quando o ponto não está dentro de nenhuma.
+  let inArea: Region | undefined;
+  for (const g of areas) if (dist(g) < g.area!.r && (!inArea || g.area!.r < inArea.area!.r)) inArea = g;
+  inArea ??= areas.find((g) => dist(g) < g.area!.r * AREA_FRINGE);
   if (inArea) return inArea;
   const sector = regions.find((g) => inSector(g, x, z));
   if (sector) return sector;

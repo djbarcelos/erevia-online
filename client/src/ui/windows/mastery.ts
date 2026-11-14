@@ -1,7 +1,9 @@
 /**
- * Maestria (aba da janela de skills, tecla K): a progressão depois do nível 30.
+ * Maestria (aba da janela de skills, tecla K): a progressão depois do nível máximo.
  *
- * No 30 a XP enche a barra de Maestria e cada barra cheia dá 1 ponto. A árvore tem 3 ramos
+ * No nível máximo (o servidor manda qual é) a XP enche a barra de Maestria e cada barra
+ * cheia dá 1 ponto. Quem ganhou pontos quando o máximo era 30 continua gastando e
+ * redistribuindo antes dele, mas a barra só volta a encher no máximo. A árvore tem 3 ramos
  * (Caça, Sobrevivência e Utilidade), cada nó com até 5 pontos e retorno decrescente; alguns
  * nós só abrem com pontos no ramo. É mais horizontal que vertical: o que mexe no combate
  * soma no máximo 5% com a árvore inteira. "Redistribuir" devolve tudo, grátis, 1 vez por dia.
@@ -24,6 +26,8 @@ export interface MasteryDeps {
   request(): void;
   spend(node: string): void;
   respec(): void;
+  /** Nível máximo dos jogadores (Progress.maxLevel), para quem ainda não tem MasteryState. */
+  maxLevel(): number;
 }
 
 const pct = (v: number) => `${(v * 100).toFixed(1).replace(".", ",").replace(",0", "")}%`;
@@ -61,13 +65,20 @@ export function buildMastery(d: MasteryDeps): HTMLElement {
   const xpBar = bar("xp", "ms-bar mastery");
   let confirmUntil = 0;
 
+  /** "no nível 40" (ou "no nível máximo", antes de o servidor dizer qual é). */
+  const opens = (s: MasteryState | null) => {
+    const n = s?.openLevel || d.maxLevel();
+    return n ? `no nível ${n}` : "no nível máximo";
+  };
+  /** Pode gastar e redistribuir: no nível máximo ou com pontos de antes. */
+  const usable = (s: MasteryState | null): s is MasteryState => !!s && (s.active || s.level > 0);
   const rank = (s: MasteryState | null, id: string) => s?.ranks.find((r) => r.node === id)?.rank ?? 0;
   const branchPts = (s: MasteryState | null, tree: MasteryTree, b: number) =>
     tree.nodes.filter((n) => n.branch === b).reduce((a, n) => a + rank(s, n.id), 0);
 
   function blocker(s: MasteryState | null, tree: MasteryTree, n: MasteryNodeInfo): string | null {
     const r = rank(s, n.id);
-    if (!s?.active) return "A Maestria abre no nível 30.";
+    if (!usable(s)) return `A Maestria abre ${opens(s)}.`;
     if (r >= tree.nodeMax) return "No máximo.";
     if (branchPts(s, tree, n.branch) - r < n.req) return `Pede ${n.req} pontos em ${tree.branches[n.branch]?.name ?? "neste ramo"}.`;
     if (s.free <= 0) return "Sem pontos para gastar.";
@@ -118,7 +129,7 @@ export function buildMastery(d: MasteryDeps): HTMLElement {
       const into = Number(s.xp);
       const need = Number(s.need);
       xpBar.set(into, need, s.level >= s.maxLevel ? "Teto da Maestria" : `${fmt.format(into)} / ${fmt.format(need)} XP`);
-    } else xpBar.set(0, 1, "Abre no nível 30");
+    } else xpBar.set(0, 1, usable(s) ? `A barra volta a encher ${opens(s)}` : `Abre ${opens(s)}`);
     const spent = s ? s.ranks.reduce((a, r) => a + r.rank, 0) : 0;
     const respec = button(performance.now() < confirmUntil ? "Confirmar?" : "Redistribuir", "btn btn-sm", () => {
       if (performance.now() < confirmUntil) {
@@ -132,7 +143,7 @@ export function buildMastery(d: MasteryDeps): HTMLElement {
         if (confirmUntil && performance.now() >= confirmUntil) render();
       }, 4100);
     });
-    respec.disabled = !s?.active || spent === 0 || !s.respecReady;
+    respec.disabled = !usable(s) || spent === 0 || !s.respecReady;
     respec.title = !s?.respecReady ? "Já usado hoje: libera à meia-noite (Brasília)" : "Devolve todos os pontos (grátis, 1 vez por dia)";
     const rested = s?.active ? restedText(s) : "";
     head.replaceChildren(
@@ -148,7 +159,9 @@ export function buildMastery(d: MasteryDeps): HTMLElement {
         "ms-sub",
         s?.active
           ? el("span", rested ? "ok" : "muted", rested ? `Bônus diário: ${rested} ${s.restedMult}× mais rápido` : "Bônus diário gasto (volta à meia-noite)")
-          : el("span", "muted", "A Maestria abre no nível 30: a XP passa a encher esta barra."),
+          : usable(s)
+            ? el("span", "muted", `Seus pontos de Maestria continuam valendo. A XP volta a encher esta barra ${opens(s)}.`)
+            : el("span", "muted", `A Maestria abre ${opens(s)}: a XP passa a encher esta barra.`),
         respec,
       ),
     );

@@ -60,7 +60,7 @@ type Character struct {
 	Achievements game.AchievementState
 	Title        string
 	Spec         string            // especialização ("" = nenhuma)
-	Mastery      game.MasteryState // Maestria (nível 30)
+	Mastery      game.MasteryState // Maestria (nível máximo)
 	// Contratos do quadro e reputação com as facções (tunnel#157).
 	Contracts  game.ContractState
 	Reputation game.ReputationState

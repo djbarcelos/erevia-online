@@ -277,7 +277,7 @@ func Simulate(p Path, level, enchant int, night bool) Row {
 	return row
 }
 
-// Progression: as linhas do caminho do nível 1 ao 30.
+// Progression: as linhas do caminho do nível 1 ao máximo (game.MaxLevel).
 func Progression(p Path, enchant int, night bool) []Row {
 	out := make([]Row, 0, game.MaxLevel)
 	for l := 1; l <= game.MaxLevel; l++ {
@@ -286,8 +286,8 @@ func Progression(p Path, enchant int, night bool) []Row {
 	return out
 }
 
-// TimeTo30: soma dos tempos de nível (segundos) do 1 ao 30.
-func TimeTo30(rows []Row) float64 {
+// TimeToMax: soma dos tempos de nível (segundos) do 1 ao máximo (game.MaxLevel).
+func TimeToMax(rows []Row) float64 {
 	t := 0.0
 	for _, r := range rows {
 		if r.Level < game.MaxLevel {
@@ -297,8 +297,8 @@ func TimeTo30(rows []Row) float64 {
 	return t
 }
 
-// TimeTo30Free: o mesmo sem o limite do renascimento.
-func TimeTo30Free(rows []Row) float64 {
+// TimeToMaxFree: o mesmo sem o limite do renascimento.
+func TimeToMaxFree(rows []Row) float64 {
 	t := 0.0
 	for _, r := range rows {
 		if r.Level < game.MaxLevel {

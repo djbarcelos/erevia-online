@@ -1,6 +1,7 @@
 package zone
 
 import (
+	"slices"
 	"strconv"
 	"testing"
 
@@ -81,7 +82,7 @@ func TestCrossroadsQuestArrivesAtLevel20(t *testing.T) {
 		t.Fatalf("nível %d, missões %v", p.level, activeIDs(p))
 	}
 	log := peer.lastQuestLog()
-	if log == nil || len(log.Quests) == 0 || log.Quests[len(log.Quests)-1].Id != game.SpecQuest {
+	if log == nil || !slices.ContainsFunc(log.Quests, func(q *pb.QuestInfo) bool { return q.Id == game.SpecQuest }) {
 		t.Fatalf("o painel deveria mostrar A Encruzilhada: %+v", log)
 	}
 

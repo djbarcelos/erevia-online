@@ -3,6 +3,7 @@ package game
 import (
 	"math"
 	"math/rand/v2"
+	"slices"
 )
 
 // MonsterDef descreve um tipo de monstro. Os atributos crescem por nível.
@@ -20,6 +21,9 @@ type MonsterDef struct {
 	Aggressive bool
 	XPBase     float64
 	Scale      float64 // tamanho visual (1 = normal)
+	// Tint: cor da variante ("#rrggbb", "" = a do modelo). O cliente tinge as malhas uma vez,
+	// quando o modelo carrega: variantes de elite reaproveitam os modelos que já existem.
+	Tint string
 	// BodyRadius: raio do corpo (m). Golpes e skills contam da borda do corpo, não do
 	// centro: em monstros grandes o atacante para encostado, não dentro das pedras.
 	// 0 = corpo de tamanho normal (ninguém mudou de alcance).
@@ -35,7 +39,8 @@ type MonsterDef struct {
 	LeashRadius float64      // distância máxima do ponto de origem (0 = a padrão da zona)
 	// Renascimento do raid em segundos de relógio, sorteado entre os dois.
 	RespawnMin, RespawnMax float64
-	NoGear                 bool // nunca deixa cair equipamento (invocações)
+	NoGear                 bool     // nunca deixa cair equipamento (invocações)
+	Rare                   *RareDef // monstro raro (rares.go): nome dourado e saque garantido
 	// Drops: moedas (por nível do monstro) e itens.
 	GoldChance       float64
 	GoldMin, GoldMax float64
@@ -59,6 +64,22 @@ var (
 	lootGolem = []LootEntry{{"rune_core", 0.3, 1, 1}, {"potion_hp_s", 0.12, 1, 2}, {"potion_hp_l", 0.03, 1, 1},
 		{"scroll_ench_armor", 0.02, 1, 1}, {"scroll_ench_weapon", 0.01, 1, 1},
 		{"scroll_ench_armor_b", 0.004, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+
+	// Elites do 30 ao 40 (conteúdo provisório, tunnel#149): materiais melhores e o
+	// equipamento ponte (bridge.go). A chance é por peça: com 8 peças (4 classes × arma e
+	// armadura), cai ~1 peça a cada 30 a 40 abates.
+	lootAncient = append([]LootEntry{{"rune_core", 0.45, 1, 2}, {"potion_hp_l", 0.06, 1, 1},
+		{"scroll_ench_armor", 0.03, 1, 1}, {"scroll_ench_weapon", 0.015, 1, 1},
+		{"scroll_ench_armor_b", 0.006, 1, 1}, {"scroll_ench_weapon_b", 0.003, 1, 1}},
+		bridgeLoot(30, 0.004, 0.0004)...)
+	lootOssuary = append(append([]LootEntry{{"skull_cracked", 0.3, 1, 2}, {"shadow_essence", 0.25, 1, 1}, {"potion_mp_l", 0.05, 1, 1},
+		{"scroll_ench_armor", 0.03, 1, 1}, {"scroll_ench_weapon", 0.015, 1, 1},
+		{"scroll_ench_armor_b", 0.006, 1, 1}, {"scroll_ench_weapon_b", 0.003, 1, 1}},
+		bridgeLoot(30, 0.002, 0.0002)...), bridgeLoot(35, 0.002, 0.0002)...)
+	lootBroken = append([]LootEntry{{"shadow_essence", 0.2, 1, 2}, {"rune_core", 0.12, 1, 1}, {"potion_hp_l", 0.06, 1, 1},
+		{"potion_mp_l", 0.05, 1, 1}, {"scroll_ench_armor", 0.035, 1, 1}, {"scroll_ench_weapon", 0.018, 1, 1},
+		{"scroll_ench_armor_b", 0.007, 1, 1}, {"scroll_ench_weapon_b", 0.004, 1, 1}},
+		bridgeLoot(35, 0.004, 0.0004)...)
 )
 
 // Marca da Morte do Ozrhal (os testes do raid usam os números).
@@ -110,12 +131,55 @@ var Monsters = map[string]*MonsterDef{
 		Aggressive: true, XPBase: 260, Scale: 2.6, BodyRadius: 1.2, Boss: true, Raid: true,
 		Immune:      []EffectKind{EffectStun, EffectRoot, EffectSlow, EffectBlind},
 		LeashRadius: 30, RespawnMin: 3 * 3600, RespawnMax: 4 * 3600,
-		GoldChance: 1, GoldMin: 120, GoldMax: 160, Loot: lootRaid,
+		GoldChance: 1, GoldMin: 120, GoldMax: 160, Loot: append(slices.Clone(lootRaid), bridgeLootGrade(35, GradeRare, 0.15)...),
 		Abilities: raidAbilities},
 	// Invocação do Ozrhal: não renasce e não deixa equipamento.
 	"bone_guard": {ID: "bone_guard", Name: "Guarda Ossário", Model: "skeleton_warrior",
 		HP: 120, HPLvl: 30, Atk: 12, AtkLv: 2.4, Def: 14, DefLv: 3, Range: 2.2, Interval: 1.6, Speed: 4.4, Aggressive: true, XPBase: 6, Scale: 1.15,
 		NoGear: true},
+
+	// ---- Do 30 ao 40: elites provisórias, com os modelos de hoje (escala e cor) ----
+	// Uns 15% mais resistentes que um golem do mesmo nível: a tabela teórica conta 25 s por
+	// abate para todos, e as habilidades (aviso de 1,5 s ou mais) fazem o resto.
+
+	// Fundo do Vale (30–35): golens mais velhos, cobertos de musgo e runas verdes.
+	"ancient_golem": {ID: "ancient_golem", Name: "Golem Ancestral", Model: "stone_golem", Tint: "#7fa898",
+		HP: 210, HPLvl: 46, Atk: 15, AtkLv: 2.8, Def: 27, DefLv: 4.2, Range: 2.8, Interval: 2.4, Speed: 2.9, Aggressive: true, XPBase: 46,
+		Scale: 1.55, BodyRadius: 1.25, Elite: true, GoldChance: 0.85, GoldMin: 3.5, GoldMax: 6.5, Loot: lootAncient,
+		Abilities: []AbilityDef{
+			// Pancada larga à frente, como a do golem, com mais alcance e aviso de elite.
+			{ID: "ancient_slam", Shape: ShapeCone, Target: AimSelf, Radius: 6, Arc: 100,
+				Delay: 1.6, Cooldown: 10, First: 4, Mult: 1.6, Effect: &EffectDef{Kind: EffectSlow, Duration: 2, Value: 0.35}},
+			// Tremor em volta: quem não sai do círculo fica atordoado 1 s.
+			{ID: "ancient_quake", Shape: ShapeCircle, Target: AimSelf, Radius: 6.5,
+				Delay: 2, Cooldown: 18, First: 9, Mult: 1.3, Effect: &EffectDef{Kind: EffectStun, Duration: 1}},
+		}},
+	// Vigília Ossária (33–38): a guarda e os devotos que cantam fora da Cripta.
+	"ossuary_knight": {ID: "ossuary_knight", Name: "Cavaleiro Ossário", Model: "skeleton_warrior", Tint: "#9d93b4",
+		HP: 160, HPLvl: 40, Atk: 16, AtkLv: 3, Def: 22, DefLv: 3.8, Range: 2.4, Interval: 1.5, Speed: 4.2, Aggressive: true, XPBase: 48,
+		Scale: 1.3, Elite: true, GoldChance: 0.8, GoldMin: 3.5, GoldMax: 6.5, Loot: lootOssuary,
+		// Investida em linha: sai da frente dele.
+		Abilities: []AbilityDef{{ID: "ossuary_charge", Shape: ShapeLine, Target: AimSelf, Length: 9, Width: 2.6,
+			Delay: 1.6, Cooldown: 12, First: 5, Mult: 1.8}}},
+	"ossuary_devotee": {ID: "ossuary_devotee", Name: "Devoto do Ossário", Model: "skeleton_mage", Tint: "#b07ad0",
+		HP: 130, HPLvl: 34, Atk: 18, AtkLv: 3.2, Def: 18, DefLv: 3.2, Range: 10, Interval: 2.0, Speed: 3.8, Magic: true, Aggressive: true, XPBase: 48,
+		Scale: 1.2, Elite: true, GoldChance: 0.8, GoldMin: 3.5, GoldMax: 6.5, Loot: lootOssuary,
+		// Maldição no chão de quem ele ataca: enfraquece o ataque por 4 s.
+		Abilities: []AbilityDef{{ID: "devotee_curse", Shape: ShapeCircle, Target: AimCurrent, Radius: 3.5,
+			Delay: 1.8, Cooldown: 11, First: 3, Mult: 1.4, Effect: &EffectDef{Kind: EffectWeaken, Duration: 4, Value: 0.15}}}},
+	// Confins Partidos (35–40): os cantos do mapa, onde a Partição rachou mais fundo.
+	"broken_reaper": {ID: "broken_reaper", Name: "Ceifador Partido", Model: "skeleton_rogue", Tint: "#c2675a",
+		HP: 150, HPLvl: 38, Atk: 16, AtkLv: 2.6, Def: 20, DefLv: 3.6, Range: 2.2, Interval: 1.1, Speed: 4.6, Aggressive: true, XPBase: 50,
+		Scale: 1.25, Elite: true, GoldChance: 0.85, GoldMin: 4, GoldMax: 7, Loot: lootBroken,
+		// Varrida em leque largo à frente.
+		Abilities: []AbilityDef{{ID: "reaper_sweep", Shape: ShapeCone, Target: AimSelf, Radius: 4.5, Arc: 160,
+			Delay: 1.5, Cooldown: 9, First: 4, Mult: 1.7}}},
+	"broken_arcanist": {ID: "broken_arcanist", Name: "Arcanista Partido", Model: "skeleton_mage", Tint: "#6fb3c8",
+		HP: 130, HPLvl: 34, Atk: 19, AtkLv: 3.3, Def: 18, DefLv: 3.2, Range: 11, Interval: 2.1, Speed: 3.8, Magic: true, Aggressive: true, XPBase: 50,
+		Scale: 1.2, Elite: true, GoldChance: 0.85, GoldMin: 4, GoldMax: 7, Loot: lootBroken,
+		// Gelo caindo em 2 jogadores da luta: deixa lento.
+		Abilities: []AbilityDef{{ID: "arcanist_frost", Shape: ShapeCircle, Target: AimRandom, Count: 2, Radius: 3.5,
+			Delay: 1.8, Cooldown: 13, First: 6, Mult: 1.3, Effect: &EffectDef{Kind: EffectSlow, Duration: 2.5, Value: 0.3}}}},
 }
 
 // ImmuneTo informa se o efeito não pega no monstro.
@@ -268,10 +332,23 @@ type SpawnPoint struct {
 	Region  string // região do spawn de origem (a troca dia/noite é por região)
 }
 
+// Áreas provisórias do 30 ao 40 (até as do docs/roadmap-areas.md): o fundo do Vale, a
+// Vigília em volta da Cripta e os três cantos vazios do mapa. Cada uma cabe no orçamento do
+// roadmap (no máximo 45 monstros por área e 18 no raio de 70 m). São discos com Region,
+// então têm dono: os anéis das outras regiões não sorteiam lá dentro.
+const (
+	// Vigília Ossária: dois grupos ao lado da Cripta, a 48 m do centro do covil (a coleira do
+	// Ozrhal é de 30 m e a percepção dos monstros, de até 11 m), longe da entrada.
+	vigilR, vigilFar, vigilNear = 8.0, 140.0, 72.0
+	// Confins Partidos: um disco em cada canto vazio (o nordeste é a Cripta).
+	cornerC, cornerR = 122.0, 16.0
+)
+
 // ownedMargin: folga (m) em volta das áreas com dono e do covil em que os anéis não sorteiam.
 const ownedMargin = 6.0
 
-// DefaultSpawns: 3 anéis de caça + chefe + o Vale das Pedras Vivas (golens, 20–30), no sul.
+// DefaultSpawns: 3 anéis de caça + chefe + o Vale das Pedras Vivas (golens, 20–30), no sul,
+// + as áreas do 30 ao 40.
 //
 // O id de cada monstro é a sua posição na lista expandida: spawn novo vai sempre para o
 // fim, e mudar Count de um spawn do meio muda o id de todos os que vêm depois. Para tirar
@@ -293,7 +370,33 @@ func DefaultSpawns() []Spawn {
 		{Monster: "stone_golem", Count: 12, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 30, Respawn: 45,
 			Region: "Vale das Pedras Vivas"},
 		// Raid boss no covil da Cripta Esquecida (o renascimento vem da def, em horas).
-		{Monster: "ozrhal", Count: 1, Fixed: true, X: RaidLairX, Z: RaidLairZ, LevelMin: 25},
+		{Monster: "ozrhal", Count: 1, Fixed: true, X: RaidLairX, Z: RaidLairZ, LevelMin: 35},
+		// Do 30 ao 40 (tunnel#149). Fundo do Vale: golens ancestrais na borda sul, do 30 (ao
+		// norte, onde acabam os golens de 30) ao 35 (na beira do mapa).
+		{Monster: "ancient_golem", Count: 8, Area: true, X: 0, Z: -300, Radius: 24, LevelMin: 30, LevelMax: 35, Respawn: 55,
+			Region: "Fundo do Vale"},
+		// Vigília Ossária (33–38): a leste e ao norte da Cripta.
+		{Monster: "ossuary_knight", Count: 4, Area: true, X: vigilFar, Z: vigilNear, Radius: vigilR, LevelMin: 33, LevelMax: 38, Respawn: 50,
+			Region: "Vigília Ossária"},
+		{Monster: "ossuary_devotee", Count: 3, Area: true, X: vigilFar, Z: vigilNear, Radius: vigilR, LevelMin: 33, LevelMax: 38, Respawn: 50,
+			Region: "Vigília Ossária"},
+		{Monster: "ossuary_knight", Count: 4, Area: true, X: vigilNear, Z: vigilFar, Radius: vigilR, LevelMin: 33, LevelMax: 38, Respawn: 50,
+			Region: "Vigília Ossária"},
+		{Monster: "ossuary_devotee", Count: 3, Area: true, X: vigilNear, Z: vigilFar, Radius: vigilR, LevelMin: 33, LevelMax: 38, Respawn: 50,
+			Region: "Vigília Ossária"},
+		// Confins Partidos (35–40): noroeste, sudoeste e sudeste.
+		{Monster: "broken_reaper", Count: 4, Area: true, X: -cornerC, Z: cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_arcanist", Count: 3, Area: true, X: -cornerC, Z: cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_reaper", Count: 4, Area: true, X: -cornerC, Z: -cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_arcanist", Count: 3, Area: true, X: -cornerC, Z: -cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_reaper", Count: 4, Area: true, X: cornerC, Z: -cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_arcanist", Count: 3, Area: true, X: cornerC, Z: -cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
 	}
 }
 

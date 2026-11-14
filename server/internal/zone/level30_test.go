@@ -52,15 +52,15 @@ func hitsSince(z *Zone, src *entity, n int) map[uint32]int {
 	return out
 }
 
-func TestProgressionToLevel30(t *testing.T) {
+func TestProgressionToMaxLevel(t *testing.T) {
 	z := newCombatZone(fixed("stone_golem", 28, 34, 0))
 	p, peer := joinAt(z, 1, "knight", 30, 0, 0)
 
-	// Do 1 ao 30 só com XP: sobe nível a nível, sem pular nenhum aviso.
+	// Do 1 ao 40 só com XP: sobe nível a nível, sem pular nenhum aviso.
 	for p.level < game.MaxLevel {
 		z.grantXP(p, game.XPToNext(p.level)/3+1)
 	}
-	if p.level != 30 || p.pl.xp < game.XPLevelStart(30) {
+	if p.level != game.MaxLevel || p.pl.xp != game.XPLevelStart(game.MaxLevel) {
 		t.Fatalf("nível %d com %d de XP", p.level, p.pl.xp)
 	}
 	z.tickFor(0.1)
@@ -72,29 +72,32 @@ func TestProgressionToLevel30(t *testing.T) {
 			}
 		}
 	}
-	if ups != 29 {
-		t.Errorf("avisos de nível: %d, want 29", ups)
+	if ups != game.MaxLevel-1 {
+		t.Errorf("avisos de nível: %d, want %d", ups, game.MaxLevel-1)
 	}
-	// No 30: 31 pontos de skill (2 nas iniciais) e 3 de atributo por nível.
+	// No 40: 31 pontos de skill (2 nas iniciais; eles param no 30) e 3 de atributo por nível.
 	prog := z.progressPB(p)
-	if prog.FreeSkillPoints != 29 || prog.FreeAttrPoints != 87 {
-		t.Errorf("pontos no 30: skill %d (want 29), atributo %d (want 87)", prog.FreeSkillPoints, prog.FreeAttrPoints)
+	if prog.FreeSkillPoints != 29 || prog.FreeAttrPoints != 117 || prog.MaxLevel != 40 || prog.SkillPointMaxLevel != 30 {
+		t.Errorf("pontos no 40: skill %d (want 29), atributo %d (want 117), %+v", prog.FreeSkillPoints, prog.FreeAttrPoints, prog)
 	}
-	if s := z.selfStats(p); s.Level != 30 || s.XpNextLevel != 0 {
-		t.Errorf("barra de XP no 30: nível %d, próximo %d", s.Level, s.XpNextLevel)
+	if s := z.selfStats(p); s.Level != game.MaxLevel || s.XpNextLevel != 0 {
+		t.Errorf("barra de XP no 40: nível %d, próximo %d", s.Level, s.XpNextLevel)
 	}
-	// Passou do máximo: a XP para de contar.
+	// Passou do máximo: a XP do nível para de contar (vai para a Maestria).
 	xp := p.pl.xp
 	z.grantXP(p, 1e6)
-	if p.pl.xp != xp || p.level != 30 {
-		t.Error("XP no nível máximo deveria ser ignorada")
+	if p.pl.xp != xp || p.level != game.MaxLevel {
+		t.Error("XP no nível máximo não deveria subir a XP do nível")
 	}
 
-	// Relogar com a XP do 30 volta no 30.
+	// Relogar com a XP do 30 volta no 30 (que agora não é o máximo).
 	z2 := newCombatZone()
 	q, _ := joinAt(z2, 2, "mage", 30, 0, game.XPLevelStart(30)+5)
 	if q.level != 30 {
 		t.Fatalf("relogar com XP do 30 deu nível %d", q.level)
+	}
+	if s := z2.selfStats(q); s.XpNextLevel != uint64(game.XPLevelStart(31)) {
+		t.Errorf("no 30 a barra vai até o 31: %+v", s)
 	}
 
 	// Golem do fundo do vale dá XP de verdade para quem está no 28.
@@ -111,7 +114,8 @@ func TestProgressionToLevel30(t *testing.T) {
 	if want := game.MonsterXP(g.mon.def, 28, 28); math.Abs(float64(got-want)) > float64(want)*0.6 {
 		t.Errorf("golem nv 28 deu %d de XP, esperava perto de %d", got, want)
 	}
-	if kills := float64(game.XPToNext(28)) / float64(got); kills < 10 || kills > 45 {
+	// Curva 2: o 28 → 29 leva ~5 h (sem os contratos, ~1.000 golens).
+	if kills := float64(game.XPToNext(28)) / float64(got); kills < 700 || kills > 1400 {
 		t.Errorf("nível 28 pede %.0f golens", kills)
 	}
 }

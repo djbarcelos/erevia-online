@@ -137,6 +137,9 @@ type ItemDef struct {
 	Scroll      ScrollKind // pergaminhos: o que faz
 	Blessed     bool       // encantar: falhar não quebra (volta a +0)
 	RepOnly     bool       // só na loja de reputação (reputation.go): não cai de monstro
+	// Bridge: equipamento ponte do 30 ao 40 (bridge.go). Só cai de quem o tem na lista de
+	// saque, fora do sorteio por raridade.
+	Bridge bool
 }
 
 // SellPrice é quanto a loja paga por uma unidade.
@@ -435,12 +438,15 @@ var Items = func() map[string]*ItemDef {
 		stackable("raid_fragment", "Fragmento do Rei Ossário", KindMaterial, 5000, "crown",
 			"Um pedaço da coroa de Ozrhal. Ainda está frio como uma tumba."),
 		stackable("broken_crown", "Coroa Partida", KindMaterial, 1500, "crown", "A coroa do Senhor dos Ossos. Vale uma fortuna."),
+		stackable("captain_insignia", "Insígnia do Capitão", KindMaterial, 900, "insignia",
+			"O distintivo de ferro do Capitão Ossudo (raro dos Campos dos Ossos, só à noite)."),
 
 		// Moedas no chão.
 		{ID: GoldID, Name: "Moedas de ouro", Kind: KindGold, Grade: GradeCommon, Stack: math.MaxInt32, Icon: "gold",
 			Description: "Dinheiro corrente em Erevia."},
 	}
 	list = append(list, RepItems...) // as capas das facções (reputation.go)
+	list = append(list, bridgeItems()...)
 	m := make(map[string]*ItemDef, len(list))
 	for _, d := range list {
 		m[d.ID] = d
@@ -524,12 +530,13 @@ type Drop struct {
 	Count int
 }
 
-// gearByGrade: equipamentos de cada raridade, em ordem de id (sorteio estável).
+// gearByGrade: equipamentos de cada raridade, em ordem de id (sorteio estável). O
+// equipamento ponte fica de fora (só cai de quem o tem no saque).
 var gearByGrade = func() map[Grade][]*ItemDef {
 	m := map[Grade][]*ItemDef{}
 	for _, id := range ItemIDs() {
 		d := Items[id]
-		if d.Equippable() && !d.RepOnly { // as da loja de reputação não caem
+		if d.Equippable() && !d.RepOnly && !d.Bridge { // nem as da loja de reputação nem as ponte caem no sorteio
 			m[d.Grade] = append(m[d.Grade], d)
 		}
 	}
