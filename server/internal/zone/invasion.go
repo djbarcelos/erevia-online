@@ -418,9 +418,10 @@ func (z *Zone) invRewards(v *invasion, won bool) string {
 			parts = append(parts, fmt.Sprintf("%d moedas", gold))
 		}
 		if def := game.Items[invTopItemFor(rank, won)]; def != nil {
-			z.trackItem(p, true, def.ID, 1, "invasion")
 			parts = append(parts, itemLabel(def, 1))
-			if p.pl.inv.add(def, 1) > 0 {
+			if p.pl.inv.add(def, 1) == 0 {
+				z.trackItem(p, true, def.ID, 1, "invasion") // o que ficar no chão entra como loot ao ser pego
+			} else {
 				if g := z.dropItem(p.pos, def, 1, 0, p.id, questRewardReserve); g != nil {
 					z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundAdded{GroundAdded: &pb.GroundItemsAdded{Items: []*pb.GroundItem{z.groundPB(g)}}}}, 0)
 					z.system(p, "Sua bolsa está cheia: o pergaminho ficou no chão, reservado para você.")

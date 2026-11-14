@@ -47,6 +47,7 @@ func (z *Zone) enchant(p *entity, scrollSlot, place, slot int) {
 
 	def, before := target.def, target.enchant
 	inv.take(scrollSlot, 1)
+	z.trackItem(p, false, sc.ID, 1, "enchant")
 	equipped := place == placeEquip
 	res := &pb.EnchantResult{ItemName: def.Name}
 	if z.rng.Float64() < game.EnchantChance(before+1) {

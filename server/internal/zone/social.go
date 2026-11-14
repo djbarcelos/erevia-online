@@ -241,6 +241,7 @@ func (z *Zone) dropPKItems(dead *entity, killer uint32) {
 		if g := z.dropItem(dead.pos, s.def, s.count, s.enchant, killer, pkDropReserve); g != nil {
 			added.Items = append(added.Items, z.groundPB(g))
 		}
+		z.trackItem(dead, false, s.def.ID, s.count, "pk_drop") // quem pegar do chão conta como loot
 		z.system(dead, fmt.Sprintf("Você deixou cair %s.", itemLabelEnchant(s.def, s.count, s.enchant)))
 		z.log.Info("pk drop", "id", dead.id, "item", s.def.ID, "count", s.count, "enchant", s.enchant)
 	}

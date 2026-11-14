@@ -159,6 +159,7 @@ func (z *Zone) updateChannel(p *entity) {
 			return
 		}
 		inv.take(slot, 1)
+		z.trackItem(p, false, ch.itemID, 1, "return")
 		def := game.Items[ch.itemID]
 		cd := z.itemCooldown(p, def.Cooldown) // Caminho de Casa (Maestria)
 		p.pl.cooldowns[uint32(itemCooldownBase+def.Cooldown)] = z.now + cd

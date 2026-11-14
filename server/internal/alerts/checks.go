@@ -41,8 +41,8 @@ const (
 	unseenLimit       = 50 // erros novos lidos por verificação (de cada lado)
 	bugsPerMessage    = 4  // relatos da mesma conta numa mensagem (o resto: "mais N" e o portal)
 	bugTextMax        = 800
-	recentWindow      = 24 * time.Hour  // erros e relatos mais velhos que isso não são avisados
-	pruneEvery        = time.Hour       // limpeza do alert_state
+	recentWindow      = 24 * time.Hour // erros e relatos mais velhos que isso não são avisados
+	pruneEvery        = time.Hour      // limpeza do alert_state
 	pruneAfter        = 30 * 24 * time.Hour
 	slowTickLimit     = 50.0            // ms: o p95 do tick não pode passar disso...
 	slowTickFor       = 2 * time.Minute // ...por esse tempo

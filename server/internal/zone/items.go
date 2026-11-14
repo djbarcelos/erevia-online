@@ -170,6 +170,7 @@ func (z *Zone) drink(p *entity, slot int, def *game.ItemDef) {
 		return
 	}
 	p.pl.inv.take(slot, 1)
+	z.trackItem(p, false, def.ID, 1, "use")
 	z.questEvent(p, game.GoalPotion, def.ID)
 	heal := 1 + p.pl.mastery.of(game.MStatPotion) // Alquimia de Campo (Maestria)
 	p.hp = math.Min(p.stats.MaxHP, p.hp+def.HealHP*heal)

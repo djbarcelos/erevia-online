@@ -861,7 +861,8 @@ message Welcome {
   repeated SpecInfo specs = 22; // as especializações de todas as classes
 }
 
-// Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
+// Zona de caça: um anel (ou setor de anel) ao redor da cidade, um disco próprio ou um ponto
+// fixo (chefe).
 message MapZone {
   string name = 1; // nomes dos monstros
   float r_min = 2;
@@ -876,6 +877,10 @@ message MapZone {
   float radius = 11;
   string region = 12; // nome da região ("Vale das Pedras Vivas")
   bool raid = 13; // raid boss (covil próprio)
+  // Setor de anel (r_min–r_max), em graus: 0° = leste (+x), crescendo para o norte (+z).
+  // angle_max > angle_min no setor (passa de 360 quando cruza o 0°); os dois 0 = anel inteiro.
+  float angle_min = 40;
+  float angle_max = 41;
 }
 
 message Spawn {

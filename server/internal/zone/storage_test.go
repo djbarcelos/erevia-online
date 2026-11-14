@@ -156,3 +156,26 @@ func TestStorageNeedsTheKeeper(t *testing.T) {
 		}
 	}
 }
+
+// Achado ao investigar a rodada do caos com o banco lento (salvamentos de 10 s): com a fila
+// de salvamento cheia, o estado fica pendente (z.pending, um por personagem). O armazém só
+// vai junto do salvamento em que mudou (storageSave limpa o dirty). Se um salvamento mais
+// novo do mesmo personagem chegasse antes da fila andar, ele tomava o lugar do pendente e
+// o armazém que estava nele sumia: a gravação seguinte não levava armazém nenhum, e o banco
+// ficava com o armazém velho (itens guardados voltavam a não existir).
+func TestPendingSaveKeepsTheStorageOfTheOlderState(t *testing.T) {
+	saves := make(chan []SavedState) // sem espaço: todo envio sem bloqueio fica pendente
+	z := newTestZone(saves)
+	p, _ := account(z, 1, "Ana", 7, &StorageData{Gold: 5})
+	z.handle(itemEvent{id: p.id, msg: &pb.StorageGold{NpcId: z.keeper().id, Amount: 100}})
+	z.saveAll(false) // leva o armazém (dirty → limpo) e fica pendente
+	p.pl.inv.gold += 1
+	z.saveAll(false) // mais novo, sem armazém: não pode apagar o do pendente
+	got := make(chan []SavedState, 1)
+	go func() { got <- <-saves }()
+	z.save(nil, true)
+	b := <-got
+	if len(b) != 1 || b[0].Storage == nil || b[0].Storage.Gold != 105 || b[0].Gold != 401 {
+		t.Fatalf("o salvamento pendente perdeu o armazém: %+v", b)
+	}
+}

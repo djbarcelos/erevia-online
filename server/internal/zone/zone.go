@@ -108,7 +108,10 @@ type JoinInfo struct {
 	Spec string
 	// Maestria (nível máximo): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
-	Peer    Peer
+	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
+	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
+	LoadedAt time.Time
+	Peer     Peer
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -276,6 +279,7 @@ type Zone struct {
 	eventJobs    chan EventData
 
 	paths []*entity // fila de caminhos longos (ver pathqueue.go)
+	adm *adminState // portal de administração (admin_actions.go e admin_ops.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -497,7 +501,7 @@ func (z *Zone) get(id uint32) *entity {
 }
 
 func (z *Zone) onJoin(info JoinInfo) {
-	if z.refuseGone(info) {
+	if z.refuseGone(info) || z.refuseAdminStale(info) {
 		return
 	}
 	// Mesmo personagem conectado em outro lugar: derruba a sessão antiga.
@@ -627,6 +631,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.achOnJoin(p)
 	z.masteryOnJoin(p)
 	z.eventsOnJoin(p)
+	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
 			z.sendAnyCooldown(p, id, ready-z.now)
@@ -810,6 +815,7 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysTrades, z.checkTrades)
 		z.runSystem(sysXP2, z.updateXP2)
 		z.runSystem(sysXPTally, z.flushXPTallies)
+		z.runSystem(sysAdminOps, z.updateAdminOps)
 		if len(z.pending) > 0 {
 			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}
@@ -991,8 +997,12 @@ func (z *Zone) save(batch []SavedState, blocking bool) {
 	if len(z.pending) > 0 {
 		merged := make([]SavedState, 0, len(z.pending)+len(batch))
 		newer := map[uint32]bool{}
-		for _, s := range batch {
+		for i, s := range batch {
 			newer[s.ID] = true
+			// O armazém só vai no salvamento em que mudou: o mais novo herda o do pendente.
+			if old, ok := z.pending[s.ID]; ok && s.Storage == nil && old.Storage != nil {
+				batch[i].Storage = old.Storage
+			}
 		}
 		for id, s := range z.pending {
 			if !newer[id] {

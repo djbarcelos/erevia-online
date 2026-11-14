@@ -6,6 +6,12 @@
 // fala no chat de vez em quando. A cada 10 s imprime mensagens, banda e ping.
 //
 //	go run ./cmd/loadbot -url http://127.0.0.1:8080 -bots 100 -duration 2m
+//
+// Com -chaos, é o teste de caos (chaos.go): cada bot sorteia ações válidas e inválidas de
+// todo o ClientMessage, cai e volta, e no fim a economia do banco é conferida com a
+// telemetria.
+//
+//	go run ./cmd/loadbot -chaos -bots 50 -duration 10m -seed 317 -db postgres://...
 package main
 
 import (
@@ -66,7 +72,24 @@ func main() {
 	ramp := flag.Duration("ramp", 50*time.Millisecond, "intervalo entre a entrada de cada bot")
 	prefix := flag.String("prefix", "Bot", "início do nome dos personagens (letras)")
 	chat := flag.Bool("chat", true, "bots falam no chat geral de vez em quando")
+	chaos := flag.Bool("chaos", false, "teste de caos: ações válidas e inválidas de todo o protocolo, quedas e conferência da economia (ver chaos.go)")
+	seed := flag.String("seed", "", "caos: semente das escolhas (vazio = sorteada e impressa)")
+	dbURL := flag.String("db", os.Getenv("DATABASE_URL"), "caos: Postgres do servidor, para o preparo e a conferência (padrão: $DATABASE_URL)")
+	serverLog := flag.String("serverlog", "", "caos: arquivo com o log do servidor, procurado por panic e invariante no fim")
+	settle := flag.Duration("settle", 15*time.Second, "caos: espera depois que os bots saem, para os salvamentos e a telemetria chegarem ao banco")
+	step := flag.Duration("step", 300*time.Millisecond, "caos: intervalo entre as ações de cada bot")
 	flag.Parse()
+
+	if *chaos {
+		pfx := *prefix
+		if pfx == "Bot" { // o padrão do modo de carga: no caos, personagens novos a cada rodada
+			pfx = ""
+		}
+		os.Exit(runChaos(chaosConfig{
+			base: strings.TrimRight(*base, "/"), bots: *n, duration: *dur, ramp: *ramp, step: *step,
+			seed: *seed, prefix: pfx, db: *dbURL, serverLog: *serverLog, settle: *settle,
+		}))
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
