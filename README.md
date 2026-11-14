@@ -79,7 +79,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Comandos de GM** (contas com `accounts.gm`, ver [Moderação](#moderação)): `/gm` lista os comandos; `/kick Nome [motivo]`, `/mute Nome minutos [motivo]` e `/unmute Nome`, `/ban Nome [motivo]` (vale para a conta inteira, mesmo offline, e derruba quem está online) e `/unban Nome`, `/tp X Z`, `/goto Nome`, `/summon Nome`, `/give Nome item|moedas [qtd]`, `/anuncio texto`, `/online`, `/evento` (invasão e XP em dobro, ver [Eventos](#eventos-invasão-da-cidade-e-xp-em-dobro)) e `/maestria xp N [Nome]` / `/maestria dia [Nome]` (teste da Maestria). Para quem não é GM, eles aparecem como comando desconhecido. Toda ação fica no `gm_log`. O silêncio vale em todos os canais e continua depois de relogar.
 - **`/bug texto`:** qualquer jogador (mesmo silenciado), um a cada 30 s. Vai para `bug_reports` com o personagem, o nível, a posição, a versão do servidor (commit do deploy) e o navegador.
 - **Reconexão automática:** se a conexão cair, o jogo espera o servidor responder e volta sozinho ao mesmo personagem (desiste depois de 2 min com o servidor fora do ar ou de 5 recargas). Quem foi expulso ou banido não volta.
-- **CI:** cada push e pull request roda os testes no GitHub Actions (servidor com Postgres e `-race`, tipos e build do cliente). A Railway só publica a `main` com o CI verde.
+- **CI:** cada push e pull request roda os testes no GitHub Actions (servidor com Postgres e `-race`, tipos e build do cliente, e o roteiro no navegador com Playwright). A Railway só publica a `main` com o CI verde.
 
 ### Fase 3 e interface nova (Fases A–C)
 - **13 encaixes de equipamento:** cabeça, peito, pernas, mãos, pés, capa, arma, mão secundária, colar, 2 brincos e 2 anéis. Anéis e brincos vão no encaixe livre com duplo clique, ou no que você escolher arrastando; dá para trocar anel 1 ↔ anel 2 arrastando. Itens novos nas 4 raridades com bônus novos: precisão, esquiva, velocidade de movimento, de ataque e de conjuração, regeneração de vida e mana e dano crítico.
@@ -156,6 +156,47 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 
 | `make gm NAME=Fulano` | Torna GM a conta do personagem no banco local (relogue depois) |
 
+### Fuzz da entrada dos jogadores
+Um cliente pode mandar qualquer byte pelo WebSocket; nenhuma mensagem pode derrubar a zona, criar ouro ou item, nem tirar alguém do mapa. Três alvos de `go test -fuzz`:
+
+| Alvo | O que faz |
+|---|---|
+| `FuzzZoneBytes` (`internal/zone`) | Bytes → `proto.Unmarshal` em `ClientMessage` → zona (2 jogadores perto do NPC da mensagem, mapa real), mandada pelos dois, com ticks |
+| `FuzzZoneSemantic` (`internal/zone`) | Sequências de 30 mensagens de todos os tipos do oneof, montadas por reflexão com valores extremos (slots 0/255/2³²−1, quantidades 0 e máximas, ids que não existem ou de outra entidade, NaN/±Inf, textos enormes ou com controle, comandos de chat), com ticks entre elas |
+| `FuzzConnBytes` (`internal/net`) | Bytes pelo WebSocket de verdade (readJoin/readPump) até a zona rodando o próprio loop; cada entrada espera a resposta da zona |
+
+Depois de cada mensagem os alvos da zona conferem: `checkInvariants` (vida, mana, ouro, itens, posição, progressão, PvP, grupo, clã e troca; em teste dá panic); ouro + valor de venda dos itens (bolsa, equipamento, armazém e chão) nunca sobe, e nenhuma unidade de item aparece fora de compra, criação ou recompensa de missão; destino, caminho e itens no chão dentro do mapa; armazém válido; nenhuma mensagem que o cliente não consiga ler; nenhum erro no log (falha de serialização ou panic recuperado por `handleSafe`/`runSystem`; os alvos da zona chamam `handle` direto, sem o recover); nenhuma mensagem ou tick acima de 2 s.
+
+```bash
+cd server
+go test ./internal/zone -run '^$' -fuzz '^FuzzZoneSemantic$' -fuzztime 10m -parallel 4
+go test ./internal/zone -run '^$' -fuzz '^FuzzZoneBytes$' -fuzztime 10m -parallel 4
+go test ./internal/net -run '^$' -fuzz '^FuzzConnBytes$' -fuzztime 10m -parallel 4
+```
+Uma falha grava a entrada em `testdata/fuzz/<Alvo>/` e mostra a sequência de mensagens; `go test ./internal/zone -run '<Alvo>/<arquivo>'` repete. Commite o arquivo junto com a correção (o `go test` normal roda todo o corpus). O corpus inicial (uma mensagem válida de cada tipo) é gerado por `EREVIA_WRITE_FUZZ_CORPUS=1 go test ./internal/zone -run TestFuzzSeedCorpus`. Sem Go instalado: `docker run --rm -v "$PWD/server:/src" -w /src golang:1.26 go test ...`. O CI roda 10 s de cada alvo.
+
+## Testes de navegador (e2e)
+Em `e2e/` (pacote próprio, fora do build do cliente), com **Playwright** no Chromium headless e WebGL por software (SwiftShader). Pegam o que só quebra no navegador: tela branca, erro de JavaScript, botão que não faz nada, cena 3D que não carrega. Um roteiro de jogador novo, todo pelo mouse e pelo teclado: login de desenvolvimento pela tela inicial, personagem criado pela API, **Entrar no mundo**, cena 3D desenhada, fechar a janela "O que há de novo", andar com um clique no chão, abrir e fechar Configurações (Esc), Inventário (I), Personagem (C), Skills (K) e Mapa (M), comprar uma Poção de Mana Menor da Mercadora Lívia, sair da cidade pelo mapa até os Arredores, selecionar um monstro (Tab), usar a skill da tecla 1, tomar a poção (tecla 4), atacar com um clique e recarregar a página para voltar ao mesmo personagem, no mesmo lugar e com as mesmas moedas.
+
+- **Qualquer `pageerror`, `console.error` ou relatório para `POST /api/client-errors` reprova o teste.** A única exceção é o 401 de `/api/me` antes do login (lista em `e2e/tests/fixtures.ts`). Os avisos "modelos 3D indisponíveis" e "cenário indisponível" também reprovam. `e2e/tests/guarda.spec.ts` confere o próprio guarda (um `throw` e um `console.error` de propósito precisam ser pegos).
+- **WebGL por software:** o Chromium roda com SwiftShader e com o canvas 2D na CPU (`--disable-accelerated-2d-canvas`: acelerado, as texturas que o cliente pinta travavam a página por mais de 30 s e o servidor derrubava a conexão). O teste entra com a qualidade gráfica salva como **Baixa**; a Alta (SSAO, FXAA) fica de fora. Se a página ainda travar e o cliente reconectar sozinho ao carregar o mundo, o teste espera uma vez e deixa um aviso no relatório.
+- **`?e2e=1`** liga no cliente (também no build de produção) o `window.__ereviaE2E`, **só de leitura**: posição do jogador, NPCs e monstros que o cliente conhece e onde cada um aparece na tela, para o teste saber onde clicar. Nada nele manda mensagem ao servidor; as ações são cliques e teclas de verdade.
+- **No CI**, o job **Navegador (Playwright)** sobe o Postgres, compila cliente e servidor, roda o servidor com `DEV_LOGIN=true` e `STATIC_DIR=client/dist` e joga o roteiro. Se falhar, o artefato `e2e-falha` tem screenshot, vídeo, trace (`npx playwright show-trace trace.zip`) e o log do servidor.
+
+Para rodar localmente, suba o servidor com `DEV_LOGIN=true` servindo o cliente compilado (o teste usa o build de produção, não o Vite de desenvolvimento). O jeito mais simples é a imagem Docker, com o Postgres do `make db-up`:
+```bash
+docker build -t erevia-e2e .
+docker run -d --name erevia-e2e-srv -p 8087:8080 -e DEV_LOGIN=true -e PUBLIC_URL=http://localhost:8087 \
+  -e DATABASE_URL='postgres://erevia:erevia@host.docker.internal:5432/erevia?sslmode=disable' erevia-e2e
+cd e2e
+npm ci
+npx playwright install chromium        # uma vez (no Linux: --with-deps)
+E2E_BASE_URL=http://localhost:8087 npx playwright test
+E2E_BASE_URL=http://localhost:8087 E2E_CHANNEL=chrome npx playwright test   # com o Chrome instalado
+npx playwright show-report             # relatório, com o trace de uma falha
+```
+Sem `E2E_BASE_URL`, o teste usa `http://localhost:8080`. Cada execução cria uma conta e um personagem novos (`e2e…` / `Heroi…`) no banco.
+
 ## Estrutura
 ```
 proto/erevia/v1/game.proto   mensagens cliente ↔ servidor
@@ -181,6 +222,7 @@ client/
   scripts/changelog-draft.mjs  rascunho do changelog com os PRs mergeados (via gh)
   src/net/                   conexão com o servidor
   src/gen/                   código TS gerado (não editar)
+e2e/                         testes de navegador (Playwright): e2e/tests/jogo.spec.ts
 infra/docker-compose.yml     Postgres local
 Dockerfile, .railway/        publicação (Railway: infraestrutura como código)
 ```

@@ -644,6 +644,11 @@ func (z *Zone) onMove(e moveEvent) {
 	if !ok || p.dead || !z.spendAction(p) {
 		return
 	}
+	// NaN passa pelo clamp (min/max com NaN dão NaN) e deixaria o personagem fora do mapa
+	// para sempre; ±Inf o clamp já leva para a borda.
+	if math.IsNaN(e.x) || math.IsNaN(e.z) {
+		return
+	}
 	p.clearAction() // clicar no chão cancela o ataque
 	z.cancelChannel(p, "Você se moveu: viagem cancelada.")
 	if p.stunned(z.now) {
