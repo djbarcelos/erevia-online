@@ -109,6 +109,7 @@ type playerState struct {
 	clan       *clan
 	clanLeftAt time.Time     // saiu de um clã (espera para entrar em outro)
 	channel    *channelState // canalizando teleporte ou pergaminho
+	pathGoal   *Vec2         // caminho longo esperando na fila (ver pathqueue.go)
 
 	// AOI: jogadores e monstros que este cliente conhece (e o spawnSeq do Spawn que recebeu).
 	known map[uint32]knownEntity
@@ -127,6 +128,8 @@ type playerState struct {
 	// Conquistas, título escolhido e quando pode pedir o ranking de novo.
 	ach         achievements
 	rankingNext float64
+	// Maestria (nível 30): barra, pontos da árvore e a soma dos efeitos (ver mastery.go).
+	mastery masteryState
 }
 
 // rank da skill (0 = não aprendida).
@@ -201,6 +204,12 @@ func (e *entity) speed(now float64) float64 {
 	}
 	if v, ok := e.effect(game.EffectSlow, now); ok {
 		s *= 1 - v
+	}
+	// Passo Leve (Maestria): só fora de combate. O snapshot leva a velocidade a cada passo.
+	if e.pl != nil && now-e.lastCombat > outOfCombatAfter {
+		if v := e.pl.mastery.of(game.MStatCalmSpeed); v > 0 {
+			s *= 1 + v
+		}
 	}
 	return s
 }

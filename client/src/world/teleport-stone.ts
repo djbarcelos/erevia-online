@@ -724,6 +724,9 @@ export function buildTeleportStone(scene: Scene, fx: Fx, id: number, visual: Tra
 
   const all = [rock, rubble, core, halo, ...wisps, pool, circle];
   for (const m of all) m.isPickable = false;
+  // A pedra não sai do lugar: rocha, pedregulhos e poça não refazem a matriz a cada quadro
+  // (o núcleo, os fios de luz e o círculo de runas se mexem).
+  for (const m of [rock, rubble, pool]) m.freezeWorldMatrix();
   const glowing = [rock, core, halo, ...wisps];
   for (const m of glowing) fx.glowInclude(m);
   fx.setGlowColor(rock, glowTint);

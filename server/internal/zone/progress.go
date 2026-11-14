@@ -40,6 +40,8 @@ func (z *Zone) onProgress(e progressEvent) {
 		z.setHotbar(p, m.Slots)
 	case *pb.SpecCmd:
 		z.onSpecCmd(p, m)
+	case *pb.MasteryCmd:
+		z.onMasteryCmd(p, m)
 	}
 }
 
@@ -60,7 +62,7 @@ func (z *Zone) computeStats(p *entity, spent game.Attrs) game.Stats {
 	if r := p.pl.rank(game.SkillClearMind); r > 0 {
 		s.MPRegen *= 1 + game.Skills[game.SkillClearMind].PValue.At(r)
 	}
-	return s
+	return applyMasteryStats(s, p) // vida e dano da Maestria (teto de 5% no combate)
 }
 
 func applyPassives(s game.Stats, p *entity) game.Stats {

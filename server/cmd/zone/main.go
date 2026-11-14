@@ -201,6 +201,12 @@ func run(log *slog.Logger) error {
 	case <-time.After(10 * time.Second):
 		log.Warn("persistence did not finish in time")
 	}
+	// E a telemetria gravar o fim das sessões de quem estava online (tempo de jogo por nível).
+	select {
+	case <-z.TelemetryDone():
+	case <-time.After(10 * time.Second):
+		log.Warn("telemetry did not finish in time")
+	}
 	select { // os alertas anotam o desligamento normal (o próximo aviso de subida não fala em queda)
 	case <-alertsDone:
 	case <-time.After(3 * time.Second):
@@ -223,7 +229,7 @@ func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.Sav
 			CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP,
 			Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
 			Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
-			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec,
+			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec, Mastery: p.Mastery,
 		}
 		if s := p.Storage; s != nil {
 			states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
@@ -295,7 +301,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		ClanLeftAt: derefTime(c.ClanLeftAt),
 		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
 		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
-		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec,
+		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery,
 	}, nil
 }
 
