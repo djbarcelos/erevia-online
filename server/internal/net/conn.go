@@ -107,6 +107,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.Close(websocket.StatusPolicyViolation, err.Error())
 		return
 	}
+	loadedAt := time.Now() // antes de ler: o portal recusa um estado lido antes de mudá-lo
 	char, err := s.backend.LoadCharacter(ctx, accountID, characterID)
 	if err != nil {
 		reason := "erro ao carregar personagem"
@@ -132,7 +133,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		AccountID: char.AccountID, Karma: char.Karma, PKs: char.PKs, PvPKills: char.PvPKills,
 		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage,
 		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Quests: char.Quests,
-		Achievements: char.Achievements, Title: char.Title, Spec: char.Spec, Peer: sess,
+		Achievements: char.Achievements, Title: char.Title, Spec: char.Spec, LoadedAt: loadedAt, Peer: sess,
 	})
 
 	s.readPump(ctx, sess, char.ID)

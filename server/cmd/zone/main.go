@@ -131,6 +131,18 @@ func run(log *slog.Logger) error {
 	z.SetSocialBackend(socialStore{st})
 	z.SetEventSink(eventStore{st})
 	z.SetRankingBackend(rankingStore{st})
+	// Anúncios agendados pelo portal que ainda não saíram (sobrevivem ao reinício).
+	lctx, lcancel = context.WithTimeout(ctx, 30*time.Second)
+	scheduled, err := st.PendingAnnouncements(lctx)
+	lcancel()
+	if err != nil {
+		return fmt.Errorf("load scheduled announcements: %w", err)
+	}
+	pending := make([]zone.ScheduledAnnouncement, len(scheduled))
+	for i, s := range scheduled {
+		pending[i] = zone.ScheduledAnnouncement{ID: s.ID, At: s.At, Title: s.Title, Text: s.Text, By: s.ByName}
+	}
+	z.LoadScheduled(pending)
 	go func() {
 		defer close(persistDone)
 		for batch := range saves {
