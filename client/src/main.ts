@@ -1320,8 +1320,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       world.followShadows(focus.x, focus.z);
     }
     dayNight.update(clock.phase(), focus);
-    // Árvores que tapam o jogador ou o alvo ficam translúcidas.
-    env?.fader.update(dt, world.camera.position, entities.focusPoints());
+    // Árvores que tapam o jogador ou o alvo ficam translúcidas. Na medição de FPS, as que tapam
+    // o ponto medido: a linha da câmera até o jogador, lá longe, apagaria árvores ao acaso
+    // (o lugar em que o jogador nasce na praça muda), e o número de malhas deixaria de ser fixo.
+    env?.fader.update(dt, world.camera.position, benchFocus ? [benchFocus.add(new Vector3(0, 1.1, 0))] : entities.focusPoints());
     loot.update(pos);
     if (pendingShop) {
       const d = entities.distanceTo(pendingShop);
@@ -1364,6 +1366,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         setTime: (p) => clock.setFixed(p),
         setFocus: (p) => (benchFocus = p ? new Vector3(p.x, 0, p.z) : null),
         forEachMarker: entities.forEachMarker.bind(entities),
+        forEachRoot: entities.forEachRoot.bind(entities),
+        settle: () => env?.fader.settle(),
+        pooled: () => env?.fader.pooled() ?? [],
         hud: $("hud"),
       });
     }, 3000);
