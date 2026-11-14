@@ -52,6 +52,8 @@ import { setupPerfPanel } from "./ui/perf";
 import { runBench, wantBench } from "./ui/bench";
 import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
+import { contractNotice, ContractsStore, ContractsWindow } from "./ui/contracts";
+import { ContractCmdKind, ReputationCmdKind } from "./gen/erevia/v1/game_pb";
 import { TeleportWindow } from "./ui/teleport";
 import { SpecWindow } from "./ui/spec";
 import { setSpecs } from "./ui/specs";
@@ -790,6 +792,23 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     hud.element,
   );
+  // Quadro de Contratos e loja de reputação (ui/contracts.ts): clicar no quadro abre a janela.
+  const contracts = new ContractsStore();
+  const contractsWin = new ContractsWindow(
+    store,
+    itemTip,
+    contracts,
+    {
+      accept: (npc, id) => conn.contractCmd(ContractCmdKind.CONTRACT_CMD_ACCEPT, id, npc),
+      buy: (npc, offer) => conn.reputationCmd(ReputationCmdKind.REPUTATION_CMD_BUY, offer, npc),
+      request: () => {
+        conn.contractCmd(ContractCmdKind.CONTRACT_CMD_GET);
+        conn.reputationCmd(ReputationCmdKind.REPUTATION_CMD_GET);
+      },
+      me,
+    },
+    hud.element,
+  );
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma, discount: () => mastery?.teleportDiscount ?? 0 }, hud.element);
   const specWin = new SpecWindow(
     store,
@@ -851,7 +870,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       storageWin.close();
       barberWin.close();
       specWin.close();
-      if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
+      contractsWin.close();
+      if (contracts.isBoard(id)) contractsWin.open(id, `${info.title} · ${info.name}`);
+      else if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
       // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
       else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
       else if (npc?.role === NpcRole.TELEPORT) {
@@ -1046,6 +1067,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     build: (close) =>
       buildJournal({
         quests: hud.quests,
+        contracts,
+        level: () => me().myLevel,
         go: (id) => {
           hud.quests.track(id);
           close();
@@ -1212,6 +1235,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (invites.open) invites.answer(false);
       else if (hud.channeling) conn.cancelChannel();
       else if (teleportWin.isOpen) teleportWin.close();
+      else if (contractsWin.isOpen) contractsWin.close();
       else if (specWin.isOpen) specWin.close();
       else if (storageWin.isOpen) storageWin.close();
       else if (tradeWin.isOpen) conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL);
@@ -1337,6 +1361,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (barberWin.isOpen) {
       const d = entities.distanceTo(barberWin.npcId);
       if (d === null || d > SHOP_KEEP_DIST) barberWin.close();
+    }
+    if (contractsWin.isOpen) {
+      const d = entities.distanceTo(contractsWin.npcId);
+      if (d === null || d > SHOP_KEEP_DIST) contractsWin.close();
     }
   });
 
@@ -1477,6 +1505,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       invites.dispose();
       shop.dispose();
       teleportWin.dispose();
+      contractsWin.dispose();
       specWin.dispose();
       storageWin.dispose();
       tradeWin.dispose();
@@ -1728,6 +1757,23 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "eventStatus":
           hud.setEvents(msg.msg.value, serverNow);
           break;
+        case "contracts": {
+          const c = msg.msg.value;
+          contracts.setContracts(c);
+          // Contrato concluído: o aviso do HUD com a recompensa (o chat também traz).
+          if (c.completed) {
+            const done = c.contracts.find((x) => x.title === c.completed);
+            contractNotice(hud.element, "Contrato concluído", c.completed, done?.reward ?? "");
+            gameAudio.ui("enchant");
+          }
+          break;
+        }
+        case "reputation": {
+          const r = msg.msg.value;
+          contracts.setReputation(r);
+          if (r.gradeUp) toast(`Reputação: ${r.gradeUp}!`);
+          break;
+        }
       }
     },
   };
