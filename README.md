@@ -143,6 +143,13 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Reconexão automática:** se a conexão cair, o jogo espera o servidor responder e volta sozinho ao mesmo personagem (desiste depois de 2 min com o servidor fora do ar ou de 5 recargas). Quem foi expulso ou banido não volta.
 - **CI:** cada push e pull request roda os testes no GitHub Actions (servidor com Postgres e `-race`, tipos e build do cliente, e o roteiro no navegador com Playwright). A Railway só publica a `main` com o CI verde.
 
+### Zonas: vários mapas no mesmo servidor (portão)
+- **Uma zona por mapa**, no mesmo processo (`zone.Manager`, `server/internal/zone/manager.go`): cada uma com o seu `world.json`, monstros, NPCs, pedras e goroutine, e dona de todo o estado de quem está nela. O login vai para a zona onde o personagem está (ou saiu há pouco, ou a gravada em `characters.zone`, migração 00050).
+- **Portão** (`gate.go`, NPC com `NPC_ROLE_GATE`): perto dele, o clique pede `UseGate`. A zona de origem tira o personagem, grava (já com a zona e o ponto de chegada do destino) e entrega o estado à outra zona, na mesma conexão: nunca nas duas zonas, nunca em nenhuma (invariante `zone_owner` e `Bus.check`). Morto, em troca ou em combate (10 s) não atravessa; canalização e convites pendentes são cancelados.
+- **O que é global** fica no barramento (`bus.go`): quem está online e onde, chat geral, sussurro, `/online`, amigos online e grupos. O grupo continua entre mapas (a janela mostra o mapa de cada um; a XP só divide entre quem está na mesma zona). Os comandos de GM sobre alguém em outro mapa rodam na zona dele. Clãs e armazém continuam na zona da cidade.
+- **Cliente:** o `ZoneChange` mostra a tela de carregamento, descarta a cena (entidades, cenário, minimapa) e o HUD e espera o `Welcome` do mapa novo (`/worlds/<id>.json` e os kits que ele pede). O painel F3 mostra as texturas da cena e do engine: depois de ir e voltar, malhas e texturas voltam ao mesmo número.
+- **Por enquanto** há só o mapa de sempre (`starter`) e a **Clareira de Testes** (`teste`, `client/scripts/build-maps.mjs`), ligada só com `DEV_LOGIN=true` ou `EREVIA_ZONES=teste`. Em produção o portão nem aparece. Para testar: `make server`, entrar e clicar no portão ao sul do poço da praça.
+
 ### Fase 3 e interface nova (Fases A–C)
 - **13 encaixes de equipamento:** cabeça, peito, pernas, mãos, pés, capa, arma, mão secundária, colar, 2 brincos e 2 anéis. Anéis e brincos vão no encaixe livre com duplo clique, ou no que você escolher arrastando; dá para trocar anel 1 ↔ anel 2 arrastando. Itens novos nas 4 raridades com bônus novos: precisão, esquiva, velocidade de movimento, de ataque e de conjuração, regeneração de vida e mana e dano crítico.
 - **Aparência na criação:** cada classe escolhe a arma inicial (ex.: espada ou lâmina curva para o cavaleiro; cajado, varinha ou cajado sombrio para o mago; três pares de lâminas para o ladino), o escudo (ou nada, e ele vai para a bolsa) e a cor do emblema. A arma é um item de verdade do kit. A cor pinta o nome e um anel no chão para todos verem, e a tela de seleção mostra cada personagem com o que tem nas mãos.
@@ -219,6 +226,7 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 | `cd server && go run ./cmd/loadbot -chaos -bots 50 -duration 10m -seed 317 -db $DATABASE_URL` | Teste de caos (ver [Teste de caos](#teste-de-caos)): ações válidas e inválidas de todo o protocolo, quedas no meio de tudo e conferência da economia; sai com código ≠ 0 se algo quebrou |
 | `cd server && go run ./cmd/balance` | Simulador de balanceamento: por classe, caminho e nível, com o equipamento típico +0 e +3, o dano por segundo, o tempo para matar e para morrer, a XP por hora e o tempo até o 30, com as fórmulas do pacote `game` (`-csv` para planilha, `-noite`). O orçamento de poder roda no `go test` (`internal/balance`); a leitura de hoje está em [docs/balanceamento-2026-11.md](docs/balanceamento-2026-11.md) |
 
+| `cd server && EREVIA_SOAK=10m go test ./internal/zone -run ZonesSoak -v -timeout 15m` | Teste longo das zonas: 50 bots atravessando o portão entre 2 zonas, com as invariantes ligadas (no CI roda 3 s) |
 | `make gm NAME=Fulano` | Torna GM a conta do personagem no banco local (relogue depois) |
 
 ### Fuzz da entrada dos jogadores
@@ -292,7 +300,7 @@ server/
   internal/store/            Postgres (pgx) + migrações SQL (goose)
   internal/game/             dados e fórmulas: classes, skills, monstros, itens, drops, dano, XP
   internal/world/            mapa embutido (world.json): colisão e caminhos (A*)
-  internal/zone/             simulação da zona: combate, PvP, IA, chat, inventário, drops, loja, grupo, clã, amigos, correio, emotes, teleporte, encantamento, armazém, casa de leilões (uma goroutine, tick 20 Hz)
+  internal/zone/             zonas (manager.go: uma por mapa; bus.go: o que é global; gate.go: o portão) e a simulação de cada uma: combate, PvP, IA, chat, inventário, drops, loja, grupo, clã, amigos, correio, emotes, teleporte, encantamento, armazém, casa de leilões (uma goroutine, tick 20 Hz)
   internal/net/              conexões WebSocket (read/write pumps)
   internal/pb/               código Go gerado (não editar)
 client/
@@ -304,6 +312,7 @@ client/
   scripts/build-models.mjs   personagens/monstros/animações a partir dos zips KayKit
   scripts/build-scenery.mjs  kits de cenário (um .glb por pacote)
   scripts/build-world.mjs    layout do mapa + colisores → public/world.json e server/internal/world/
+  scripts/build-maps.mjs     os outros mapas (Clareira de Testes) → public/worlds/ e server/internal/world/maps/
   scripts/world-gen.mjs      motor do gerador do mapa (fases, sorteio por bioma, saída)
   scripts/biomes/            um arquivo por bioma (ver [Como criar um bioma](#como-criar-um-bioma))
   scripts/build-changelog.mjs  CHANGELOG.md → public/novidades.json (roda no npm run build)
@@ -364,6 +373,7 @@ Depois de mexer num bioma, rode `node scripts/build-world.mjs` e commite os dois
 | `DEBUG_INVARIANTS` | vazio | A zona confere o estado de cada jogador 1×/s e antes de salvar (vida e mana, ouro, pilhas, equipamento, nível e XP, posição, karma, grupo, clã e troca; ver `server/internal/zone/invariants.go`). Com `1` (e sempre nos testes), estado inválido é panic; sem ela, corrige o que é seguro e anota um evento `invariant` em `game_events` |
 | `INVASION_CHANCE` | `0.15` | Chance (0 a 1) de invasão da cidade a cada noite; `0` = só por GM |
 | `XP2_DAYS` | `sab,dom` | Dias de XP em dobro (horário de Brasília); vazio ou `nenhum` = só por GM |
+| `EREVIA_ZONES` | vazio | Mapas além do principal, separados por vírgula (hoje só `teste`). Com `DEV_LOGIN=true` o `teste` já liga |
 | `ALERT_WEBHOOK_URL` | vazio | Webhook do Discord dos [alertas](#alertas-no-discord). **Segredo**: só na variável da Railway, nunca no git. Vazio = os alertas só vão para o log |
 | `ALERT_SPIKE_N` | `50` | Pico de erros: avisa com mais de N ocorrências de um mesmo erro em 5 min |
 

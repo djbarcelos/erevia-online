@@ -135,6 +135,7 @@ type playerState struct {
 	contracts contractsState
 	// Casa de leilões: operações a caminho do banco, anúncios vistos e anexos do correio.
 	auc auctionState
+	hop     hopState // portão e zonas (gate.go)
 }
 
 // rank da skill (0 = não aprendida).

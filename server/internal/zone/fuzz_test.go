@@ -124,6 +124,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.Trade(ctx, id, m.TradeCmd)
 	case *pb.ClientMessage_AuctionCmd:
 		z.Social(ctx, id, m.AuctionCmd)
+	case *pb.ClientMessage_UseGate:
+		z.UseGate(ctx, id, m.UseGate.NpcId)
 	default:
 		// Join (só vale como primeira mensagem), Ping (respondido na conexão) e vazio.
 		return false
@@ -926,6 +928,8 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_CLAIM}}},
 		// Bestiário: pedir o estado (a janela abriu).
 		{Msg: &pb.ClientMessage_BestiaryCmd{BestiaryCmd: &pb.BestiaryCmd{Kind: pb.BestiaryCmdKind_BESTIARY_CMD_GET}}},
+		// Portão (zonas): sem gerente, a zona sozinha responde "fechado".
+		{Msg: &pb.ClientMessage_UseGate{UseGate: &pb.UseGate{NpcId: gateIDBase}}},
 	}
 	return out
 }

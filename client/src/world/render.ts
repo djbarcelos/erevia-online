@@ -229,7 +229,15 @@ export class RenderQuality {
       if (scene.isDisposed) return;
       if (s.quality !== this.lastQuality || s.shadows !== this.lastShadows) this.apply(s);
     });
-    scene.onDisposeObservable.addOnce(() => off());
+    scene.onDisposeObservable.addOnce(() => {
+      off();
+      // Troca de mapa: o SSAO tem um GeometryBufferRenderer próprio, inscrito no resize do
+      // engine (que fica); sem soltar aqui, ele segurava a cena velha inteira.
+      this.ssao?.dispose(true);
+      this.ssao = null;
+      this.pipeline?.dispose();
+      this.pipeline = null;
+    });
   }
 
   /** Regiões do mapa (do Welcome), para a cor por região. */

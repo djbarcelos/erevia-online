@@ -61,7 +61,7 @@ func (z *Zone) rareSetup() *rareWorld {
 // e o hospedeiro pode renascer como raro.
 func (z *Zone) rareRevive(m *entity) {
 	ms := m.mon
-	if ms.summon || ms.raid != nil || ms.invader {
+	if z.cfg.NoRares || ms.summon || ms.raid != nil || ms.invader {
 		return
 	}
 	if ms.def.Rare != nil {

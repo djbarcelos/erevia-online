@@ -162,7 +162,9 @@ func (z *Zone) dbTry(ctx context.Context, what string, retry bool, fn func(ctx c
 func (z *Zone) socialOnJoin(p *entity) {
 	for _, o := range z.players {
 		if o != p && o.pl.social.friends[p.id] != nil {
-			z.system(o, fmt.Sprintf("Seu amigo %s entrou no jogo.", p.name))
+			if !p.pl.hop.arrived { // chegou pelo portão: não acabou de entrar no jogo
+				z.system(o, fmt.Sprintf("Seu amigo %s entrou no jogo.", p.name))
+			}
 			z.sendFriends(o)
 		}
 	}
@@ -384,6 +386,8 @@ func (z *Zone) friendsOnline(p *entity) []string {
 	for id := range p.pl.social.friends {
 		if o := z.players[id]; o != nil {
 			out = append(out, o.name)
+		} else if f := p.pl.social.friends[id]; z.mgr != nil && z.mgr.bus.online(id) {
+			out = append(out, f.Name) // em outro mapa
 		}
 	}
 	slices.SortFunc(out, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
@@ -406,6 +410,8 @@ func (z *Zone) friendsPB(p *entity) *pb.FriendList {
 			fr.Online = true
 			fr.Level = uint32(o.level)
 			fr.X, fr.Z = float32(o.pos.X), float32(o.pos.Z)
+		} else if z.mgr != nil && z.mgr.bus.online(f.ID) {
+			fr.Online = true // em outro mapa (sem posição)
 		}
 		out.Friends = append(out.Friends, fr)
 	}

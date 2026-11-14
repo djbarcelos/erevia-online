@@ -89,6 +89,7 @@ func (z *Zone) npcList() []*pb.NpcInfo {
 		if n.npc.crafts {
 			info.Recipes = recipesPB()
 		}
+		info.GateTo = z.gateTo(n)
 		out = append(out, info)
 	}
 	return out

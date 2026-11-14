@@ -425,8 +425,13 @@ export class Hud {
       this.autoBtn.querySelector("kbd")!.textContent = keyLabel(settings.get().keys.auto);
     };
     applyEnv();
-    this.offSettings = settings.on(applyEnv);
+    const offEnv = settings.on(applyEnv);
     addEventListener("resize", applyEnv);
+    // Saída e troca de mapa: nada do HUD velho continua ouvindo.
+    this.offSettings = () => {
+      offEnv();
+      removeEventListener("resize", applyEnv);
+    };
 
     this.renderSlots();
     store.onChange(() => this.renderSlots());
@@ -836,12 +841,13 @@ export class Hud {
         this.partyRows.set(m.id, row);
       }
       const lead = m.id === state.leaderId ? el("span", "m-lead", "♛") : "";
-      row.name.replaceChildren(lead, document.createTextNode(m.name), el("small", null, ` Nv ${m.level}`));
+      // Em outro mapa (zonas): o nome do mapa no lugar do nível; a vida é de até 1 s atrás.
+      row.name.replaceChildren(lead, document.createTextNode(m.name), el("small", null, m.map ? ` · ${m.map}` : ` Nv ${m.level}`));
       row.hp.set(m.hp, m.maxHp, "");
       row.mp.set(m.mp, m.maxMp, "");
       row.root.classList.toggle("dead", m.dead);
-      row.root.classList.toggle("far", !near(m.id));
-      row.root.title = m.dead ? `${m.name} (morto)` : `Selecionar ${m.name}`;
+      row.root.classList.toggle("far", !!m.map || !near(m.id));
+      row.root.title = m.map ? `${m.name} está em ${m.map}` : m.dead ? `${m.name} (morto)` : `Selecionar ${m.name}`;
     }
     for (const [id, row] of this.partyRows) {
       if (!seen.has(id)) {

@@ -387,7 +387,11 @@ func (z *Zone) checkParty(p *entity) {
 			if id == p.id {
 				continue
 			}
-			if m := z.players[id]; m == nil || m.pl.party != pt {
+			m := z.players[id]
+			if m == nil && z.mgr != nil {
+				continue // em outra zona: o barramento confere (Bus.check)
+			}
+			if m == nil || m.pl.party != pt {
 				bad = fmt.Sprintf("colega %d não aponta para o grupo", id)
 				break
 			}
