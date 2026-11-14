@@ -113,18 +113,18 @@ func TestContractStateOnJoinHasTheBoard(t *testing.T) {
 func TestContractAcceptRules(t *testing.T) {
 	z := newTestZone(nil)
 	z.SetEventSink(nopSink{})
-	id := charWith(t, z, "hunt_vale_golems")
+	id := charWith(t, z, "hunt_fundo_golems")
 	p, peer := atBoardLevel(z, id, game.ContractMinLevel-1, 0)
 
 	// Abaixo do nível: recusado.
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_vale_golems")
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_fundo_golems")
 	if len(p.pl.contracts.st.Taken) != 0 || !peer.systemContains("nível") {
 		t.Fatal("aceitou abaixo do nível")
 	}
 	// No nível, mas longe do quadro: recusado.
 	p.level = game.ContractMinLevel
 	p.pos = Vec2{X: 30, Z: 30}
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_vale_golems")
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_fundo_golems")
 	if len(p.pl.contracts.st.Taken) != 0 {
 		t.Fatal("aceitou longe do quadro")
 	}
@@ -143,50 +143,50 @@ func TestContractAcceptRules(t *testing.T) {
 		t.Fatal("aceitou contrato fora do quadro")
 	}
 	drainEvents(z)
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_vale_golems")
-	c := contractInfo(peer.lastContracts(), "hunt_vale_golems")
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_fundo_golems")
+	c := contractInfo(peer.lastContracts(), "hunt_fundo_golems")
 	if c == nil || c.Status != pb.ContractStatus_CONTRACT_STATUS_ACTIVE || c.Count != 0 {
 		t.Fatalf("depois de aceitar: %+v", c)
 	}
-	if e := findEvent(drainEvents(z), "contract_accept", "hunt_vale_golems"); e == nil || e.CharacterID != int64(id) {
+	if e := findEvent(drainEvents(z), "contract_accept", "hunt_fundo_golems"); e == nil || e.CharacterID != int64(id) {
 		t.Fatal("sem telemetria contract_accept")
 	}
 	// Aceitar de novo não zera o progresso.
-	p.pl.contracts.st.Taken["hunt_vale_golems"].N = 7
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_vale_golems")
-	if p.pl.contracts.st.Taken["hunt_vale_golems"].N != 7 {
+	p.pl.contracts.st.Taken["hunt_fundo_golems"].N = 7
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_fundo_golems")
+	if p.pl.contracts.st.Taken["hunt_fundo_golems"].N != 7 {
 		t.Fatal("aceitar de novo zerou o progresso")
 	}
 }
 
-// Caça: só conta golem do Vale (onde nasceu), aceito, com XP; ao completar, a recompensa
+// Caça: só conta Golem Ancestral do Fundo do Vale (onde nasceu), aceito, com XP; ao completar, a recompensa
 // sai (moedas, Maestria e reputação), com telemetria e o aviso do HUD.
 func TestContractHuntProgressAndReward(t *testing.T) {
-	z := newCombatZone(fixed("stone_golem", 30, 30, 0))
+	z := newCombatZone(fixed("ancient_golem", 35, 30, 0))
 	z.SetEventSink(nopSink{})
 	m := z.onlyMonster()
-	m.mon.home = Vec2{X: 0, Z: -280} // nasceu no Vale
-	id := charWith(t, z, "hunt_vale_golems")
+	m.mon.home = Vec2{X: 0, Z: -300} // nasceu no Fundo do Vale
+	id := charWith(t, z, "hunt_fundo_golems")
 	p, peer := atBoardLevel(z, id, game.MaxLevel, 100)
 
 	z.shareMonsterXP(m, []*entity{p}) // antes de aceitar: não conta
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_vale_golems")
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_fundo_golems")
 	z.shareMonsterXP(m, []*entity{p})
-	if n := p.pl.contracts.st.Taken["hunt_vale_golems"].N; n != 1 {
+	if n := p.pl.contracts.st.Taken["hunt_fundo_golems"].N; n != 1 {
 		t.Fatalf("progresso %d depois de 1 golem", n)
 	}
-	// Golem que nasceu fora do Vale, invasor ou invocação não contam.
+	// Golem que nasceu fora do Fundo do Vale ou invasor não contam.
 	m.mon.home = Vec2{X: 0, Z: 0}
 	z.shareMonsterXP(m, []*entity{p})
-	m.mon.home = Vec2{X: 0, Z: -280}
+	m.mon.home = Vec2{X: 0, Z: -300}
 	m.mon.invader = true
 	z.shareMonsterXP(m, []*entity{p})
 	m.mon.invader = false
-	if n := p.pl.contracts.st.Taken["hunt_vale_golems"].N; n != 1 {
+	if n := p.pl.contracts.st.Taken["hunt_fundo_golems"].N; n != 1 {
 		t.Fatalf("contou golem de fora: %d", n)
 	}
 
-	def := game.Contracts["hunt_vale_golems"]
+	def := game.Contracts["hunt_fundo_golems"]
 	p.pl.contracts.st.Taken[def.ID].N = def.Count - 1
 	gold, rep, mxp := p.pl.inv.gold, p.pl.contracts.rep.Of(def.Faction), p.pl.mastery.st.XP
 	drainEvents(z)
@@ -227,20 +227,20 @@ func TestContractHuntProgressAndReward(t *testing.T) {
 	}
 }
 
-// Nível mínimo de monstro e área dos Ermos (o anel), para os contratos de esqueleto.
+// Nível mínimo do monstro e a área (o disco do Fundo, não o resto do Vale).
 func TestContractKillLevelAndArea(t *testing.T) {
-	z := newCombatZone(fixed("skeleton_mage", 12, 30, 0))
+	z := newCombatZone(fixed("ancient_golem", 31, 30, 0))
 	m := z.onlyMonster()
-	id := charWith(t, z, "hunt_ermos_mages")
+	id := charWith(t, z, "hunt_fundo_deep")
 	p, _ := atBoardLevel(z, id, game.MaxLevel, 0)
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_ermos_mages")
-	m.mon.home = Vec2{X: 0, Z: 128}
-	z.shareMonsterXP(m, []*entity{p}) // nível 12: abaixo do mínimo (13)
-	m.level = 18
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_fundo_deep")
+	m.mon.home = Vec2{X: 4, Z: -298}
+	z.shareMonsterXP(m, []*entity{p}) // nível 31: abaixo do mínimo (32)
+	m.level = 34
 	z.shareMonsterXP(m, []*entity{p})
-	m.mon.home = Vec2{X: 0, Z: 90} // Campos dos Ossos
+	m.mon.home = Vec2{X: 0, Z: -250} // o Vale das Pedras Vivas, fora do Fundo
 	z.shareMonsterXP(m, []*entity{p})
-	if n := p.pl.contracts.st.Taken["hunt_ermos_mages"].N; n != 1 {
+	if n := p.pl.contracts.st.Taken["hunt_fundo_deep"].N; n != 1 {
 		t.Fatalf("progresso %d, esperava 1", n)
 	}
 }
@@ -249,19 +249,19 @@ func TestContractKillLevelAndArea(t *testing.T) {
 // lugar (ou que não veio de monstro) não conta.
 func TestContractCollectCountsLootPickups(t *testing.T) {
 	z := newCombatZone()
-	id := charWith(t, z, "collect_cores")
+	id := charWith(t, z, "collect_fundo_cores")
 	p, _ := atBoardLevel(z, id, game.MaxLevel, 0)
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "collect_cores")
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "collect_fundo_cores")
 	pick := func(loot bool, from Vec2, n int) {
 		g := z.placeItem(p.pos, game.Items["rune_core"], n, 0, 0, 0)
 		g.loot, g.lootFrom = loot, from
 		p.act = action{kind: actPickup, target: g.id}
 		z.runPickup(p)
 	}
-	pick(true, Vec2{X: 5, Z: -260}, 3)
-	pick(false, Vec2{X: 5, Z: -260}, 4) // não veio de monstro (ex.: caiu de quem morreu com karma)
-	pick(true, Vec2{X: 0, Z: 0}, 5)     // de fora do Vale
-	if n := p.pl.contracts.st.Taken["collect_cores"].N; n != 3 {
+	pick(true, Vec2{X: 5, Z: -300}, 3)
+	pick(false, Vec2{X: 5, Z: -300}, 4)  // não veio de monstro (ex.: caiu de quem morreu com karma)
+	pick(true, Vec2{X: -122, Z: 122}, 5) // dos Confins (núcleo rachado): não é do Fundo
+	if n := p.pl.contracts.st.Taken["collect_fundo_cores"].N; n != 3 {
 		t.Fatalf("coleta %d, esperava 3", n)
 	}
 	if got := p.pl.inv.countOf("rune_core"); got != 12 {
@@ -269,8 +269,8 @@ func TestContractCollectCountsLootPickups(t *testing.T) {
 	}
 }
 
-// Semanal de PvP: vitória contra jogador roxo ou com karma, de outra conta e do nível 20
-// para cima; cada personagem conta uma vez.
+// Semanal de PvP: vitória contra jogador roxo ou com karma, de outra conta e do nível
+// mínimo para cima; cada personagem conta uma vez.
 func TestContractPvPWeekly(t *testing.T) {
 	z := newTestZone(nil)
 	id := charWith(t, z, "weekly_pvp")
@@ -280,7 +280,7 @@ func TestContractPvPWeekly(t *testing.T) {
 	if other == id {
 		other = 2
 	}
-	q, _ := atBoardLevel(z, other, 25, 0)
+	q, _ := atBoardLevel(z, other, game.ContractPvPMinLevel+2, 0)
 	z.contractPvP(p, q)
 	z.contractPvP(p, q) // o mesmo de novo
 	low, _ := atBoardLevel(z, 900, 10, 0)
@@ -310,21 +310,21 @@ func TestContractPvPWeekly(t *testing.T) {
 func TestContractsRenewAtBrasiliaMidnightInZone(t *testing.T) {
 	now := time.Date(2026, 11, 14, 2, 59, 0, 0, time.UTC) // 23:59 de sexta em Brasília
 	z := newClockZone(&now)
-	id := charWith(t, z, "hunt_vale_golems")
+	id := charWith(t, z, "hunt_fundo_golems")
 	p, peer := atBoardLevel(z, id, game.MaxLevel, 0)
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_vale_golems")
-	p.pl.contracts.st.Taken["hunt_vale_golems"].N = 50
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_fundo_golems")
+	p.pl.contracts.st.Taken["hunt_fundo_golems"].N = 50
 	before := peer.lastContracts()
 
 	now = now.Add(59 * time.Second) // 23:59:59: ainda é sexta
 	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_GET, "")
-	if c := contractInfo(peer.lastContracts(), "hunt_vale_golems"); c == nil || c.Count != 50 {
+	if c := contractInfo(peer.lastContracts(), "hunt_fundo_golems"); c == nil || c.Count != 50 {
 		t.Fatal("a renovação veio antes da meia-noite")
 	}
 	now = now.Add(time.Second) // sábado, 00:00 em Brasília (03:00 UTC)
 	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_GET, "")
 	after := peer.lastContracts()
-	if p.pl.contracts.st.Taken["hunt_vale_golems"] != nil {
+	if p.pl.contracts.st.Taken["hunt_fundo_golems"] != nil {
 		t.Fatal("o diário de ontem continuou aceito")
 	}
 	for i := 0; i < 3; i++ {
@@ -365,7 +365,7 @@ func TestContractReputationGradeUp(t *testing.T) {
 func TestRepShopBuy(t *testing.T) {
 	z := newTestZone(nil)
 	z.SetEventSink(nopSink{})
-	p, peer := atBoardLevel(z, 7, game.MaxLevel, 20000)
+	p, peer := atBoardLevel(z, 7, game.MaxLevel, 60000)
 
 	repCmd(z, p, pb.ReputationCmdKind_REPUTATION_CMD_GET, "")
 	if r := peer.lastReputation(); len(r.Offers) != len(game.RepOffers) {
@@ -373,14 +373,14 @@ func TestRepShopBuy(t *testing.T) {
 	}
 	// Neutro: nada.
 	repCmd(z, p, pb.ReputationCmdKind_REPUTATION_CMD_BUY, "bastion_hp_l")
-	if p.pl.inv.gold != 20000 || p.pl.inv.countOf("potion_hp_l") != 0 {
+	if p.pl.inv.gold != 60000 || p.pl.inv.countOf("potion_hp_l") != 0 {
 		t.Fatal("comprou sem o grau")
 	}
 	p.pl.contracts.rep.Points = map[string]int{game.FactionBastion: game.RepGradePoints[game.RepRevered]}
 	drainEvents(z)
 	repCmd(z, p, pb.ReputationCmdKind_REPUTATION_CMD_BUY, "bastion_hp_l")
 	o := game.RepOfferByID("bastion_hp_l")
-	if p.pl.inv.gold != 20000-o.Price || p.pl.inv.countOf("potion_hp_l") != o.Count {
+	if p.pl.inv.gold != 60000-o.Price || p.pl.inv.countOf("potion_hp_l") != o.Count {
 		t.Fatalf("compra: %d moedas, %d poções", p.pl.inv.gold, p.pl.inv.countOf("potion_hp_l"))
 	}
 	evs := drainEvents(z)
@@ -403,11 +403,11 @@ func TestRepShopBuy(t *testing.T) {
 	}
 	// Título: desbloqueia a conquista (escolhida na Glória) e não vende duas vezes.
 	repCmd(z, p, pb.ReputationCmdKind_REPUTATION_CMD_BUY, "bastion_title_watch")
-	if _, ok := p.pl.ach.unlocked["rep_bastion_honored"]; !ok || p.pl.inv.gold != gold-3000 {
+	if _, ok := p.pl.ach.unlocked["rep_bastion_honored"]; !ok || p.pl.inv.gold != gold-game.RepOfferByID("bastion_title_watch").Price {
 		t.Fatal("o título não veio")
 	}
 	repCmd(z, p, pb.ReputationCmdKind_REPUTATION_CMD_BUY, "bastion_title_watch")
-	if p.pl.inv.gold != gold-3000 || !peer.systemContains("já tem esse título") {
+	if p.pl.inv.gold != gold-game.RepOfferByID("bastion_title_watch").Price || !peer.systemContains("já tem esse título") {
 		t.Fatal("vendeu o título duas vezes")
 	}
 	z.setTitle(p, "rep_bastion_honored")
@@ -437,38 +437,38 @@ func TestRepShopBuy(t *testing.T) {
 // O estado vai e volta pelo salvamento (e pelo z.recent de quem relogou rápido).
 func TestContractsSurviveRelog(t *testing.T) {
 	z := newTestZone(nil)
-	id := charWith(t, z, "collect_cores")
+	id := charWith(t, z, "collect_fundo_cores")
 	p, _ := atBoardLevel(z, id, game.MaxLevel, 0)
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "collect_cores")
-	p.pl.contracts.st.Taken["collect_cores"].N = 11
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "collect_fundo_cores")
+	p.pl.contracts.st.Taken["collect_fundo_cores"].N = 11
 	p.pl.contracts.rep.Points = map[string]int{game.FactionBastion: 777}
 	st := z.savedState(p)
-	if st.Contracts.Taken["collect_cores"].N != 11 || st.Reputation.Points[game.FactionBastion] != 777 {
+	if st.Contracts.Taken["collect_fundo_cores"].N != 11 || st.Reputation.Points[game.FactionBastion] != 777 {
 		t.Fatalf("salvamento: %+v %+v", st.Contracts, st.Reputation)
 	}
-	st.Contracts.Taken["collect_cores"].N = 99 // a cópia é independente
-	if p.pl.contracts.st.Taken["collect_cores"].N != 11 {
+	st.Contracts.Taken["collect_fundo_cores"].N = 99 // a cópia é independente
+	if p.pl.contracts.st.Taken["collect_fundo_cores"].N != 11 {
 		t.Fatal("o salvamento divide o mapa com a zona")
 	}
 	z.removePlayer(id)
 	q, _ := atBoardLevel(z, id, game.MaxLevel, 0)
-	if q.pl.contracts.st.Taken["collect_cores"].N != 11 || q.pl.contracts.rep.Of(game.FactionBastion) != 777 {
+	if q.pl.contracts.st.Taken["collect_fundo_cores"].N != 11 || q.pl.contracts.rep.Of(game.FactionBastion) != 777 {
 		t.Fatalf("relogar perdeu: %+v", q.pl.contracts)
 	}
 }
 
 func TestGMContractCommands(t *testing.T) {
 	z := newTestZone(nil)
-	id := charWith(t, z, "hunt_vale_golems")
+	id := charWith(t, z, "hunt_fundo_golems")
 	p, peer := atBoardLevel(z, id, game.MaxLevel, 0)
 	p.pl.gm = true
-	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_vale_golems")
+	contractCmd(z, p, pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, "hunt_fundo_golems")
 	z.command(p, "/contrato andar 1000")
-	if !p.pl.contracts.st.Taken["hunt_vale_golems"].Done || peer.lastContracts().Completed == "" {
+	if !p.pl.contracts.st.Taken["hunt_fundo_golems"].Done || peer.lastContracts().Completed == "" {
 		t.Fatal("/contrato andar não concluiu")
 	}
 	z.command(p, "/contrato dia")
-	if p.pl.contracts.st.Taken["hunt_vale_golems"] != nil {
+	if p.pl.contracts.st.Taken["hunt_fundo_golems"] != nil {
 		t.Fatal("/contrato dia não liberou o diário")
 	}
 	z.command(p, "/contrato rep guard 1600")

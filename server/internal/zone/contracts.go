@@ -388,16 +388,16 @@ func (z *Zone) buyRepOffer(p *entity, npcID uint32, id string) {
 		z.system(p, fmt.Sprintf("Essa oferta da %s pede o grau %s (você é %s).", f.Name, game.RepGradeNames[o.Grade], game.RepGradeNames[g]))
 		return
 	}
+	if _, ok := p.pl.ach.unlocked[o.Title]; ok && o.Title != "" {
+		z.system(p, "Você já tem esse título.")
+		return
+	}
 	inv := &p.pl.inv
 	if inv.gold < o.Price {
 		z.system(p, "Moedas insuficientes.")
 		return
 	}
 	if o.Title != "" {
-		if _, ok := p.pl.ach.unlocked[o.Title]; ok {
-			z.system(p, "Você já tem esse título.")
-			return
-		}
 		inv.gold -= o.Price
 		z.trackGold(p, "rep_shop", -o.Price)
 		z.inventoryChanged(p, false)

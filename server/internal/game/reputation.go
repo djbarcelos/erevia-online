@@ -1,10 +1,11 @@
 package game
 
 // Reputação com as facções (tunnel#157). Hoje são duas, ligadas ao roadmap
-// (docs/roadmap-areas.md, seção 7): a Ordem do Bastião Cinzento (o Vale e a Cripta) e a
-// Guarda de Vel'Aran (a cidade, as estradas dos Ermos e os eventos). A reputação só sobe,
-// com os contratos (contracts.go), e nunca é gasta: o grau abre as ofertas da loja da
-// facção, que custam moedas.
+// (docs/roadmap-areas.md, seção 7): a Ordem do Bastião Cinzento (o Fundo do Vale, a Vigília
+// Ossária e a Cripta) e a Guarda de Vel'Aran (a cidade, os Confins Partidos e os eventos).
+// A reputação só sobe, com os contratos (contracts.go), e nunca é gasta: o grau abre as
+// ofertas da loja da facção, que custam moedas (na escala do nível 40: um elite do 35 ao 40
+// rende ~180 moedas, ~50 mil por hora de caça).
 //
 // A loja é só horizontal: títulos, capas que repetem o poder do Manto das Cinzas (a capa
 // épica que o Ferreiro cria; "só muda o visual", como as peças de mesmo bônus do
@@ -26,9 +27,9 @@ type Faction struct {
 
 var Factions = []*Faction{
 	{ID: FactionBastion, Name: "Ordem do Bastião Cinzento", Color: "#b9c2d4",
-		Text: "Monges-guerreiros de Vel'Aran que vigiam a Cripta desde a fundação. Sobe com os contratos do Vale das Pedras Vivas e da Cripta Esquecida."},
+		Text: "Monges-guerreiros de Vel'Aran que vigiam a Cripta desde a fundação. Sobe com os contratos do Fundo do Vale, da Vigília Ossária e da Cripta Esquecida."},
 	{ID: FactionGuard, Name: "Guarda de Vel'Aran", Color: "#d9a441",
-		Text: "Quem segura as muralhas e as estradas. Sobe com os contratos dos Ermos Partidos, do Senhor dos Ossos e dos eventos da cidade (invasão e PvP)."},
+		Text: "Quem segura as muralhas e as estradas. Sobe com os contratos dos Confins Partidos, com a coleta de materiais e com os raros e os eventos da cidade (invasão e PvP)."},
 }
 
 // FactionByID: a facção pelo id (nil se não existir).
@@ -139,13 +140,13 @@ var RepOffers = []*RepOffer{
 		Text: "Cinco Pergaminhos de Retorno, 20% mais baratos."},
 	{ID: "bastion_ench_armor", Faction: FactionBastion, Grade: RepHonored, Item: "scroll_ench_armor", Count: 1, Price: 540,
 		Text: "Pergaminho de Encantar Armadura, 10% mais barato que no Ferreiro."},
-	{ID: "bastion_title_watch", Faction: FactionBastion, Grade: RepHonored, Title: "rep_bastion_honored", Price: 3000,
+	{ID: "bastion_title_watch", Faction: FactionBastion, Grade: RepHonored, Title: "rep_bastion_honored", Price: 15000,
 		Text: "Título «Vigia da Cripta», embaixo do nome, para todos verem."},
-	{ID: "bastion_cape", Faction: FactionBastion, Grade: RepRevered, Item: "cape_rep_bastion", Count: 1, Price: 9000,
+	{ID: "bastion_cape", Faction: FactionBastion, Grade: RepRevered, Item: "cape_rep_bastion", Count: 1, Price: 30000,
 		Text: "Manto do Bastião Cinzento: o mesmo poder do Manto das Cinzas, nas cores da Ordem."},
-	{ID: "bastion_ench_armor_b", Faction: FactionBastion, Grade: RepExalted, Item: "scroll_ench_armor_b", Count: 1, Price: 5000,
+	{ID: "bastion_ench_armor_b", Faction: FactionBastion, Grade: RepExalted, Item: "scroll_ench_armor_b", Count: 1, Price: 8000,
 		Text: "Pergaminho Abençoado de Armadura (falhar volta a +0, não quebra)."},
-	{ID: "bastion_title_hand", Faction: FactionBastion, Grade: RepExalted, Title: "rep_bastion_exalted", Price: 10000,
+	{ID: "bastion_title_hand", Faction: FactionBastion, Grade: RepExalted, Title: "rep_bastion_exalted", Price: 50000,
 		Text: "Título «Mão do Bastião»."},
 	// Guarda de Vel'Aran.
 	{ID: "guard_mp_l", Faction: FactionGuard, Grade: RepFriendly, Item: "potion_mp_l", Count: 10, Price: 720,
@@ -154,13 +155,13 @@ var RepOffers = []*RepOffer{
 		Text: "Cinco Pergaminhos de Retorno, 20% mais baratos."},
 	{ID: "guard_ench_weapon", Faction: FactionGuard, Grade: RepHonored, Item: "scroll_ench_weapon", Count: 1, Price: 1350,
 		Text: "Pergaminho de Encantar Arma, 10% mais barato que no Ferreiro."},
-	{ID: "guard_title_friend", Faction: FactionGuard, Grade: RepHonored, Title: "rep_guard_honored", Price: 3000,
+	{ID: "guard_title_friend", Faction: FactionGuard, Grade: RepHonored, Title: "rep_guard_honored", Price: 15000,
 		Text: "Título «Amigo da Guarda»."},
-	{ID: "guard_cape", Faction: FactionGuard, Grade: RepRevered, Item: "cape_rep_guard", Count: 1, Price: 9000,
+	{ID: "guard_cape", Faction: FactionGuard, Grade: RepRevered, Item: "cape_rep_guard", Count: 1, Price: 30000,
 		Text: "Capa da Guarda de Vel'Aran: o mesmo poder do Manto das Cinzas, no azul e dourado da muralha."},
-	{ID: "guard_ench_weapon_b", Faction: FactionGuard, Grade: RepExalted, Item: "scroll_ench_weapon_b", Count: 1, Price: 12000,
+	{ID: "guard_ench_weapon_b", Faction: FactionGuard, Grade: RepExalted, Item: "scroll_ench_weapon_b", Count: 1, Price: 18000,
 		Text: "Pergaminho Abençoado de Arma (falhar volta a +0, não quebra)."},
-	{ID: "guard_title_shield", Faction: FactionGuard, Grade: RepExalted, Title: "rep_guard_exalted", Price: 10000,
+	{ID: "guard_title_shield", Faction: FactionGuard, Grade: RepExalted, Title: "rep_guard_exalted", Price: 50000,
 		Text: "Título «Escudo de Vel'Aran»."},
 }
 

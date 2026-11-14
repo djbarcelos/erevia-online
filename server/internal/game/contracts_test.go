@@ -9,10 +9,41 @@ import (
 
 var brt = time.FixedZone("BRT", -3*3600) // o fuso dos eventos da zona (zone.brasilia)
 
+// "Perto do nível máximo": os 5 últimos níveis, saindo de MaxLevel.
 func TestContractMinLevel(t *testing.T) {
-	// "Perto do nível máximo": até 5 níveis abaixo dele, e dentro da caça do Vale (20+).
-	if ContractMinLevel > MaxLevel || ContractMinLevel < MaxLevel-5 || ContractMinLevel < 20 {
+	if ContractMinLevel != MaxLevel-5 || ContractMinLevel < 1 {
 		t.Fatalf("ContractMinLevel = %d com MaxLevel = %d", ContractMinLevel, MaxLevel)
+	}
+}
+
+// No nível máximo os diários não são triviais: cada caça e cada chefe mira monstros de uma
+// área cujo topo chega perto do máximo, e a coleta usa uma área do 30 ao 40.
+func TestContractTargetsNotTrivial(t *testing.T) {
+	top := map[string]int{} // área → maior nível de monstro
+	for _, sp := range DefaultSpawns() {
+		if sp.Region != "" {
+			top[sp.Region] = max(top[sp.Region], sp.LevelMax, sp.LevelMin)
+		}
+	}
+	for _, c := range ContractList {
+		if c.Slot == ContractWeekly {
+			continue
+		}
+		if c.Area == "" || top[c.Area] < MaxLevel-5 {
+			t.Errorf("%s: área %q chega só ao nível %d (o máximo é %d)", c.ID, c.Area, top[c.Area], MaxLevel)
+		}
+		if c.Goal != CGoalKill {
+			continue
+		}
+		found := false
+		for _, sp := range DefaultSpawns() {
+			if sp.Region == c.Area && c.Matches(sp.Monster) && max(sp.LevelMax, sp.LevelMin) >= c.MinLevel {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s: nenhum %s de nível %d+ nasce em %s", c.ID, c.Target, c.MinLevel, c.Area)
+		}
 	}
 }
 
@@ -51,7 +82,7 @@ func TestContractData(t *testing.T) {
 	// Cada vaga tem opção nos dois dias da região, e o semanal tem pelo menos 3 (a permutação
 	// sem repetir precisa de 3 para não depender do ciclo anterior).
 	for _, slot := range DailySlots {
-		for _, region := range []string{AreaVale, AreaErmos} {
+		for _, region := range ContractRegions {
 			if len(contractPool(slot, region)) == 0 {
 				t.Errorf("vaga %d sem contrato no dia %s", slot, region)
 			}
@@ -133,19 +164,19 @@ func TestDrawNeverRepeatsYesterday(t *testing.T) {
 	}
 }
 
-// A caça do dia não enche a coleta do dia: o material da coleta não cai dos monstros da caça
-// (o dia da região separa o Vale dos Ermos).
+// A caça e o chefe do dia não enchem a coleta do dia: as três vagas ficam sempre em áreas
+// diferentes (e a coleta só conta o saque de monstros que nasceram na área dela).
 func TestDailyHuntDoesNotFillCollect(t *testing.T) {
 	for char := uint32(1); char <= 40; char++ {
 		for day := 20700; day < 20760; day++ {
 			list := DailyContracts(char, day)
-			hunt, collect := list[0], list[2]
-			for _, mon := range splitTargets(hunt.Target) {
-				for _, l := range Monsters[mon].Loot {
-					if collect.Matches(l.ItemID) {
-						t.Fatalf("dia %d: a caça %s deixa cair %s, da coleta %s", day, hunt.ID, l.ItemID, collect.ID)
-					}
-				}
+			hunt, boss, collect := list[0], list[1], list[2]
+			if hunt.Area == boss.Area || hunt.Area == collect.Area || boss.Area == collect.Area || hunt.Area != hunt.Region {
+				t.Fatalf("dia %d: caça em %s, chefe em %s, coleta em %s", day, hunt.Area, boss.Area, collect.Area)
+			}
+			if !InContractArea(collect.Area, contractAreas[collect.Area][0].X, contractAreas[collect.Area][0].Z) ||
+				InContractArea(collect.Area, contractAreas[hunt.Area][0].X, contractAreas[hunt.Area][0].Z) {
+				t.Fatalf("dia %d: as áreas da coleta e da caça se encostam", day)
 			}
 		}
 	}
@@ -223,26 +254,26 @@ func TestContractStateRefresh(t *testing.T) {
 
 func TestNormalContracts(t *testing.T) {
 	st := NormalContracts(ContractState{Day: 5, Taken: map[string]*ContractProgress{
-		"nao_existe":       {N: 3},
-		"hunt_vale_golems": {N: 1_000_000},
-		"collect_cores":    {N: -4},
-		"weekly_pvp":       {N: 1, Seen: []uint32{1, 2, 3, 4, 5, 6}},
-		"weekly_ozrhal":    {Done: true},
-		"boss_bone_lord":   nil,
+		"nao_existe":          {N: 3},
+		"hunt_fundo_golems":   {N: 1_000_000},
+		"collect_fundo_cores": {N: -4},
+		"weekly_pvp":          {N: 1, Seen: []uint32{1, 2, 3, 4, 5, 6}},
+		"weekly_ozrhal":       {Done: true},
+		"boss_fundo_elders":   nil,
 	}})
-	if len(st.Taken) != 4 || st.Taken["hunt_vale_golems"].N != 100 || st.Taken["collect_cores"].N != 0 ||
+	if len(st.Taken) != 4 || st.Taken["hunt_fundo_golems"].N != 70 || st.Taken["collect_fundo_cores"].N != 0 ||
 		len(st.Taken["weekly_pvp"].Seen) != 3 || st.Taken["weekly_ozrhal"].N != 1 {
 		t.Fatalf("estado limpo errado: %+v", st.Taken)
 	}
 }
 
 func TestContractRewardXP(t *testing.T) {
-	c := Contracts["hunt_vale_golems"]
+	c := Contracts["hunt_fundo_golems"]
 	if got, want := c.RewardXP(MaxLevel), int64(float64(MasteryPointXP)*c.XPShare+0.5); got != want {
 		t.Fatalf("no nível máximo a XP é da barra de Maestria: %d, esperava %d", got, want)
 	}
-	if got, want := c.RewardXP(28), int64(float64(XPToNext(28))*c.XPShare+0.5); got != want {
-		t.Fatalf("no 28: %d, esperava %d", got, want)
+	if got, want := c.RewardXP(ContractMinLevel), int64(float64(XPToNext(ContractMinLevel))*c.XPShare+0.5); got != want {
+		t.Fatalf("no %d: %d, esperava %d", ContractMinLevel, got, want)
 	}
 }
 
@@ -252,8 +283,9 @@ func TestContractAreas(t *testing.T) {
 		x, z float64
 		in   bool
 	}{
-		{AreaVale, 0, -270, true}, {AreaVale, 30, -300, true}, {AreaVale, 0, -132, false},
-		{AreaErmos, 0, -132, true}, {AreaErmos, -128, 5, true}, {AreaErmos, 90, 0, false}, {AreaErmos, 0, 0, false},
+		{AreaFundo, 0, -300, true}, {AreaFundo, 0, -250, false},
+		{AreaVigil, 140, 72, true}, {AreaVigil, 72, 140, true}, {AreaVigil, 108, 108, false},
+		{AreaConfins, -122, 122, true}, {AreaConfins, 122, -122, true}, {AreaConfins, 0, 0, false},
 		{"", 1, 2, true},
 	}
 	for _, c := range cases {
@@ -261,17 +293,10 @@ func TestContractAreas(t *testing.T) {
 			t.Errorf("InContractArea(%q, %v, %v) != %v", c.area, c.x, c.z, c.in)
 		}
 	}
-	// Os monstros de cada área nascem dentro dela (DefaultSpawns).
-	for _, s := range DefaultSpawns() {
-		switch s.Monster {
-		case "stone_golem":
-			if !InContractArea(AreaVale, s.X, s.Z) {
-				t.Errorf("o Vale (%v, %v) fora da área", s.X, s.Z)
-			}
-		case "bone_lord":
-			if !InContractArea(AreaErmos, s.X, s.Z) {
-				t.Errorf("o Senhor dos Ossos (%v, %v) fora dos Ermos", s.X, s.Z)
-			}
+	// Toda área da rotação existe nos spawns.
+	for _, r := range ContractRegions {
+		if len(contractAreas[r]) == 0 {
+			t.Errorf("a área %s não tem spawn", r)
 		}
 	}
 }
