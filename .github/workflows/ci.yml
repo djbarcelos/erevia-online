@@ -44,6 +44,19 @@ jobs:
           cache-dependency-path: server/go.sum
       - run: go vet ./...
       - run: go test ./... -race -count=1
+      # Fuzz da entrada dos jogadores (README): o corpus de testdata/fuzz já rodou no go test
+      # acima; aqui cada alvo procura entradas novas por alguns segundos.
+      - name: Fuzz (10 s por alvo)
+        run: |
+          go test ./internal/zone -run '^$' -fuzz '^FuzzZoneBytes$' -fuzztime 10s
+          go test ./internal/zone -run '^$' -fuzz '^FuzzZoneSemantic$' -fuzztime 10s
+          go test ./internal/net -run '^$' -fuzz '^FuzzConnBytes$' -fuzztime 10s
+      - name: Guardar a entrada que o fuzz achou
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-testdata
+          path: server/internal/*/testdata/fuzz
 
   client:
     name: Cliente (tipos + build)
