@@ -155,7 +155,7 @@ func cut(s string, n int) string {
 
 var mdEscaper = strings.NewReplacer(
 	`\`, `\\`, "*", `\*`, "_", `\_`, "~", `\~`, "`", "\\`", "|", `\|`, ">", `\>`,
-	"#", `\#`, "[", `\[`, "]", `\]`, "(", `\(`, ")", `\)`, "@", "@​", "<", `\<`,
+	"#", `\#`, "[", `\[`, "]", `\]`, "@", "@​", "<", `\<`,
 )
 
 // plain escapa o markdown de um texto que veio de fora (o /bug de um jogador não formata,
