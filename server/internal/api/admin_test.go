@@ -127,6 +127,7 @@ func TestAdminHiddenFromNonGM(t *testing.T) {
 			{"GET", "/api/admin/me", ""},
 			{"GET", "/api/admin/overview", ""},
 			{"GET", "/api/admin/gm-log", ""},
+			{"GET", "/api/admin/progression", ""},
 			{"GET", "/api/admin/nao-existe", ""},
 			{"POST", "/api/admin/overview", `{}`}, // método errado: 404, não 405
 			{"POST", "/api/admin/test/echo", `{"target":"x"}`},
@@ -210,6 +211,37 @@ func TestAdminOverviewForGM(t *testing.T) {
 	json.NewDecoder(gm.req("GET", "/api/admin/me", "", nil).Body).Decode(&me)
 	if me.DisplayName != "Mestre" || me.AccountID == 0 {
 		t.Fatalf("me = %+v", me)
+	}
+}
+
+// A seção Progressão traz as cinco views da 00018, com as colunas na ordem do SQL.
+func TestAdminProgressionForGM(t *testing.T) {
+	e := newAdminEnv(t, AdminConfig{})
+	gm := e.login("Mestre", true)
+	player := e.login("Jogador", false)
+	player.req("POST", "/api/characters", `{"name":"Heroi","class":"mage"}`, nil)
+
+	resp := gm.req("GET", "/api/admin/progression", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("progression = %d %s", resp.StatusCode, readBody(resp))
+	}
+	var out struct{ Tables []store.ProgressionTable }
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]store.ProgressionTable{}
+	for _, tb := range out.Tables {
+		ids[tb.ID] = tb
+	}
+	for _, id := range []string{"v_level_playtime", "v_xp_sources", "v_level_kills_deaths", "v_gold_per_hour", "v_level_reached"} {
+		if len(ids[id].Columns) == 0 {
+			t.Errorf("%s ausente ou sem colunas: %+v", id, ids[id])
+		}
+	}
+	// O funil vem de characters: o personagem criado chegou ao nível 1.
+	funnel := ids["v_level_reached"]
+	if len(funnel.Rows) != 30 || funnel.Columns[0] != "nivel" || funnel.Columns[1] != "chegaram" || funnel.Rows[0][1] != float64(1) {
+		t.Fatalf("funil = %v %v", funnel.Columns, funnel.Rows[:min(2, len(funnel.Rows))])
 	}
 }
 

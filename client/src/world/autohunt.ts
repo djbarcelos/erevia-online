@@ -2,18 +2,23 @@
  * Auto-caça no cliente: escolhe o monstro vivo mais perto dentro do raio, manda atacar,
  * usa as skills da barra quando prontas e toma poção abaixo do limite. Manda só os mesmos
  * comandos que um jogador mandaria (o servidor valida tudo) e num ritmo baixo (4×/s).
+ *
+ * Com filtro (o "Caçar aqui" das missões, ver questgo.ts) só mira nos monstros com aqueles
+ * nomes; ligada pelo F/AUTO não tem filtro e caça como sempre.
  */
 
 import { SkillTarget, type SelfStats, type SkillInfo } from "../gen/erevia/v1/game_pb";
 import { settings } from "../ui/kit";
+import { huntAllows } from "./questgo";
 
 export interface AutoHuntDeps {
   dead(): boolean;
   stats(): SelfStats | null;
-  /** Monstro vivo mais perto (distância em metros). */
-  nearestMonster(): { id: number; dist: number } | null;
+  /** Monstro vivo mais perto (distância em metros); com filtro, só os desses nomes. */
+  nearestMonster(names: readonly string[] | null): { id: number; dist: number } | null;
   targetId(): number;
   isEnemy(id: number): boolean;
+  nameOf(id: number): string | undefined;
   distanceTo(id: number): number | null;
   /** Seleciona e ataca. */
   attack(id: number): void;
@@ -38,17 +43,28 @@ export class AutoHunt {
   kills = 0;
   since = 0;
   xpStart = 0n;
+  /** Nomes dos monstros que valem como alvo (null = qualquer um). */
+  filter: readonly string[] | null = null;
+  private label = "";
 
   constructor(private d: AutoHuntDeps) {}
 
-  start(): void {
+  /** Liga; com `only`, só caça os monstros desses nomes (label vai na pílula). */
+  start(only: { names: readonly string[]; label: string } | null = null): void {
     if (this.on) return;
     this.on = true;
+    this.filter = only ? only.names : null;
+    this.label = only?.label ?? "";
     this.kills = 0;
     this.since = performance.now();
     this.xpStart = this.d.stats()?.xp ?? 0n;
     this.current = 0;
     this.timer = window.setInterval(() => this.tick(), 250);
+  }
+
+  /** Ligada pelo "Caçar aqui" (com filtro), não pelo F/AUTO. */
+  get questMode(): boolean {
+    return this.on && this.filter !== null;
   }
 
   stop(reason = ""): void {
@@ -74,7 +90,7 @@ export class AutoHunt {
   status(): string {
     const secs = Math.floor((performance.now() - this.since) / 1000);
     const xp = Number((this.d.stats()?.xp ?? this.xpStart) - this.xpStart);
-    return `Auto-caça · ${this.kills} ${this.kills === 1 ? "abate" : "abates"} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} · +${Math.max(0, xp).toLocaleString("pt-BR")} XP`;
+    return `${this.label ? `Caçar aqui: ${this.label}` : "Auto-caça"} · ${this.kills} ${this.kills === 1 ? "abate" : "abates"} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} · +${Math.max(0, xp).toLocaleString("pt-BR")} XP`;
   }
 
   private tick(): void {
@@ -96,9 +112,9 @@ export class AutoHunt {
 
     // Alvo: mantém o atual se ainda for inimigo; senão o mais perto dentro do raio.
     let target = d.targetId();
-    if (!d.isEnemy(target)) {
+    if (!d.isEnemy(target) || !huntAllows(this.filter, d.nameOf(target))) {
       if (s.autoLoot && d.lootNearby(10)) return; // pega o saque antes do próximo
-      const n = d.nearestMonster();
+      const n = d.nearestMonster(this.filter);
       if (!n || n.dist > s.autoRadius) {
         this.current = 0;
         return;
