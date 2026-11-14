@@ -13,6 +13,8 @@ import {
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { ItemKind, type GroundItem } from "../gen/erevia/v1/game_pb";
 import { GRADE_COLOR, itemLabel, type ItemStore } from "../ui/items";
+import { resourceFailed } from "../net/invariants";
+import type { PickAreas } from "./pick";
 
 /** Até que distância o nome do item no chão aparece (m). */
 const LABEL_DISTANCE = 22;
@@ -50,6 +52,8 @@ export class GroundLoot {
     private gui: AdvancedDynamicTexture,
     private store: ItemStore,
     private localId: number,
+    /** Áreas de clique (cilindros testados em código, sem malha na cena). */
+    private picks: PickAreas,
   ) {
     void this.loadModel();
   }
@@ -64,7 +68,8 @@ export class GroundLoot {
       mesh.bakeCurrentTransformIntoVertices();
       for (const r of c.rootNodes) if (r !== mesh) r.dispose();
       proto = mesh;
-    } catch {
+    } catch (err) {
+      resourceFailed("glb", "/models/props/loot_sack.glb", err);
       // Sem o modelo: uma caixinha.
       proto = MeshBuilder.CreateBox("loot-box", { size: 0.4 }, this.scene);
       const m = new StandardMaterial("loot-box", this.scene);
@@ -122,13 +127,8 @@ export class GroundLoot {
       sack.parent = root;
       sack.rotation.y = Math.random() * Math.PI * 2;
       sack.isPickable = false;
-      // Área de clique maior que o saquinho (invisível: não é desenhada).
-      const hit = MeshBuilder.CreateCylinder(`loot-hit${it.id}`, { height: 0.9, diameter: 1 }, this.scene);
-      hit.parent = root;
-      hit.position.y = 0.45;
-      hit.isVisible = false;
-      hit.isPickable = true;
-      hit.metadata = { lootId: it.id };
+      // Área de clique maior que o saquinho (cilindro testado em código, world/pick.ts).
+      this.picks.addLoot(it.id, root, 0.5, 0.9);
       const beamProto = this.beams.get(info.grade);
       let beam: InstancedMesh | null = null;
       if (beamProto && !gold) {
@@ -163,6 +163,7 @@ export class GroundLoot {
       d.label.dispose();
       d.root.dispose(false, false); // instâncias; o material é compartilhado
       this.drops.delete(id);
+      this.picks.removeLoot(id);
     }
   }
 

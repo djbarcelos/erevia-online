@@ -29,6 +29,15 @@ export interface GMLogEntry {
   detail: string;
 }
 
+/** Uma view da progressão (migração 00018), com as colunas na ordem do SQL. */
+export interface ProgressionTable {
+  id: string;
+  title: string;
+  note: string;
+  columns: string[];
+  rows: (string | number | boolean | null)[][];
+}
+
 export class AdminError extends Error {
   constructor(
     readonly status: number,
@@ -42,7 +51,7 @@ export class AdminError extends Error {
  * Todo pedido leva o cabeçalho X-Erevia-Admin: o servidor exige nos de escrita (contra
  * CSRF: outra origem não consegue mandá-lo sem preflight) e ignora nos de leitura.
  */
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { "X-Erevia-Admin": "1" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   let res: Response;
@@ -70,4 +79,5 @@ export const adminApi = {
   me: () => call<{ accountId: number; displayName: string }>("GET", "/api/admin/me"),
   overview: () => call<Overview>("GET", "/api/admin/overview"),
   gmLog: (limit = 10) => call<{ entries: GMLogEntry[] }>("GET", `/api/admin/gm-log?limit=${limit}`),
+  progression: () => call<{ tables: ProgressionTable[] }>("GET", "/api/admin/progression"),
 };

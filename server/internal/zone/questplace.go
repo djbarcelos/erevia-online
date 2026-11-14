@@ -137,5 +137,12 @@ func (z *Zone) stepInfo(p *entity, s game.QuestStep, progress int) *pb.QuestStep
 		info.X, info.Z, info.Radius = float32(pl.X), float32(pl.Z), float32(pl.Radius)
 		info.PlaceName = pl.Name
 	}
+	if s.Goal == game.GoalKill {
+		for _, id := range s.Monsters() {
+			if def := game.Monsters[id]; def != nil {
+				info.Monsters = append(info.Monsters, def.Name)
+			}
+		}
+	}
 	return info
 }

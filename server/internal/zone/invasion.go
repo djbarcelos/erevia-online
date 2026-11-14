@@ -429,17 +429,18 @@ func (z *Zone) invRewards(v *invasion, won bool) string {
 			}
 		}
 		z.inventoryChanged(p, false)
-		var xp int64
-		if p.level < game.MaxLevel {
-			xp = int64(math.Round(float64(game.XPToNext(p.level)) * invRewardXP * w * mult))
+		bar := game.XPToNext(p.level)
+		if p.level >= game.MasteryLevel {
+			bar = game.MasteryPointXP // no 30, a recompensa enche a barra de Maestria
 		}
+		xp := int64(math.Round(float64(bar) * invRewardXP * w * mult))
 		if xp > 0 {
 			parts = append(parts, fmt.Sprintf("%d de XP", xp))
 		}
 		z.system(p, fmt.Sprintf("Invasão: %d abates, %.0f%% da contribuição do melhor defensor. Recompensa: %s.",
 			v.kills[p.id], w*100, strings.Join(parts, ", ")))
 		if xp > 0 {
-			z.grantXP(p, xp)
+			z.grantXPFrom(p, xpInvasion, xp)
 		}
 		z.track(p, "invasion", v.reason, int64(math.Round(s.points)), map[string]any{"won": won, "rank": rank + 1, "kills": v.kills[p.id]})
 		if won {

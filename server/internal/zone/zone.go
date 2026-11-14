@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -105,7 +106,12 @@ type JoinInfo struct {
 	Title        string
 	// Especialização (segunda classe; "" = nenhuma).
 	Spec string
-	Peer Peer
+	// Maestria (nível 30): barra, bônus diário e pontos da árvore.
+	Mastery game.MasteryState
+	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
+	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
+	LoadedAt time.Time
+	Peer     Peer
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -129,6 +135,7 @@ type SavedState struct {
 	Achievements game.AchievementState
 	Title        string
 	Spec         string // especialização ("" = nenhuma)
+	Mastery      game.MasteryState
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -193,7 +200,7 @@ type frame struct {
 	levelUps []*pb.LevelUp
 	ends     []*pb.EffectEnd
 	casts    []*pb.SkillCast
-	// Avisos no chão do raid boss (começo, golpe e cancelamento).
+	// Avisos no chão das habilidades de monstro (começo, golpe e cancelamento).
 	telegraphs []*pb.Telegraph
 }
 
@@ -245,6 +252,10 @@ type Zone struct {
 	telemetry     chan GameEvent
 	eventSink     EventSink
 	droppedEvents int
+	xpTally       xpTallies     // XP por fonte, gravada a cada minuto (xptally.go)
+	stopped       chan struct{} // fechado quando a zona para (a telemetria espera o fim das sessões)
+	telemetryDone chan struct{} // fechado quando a telemetria gravou o que faltava (TelemetryDone)
+	telemetryOnce sync.Once
 	bossBackend   BossBackend
 	bossJobs      chan BossData
 	telegraphs    []*telegraph
@@ -266,6 +277,9 @@ type Zone struct {
 	xp2          xp2State
 	eventBackend EventBackend
 	eventJobs    chan EventData
+
+	paths []*entity // fila de caminhos longos (ver pathqueue.go)
+	adm *adminState // portal de administração (admin_actions.go e admin_ops.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -293,6 +307,8 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		storages:       map[int64]*storage{},
 		modJobs:        make(chan modJob, modJobQueue),
 		telemetry:      make(chan GameEvent, telemetryQueue),
+		stopped:        make(chan struct{}),
+		telemetryDone:  make(chan struct{}),
 		bossJobs:       make(chan BossData, 16),
 		eventJobs:      make(chan EventData, 16),
 		socialJobs:     make(chan socialJob, socialJobQueue),
@@ -388,6 +404,8 @@ func (z *Zone) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			z.runSystem(sysXPTally, z.endSessions) // fim de sessão e XP de quem estava online (telemetry.go)
+			close(z.stopped)
 			z.saveAll(true)
 			if z.saves != nil {
 				close(z.saves)
@@ -483,7 +501,7 @@ func (z *Zone) get(id uint32) *entity {
 }
 
 func (z *Zone) onJoin(info JoinInfo) {
-	if z.refuseGone(info) {
+	if z.refuseGone(info) || z.refuseAdminStale(info) {
 		return
 	}
 	// Mesmo personagem conectado em outro lugar: derruba a sessão antiga.
@@ -505,6 +523,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Quests = st.Quests
 		info.Achievements, info.Title = st.Achievements, st.Title
 		info.Spec = st.Spec
+		info.Mastery = st.Mastery
 		delete(z.recent, info.ID)
 	}
 
@@ -534,8 +553,9 @@ func (z *Zone) onJoin(info JoinInfo) {
 			accountID: info.AccountID,
 			karma:     max(0, info.Karma), pks: max(0, info.PKs), pvpKills: max(0, info.PvPKills),
 			gm: info.GM, mutedUntil: info.MutedUntil, userAgent: truncateRunes(info.UserAgent, maxUserAgent),
-			quests: loadQuests(info.Quests, level),
-			ach:    loadAchievements(info.Achievements, info.Title),
+			quests:  loadQuests(info.Quests, level),
+			ach:     loadAchievements(info.Achievements, info.Title),
+			mastery: loadMastery(info.Mastery),
 		},
 	}
 	p.pl.sentPvp = z.pvpState(p)
@@ -609,7 +629,9 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.sendQuests(p, "")
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
 	z.achOnJoin(p)
+	z.masteryOnJoin(p)
 	z.eventsOnJoin(p)
+	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
 			z.sendAnyCooldown(p, id, ready-z.now)
@@ -627,8 +649,9 @@ func (z *Zone) onMove(e moveEvent) {
 	if !ok || p.dead || !z.spendAction(p) {
 		return
 	}
-	// NaN passa pelo clampToZone (min/max de NaN é NaN) e viraria a posição do jogador.
-	if !finite(e.x) || !finite(e.z) {
+	// NaN passa pelo clamp (min/max com NaN dão NaN) e deixaria o personagem fora do mapa
+	// para sempre; ±Inf o clamp já leva para a borda.
+	if math.IsNaN(e.x) || math.IsNaN(e.z) {
 		return
 	}
 	p.clearAction() // clicar no chão cancela o ataque
@@ -636,7 +659,7 @@ func (z *Zone) onMove(e moveEvent) {
 	if p.stunned(z.now) {
 		return
 	}
-	z.goTo(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.bounds()))
+	z.requestPath(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.bounds()))
 }
 
 // onStop para o andar livre. Não gasta token (parar não é abusável, e perder o pedido
@@ -646,6 +669,7 @@ func (z *Zone) onStop(e stopEvent) {
 	if !ok || p.dead || p.act.kind != actNone {
 		return
 	}
+	p.pl.pathGoal = nil
 	p.stopMoving()
 }
 
@@ -725,6 +749,7 @@ func (z *Zone) removePlayer(id uint32) {
 		delete(z.byName, strings.ToLower(p.name))
 	}
 	z.forgetTarget(id)
+	z.endXPTally(p)
 	z.track(p, "session", "end", int64(z.cfg.Clock().Sub(p.pl.joinedAt).Seconds()), nil)
 	if p.pl.trade != nil {
 		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
@@ -750,6 +775,7 @@ func (z *Zone) update(dt float64) {
 	z.tick++
 	z.now += dt
 	z.runSystem(sysDaytime, z.updateDaytime)
+	z.runSystem(sysPaths, z.updatePaths)
 
 	if z.now >= z.nextAura {
 		z.nextAura = z.now + auraEvery
@@ -788,6 +814,8 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysLeaveTown, z.checkLeaveTown)
 		z.runSystem(sysTrades, z.checkTrades)
 		z.runSystem(sysXP2, z.updateXP2)
+		z.runSystem(sysXPTally, z.flushXPTallies)
+		z.runSystem(sysAdminOps, z.updateAdminOps)
 		if len(z.pending) > 0 {
 			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}
@@ -908,6 +936,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
+		Mastery: p.pl.mastery.save(),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1

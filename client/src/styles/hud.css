@@ -652,6 +652,71 @@ section.party {
   border-left-color: var(--gold);
 }
 
+/* Cabeçalho do painel: recolher à esquerda, "Diário" (J) à direita */
+.q-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hud-side .quests.collapsed > .q-panel-head {
+  display: flex;
+}
+
+.q-journal {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(10, 8, 14, 0.6);
+  color: var(--gold);
+  font: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  padding: 1px 8px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.q-journal:hover {
+  border-color: var(--line-strong);
+  color: var(--gold-hi);
+}
+
+.q-empty {
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.72rem;
+}
+
+/* Recém-aceita com o painel cheio: some sozinha se não for fixada (quest-pins.ts). A
+   barrinha que encolhe é uma animação de transform no compositor, sem JS por quadro. */
+.quest.temp {
+  position: relative;
+  border-left-color: var(--warn);
+  background: rgba(240, 198, 107, 0.07);
+}
+
+.quest.temp::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--warn);
+  transform-origin: left;
+  animation: q-temp var(--q-left, 8s) linear forwards; /* o que falta (hud.ts) */
+}
+
+@keyframes q-temp {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 .quest.tracked b::before {
   content: "◎ ";
   color: var(--gold-hi);
@@ -661,6 +726,51 @@ section.party {
   color: var(--warn);
   font-weight: 600;
   font-size: 0.82rem;
+}
+
+/* Título da missão com o botão "Ir" (questgo.ts) à direita */
+.q-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.quest .q-go {
+  padding: 1px 9px;
+  min-height: 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  pointer-events: auto;
+}
+
+/* Pílula do "Ir" (andando, pedra, "Caçar aqui"), acima da pílula da auto-caça */
+.go-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 128px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 4px 6px 4px 14px;
+  border-radius: 999px;
+  background: rgba(10, 8, 14, 0.82);
+  border: 1px solid var(--gold);
+  color: var(--gold-hi);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.go-pill > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.go-pill[hidden] {
+  display: none;
 }
 
 .q-step {
@@ -1586,6 +1696,12 @@ section.party {
   font-size: 0.7rem;
 }
 
+.hud-screen.touch .go-pill {
+  bottom: auto;
+  top: calc(100px + var(--safe-t));
+  font-size: 0.7rem;
+}
+
 .hud-screen.touch .loot-feed {
   right: calc(250px + var(--safe-r));
   bottom: calc(60px + var(--safe-b));
@@ -1617,6 +1733,10 @@ section.party {
 
   .hud-screen.touch .auto-pill {
     top: calc(178px + var(--safe-t));
+  }
+
+  .hud-screen.touch .go-pill {
+    top: calc(212px + var(--safe-t));
   }
 
   .hud-screen.touch .hud-side {
@@ -2079,4 +2199,9 @@ section.party {
   height: 100%;
   width: 0;
   background: linear-gradient(90deg, #5fa8ff, #bfe3ff);
+}
+
+.go-pill .go-actions {
+  display: flex;
+  gap: 6px;
 }

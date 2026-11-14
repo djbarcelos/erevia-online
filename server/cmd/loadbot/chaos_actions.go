@@ -49,6 +49,7 @@ var chaosActions = []chaosAction{
 	{"skills", 2, actLearn},
 	{"atalhos", 1, actHotbar},
 	{"especializacao", 1, actSpec},
+	{"maestria", 1, actMastery},
 	{"amigos", 1, actFriend},
 	{"correio", 2, actMail},
 	{"ranking", 1, actRanking},
@@ -820,6 +821,20 @@ func actSpec(b *chaosBot, s *chaosSession, r [6]uint64) {
 	}
 	s.mu.Unlock()
 	b.emit(s, label, &pb.ClientMessage{Msg: &pb.ClientMessage_SpecCmd{SpecCmd: m}})
+}
+
+// actMastery: Maestria do nível 30 (pedir a árvore, gastar ponto num nó, devolver os pontos),
+// às vezes com tipo ou nó que não existem.
+func actMastery(b *chaosBot, s *chaosSession, r [6]uint64) {
+	m := &pb.MasteryCmd{Kind: pb.MasteryCmdKind(1 + pickN(r[1], 3))}
+	if m.Kind == pb.MasteryCmdKind_MASTERY_CMD_SPEND {
+		m.Node = game.MasteryNodes[pickN(r[2], len(game.MasteryNodes))].ID
+	}
+	label := "maestria:" + strings.ToLower(strings.TrimPrefix(m.Kind.String(), "MASTERY_CMD_"))
+	if bad(r[3], 15) {
+		m.Kind, m.Node, label = pb.MasteryCmdKind(pickN(r[4], 6)), []string{"", "nao_existe", strings.Repeat("n", 200)}[pickN(r[5], 3)], "maestria!lixo"
+	}
+	b.emit(s, label, &pb.ClientMessage{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: m}})
 }
 
 func actFriend(b *chaosBot, s *chaosSession, r [6]uint64) {

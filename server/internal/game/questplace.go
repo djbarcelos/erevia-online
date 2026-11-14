@@ -46,6 +46,12 @@ func HuntPlace(spawns []Spawn, monsters []string, level int, px, pz float64) (Qu
 	var best QuestPlace
 	bestGap, bestDist := math.MaxInt, math.Inf(1)
 	found := false
+	var owned []Spawn // áreas com dono: o círculo de um anel não cai nelas (como em ExpandSpawns)
+	for _, s := range spawns {
+		if s.Owned() {
+			owned = append(owned, s)
+		}
+	}
 	for i, s := range spawns {
 		def := Monsters[s.Monster]
 		if def == nil || s.Count < 1 {
@@ -63,7 +69,7 @@ func HuntPlace(spawns []Spawn, monsters []string, level int, px, pz float64) (Qu
 			lmax = s.LevelMin
 		}
 		gap := levelGap(level, s.LevelMin, lmax)
-		pl := spawnPlace(s, level, px, pz)
+		pl := spawnPlace(s, level, px, pz, owned)
 		d := math.Hypot(pl.X-px, pl.Z-pz)
 		if gap > bestGap || gap == bestGap && d >= bestDist {
 			continue
@@ -75,7 +81,7 @@ func HuntPlace(spawns []Spawn, monsters []string, level int, px, pz float64) (Qu
 }
 
 // spawnPlace: o círculo de caça de um spawn para o nível e a posição do jogador.
-func spawnPlace(s Spawn, level int, px, pz float64) QuestPlace {
+func spawnPlace(s Spawn, level int, px, pz float64, owned []Spawn) QuestPlace {
 	t := levelShare(level, s.LevelMin, s.LevelMax)
 	switch {
 	case s.Fixed:
@@ -92,12 +98,36 @@ func spawnPlace(s Spawn, level int, px, pz float64) QuestPlace {
 	if math.Hypot(px, pz) > 1 {
 		a = math.Atan2(pz, px)
 	}
-	// Os monstros do anel não nascem no covil do raid boss: gira até sair dele.
+	if s.Sector() {
+		// Setor: o ângulo do jogador preso dentro do setor (com o círculo inteiro lá dentro).
+		start, span := s.SectorSpan()
+		pad := math.Min(h/r*180/math.Pi, span/2)
+		off := wrapDeg(a*180/math.Pi - start)
+		if off < pad || off > span-pad {
+			// Fora: a borda mais perto, contando a volta pelo 0°.
+			gap := func(x, y float64) float64 { return math.Min(wrapDeg(x-y), wrapDeg(y-x)) }
+			if gap(off, pad) <= gap(off, span-pad) {
+				off = pad
+			} else {
+				off = span - pad
+			}
+		}
+		b := (start + off) * math.Pi / 180
+		return QuestPlace{Kind: PlaceHunt, X: r * math.Cos(b), Z: r * math.Sin(b), Radius: h}
+	}
+	// Os monstros do anel não nascem no covil do raid boss nem nas áreas com dono de outra
+	// região: gira até sair deles.
 	for k := 0; k <= 12; k++ {
 		for _, sg := range []float64{1, -1} {
 			b := a + sg*float64(k)*math.Pi/12
 			x, z := r*math.Cos(b), r*math.Sin(b)
-			if math.Hypot(x-RaidLairX, z-RaidLairZ) > RaidLairRadius+lairMargin+h {
+			free := math.Hypot(x-RaidLairX, z-RaidLairZ) > RaidLairRadius+lairMargin+h
+			for _, o := range owned {
+				if free && o.Region != s.Region && o.Contains(x, z, h) {
+					free = false
+				}
+			}
+			if free {
 				return QuestPlace{Kind: PlaceHunt, X: x, Z: z, Radius: h}
 			}
 			if k == 0 {

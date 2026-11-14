@@ -66,3 +66,24 @@ func TestQuestStepMatches(t *testing.T) {
 		t.Fatal("empty target should match anything of the same goal")
 	}
 }
+
+func TestEveryQuestHasACategory(t *testing.T) {
+	seen := map[string]bool{}
+	for _, q := range QuestsInOrder() {
+		if q.Category < QuestStory || q.Category > QuestTutorial {
+			t.Errorf("%s: category %d is not one of the Diary groups", q.ID, q.Category)
+		}
+		if seen[q.ID] {
+			t.Errorf("%s: listed twice", q.ID)
+		}
+		seen[q.ID] = true
+	}
+	if len(seen) != len(Quests) {
+		t.Fatalf("QuestsInOrder has %d quests, Quests has %d", len(seen), len(Quests))
+	}
+	for id := TutorialStart; id != ""; id = Quests[id].Next {
+		if Quests[id].Category != QuestTutorial {
+			t.Errorf("%s: the tutorial chain should be in the tutorial group", id)
+		}
+	}
+}
