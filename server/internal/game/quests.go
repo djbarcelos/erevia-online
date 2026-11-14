@@ -63,6 +63,17 @@ type QuestReward struct {
 	Items []QuestItem
 }
 
+// QuestCategory agrupa as missões no Diário (J). Os números são os do QuestCategory do
+// protocolo.
+type QuestCategory int
+
+const (
+	QuestStory    QuestCategory = iota + 1 // história
+	QuestRegion                            // missões de uma região
+	QuestDaily                             // diárias
+	QuestTutorial                          // os primeiros passos
+)
+
 type QuestDef struct {
 	ID     string
 	Title  string
@@ -74,6 +85,8 @@ type QuestDef struct {
 	Unlock int
 	// Until > 0: a missão de nível só chega até este nível (quem já passou dele não recebe).
 	Until int
+	// Category: o grupo no Diário (obrigatório; o teste dos dados confere).
+	Category QuestCategory
 }
 
 // QuestState é o que fica salvo: progresso das missões ativas e as concluídas.
@@ -93,63 +106,63 @@ const TutorialSkipLevel = 5
 // contratos de caça.
 var questList = append([]*QuestDef{
 	{
-		ID: "tut_gate", Title: "Além das muralhas",
+		ID: "tut_gate", Title: "Além das muralhas", Category: QuestTutorial,
 		Text:   "Vel'Aran está segura atrás das muralhas, mas a sua jornada começa lá fora. Saia por qualquer portão.",
 		Steps:  []QuestStep{{Goal: GoalLeaveTown, Count: 1, Text: "Sair da cidade"}},
 		Reward: QuestReward{XP: 40},
 		Next:   "tut_hunt",
 	},
 	{
-		ID: "tut_hunt", Title: "Ossos inquietos",
+		ID: "tut_hunt", Title: "Ossos inquietos", Category: QuestTutorial,
 		Text:   "Os Esqueletos Lacaios rondam os Arredores. Clique num deles para atacar.",
 		Steps:  []QuestStep{{Goal: GoalKill, Target: "skeleton_minion", Count: 3, Text: "Derrotar Esqueletos Lacaios"}},
 		Reward: QuestReward{XP: 120, Gold: 30},
 		Next:   "tut_skill",
 	},
 	{
-		ID: "tut_skill", Title: "Golpe especial",
+		ID: "tut_skill", Title: "Golpe especial", Category: QuestTutorial,
 		Text:   "Cada classe tem skills na barra de atalhos (teclas 1 a 0). Use-as em combate.",
 		Steps:  []QuestStep{{Goal: GoalSkill, Count: 3, Text: "Usar skills"}},
 		Reward: QuestReward{XP: 150},
 		Next:   "tut_potion",
 	},
 	{
-		ID: "tut_potion", Title: "Fôlego",
+		ID: "tut_potion", Title: "Fôlego", Category: QuestTutorial,
 		Text:   "Ferido? Tome uma poção pela barra de atalhos ou com duplo clique no inventário (I).",
 		Steps:  []QuestStep{{Goal: GoalPotion, Count: 1, Text: "Tomar uma poção"}},
 		Reward: QuestReward{XP: 100, Items: []QuestItem{{ID: "potion_hp_s", Count: 3}, {ID: "potion_mp_s", Count: 2}}},
 		Next:   "tut_shop",
 	},
 	{
-		ID: "tut_shop", Title: "Compras na praça",
+		ID: "tut_shop", Title: "Compras na praça", Category: QuestTutorial,
 		Text:   "A Mercadora Lívia e o Ferreiro Bruno ficam na praça. Clique num deles e compre algo.",
 		Steps:  []QuestStep{{Goal: GoalBuy, Count: 1, Text: "Comprar numa loja"}},
 		Reward: QuestReward{XP: 200, Gold: 40},
 		Next:   "tut_level",
 	},
 	{
-		ID: "tut_level", Title: "Mais forte",
+		ID: "tut_level", Title: "Mais forte", Category: QuestTutorial,
 		Text:   "Cace nos Arredores até o nível 4. A cada nível, distribua os pontos de atributo (C) e de skill (K).",
 		Steps:  []QuestStep{{Goal: GoalLevel, Count: 4, Text: "Chegar ao nível 4"}},
 		Reward: QuestReward{Gold: 60, Items: []QuestItem{{ID: "potion_hp_s", Count: 5}}},
 		Next:   "tut_stone",
 	},
 	{
-		ID: "tut_stone", Title: "Caminhos de pedra",
+		ID: "tut_stone", Title: "Caminhos de pedra", Category: QuestTutorial,
 		Text:   "As Pedras de Teleporte levam aos acampamentos nas estradas. Use a da praça para viajar.",
 		Steps:  []QuestStep{{Goal: GoalTeleport, Count: 1, Text: "Viajar com uma Pedra de Teleporte"}},
 		Reward: QuestReward{XP: 300, Gold: 100},
 		Next:   "tut_bones",
 	},
 	{
-		ID: "tut_bones", Title: "Os Campos dos Ossos",
+		ID: "tut_bones", Title: "Os Campos dos Ossos", Category: QuestTutorial,
 		Text:   "Mais longe da cidade, guerreiros e ladinos esqueletos guardam os Campos dos Ossos. Vá preparado.",
 		Steps:  []QuestStep{{Goal: GoalKill, Target: "skeleton_warrior|skeleton_rogue", Count: 5, Text: "Derrotar Esqueletos Guerreiros ou Ladinos"}},
 		Reward: QuestReward{XP: 1500, Gold: 200, Items: []QuestItem{{ID: "scroll_ench_weapon", Count: 1}, {ID: "scroll_return", Count: 2}}},
 	},
 	// Segunda classe: chega no nível 20 e termina na escolha do caminho.
 	{
-		ID: SpecQuest, Title: "A Encruzilhada", Unlock: SpecLevel,
+		ID: SpecQuest, Title: "A Encruzilhada", Unlock: SpecLevel, Category: QuestStory,
 		Text: "Ninguém chega tão longe por acaso. Ysolde, a Mestra dos Caminhos, espera na praça de Vel'Aran " +
 			"para mostrar os dois caminhos da sua classe. A escolha é para sempre.",
 		Steps: []QuestStep{
@@ -201,6 +214,7 @@ func contractQuests() []*QuestDef {
 		count := max(5, int(math.Round(kills*contractKillPart/5))*5)
 		out = append(out, &QuestDef{
 			ID: ContractID(l), Title: fmt.Sprintf("Contrato: %s (nível %d)", region, l), Unlock: l, Until: l + ContractWindow,
+			Category: QuestRegion,
 			Text: fmt.Sprintf("O quadro de contratos da praça de Vel'Aran paga por cada caçada que mantém as estradas abertas. "+
 				"Derrote %d %s (%s), perto do nível %d.", count, who, region, l),
 			Steps:  []QuestStep{{Goal: GoalKill, Target: strings.Join(ids, "|"), Count: count, Text: "Derrotar " + who}},
@@ -229,3 +243,8 @@ var Quests = func() map[string]*QuestDef {
 	}
 	return m
 }()
+
+// QuestsInOrder: todas as missões na ordem da lista (a aba Concluídas do Diário segue ela).
+func QuestsInOrder() []*QuestDef {
+	return questList
+}

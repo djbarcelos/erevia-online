@@ -1,6 +1,7 @@
 /**
- * Navegação de missões: a missão **rastreada** (uma por vez, clique no painel Missões; a
- * primeira ativa é a padrão) guia o minimapa, o mapa do mundo e uma seta na borda da tela.
+ * Navegação de missões: a missão **rastreada** (uma por vez, sempre entre as fixadas no
+ * painel; clique no painel ou "Rastrear" no Diário) guia o minimapa, o mapa do mundo e uma
+ * seta na borda da tela.
  * O alvo é o primeiro passo pendente com lugar (o servidor manda x, z, raio e tipo no
  * QuestLog); quando o passo termina, o QuestLog novo já traz o próximo e o alvo avança.
  *
@@ -8,8 +9,9 @@
  * (minimapa ~15×/s, mapa só aberto) e a seta é um elemento DOM só, mexido no máximo 5×/s.
  */
 
-import { QuestPlaceKind, type QuestInfo, type QuestLog } from "../gen/erevia/v1/game_pb";
+import { QuestPlaceKind, type QuestDone, type QuestInfo, type QuestLog } from "../gen/erevia/v1/game_pb";
 import { el, settings } from "./kit";
+import { QuestPins, type PinStorage } from "./quest-pins";
 
 /** Para onde a missão rastreada aponta agora. */
 export interface QuestTarget {
@@ -34,59 +36,121 @@ export function questStepTarget(q: QuestInfo): QuestTarget | null {
   return { questId: q.id, kind: s.place, x: s.x, z: s.z, radius: Math.max(1, s.radius), name: s.placeName, step: i, monsters: s.monsters };
 }
 
-const TRACK_KEY = "erevia.questTrack";
+/** Rastreada do esquema antigo (uma chave só para todos os personagens). */
+const LEGACY_TRACK_KEY = "erevia.questTrack";
+/** Fixadas e rastreada, por personagem (quest-pins.ts). */
+const PINS_KEY = "erevia.questPins.";
 
-function readTracked(): string | null {
+function readLegacyTrack(): string | null {
   try {
-    return localStorage.getItem(TRACK_KEY);
+    return localStorage.getItem(LEGACY_TRACK_KEY);
   } catch {
-    return null; // armazenamento bloqueado: fica a padrão (a primeira)
+    return null; // armazenamento bloqueado
   }
 }
 
-function saveTracked(id: string): void {
-  try {
-    localStorage.setItem(TRACK_KEY, id);
-  } catch {
-    // ignora
-  }
+function pinStorage(characterId: number): PinStorage {
+  const key = PINS_KEY + characterId;
+  return {
+    load: () => localStorage.getItem(key),
+    save: (raw) => localStorage.setItem(key, raw),
+  };
 }
 
-/** Qual missão está rastreada e para onde ela aponta (recalculado só com QuestLog ou clique). */
+/**
+ * As missões ativas, as concluídas, as fixadas no painel e a rastreada (que guia o minimapa,
+ * o mapa e a seta). Recalculado só com QuestLog, clique ou o fim do tempo da recém-aceita.
+ */
 export class QuestTracker {
   private quests: QuestInfo[] = [];
-  private trackedId = readTracked();
+  private done: QuestDone[] = [];
+  private pins: QuestPins;
   private current: QuestTarget | null = null;
   private subs = new Set<() => void>();
+  private panelSubs = new Set<() => void>();
   private offSettings = settings.on(() => this.refresh());
+  private expiry = 0;
+
+  constructor(characterId: number) {
+    this.pins = new QuestPins(pinStorage(characterId), () => Date.now(), readLegacyTrack());
+  }
 
   dispose(): void {
     this.offSettings();
+    clearTimeout(this.expiry);
     this.subs.clear();
+    this.panelSubs.clear();
   }
 
-  /** Novo QuestLog. Se a rastreada acabou, segue a missão nova que chegou junto (a próxima
-   *  da sequência); senão volta para a primeira. */
+  /** Novo QuestLog. A missão concluída sai do painel; se era a rastreada, segue a nova que
+   *  chegou junto (a próxima da sequência). */
   setLog(log: QuestLog): void {
-    const before = new Set(this.quests.map((q) => q.id));
     this.quests = log.quests;
-    if (this.trackedId && !this.quests.some((q) => q.id === this.trackedId) && before.has(this.trackedId)) {
-      const fresh = this.quests.find((q) => !before.has(q.id));
-      this.trackedId = fresh?.id ?? null;
-      if (fresh) saveTracked(fresh.id);
-    }
-    this.refresh();
+    if (log.doneFull) this.done = log.done;
+    this.pins.update(this.quests.map((q) => q.id));
+    this.panelChanged();
   }
 
-  /** A missão rastreada (a escolhida ou, sem escolha válida, a primeira). */
+  /** Ativas, na ordem do servidor. */
+  list(): readonly QuestInfo[] {
+    return this.quests;
+  }
+
+  /** Concluídas (só id, título e categoria). */
+  doneList(): readonly QuestDone[] {
+    return this.done;
+  }
+
+  /** O que aparece no painel do HUD: as fixadas e a recém-aceita esperando o "Fixar". */
+  panel(): QuestInfo[] {
+    return this.quests.filter((q) => this.pins.visible(q.id));
+  }
+
+  /** A missão rastreada (sempre uma das fixadas; nenhuma se nada estiver fixado). */
   tracked(): QuestInfo | undefined {
-    return this.quests.find((q) => q.id === this.trackedId) ?? this.quests[0];
+    const id = this.pins.tracked();
+    return id ? this.quests.find((q) => q.id === id) : undefined;
   }
 
-  track(id: string): void {
-    this.trackedId = id;
-    saveTracked(id);
-    this.refresh();
+  isPinned(id: string): boolean {
+    return this.pins.isPinned(id);
+  }
+
+  isTemp(id: string): boolean {
+    return this.pins.isTemp(id);
+  }
+
+  /** Quantos ms faltam para a recém-aceita sumir do painel. */
+  tempLeft(id: string): number {
+    return this.pins.tempLeft(id);
+  }
+
+  pinnedCount(): number {
+    return this.pins.pinned().length;
+  }
+
+  /** Título da fixada que sairia para dar lugar a mais uma (null = há lugar). */
+  wouldEvict(): string | null {
+    const id = this.pins.wouldEvict();
+    return id ? (this.quests.find((q) => q.id === id)?.title ?? null) : null;
+  }
+
+  /** Rastreia (e fixa). Devolve o título da que saiu do painel para dar lugar. */
+  track(id: string): string | null {
+    const before = this.snapshot();
+    return this.after(this.pins.track(id), before);
+  }
+
+  /** Fixa no painel. Devolve o título da que saiu para dar lugar. */
+  pin(id: string): string | null {
+    const before = this.snapshot();
+    return this.after(this.pins.pin(id), before);
+  }
+
+  unpin(id: string): void {
+    const before = this.snapshot();
+    this.pins.unpin(id);
+    this.after(null, before);
   }
 
   /** Alvo de agora de uma missão qualquer (o "Ir"; vale com os marcadores desligados). */
@@ -100,9 +164,39 @@ export class QuestTracker {
     return this.current;
   }
 
+  /** O alvo mudou (minimapa, mapa, seta). */
   onChange(fn: () => void): () => void {
     this.subs.add(fn);
     return () => this.subs.delete(fn);
+  }
+
+  /** Chegou QuestLog ou mudou a fixação (painel do HUD e Diário redesenham). */
+  onPanel(fn: () => void): () => void {
+    this.panelSubs.add(fn);
+    return () => this.panelSubs.delete(fn);
+  }
+
+  /** Clique de fixar/rastrear: redesenha só se algo mudou de fato. */
+  private after(evicted: string | null, before: string): string | null {
+    const title = evicted ? (this.quests.find((q) => q.id === evicted)?.title ?? null) : null;
+    if (this.snapshot() !== before) this.panelChanged();
+    return title;
+  }
+
+  private snapshot(): string {
+    return this.pins.key();
+  }
+
+  private panelChanged(): void {
+    // Um timeout só, para a próxima recém-aceita que some (nada por quadro).
+    clearTimeout(this.expiry);
+    const ms = this.pins.nextExpiry();
+    if (ms !== null)
+      this.expiry = window.setTimeout(() => {
+        if (this.pins.expire()) this.panelChanged();
+      }, ms + 50);
+    for (const fn of this.panelSubs) fn();
+    this.refresh();
   }
 
   private refresh(): void {

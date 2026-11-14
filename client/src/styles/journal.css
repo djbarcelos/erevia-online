@@ -1,0 +1,254 @@
+/* ---------- Diário de missões (tecla J) ---------- */
+
+.journal-win {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.journal-body {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.jr-empty {
+  margin: 0;
+}
+
+.jr-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: rgba(232, 207, 138, 0.06);
+  border: 1px solid rgba(232, 207, 138, 0.18);
+}
+
+.jr-group {
+  display: grid;
+  gap: 6px;
+}
+
+.jr-group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--gold);
+  font-family: var(--font-title);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.jr-group-title .count {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0;
+  color: var(--dim);
+}
+
+.jr-quest {
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 3px solid transparent;
+}
+
+.jr-quest.tracked {
+  border-left-color: var(--gold);
+}
+
+.jr-quest.open {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.jr-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: max(var(--touch), 36px);
+  padding: 4px 10px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jr-mark {
+  width: 14px;
+  flex: none;
+  color: var(--gold-hi);
+  text-align: center;
+}
+
+.jr-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--warn);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.jr-tag {
+  flex: none;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--gold);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+}
+
+.jr-sum {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.jr-caret {
+  flex: none;
+  font-style: normal;
+  color: var(--dim);
+  transform: rotate(-90deg);
+  transition: transform 0.2s;
+}
+
+.jr-quest.open .jr-caret {
+  transform: none;
+}
+
+.jr-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px 32px;
+}
+
+.jr-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.jr-steps {
+  display: grid;
+  gap: 6px;
+}
+
+.jr-step {
+  display: grid;
+  gap: 3px;
+  font-size: 0.82rem;
+}
+
+.jr-step-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.jr-count {
+  color: var(--gold-hi);
+  font-variant-numeric: tabular-nums;
+}
+
+.jr-step.done {
+  color: var(--dim);
+}
+
+.jr-step.done .jr-step-head > span:first-child {
+  text-decoration: line-through;
+}
+
+.jr-step.done .jr-count {
+  color: var(--ok);
+}
+
+.pbar.jr-bar {
+  height: 6px;
+}
+
+.pbar.jr-bar > b {
+  display: none;
+}
+
+.jr-place {
+  color: var(--dim);
+  font-size: 0.74rem;
+}
+
+.jr-place b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.jr-reward {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.jr-label {
+  color: var(--dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  margin-right: 2px;
+}
+
+.jr-chip {
+  padding: 1px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(10, 8, 14, 0.5);
+  font-size: 0.75rem;
+}
+
+.jr-chip.xp {
+  color: var(--xp-a);
+}
+
+.jr-chip.gold {
+  color: var(--gold-hi);
+}
+
+.jr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.jr-done {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.jr-done li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.85rem;
+}
+
+.jr-check {
+  color: var(--ok);
+}
+
+/* Celular: menos recuo no corpo (a janela já ocupa a tela). */
+.is-touch .jr-body {
+  padding-left: 12px;
+}
