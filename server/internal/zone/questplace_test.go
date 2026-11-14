@@ -185,6 +185,9 @@ func TestQuestLogSendsPlacesAndRefreshesOnLevelUp(t *testing.T) {
 
 	// Sem objetivo que dependa do nível, subir não reenvia (nada de tráfego à toa).
 	p.pl.quests.active = []*activeQuest{{def: game.Quests["tut_skill"], progress: []int{0}}}
+	for l := 9; l <= 11; l++ { // os contratos do 9 ao 11 chegariam e reenviariam
+		p.pl.quests.done[game.ContractID(l)] = true
+	}
 	n = peer.questLogCount()
 	z.grantXP(p, game.XPLevelStart(11)-p.pl.xp)
 	if peer.questLogCount() != n {

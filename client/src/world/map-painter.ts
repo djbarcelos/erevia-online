@@ -1,7 +1,27 @@
 import kitSizes from "./kit-sizes.json";
-import { rockyAt, worldBounds, type WorldData } from "./world-data";
+import { worldBiomes, worldBounds, type BiomeEntry, type Bounds, type WorldData } from "./world-data";
 
 type Ctx = CanvasRenderingContext2D;
+
+/** O que o cliente entrega à pintura do chão de um bioma (`paint` em scripts/biomes/<id>.mjs). */
+export interface BiomePaintHelpers {
+  p: MapProjection;
+  /** Limites do mapa inteiro. */
+  bounds: Bounds;
+  rng: (seed: number) => () => number;
+}
+export type BiomePaint = (ctx: Ctx, biome: BiomeEntry, h: BiomePaintHelpers) => void;
+
+/**
+ * A pintura do chão de cada bioma mora no arquivo do bioma: uma fonte só da regra de
+ * transição, a mesma que o gerador usa para espalhar árvores e pedras. Só a função `paint`
+ * (e o que ela usa) entra no pacote do cliente; o resto do arquivo é do gerador.
+ */
+const BIOME_PAINT: Record<string, BiomePaint> = Object.fromEntries(
+  Object.entries(import.meta.glob<{ paint?: BiomePaint }>("../../scripts/biomes/*.mjs", { eager: true }))
+    .filter(([, mod]) => typeof mod.paint === "function")
+    .map(([path, mod]) => [path.slice(path.lastIndexOf("/") + 1, -".mjs".length), mod.paint!]),
+);
 
 /** Converte mundo (x, z) → canvas, com +Z (norte) para cima e +X (leste) à direita. */
 export interface MapProjection {
@@ -28,7 +48,7 @@ export function projection(world: WorldData, px: number): MapProjection {
 }
 
 /**
- * Pinta o terreno (grama, vale de pedra do sul, estradas de terra e praça de pedra) num
+ * Pinta o terreno (grama, a camada de cada bioma, estradas de terra e praça de pedra) num
  * canvas de `px` pixels de largura que cobre o mapa inteiro (a altura segue a proporção
  * do mapa). Usado pela textura do chão e pelo mapa.
  */
@@ -58,7 +78,9 @@ export function paintTerrain(ctx: Ctx, world: WorldData, px: number): void {
   }
   ctx.globalAlpha = 1;
 
-  if (world.biome) paintValley(ctx, world, projection(world, px));
+  // Camada de cada bioma (por cima da grama, por baixo das estradas e da praça).
+  const p = projection(world, px);
+  for (const bio of worldBiomes(world)) BIOME_PAINT[bio.id]?.(ctx, bio, { p, bounds: worldBounds(world), rng: mulberry32 });
 
   // Estradas de terra (borda mais escura + miolo + pedrinhas).
   ctx.lineCap = "round";
@@ -114,76 +136,6 @@ export function paintTerrain(ctx: Ctx, world: WorldData, px: number): void {
     const r = Math.sqrt(rand()) * plazaR;
     ctx.fillStyle = rand() < 0.5 ? "rgba(70,65,58,0.18)" : "rgba(170,160,145,0.18)";
     ctx.fillRect(cx(Math.cos(a) * r), cy(Math.sin(a) * r), 0.5 * k, 0.5 * k);
-  }
-}
-
-/**
- * Vale das Pedras Vivas: a grama seca, vira terra batida e depois cascalho e rocha, com a
- * borda ondulada igual à do gerador (as árvores e pedras param no mesmo lugar).
- */
-function paintValley(ctx: Ctx, world: WorldData, p: MapProjection): void {
-  const b = worldBounds(world);
-  const bio = world.biome!;
-  const top = Math.max(0, Math.floor(p.cy(bio.zFrom + bio.amp + 2)));
-  const rows = p.height - top;
-  if (rows <= 0) return;
-  const img = ctx.getImageData(0, top, p.width, rows);
-  const d = img.data;
-  const DRY = [124, 118, 76];
-  const DIRT = [122, 104, 80];
-  const GRAVEL = [136, 131, 121];
-  const mix = (a: number[], c: number[], t: number, i: number) => a[i] + (c[i] - a[i]) * t;
-  for (let y = 0; y < rows; y++) {
-    const z = b.maxZ - (top + y + 0.5) / p.k;
-    for (let x = 0; x < p.width; x++) {
-      const wx = b.minX + (x + 0.5) / p.k;
-      const t = rockyAt(world, wx, z);
-      if (t <= 0.002) continue;
-      // Variação fina (manchas de terra e pedra) para o chão não ficar liso.
-      const n = Math.sin(wx * 0.9 + z * 0.35) * Math.sin(z * 0.8 - wx * 0.3) * 0.5 + Math.sin(wx * 2.7 + z * 3.1) * 0.25;
-      const u = Math.max(0, Math.min(1, t + n * 0.18));
-      const a = Math.min(1, t * 1.6); // a grama começa a secar antes das pedras aparecerem
-      const i = (y * p.width + x) * 4;
-      for (let c = 0; c < 3; c++) {
-        const target = u < 0.5 ? mix(DRY, DIRT, u * 2, c) : mix(DIRT, GRAVEL, (u - 0.5) * 2, c);
-        d[i + c] = d[i + c] + (target + n * 10 - d[i + c]) * a;
-      }
-    }
-  }
-  ctx.putImageData(img, 0, top);
-
-  // Lajes de rocha exposta, veios claros e pedrinhas, mais densos no fundo do vale.
-  const rand = mulberry32(31);
-  const area = ((b.maxX - b.minX) * (b.maxZ - (bio.zFrom + bio.amp))) / 1000;
-  for (let i = 0; i < 260 * area; i++) {
-    const wx = b.minX + rand() * (b.maxX - b.minX);
-    const wz = bio.zFrom + bio.amp + rand() * (b.minZ - bio.zFrom - bio.amp);
-    const t = rockyAt(world, wx, wz);
-    if (rand() > t) continue;
-    const kind = rand();
-    if (kind < 0.18) {
-      ctx.fillStyle = rand() < 0.5 ? "rgba(92,88,82,0.35)" : "rgba(170,165,154,0.3)";
-      ctx.beginPath();
-      ctx.ellipse(p.cx(wx), p.cy(wz), (0.8 + rand() * 2.6) * p.k, (0.5 + rand() * 1.6) * p.k, rand() * Math.PI, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (kind < 0.26) {
-      ctx.strokeStyle = "rgba(60,56,50,0.4)";
-      ctx.lineWidth = 0.08 * p.k;
-      ctx.beginPath();
-      let x = wx;
-      let z = wz;
-      ctx.moveTo(p.cx(x), p.cy(z));
-      for (let s = 0; s < 4; s++) {
-        x += (rand() - 0.5) * 2.4;
-        z += (rand() - 0.5) * 2.4;
-        ctx.lineTo(p.cx(x), p.cy(z));
-      }
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = rand() < 0.5 ? "rgba(70,66,60,0.45)" : "rgba(190,184,172,0.45)";
-      const s = (0.1 + rand() * 0.25) * p.k;
-      ctx.fillRect(p.cx(wx), p.cy(wz), s, s);
-    }
   }
 }
 

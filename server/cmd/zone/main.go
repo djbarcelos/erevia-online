@@ -245,6 +245,7 @@ func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.Sav
 			Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
 			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec, Mastery: p.Mastery,
 			Auction: auctionOps(p.Auction),
+			Bestiary: p.Bestiary,
 		}
 		if s := p.Storage; s != nil {
 			states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
@@ -320,6 +321,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
 		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
 		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery,
+		Bestiary: c.Bestiary,
 	}, nil
 }
 

@@ -25,6 +25,8 @@ export interface GloryDeps {
   titleId(): string;
   onAchievements(fn: () => void): () => void;
   setTitle(id: string): void;
+  /** Texto de um título que não é de conquista (o de família do Bestiário). */
+  titleText?(id: string): string | undefined;
 }
 
 type Board = "level" | "pvp" | "clans";
@@ -55,7 +57,7 @@ function playerRow(r: RankEntry, board: Board, localId: number): HTMLElement {
       el("small", null, [info.label, r.clanName ? `‹${r.clanName}›` : ""].filter(Boolean).join(" · ")),
     ),
     board === "pvp" ? el("span", "rk-val", el("b", null, fmt.format(r.pvpKills)), el("small", null, "vitórias")) : "",
-    // No 30, o nível de Maestria ao lado do nível (também desempata a ordem).
+    // No nível máximo, o nível de Maestria ao lado do nível (também desempata a ordem).
     el("span", "rk-val", el("b", null, `Nv ${r.level}`), r.mastery > 0 ? el("small", "rk-mastery", `Maestria ${r.mastery}`) : ""),
   );
   row.style.setProperty("--cc", info.color);
@@ -120,7 +122,7 @@ export function buildGlory(d: GloryDeps): HTMLElement {
     const list = d.achievements();
     const current = d.titleId();
     const done = list.filter((a) => a.unlocked).length;
-    const currentTitle = list.find((a) => a.id === current)?.title;
+    const currentTitle = list.find((a) => a.id === current)?.title ?? (current ? d.titleText?.(current) : undefined);
     const head = el(
       "div",
       "ach-head",

@@ -414,6 +414,7 @@ func (z *Zone) raidKilled(m *entity) {
 	for id := range r.byPlayer {
 		if p := z.players[id]; p != nil {
 			z.achEvent(p, game.AchRaid, ms.def.ID)
+			z.bestiaryKill(p, m) // Bestiário: 1 abate abre a entrada do raid boss
 		}
 	}
 

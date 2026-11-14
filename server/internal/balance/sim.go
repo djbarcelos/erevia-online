@@ -280,7 +280,7 @@ func (f *fight) mDead() bool { return !f.immortal && f.mhp <= 0 }
 // hit: o golpe do jogador no monstro (dano médio), com a Marca, o roubo de vida e o veneno
 // da Lâmina Envenenada.
 func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) {
-	in := game.HitInput{Atk: f.pAtk(magic), Def: f.mDef(magic), Mult: mult,
+	in := game.HitInput{Atk: f.pAtk(magic), Def: f.mDef(magic), Mult: mult * (1 + f.b.Bestiary), // como zone.hitInput
 		Crit: f.p.Crit + extraCrit, CritMult: f.p.CritDamage, Accuracy: f.p.Accuracy, Evasion: f.m.Evasion, NoMiss: noMiss}
 	dmg := game.ExpectedHit(in)
 	if v, ok := f.mfx.active(game.EffectMark, f.now); ok {

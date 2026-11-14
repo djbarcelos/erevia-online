@@ -106,8 +106,10 @@ type JoinInfo struct {
 	Title        string
 	// Especialização (segunda classe; "" = nenhuma).
 	Spec string
-	// Maestria (nível 30): barra, bônus diário e pontos da árvore.
+	// Maestria (nível máximo): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
+	// Bestiário: abates por monstro e famílias completas (bestiary.go).
+	Bestiary game.BestiaryState
 	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
 	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
 	LoadedAt time.Time
@@ -136,6 +138,7 @@ type SavedState struct {
 	Title        string
 	Spec         string // especialização ("" = nenhuma)
 	Mastery      game.MasteryState
+	Bestiary     game.BestiaryState
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Auction: operações da casa de leilões ainda sem confirmação do banco (vão na mesma
@@ -285,6 +288,7 @@ type Zone struct {
 	adm *adminState // portal de administração (admin_actions.go e admin_ops.go)
 
 	auction auctionHouse // casa de leilões (auction.go)
+	rares rareWorld // monstros raros (rares.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -533,6 +537,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Spec = st.Spec
 		info.Mastery = st.Mastery
 		aucOps = st.Auction
+		info.Bestiary = st.Bestiary
 		delete(z.recent, info.ID)
 	}
 
@@ -565,6 +570,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 			quests:  loadQuests(info.Quests, level),
 			ach:     loadAchievements(info.Achievements, info.Title),
 			mastery: loadMastery(info.Mastery),
+			bst:     loadBestiary(info.Bestiary),
 		},
 	}
 	p.pl.sentPvp = z.pvpState(p)
@@ -638,6 +644,8 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.sendSelfStats(p)
 	z.sendQuests(p, "")
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
+	// Bestiário antes das conquistas: pode tirar um título de família que não vale.
+	z.bestiaryOnJoin(p)
 	z.achOnJoin(p)
 	z.masteryOnJoin(p)
 	z.eventsOnJoin(p)
@@ -946,7 +954,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
-		Mastery: p.pl.mastery.save(), Auction: z.auctionSave(p),
+		Mastery: p.pl.mastery.save(), Bestiary: p.pl.bst.state(), Auction: z.auctionSave(p),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
@@ -1054,6 +1062,10 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		Dead: e.dead, Scale: float32(e.scale),
 		Boss: e.mon != nil && e.mon.def.Boss,
 		Raid: e.mon != nil && e.mon.def.Raid,
+		Rare: e.mon != nil && e.mon.def.Rare != nil,
+	}
+	if e.mon != nil {
+		out.Tint = e.mon.def.Tint
 	}
 	if e.pl != nil {
 		w, o, g := e.pl.inv.look()

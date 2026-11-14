@@ -1,7 +1,9 @@
 package world
 
 import (
+	"encoding/json"
 	"math"
+	"reflect"
 	"testing"
 )
 
@@ -150,5 +152,51 @@ func TestEmbeddedWorldGrowsSouthOnly(t *testing.T) {
 	// A célula mais ao sul existe na grade (o A* não corta o mapa estendido).
 	if p := w.NearestFree(Point{0, -328}); p.Z > -320 {
 		t.Errorf("o fundo do vale deveria ser andável: %v", p)
+	}
+}
+
+// O world.json passou de `biome` (só o Vale) para `biomes[]` (um por arquivo de
+// client/scripts/biomes/). Os dois formatos dão o mesmo mapa no servidor.
+func TestLoadAcceptsBothBiomeFormats(t *testing.T) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(embedded, &raw); err != nil {
+		t.Fatal(err)
+	}
+	var biomes []map[string]json.RawMessage
+	if err := json.Unmarshal(raw["biomes"], &biomes); err != nil || len(biomes) == 0 {
+		t.Fatalf("o world.json embutido deveria ter biomes[]: %v", err)
+	}
+	ids := map[string]bool{}
+	for _, b := range biomes {
+		var id string
+		_ = json.Unmarshal(b["id"], &id)
+		ids[id] = true
+	}
+	for _, id := range []string{"floresta", "vale", "cripta"} {
+		if !ids[id] {
+			t.Errorf("falta o bioma %q em biomes[]", id)
+		}
+	}
+	// Formato antigo: o Vale no campo biome, sem biomes.
+	legacy := map[string]json.RawMessage{}
+	for k, v := range raw {
+		legacy[k] = v
+	}
+	delete(legacy, "biomes")
+	legacy["biome"] = json.RawMessage(`{"name":"Vale das Pedras Vivas","zFrom":-150,"zTo":-205,"amp":14,"ph":[0.81,2.4,4.76,1.24],"vale":{"x":0,"z":-270,"r":52}}`)
+	old, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := parse(embedded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := parse(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Bounds != b.Bounds || a.Size != b.Size || a.SafeRadius != b.SafeRadius || !reflect.DeepEqual(a.colliders, b.colliders) || !reflect.DeepEqual(a.blocked, b.blocked) {
+		t.Fatal("os dois formatos deveriam dar o mesmo mapa")
 	}
 }

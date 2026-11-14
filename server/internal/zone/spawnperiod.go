@@ -21,6 +21,7 @@ import (
 //
 // Roda na virada e 1×/s (para quem saiu de combate depois dela).
 func (z *Zone) updatePeriodSpawns() {
+	z.updateRares() // o raro noturno some no amanhecer e a aparição que acabou conta os 45 min
 	type group struct {
 		inPeriod []*entity // do período atual (no mundo ou esperando a vaga)
 		awake    int       // dos do período atual, os que não estão dormant
