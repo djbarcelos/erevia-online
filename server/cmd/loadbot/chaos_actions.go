@@ -53,6 +53,7 @@ var chaosActions = []chaosAction{
 	{"bestiario", 1, actBestiary},
 	{"amigos", 1, actFriend},
 	{"correio", 2, actMail},
+	{"leilao", 8, actAuction},
 	{"ranking", 1, actRanking},
 	{"titulo", 1, actTitle},
 	{"chat", 2, actChat},

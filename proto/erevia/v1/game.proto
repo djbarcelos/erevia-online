@@ -43,6 +43,7 @@ message ClientMessage {
     BestiaryCmd bestiary_cmd = 40; // Bestiário: pedir o estado (a janela abriu)
     SpecCmd spec_cmd = 50;
     MasteryCmd mastery_cmd = 54; // Maestria: pedir o estado, gastar ponto, redistribuir
+    AuctionCmd auction_cmd = 44; // Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, retirar do correio
   }
 }
 
@@ -451,6 +452,7 @@ message ServerMessage {
     EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
     MasteryState mastery = 54; // Maestria (nível máximo): barra, pontos e árvore do jogador
     MasteryTree mastery_tree = 55; // a árvore da Maestria (resposta ao MASTERY_CMD_GET)
+    AuctionUpdate auction = 44; // Casa de leilões: janela, busca, meus anúncios e avisos
   }
 }
 
@@ -869,6 +871,7 @@ enum NpcRole {
   NPC_ROLE_STORAGE = 2;
   NPC_ROLE_BARBER = 3;
   NPC_ROLE_MASTER = 4; // Mestra dos Caminhos (especialização)
+  NPC_ROLE_AUCTION = 5; // Leiloeiro (casa de leilões)
 }
 
 // Atributos e skills aprendidas do jogador.
@@ -1426,6 +1429,7 @@ message Mail {
   string body = 4;
   int64 sent_at_ms = 5;
   bool read = 6;
+  MailAttachment attachment = 7; // anexo (casa de leilões); vazio = só texto
 }
 
 // Caixa de entrada. listed = false: só os contadores (aviso de carta nova ou ao entrar).
@@ -1474,4 +1478,111 @@ message QuestDone {
   string id = 1;
   string title = 2;
   QuestCategory category = 3;
+}
+
+// ---------- Casa de leilões ----------
+
+// Anexo de uma carta do sistema (casa de leilões): moedas e/ou um item. Retirar põe na
+// bolsa (AUCTION_CMD_CLAIM); a carta não pode ser apagada antes.
+message MailAttachment {
+  string item_id = 1; // vazio = só moedas
+  uint32 count = 2;
+  uint32 enchant = 3;
+  int64 gold = 4;
+  bool claimed = 5; // já retirado
+}
+
+enum AuctionCmdKind {
+  AUCTION_CMD_UNSPECIFIED = 0;
+  AUCTION_CMD_OPEN = 1; // falou com o leiloeiro (npc_id): regras e meus anúncios
+  AUCTION_CMD_SEARCH = 2; // query
+  AUCTION_CMD_LIST = 3; // anunciar: slot (bolsa), count (0 = a pilha toda), price (total), hours
+  AUCTION_CMD_BUY = 4; // auction_id, price (o que o cliente viu)
+  AUCTION_CMD_CANCEL = 5; // auction_id
+  AUCTION_CMD_MINE = 6; // meus anúncios
+  AUCTION_CMD_CLAIM = 7; // mail_id: retirar o anexo da carta (0 = todos os que couberem)
+}
+
+enum AuctionSort {
+  AUCTION_SORT_PRICE_ASC = 0;
+  AUCTION_SORT_PRICE_DESC = 1;
+  AUCTION_SORT_NEWEST = 2;
+  AUCTION_SORT_ENDING = 3; // vence antes
+}
+
+// Filtros da busca (0/vazio = qualquer).
+message AuctionQuery {
+  string name = 1; // parte do nome do item (sem diferenciar acento e maiúsculas)
+  ItemKind kind = 2;
+  uint32 grade = 3; // raridade
+  uint32 min_level = 4; // nível exigido pelo item
+  uint32 max_level = 5;
+  int64 min_price = 6;
+  int64 max_price = 7;
+  bool my_class = 8; // só o que a minha classe usa
+  AuctionSort sort = 9;
+  uint32 page = 10; // a partir de 0
+}
+
+message AuctionCmd {
+  AuctionCmdKind kind = 1;
+  uint32 npc_id = 2; // o leiloeiro (abrir, buscar, anunciar, comprar e cancelar exigem estar perto)
+  AuctionQuery query = 3;
+  uint32 slot = 4;
+  uint32 count = 5;
+  int64 price = 6;
+  uint32 hours = 7;
+  uint64 auction_id = 8;
+  uint64 mail_id = 9;
+}
+
+enum AuctionStatus {
+  AUCTION_STATUS_ACTIVE = 0;
+  AUCTION_STATUS_SOLD = 1;
+  AUCTION_STATUS_CANCELLED = 2;
+  AUCTION_STATUS_EXPIRED = 3;
+}
+
+message AuctionListing {
+  uint64 id = 1;
+  string item_id = 2;
+  uint32 count = 3;
+  uint32 enchant = 4;
+  int64 price = 5; // total
+  string seller_name = 6;
+  int64 created_at_ms = 7;
+  int64 expires_at_ms = 8;
+  AuctionStatus status = 9;
+  string buyer_name = 10; // vendido: para quem
+  bool mine = 11;
+}
+
+// Regras (vêm ao abrir a janela).
+message AuctionRules {
+  uint32 max_listings = 1; // por conta
+  int64 min_price = 2;
+  int64 max_price = 3;
+  uint32 fee_percent = 4; // taxa do anúncio (não volta)
+  int64 fee_min = 5;
+  uint32 commission_percent = 6; // sai do que o vendedor recebe
+  repeated uint32 hours = 7; // prazos aceitos
+  uint32 page_size = 8;
+}
+
+// Só o que mudou vem preenchido.
+message AuctionUpdate {
+  bool open = 1; // abrir a janela (resposta ao OPEN)
+  uint32 npc_id = 2;
+  AuctionRules rules = 3;
+  bool searched = 4; // results/total/page são de uma busca
+  repeated AuctionListing results = 5;
+  uint32 total = 6;
+  uint32 page = 7;
+  bool mine_listed = 8; // mine/active são a lista dos meus anúncios
+  repeated AuctionListing mine = 9; // ativos e os últimos encerrados
+  uint32 active = 10; // anúncios ativos da conta
+  string notice = 11; // aviso (anunciado, vendido, comprado…); também sai no chat
+  uint64 gone_id = 12; // anúncio que saiu (comprado ou cancelado): o cliente tira da lista
+  uint32 pending = 13; // operações da casa de leilões ainda sem confirmação do banco
+  uint32 claimable = 14; // anexos no correio esperando para retirar (os que o servidor conhece)
 }

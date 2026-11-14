@@ -142,6 +142,8 @@ type CharacterState struct {
 	Bestiary game.BestiaryState
 	// Storage (opcional): o armazém da conta mudou e vai junto, na mesma transação.
 	Storage *StorageState
+	// Auction: operações da casa de leilões que vão na mesma transação (ver auction.go).
+	Auction []AuctionOp
 }
 
 type Store struct {
@@ -480,6 +482,13 @@ func placeOf(r game.ItemRecord) int16 {
 // única transação. Um estado mais velho (Seq menor) que o já gravado é ignorado, e os
 // itens de um personagem só são trocados junto com a linha dele: nunca fica meio salvo.
 func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
+	_, err := s.SaveStatesAuction(ctx, states)
+	return err
+}
+
+// SaveStatesAuction é o SaveStates que também aplica as operações da casa de leilões que
+// vieram com os estados (na mesma transação) e devolve o que aconteceu com cada uma.
+func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) ([]AuctionResult, error) {
 	// Se o mesmo personagem vier duas vezes, vale o mais novo.
 	latest := map[int64]CharacterState{}
 	for _, c := range states {
@@ -488,9 +497,10 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 		}
 	}
 	if len(latest) == 0 {
-		return nil
+		return nil, nil
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	var results []AuctionResult
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		batch := &pgx.Batch{}
 		order := make([]CharacterState, 0, len(latest))
 		for _, c := range latest {
@@ -560,8 +570,17 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 				return err
 			}
 		}
-		return saveStorages(ctx, tx, states)
+		if err := saveStorages(ctx, tx, states); err != nil {
+			return err
+		}
+		var err error
+		results, err = applyAuctionOps(ctx, tx, states)
+		return err
 	})
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // saveStorages grava os armazéns que vieram junto (o mais novo de cada conta), na mesma

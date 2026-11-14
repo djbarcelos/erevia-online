@@ -131,6 +131,8 @@ type playerState struct {
 	rankingNext float64
 	// Maestria (nível máximo): barra, pontos da árvore e a soma dos efeitos (ver mastery.go).
 	mastery masteryState
+	// Casa de leilões: operações a caminho do banco, anúncios vistos e anexos do correio.
+	auc auctionState
 }
 
 // rank da skill (0 = não aprendida).

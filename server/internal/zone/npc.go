@@ -58,6 +58,7 @@ func (z *Zone) spawnNPCs() {
 	z.spawnStones(npcIDBase + uint32(len(townNPCs)))
 	z.spawnKeeper(npcIDBase + uint32(len(townNPCs)+len(teleportStones)))
 	z.spawnMaster(npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1))
+	z.spawnAuctioneer(npcIDBase + uint32(len(townNPCs)+len(teleportStones)+2))
 }
 
 // storageKeeper: o Guarda do Armazém, na praça, do lado oeste do poço.
