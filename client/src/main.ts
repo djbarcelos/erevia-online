@@ -82,6 +82,7 @@ import type { QuestTarget } from "./ui/quest-nav";
 import { GroundLoot } from "./world/loot";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
+import { PickAreas } from "./world/pick";
 import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
 import { loadEnvironment, type Environment } from "./world/environment";
@@ -205,7 +206,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const dayNight = new DayNight(world, worldData);
   const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
   const collision = new Collision(worldData);
-  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision);
+  const picks = new PickAreas();
+  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision, picks);
   setSpecs(welcome.specs);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
   for (const e of welcome.entities) entities.add(e);
@@ -360,7 +362,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const npcStock = new Map(welcome.npcs.map((n) => [n.id, n.stock]));
   const npcRecipes = new Map(welcome.npcs.map((n) => [n.id, n.recipes]));
   const npcInfo = new Map(welcome.npcs.map((n) => [n.id, n]));
-  const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId);
+  const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId, picks);
   loot.add(welcome.groundItems);
 
   // ---------- Barra de atalhos (10 teclas): salva no servidor ----------
@@ -1232,7 +1234,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       conn.pickUp(id);
     },
     isEnemy: (id, force) => entities.isEnemy(id) || entities.canAttack(id, force || forcedId === id),
-  });
+  }, picks);
   const stopTouchCamera = setupTouchCamera(canvas, world.camera);
   const stopAudio = gameAudio.attachWorld({
     scene: world.scene,
