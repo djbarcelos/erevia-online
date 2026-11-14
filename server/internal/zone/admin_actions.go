@@ -714,18 +714,3 @@ func (z *Zone) adminLive(id uint32, accountID int64) AdminLive {
 	return out
 }
 
-// RegionAt: a região pela posição (os mesmos anéis da função erevia_region do banco).
-func RegionAt(x, z float64) string {
-	r := math.Hypot(x, z)
-	switch {
-	case z < -200:
-		return "Vale das Pedras Vivas"
-	case r < 40:
-		return "Cidade"
-	case r < 78:
-		return "Arredores"
-	case r < 112:
-		return "Campos dos Ossos"
-	}
-	return "Ermos Partidos"
-}
