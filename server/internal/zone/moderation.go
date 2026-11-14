@@ -196,6 +196,10 @@ func (z *Zone) command(p *entity, text string) {
 		z.devRaid(p, args)
 		return
 	}
+	if cmd == "/avisos" && z.cfg.DevCommands { // avisos no chão de teste (abilities.go)
+		z.devWarnings(p)
+		return
+	}
 	if !p.pl.gm {
 		z.system(p, "Comando desconhecido: "+fields[0])
 		return

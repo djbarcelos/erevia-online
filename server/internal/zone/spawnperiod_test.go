@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"erevia/server/internal/game"
+	"erevia/server/internal/pb"
 )
 
 // Setor de exemplo (o formato do Bosque Gris): os mesmos 6 lugares, de dia ladinos e à
@@ -214,5 +215,53 @@ func TestPeriodSwapReachesNearbyPlayers(t *testing.T) {
 	z.tickFor(0.5)
 	if !peer.despawned(dayMon.id) || peer.spawned(nightMon.id) == 0 {
 		t.Fatal("à noite, o jogador devia receber o Despawn do monstro do dia e o Spawn do da noite")
+	}
+}
+
+// Monstro que vira dormente com um aviso no chão pendente: o aviso é cancelado (o cliente
+// recebe o cancelamento), o golpe não cai e, quando ele volta, as habilidades esperam o
+// First de novo.
+func TestDormantMonsterCancelsPendingWarnings(t *testing.T) {
+	now := noon
+	golem := fixed("stone_golem", 25, 40, 0)
+	golem.When = game.WhenDay
+	z := newClockZone(&now, golem)
+	m := z.onlyMonster()
+	p, peer := joinAt(z, 1, "knight", m.pos.X+2.5, m.pos.Z, 0)
+	atLevel(z, p, 25)
+	m.mon.hate[p.id] = 1
+	slam := m.mon.def.Abilities[0]
+	z.tickFor(slam.First + 0.1)
+	tg := z.pendingFrom(m)
+	if tg == nil {
+		t.Fatal("o golem devia estar preparando o golpe")
+	}
+	gen := m.mon.abilGen
+	z.putToSleep(m) // o caminho da troca de período
+	if m.mon.abilGen == gen || m.mon.abilFight {
+		t.Fatal("dormir não parou as habilidades")
+	}
+	z.tickFor(slam.Delay + 0.5)
+	if z.pendingFrom(m) != nil || abilityHits(peer, p) != 0 {
+		t.Fatal("o aviso de um monstro dormente ficou pendurado ou o golpe caiu")
+	}
+	if !peer.has(func(msg *pb.ServerMessage) bool {
+		for _, w := range msg.GetSnapshot().GetTelegraphs() {
+			if w.Id == tg.id && w.Cancelled {
+				return true
+			}
+		}
+		return false
+	}) {
+		t.Fatal("o cliente não recebeu o cancelamento do aviso")
+	}
+
+	// Volta (o período dele de novo): a luta nova espera o First.
+	m.mon.dormant = false
+	z.reviveMonster(m)
+	m.mon.hate[p.id] = 1
+	z.tickFor(1)
+	if z.pendingFrom(m) != nil {
+		t.Fatal("ao voltar, as habilidades começam do First")
 	}
 }

@@ -85,16 +85,23 @@ func (z *Zone) monsterFighting(m *entity) bool {
 }
 
 // putToSleep tira o monstro do mundo até o período dele voltar. Vivo, ele some sem morrer
-// (sem saque nem XP); morto, o corpo some no tempo de sempre e ele não renasce.
+// (sem saque nem XP); morto, o corpo some no tempo de sempre e ele não renasce. Os avisos
+// no chão pendentes dele são cancelados no próximo tick (abilGen muda) e, quando ele
+// voltar, as habilidades esperam o First de novo.
 func (z *Zone) putToSleep(m *entity) {
 	ms := m.mon
 	ms.dormant = true
+	ms.stopAbilities()
 	ms.windowStart, ms.windowEnd = time.Time{}, time.Time{}
 	if m.dead {
 		return
 	}
-	m.dead, m.hp = true, 0
-	ms.hidden = true // a AOI manda o Despawn a quem o conhecia
+	// Sai da luta e da IA já (dead), mas o corpo só some depois de mais um tick inteiro
+	// (corpseEnd): quem o conhece ainda recebe o cancelamento dos avisos no chão dele
+	// (updateTelegraphs vê o dead) e só depois o Despawn. Sem frame.deaths nem HP zerado: o
+	// cliente não vê uma morte.
+	m.dead = true
+	ms.corpseEnd = z.now + 1.5/float64(z.cfg.TickRate)
 	ms.returning = false
 	ms.hate = map[uint32]float64{}
 	for _, ef := range m.effects {
@@ -103,6 +110,5 @@ func (z *Zone) putToSleep(m *entity) {
 	m.effects = nil
 	m.clearAction()
 	m.stopMoving()
-	z.aoiDirty = true
 	z.bossChanged(m)
 }

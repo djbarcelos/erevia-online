@@ -31,6 +31,8 @@ export interface WorldMapDeps {
   serverNow?(): number;
   /** Missão rastreada (área, ícone e linha até ela). */
   quests?: QuestTracker;
+  /** Botão "Ir" da missão rastreada (anda até o lugar do passo). */
+  go?(questId: string): void;
 }
 
 const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -179,7 +181,10 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     b.type = "button";
     b.append(el("span", "qm", "◎"), el("span", null, el("b", null, q.title), el("small", null, t.name)));
     b.onclick = () => flyTo(t.x, t.z, Math.max(1.6, Math.min(5, 90 / Math.max(10, t.radius * 3))));
-    questRow.replaceChildren(b);
+    if (!d.go) return questRow.replaceChildren(b);
+    const go = button("Ir", "btn btn-sm btn-gold wmap-go", () => d.go?.(q.id));
+    go.title = "Andar até o objetivo (WASD, clique no chão ou ser atacado param)";
+    questRow.replaceChildren(el("div", "wmap-quest-go", b, go));
   };
   const offQuests = d.quests?.onChange(renderQuest);
   side.append(el("h3", "wmap-title", "Erevia"), here, questSec, questRow, el("div", "wmap-sec", "Camadas"), layers, el("div", "wmap-sec", "Regiões"), zoneList);

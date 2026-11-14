@@ -20,6 +20,18 @@ export interface QuestTarget {
   /** Metros: dentro dele o jogador chegou (a seta some). */
   radius: number;
   name: string;
+  /** Índice do passo (o "Ir" percebe quando ele termina). */
+  step: number;
+  /** Matar: nomes dos monstros que contam (vazio = qualquer). */
+  monsters: string[];
+}
+
+/** O primeiro passo pendente com lugar desta missão (null = nenhum: usar skill, poção...). */
+export function questStepTarget(q: QuestInfo): QuestTarget | null {
+  const i = q.steps.findIndex((s) => s.count < s.need && s.place !== QuestPlaceKind.NONE);
+  if (i < 0) return null;
+  const s = q.steps[i];
+  return { questId: q.id, kind: s.place, x: s.x, z: s.z, radius: Math.max(1, s.radius), name: s.placeName, step: i, monsters: s.monsters };
 }
 
 const TRACK_KEY = "erevia.questTrack";
@@ -77,6 +89,12 @@ export class QuestTracker {
     this.refresh();
   }
 
+  /** Alvo de agora de uma missão qualquer (o "Ir"; vale com os marcadores desligados). */
+  targetOf(questId: string): QuestTarget | null {
+    const q = this.quests.find((q) => q.id === questId);
+    return q ? questStepTarget(q) : null;
+  }
+
   /** Alvo atual (null: sem missão com lugar ou marcadores desligados). */
   target(): QuestTarget | null {
     return this.current;
@@ -89,8 +107,7 @@ export class QuestTracker {
 
   private refresh(): void {
     const q = this.tracked();
-    const s = settings.get().questMarkers ? q?.steps.find((s) => s.count < s.need && s.place !== QuestPlaceKind.NONE) : undefined;
-    this.current = q && s ? { questId: q.id, kind: s.place, x: s.x, z: s.z, radius: Math.max(1, s.radius), name: s.placeName } : null;
+    this.current = q && settings.get().questMarkers ? questStepTarget(q) : null;
     for (const fn of this.subs) fn();
   }
 }

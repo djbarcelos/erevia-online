@@ -438,7 +438,7 @@ func (z *Zone) invRewards(v *invasion, won bool) string {
 		z.system(p, fmt.Sprintf("Invasão: %d abates, %.0f%% da contribuição do melhor defensor. Recompensa: %s.",
 			v.kills[p.id], w*100, strings.Join(parts, ", ")))
 		if xp > 0 {
-			z.grantXP(p, xp)
+			z.grantXPFrom(p, xpInvasion, xp)
 		}
 		z.track(p, "invasion", v.reason, int64(math.Round(s.points)), map[string]any{"won": won, "rank": rank + 1, "kills": v.kills[p.id]})
 		if won {

@@ -197,6 +197,12 @@ func run(log *slog.Logger) error {
 	case <-time.After(10 * time.Second):
 		log.Warn("persistence did not finish in time")
 	}
+	// E a telemetria gravar o fim das sessões de quem estava online (tempo de jogo por nível).
+	select {
+	case <-z.TelemetryDone():
+	case <-time.After(10 * time.Second):
+		log.Warn("telemetry did not finish in time")
+	}
 	log.Info("bye")
 	return nil
 }
