@@ -434,6 +434,8 @@ var Items = func() map[string]*ItemDef {
 		stackable("raid_fragment", "Fragmento do Rei Ossário", KindMaterial, 5000, "crown",
 			"Um pedaço da coroa de Ozrhal. Ainda está frio como uma tumba."),
 		stackable("broken_crown", "Coroa Partida", KindMaterial, 1500, "crown", "A coroa do Senhor dos Ossos. Vale uma fortuna."),
+		stackable("captain_insignia", "Insígnia do Capitão", KindMaterial, 900, "insignia",
+			"O distintivo de ferro do Capitão Ossudo (raro dos Campos dos Ossos, só à noite)."),
 
 		// Moedas no chão.
 		{ID: GoldID, Name: "Moedas de ouro", Kind: KindGold, Grade: GradeCommon, Stack: math.MaxInt32, Icon: "gold",

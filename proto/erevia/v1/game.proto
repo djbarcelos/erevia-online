@@ -1145,6 +1145,7 @@ message Entity {
   BodyLook look = 24; // jogadores: visual do corpo
   bool raid = 25; // raid boss (barra no topo da tela)
   string spec = 26; // jogadores: especialização (SpecInfo.id; "" = nenhuma)
+  bool rare = 40; // monstro raro (named): nome dourado e selo no quadro do alvo
 }
 
 message EntityState {
