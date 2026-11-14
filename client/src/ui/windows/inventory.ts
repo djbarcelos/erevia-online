@@ -31,7 +31,8 @@ import { createPreview } from "../preview3d";
 
 export interface InventoryDeps {
   store: ItemStore;
-  me(): { myClass: string; myLevel: number; name: string; emblem: string };
+  /** myClass: a classe ativa (o que dá para equipar); bodyClass: a principal (o modelo). */
+  me(): { myClass: string; myLevel: number; name: string; emblem: string; bodyClass?: string };
   stats(): SelfStats | null;
   onStats(fn: () => void): () => void;
   move(fromPlace: number, fromSlot: number, toPlace: number, toSlot: number): void;
@@ -147,7 +148,7 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
     const key = JSON.stringify(look);
     if (key === lastLook) return;
     lastLook = key;
-    void pv.show(me0.myClass as ClassId, look);
+    void pv.show((me0.bodyClass ?? me0.myClass) as ClassId, look);
   };
 
   // ---------- Ações ----------

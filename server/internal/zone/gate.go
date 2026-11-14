@@ -170,7 +170,9 @@ func (z *Zone) handOff(p *entity, st *SavedState) bool {
 	pl := p.pl
 	// Cópias novas (nada é dividido com o estado que vai para a persistência).
 	info := JoinInfo{
-		ID: p.id, Name: p.name, Class: pl.class, X: st.X, Z: st.Z, Zone: st.Zone,
+		// Class é a principal (o corpo); a progressão que vai é a da classe ativa, e as
+		// classes (com a ativa e a recarga da troca) vão em Classes (subclass.go).
+		ID: p.id, Name: p.name, Class: pl.mainClass, Classes: classSnapshot(p), X: st.X, Z: st.Z, Zone: st.Zone,
 		XP: pl.xp, HP: st.HP, MP: st.MP, Gold: pl.inv.gold, Items: pl.inv.records(),
 		Attrs: pl.attrs, Ranks: maps.Clone(pl.ranks), Hotbar: slices.Clone(pl.hotbar),
 		Emblem: pl.emblem, Look: pl.look,

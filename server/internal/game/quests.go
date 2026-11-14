@@ -102,8 +102,8 @@ const TutorialStart = "tut_gate"
 // tutorial (personagens de antes das missões).
 const TutorialSkipLevel = 5
 
-// questList: o tutorial dos primeiros ~15 minutos, em ordem, a segunda classe e os
-// contratos de caça.
+// questList: o tutorial dos primeiros ~15 minutos, em ordem, a segunda classe, a
+// subclasse e os contratos de caça.
 var questList = append([]*QuestDef{
 	{
 		ID: "tut_gate", Title: "Além das muralhas", Category: QuestTutorial,
@@ -170,6 +170,30 @@ var questList = append([]*QuestDef{
 			{Goal: GoalSpec, Count: 1, Text: "Escolher o seu caminho"},
 		},
 		Reward: QuestReward{Gold: 1000, Items: []QuestItem{{ID: "scroll_return", Count: 3}}},
+	},
+	// Subclasse (tunnel#156): chega com a classe principal no 30; o juramento libera a
+	// escolha de uma outra classe base na janela do Guardião (zone/subclass.go).
+	{
+		ID: SubclassQuestCall, Title: "O Chamado das Sendas", Unlock: SubclassQuestLevel, Category: QuestStory,
+		Text: "Quem domina uma classe começa a ouvir as outras. Edrian, o Guardião das Sendas, espera na praça de " +
+			"Vel'Aran, ao sul do poço, por quem quer trilhar um segundo caminho.",
+		Steps: []QuestStep{{Goal: GoalTalk, Target: TalkGuardian, Count: 1, Text: "Falar com Edrian, o Guardião das Sendas, na praça"}},
+		Next:  SubclassQuestTrial,
+	},
+	{
+		ID: SubclassQuestTrial, Title: "A Prova das Duas Sendas", Category: QuestStory,
+		Text: "Edrian quer ver se o seu braço aguenta duas vidas. Derrote os Golens Ancestrais no Fundo do Vale, " +
+			"na borda sul do Vale das Pedras Vivas.",
+		Steps:  []QuestStep{{Goal: GoalKill, Target: SubclassTrialMonster, Count: SubclassTrialKills, Text: "Derrotar Golens Ancestrais"}},
+		Reward: QuestReward{Gold: 5000},
+		Next:   SubclassQuestOath,
+	},
+	{
+		ID: SubclassQuestOath, Title: "O Juramento", Category: QuestStory,
+		Text: "Volte a Edrian e faça o juramento. Ele mostra as outras classes: a que você escolher começa no nível 20, " +
+			"e é com ele que você troca de classe depois.",
+		Steps:  []QuestStep{{Goal: GoalTalk, Target: TalkGuardian, Count: 1, Text: "Fazer o juramento com Edrian"}},
+		Reward: QuestReward{Items: []QuestItem{{ID: "scroll_return", Count: 3}}},
 	},
 }, contractQuests()...)
 

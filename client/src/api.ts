@@ -7,8 +7,14 @@ export type ClassId = "knight" | "barbarian" | "mage" | "rogue";
 export interface CharacterInfo {
   id: number;
   name: string;
+  /** Classe principal (a do corpo: modelo e visual). */
   class: ClassId;
+  /** Nível da classe ativa. */
   level?: number;
+  /** Classe ativa (a subclasse em uso; igual a class sem subclasse). */
+  activeClass?: ClassId;
+  /** Com subclasse: cada classe e o nível dela (a principal primeiro). */
+  classes?: { class: ClassId; level: number; main?: boolean }[];
   /** Cor do emblema (#rrggbb; o servidor manda a padrão da classe se não houver). */
   emblem?: string;
   /** Modelos 3D das armas que estão nas mãos agora e a raridade da principal. */

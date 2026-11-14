@@ -313,16 +313,21 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
   const selectFoot = el("div", "char-foot select-foot");
   let picked = 0;
 
+  /** "Mago · Nv 20" (a classe ativa) e, com subclasse, "Cavaleiro 30 · Mago 20". */
+  const classLine = (c: CharacterInfo, nv: string) => `${classInfo(c.activeClass ?? c.class).label} · ${nv} ${c.level ?? 1}`;
+  const classesLine = (c: CharacterInfo) => (c.classes && c.classes.length > 1 ? c.classes.map((k) => `${classInfo(k.class).label} ${k.level}`).join(" · ") : "");
   const renderSelect = () => {
     selectPanel.replaceChildren(el("h2", "title panel-title", "Personagens", el("span", "count", ` ${roster.length}/${max}`)));
     roster.forEach((c, i) => {
-      const info = classInfo(c.class);
+      const info = classInfo(c.activeClass ?? c.class);
       const b = el("button", "roster-slot");
       b.type = "button";
       b.setAttribute("aria-pressed", String(i === picked));
       b.style.setProperty("--cc", info.color);
       b.style.setProperty("--emblem", c.emblem ?? DEFAULT_LOOK[c.class].emblem);
-      b.append(el("span", "roster-crest", info.label[0]), el("span", "roster-info", el("b", null, c.name), el("span", null, `${info.label} · Nv ${c.level ?? 1}`)));
+      b.append(el("span", "roster-crest", info.label[0]), el("span", "roster-info", el("b", null, c.name), el("span", null, classLine(c, "Nv"))));
+      const subs = classesLine(c);
+      if (subs) b.title = subs;
       b.onclick = () => {
         picked = i;
         renderSelect();
@@ -341,9 +346,10 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     if (!c) return;
     const look = rosterLook(c);
     void preview?.show(c.class, look);
-    setPlate(c.name, `${classInfo(c.class).label} · Nível ${c.level ?? 1}`, look.emblem);
+    const subs = classesLine(c);
+    setPlate(c.name, classLine(c, "Nível") + (subs ? ` (${subs})` : ""), look.emblem);
     const play = button("Entrar no mundo", "btn btn-gold btn-play", () => onPlay(c));
-    selectFoot.replaceChildren(el("div", "foot-info", el("b", null, c.name), el("span", "muted small", `${classInfo(c.class).label} · Nível ${c.level ?? 1}`)), play);
+    selectFoot.replaceChildren(el("div", "foot-info", el("b", null, c.name), el("span", "muted small", classLine(c, "Nível") + (subs ? ` · ${subs}` : ""))), play);
   };
 
   // ---------- Criação ----------

@@ -16,7 +16,8 @@ import type { BodyLook } from "../../world/body-look";
 
 export interface CharacterDeps {
   store: ItemStore;
-  me(): { myClass: string; myLevel: number; name: string; emblem: string; body?: BodyLook };
+  /** myClass: a classe ativa; bodyClass: a principal (o modelo da prévia). */
+  me(): { myClass: string; myLevel: number; name: string; emblem: string; body?: BodyLook; bodyClass?: string };
   stats(): SelfStats | null;
   progress(): Progress | null;
   onStats(fn: () => void): () => void;
@@ -272,7 +273,7 @@ export function buildCharacter(d: CharacterDeps): HTMLElement {
     const key = JSON.stringify(look);
     if (key !== lastLook) {
       lastLook = key;
-      void pv.show(m.myClass as ClassId, look);
+      void pv.show((m.bodyClass ?? m.myClass) as ClassId, look);
     }
   }
 

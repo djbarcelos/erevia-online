@@ -60,6 +60,7 @@ func (z *Zone) spawnNPCs() {
 	z.spawnMaster(npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1))
 	z.spawnBoard(boardID) // o Quadro de Contratos (contracts.go)
 	z.spawnAuctioneer(auctioneerID)
+	z.spawnGuardian(guardianID) // o Guardião das Sendas (subclass.go)
 }
 
 // storageKeeper: o Guarda do Armazém, na praça, do lado oeste do poço.

@@ -139,6 +139,8 @@ export interface EntityInfo {
   clanName: string;
   /** Jogadores: especialização (id em Welcome.specs; "" = ainda não escolheu). */
   spec: string;
+  /** Jogadores: classe ativa (a subclasse em uso, ou a principal, que é a do modelo). */
+  cls: string;
 }
 
 /**
@@ -384,6 +386,12 @@ export class EntityManager {
     v.clanName = s.clanName;
     v.title = s.title;
     v.spec = s.spec;
+    // Trocou de classe (subclasse): a classe e o nível novos (o modelo continua o da principal).
+    if (s.activeClass) v.cls = s.activeClass;
+    if (s.level > 0 && s.level !== v.level) {
+      v.level = s.level;
+      this.refreshLabel(v);
+    }
     this.refreshName(v);
     // O clã do jogador local mudou: os aliados de clã mudam de cor também.
     if (s.id === this.localId) for (const o of this.views.values()) if (o !== v) this.refreshName(o);
@@ -562,7 +570,7 @@ export class EntityManager {
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
       model: e.model, boss: e.boss, rare: e.rare, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
-      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, baseColor, clanText, titleText, pkRing: null,
+      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, cls: e.activeClass || e.model, baseColor, clanText, titleText, pkRing: null,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,

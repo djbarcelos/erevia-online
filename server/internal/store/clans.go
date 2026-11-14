@@ -53,7 +53,7 @@ func (s *Store) LoadClans(ctx context.Context) ([]Clan, error) {
 	for i, c := range clans {
 		byID[c.ID] = i
 	}
-	rows, err = s.pool.Query(ctx, `SELECT m.clan_id, m.character_id, c.name, c.class, c.level, m.rank
+	rows, err = s.pool.Query(ctx, `SELECT m.clan_id, m.character_id, c.name, `+activeClassSQL+`, c.level, m.rank
 		FROM clan_members m JOIN characters c ON c.id = m.character_id ORDER BY m.clan_id, m.rank DESC, c.name`)
 	if err != nil {
 		return nil, err

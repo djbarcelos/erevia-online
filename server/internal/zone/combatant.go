@@ -93,6 +93,12 @@ type playerState struct {
 	hotbar []string
 	// Especialização (segunda classe, nível 20): id do caminho ("" = ainda não escolheu).
 	spec string
+	// Subclasse (subclass.go): class acima é a classe ativa (skills, equipamento e
+	// atributos), e xp, attrs, ranks, hotbar, spec e o nível da entidade são dela.
+	// mainClass é a principal, a do corpo (modelo e visual). Em classes, a entrada da
+	// ativa só é atualizada ao salvar e ao trocar (classSnapshot).
+	mainClass string
+	classes   game.ClassSet
 	// Muralha Viva: quando pode disparar de novo. Sumir: o próximo golpe é crítico.
 	lastStandReady float64
 	ambushCrit     bool

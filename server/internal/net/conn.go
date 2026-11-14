@@ -67,9 +67,10 @@ type Character struct {
 	Reputation game.ReputationState
 	// Bestiário: abates por monstro e famílias completas.
 	Bestiary game.BestiaryState
-	Zone         string            // mapa onde está ("" = starter)
+	Zone     string // mapa onde está ("" = starter)
 	// Vitalidade: estoque, última saída e maior nível da conta.
 	Vitality game.VitalityState
+	Classes  game.ClassSet // subclasse: as classes (Class é a principal; a progressão é da ativa)
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -146,8 +147,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Achievements: char.Achievements, Title: char.Title, Spec: char.Spec, Mastery: char.Mastery, LoadedAt: loadedAt, Peer: sess,
 		Contracts: char.Contracts, Reputation: char.Reputation,
 		Bestiary: char.Bestiary,
-		Zone: char.Zone,
-		Vitality: char.Vitality,
+		Zone:     char.Zone,
+		Vitality: char.Vitality, Classes: char.Classes,
 	})
 
 	s.readPump(ctx, sess, char.ID)
@@ -284,6 +285,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			z.ProgressAction(ctx, id, m.MasteryCmd)
 		case *pb.ClientMessage_BestiaryCmd:
 			z.ProgressAction(ctx, id, m.BestiaryCmd)
+		case *pb.ClientMessage_SubclassCmd:
+			z.ProgressAction(ctx, id, m.SubclassCmd)
 		case *pb.ClientMessage_TradeCmd:
 			z.Trade(ctx, id, m.TradeCmd)
 		case *pb.ClientMessage_AuctionCmd:

@@ -29,7 +29,7 @@ type Friend struct {
 
 // Friends lista quem o personagem segue, pelo nome.
 func (s *Store) Friends(ctx context.Context, characterID int64) ([]Friend, error) {
-	rows, err := s.pool.Query(ctx, `SELECT c.id, c.name, c.class, c.level
+	rows, err := s.pool.Query(ctx, `SELECT c.id, c.name, `+activeClassSQL+`, c.level
 		FROM friends f JOIN characters c ON c.id = f.friend_id
 		WHERE f.character_id = $1 ORDER BY lower(c.name)`, characterID)
 	if err != nil {
@@ -45,7 +45,7 @@ func (s *Store) Friends(ctx context.Context, characterID int64) ([]Friend, error
 // characterByName acha um personagem pelo nome, sem diferenciar maiúsculas.
 func characterByName(ctx context.Context, tx pgx.Tx, name string) (Friend, error) {
 	var f Friend
-	err := tx.QueryRow(ctx, `SELECT id, name, class, level FROM characters WHERE lower(name) = lower($1)`, name).
+	err := tx.QueryRow(ctx, `SELECT c.id, c.name, `+activeClassSQL+`, c.level FROM characters c WHERE lower(c.name) = lower($1)`, name).
 		Scan(&f.ID, &f.Name, &f.Class, &f.Level)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return f, ErrNotFound
