@@ -160,7 +160,95 @@ type Spawn struct {
 	// O nível sobe com a profundidade: LevelMin na borda norte, LevelMax na borda sul.
 	Area   bool
 	Radius float64
-	Region string // nome da região (aparece no mapa)
+	// Região: o nome que aparece no mapa. Um disco (Area) ou setor com Region tem dono: os
+	// anéis das outras regiões não sorteiam monstros lá dentro (ver Owned).
+	Region string
+	// Setor do anel, em graus: o anel só sorteia entre AngleMin e AngleMax. 0° = leste (+X)
+	// e o ângulo cresce para o norte (+Z), o sentido de atan2(z, x) e anti-horário no mapa:
+	// 90° = norte, 180° = oeste, 270° = sul. Com AngleMin > AngleMax o setor cruza o 0°
+	// (340 → 20 é o leste, 40° de largura). Os dois iguais (0 e 0) = o anel inteiro.
+	AngleMin, AngleMax float64
+	// When: período em que o spawn existe. Na virada, os do outro período saem quando
+	// estão fora de combate e os deste entram no lugar (zone/spawnperiod.go).
+	When When
+}
+
+// When é o período em que um spawn existe.
+type When uint8
+
+const (
+	WhenAny   When = iota // sempre (o padrão)
+	WhenDay               // só de dia (some à noite)
+	WhenNight             // só à noite
+)
+
+// Active informa se o spawn existe no período (night = game.IsNight).
+func (w When) Active(night bool) bool {
+	return w == WhenAny || (w == WhenNight) == night
+}
+
+func (w When) String() string {
+	switch w {
+	case WhenDay:
+		return "de dia"
+	case WhenNight:
+		return "à noite"
+	}
+	return ""
+}
+
+// Sector informa se o spawn é um setor de anel (e não o anel inteiro).
+func (s Spawn) Sector() bool {
+	return !s.Fixed && !s.Area && s.AngleMin != s.AngleMax
+}
+
+// SectorSpan devolve o começo do setor em [0, 360) e a largura em (0, 360]: o setor vai
+// de start a start+span no sentido anti-horário (passando do 360 quando cruza o 0°).
+func (s Spawn) SectorSpan() (start, span float64) {
+	start = wrapDeg(s.AngleMin)
+	span = wrapDeg(s.AngleMax - s.AngleMin)
+	if span == 0 {
+		span = 360 // 0 → 360: o anel inteiro, mas declarado como setor
+	}
+	return start, span
+}
+
+// Owned informa se o spawn declara uma área com dono (disco ou setor com Region).
+func (s Spawn) Owned() bool {
+	return s.Region != "" && (s.Area || s.Sector())
+}
+
+// Contains informa se (x, z) está no disco ou setor do spawn, com uma folga em metros.
+func (s Spawn) Contains(x, z, margin float64) bool {
+	switch {
+	case s.Area:
+		return math.Hypot(x-s.X, z-s.Z) <= s.Radius+margin
+	case s.Sector():
+		r := math.Hypot(x, z)
+		if r < s.RMin-margin || r > s.RMax+margin {
+			return false
+		}
+		start, span := s.SectorSpan()
+		pad := margin / math.Max(r, 1) * 180 / math.Pi // a folga em graus naquele raio
+		return wrapDeg(AngleDeg(x, z)-start+pad) <= span+2*pad
+	}
+	return false
+}
+
+// AngleDeg é o ângulo de (x, z) em graus, em [0, 360), na convenção de Spawn.AngleMin.
+func AngleDeg(x, z float64) float64 {
+	return wrapDeg(math.Atan2(z, x) * 180 / math.Pi)
+}
+
+func wrapDeg(a float64) float64 {
+	a = math.Mod(a, 360)
+	if a < 0 {
+		a += 360
+	}
+	if a >= 360 { // -1e-15 + 360 arredonda para 360
+		a = 0
+	}
+	return a
 }
 
 // Covil do raid boss (a Cripta Esquecida, no nordeste do mapa).
@@ -176,9 +264,20 @@ type SpawnPoint struct {
 	Level   int
 	X, Z    float64
 	Respawn float64
+	When    When   // período do spawn de origem
+	Region  string // região do spawn de origem (a troca dia/noite é por região)
 }
 
+// ownedMargin: folga (m) em volta das áreas com dono e do covil em que os anéis não sorteiam.
+const ownedMargin = 6.0
+
 // DefaultSpawns: 3 anéis de caça + chefe + o Vale das Pedras Vivas (golens, 20–30), no sul.
+//
+// O id de cada monstro é a sua posição na lista expandida: spawn novo vai sempre para o
+// fim, e mudar Count de um spawn do meio muda o id de todos os que vêm depois. Para tirar
+// monstros de um pedaço do anel, declare a área (setor ou disco com Region): o anel sorteia
+// fora dela sem mudar a contagem. Numa região, os spawns WhenDay e WhenNight devem somar a
+// mesma quantidade (os noturnos trocam os do dia, não somam).
 func DefaultSpawns() []Spawn {
 	return []Spawn{
 		{Monster: "skeleton_minion", Count: 30, RMin: 46, RMax: 74, LevelMin: 1, LevelMax: 5, Respawn: 20},
@@ -201,14 +300,34 @@ func DefaultSpawns() []Spawn {
 // ExpandSpawns sorteia as posições (determinístico para a mesma semente).
 func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 	var out []SpawnPoint
+	var owned []Spawn // discos e setores com dono: os anéis das outras regiões ficam fora
+	for _, s := range spawns {
+		if s.Owned() {
+			owned = append(owned, s)
+		}
+	}
+	// blocked: o ponto do anel s cai no covil ou na área de outra região.
+	blocked := func(s Spawn, x, z float64) bool {
+		if math.Hypot(x-RaidLairX, z-RaidLairZ) <= RaidLairRadius+ownedMargin {
+			return true
+		}
+		for _, o := range owned {
+			if o.Region != s.Region && o.Contains(x, z, ownedMargin) {
+				return true
+			}
+		}
+		return false
+	}
 	for _, s := range spawns {
 		def := Monsters[s.Monster]
 		if def == nil {
 			continue
 		}
+		start, span := s.SectorSpan()
 		for i := 0; i < s.Count; i++ {
 			if s.Fixed {
-				out = append(out, SpawnPoint{Monster: def, Level: s.LevelMin, X: s.X, Z: s.Z, Respawn: s.Respawn})
+				out = append(out, SpawnPoint{Monster: def, Level: s.LevelMin, X: s.X, Z: s.Z, Respawn: s.Respawn,
+					When: s.When, Region: s.Region})
 				continue
 			}
 			if s.Area {
@@ -218,23 +337,30 @@ func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 				x, z := s.X+r*math.Cos(a), s.Z+r*math.Sin(a)
 				depth := (s.Z + s.Radius - z) / math.Max(1e-9, 2*s.Radius) // 0 na borda norte, 1 na sul
 				level := s.LevelMin + int(math.Round(depth*float64(s.LevelMax-s.LevelMin)))
-				out = append(out, SpawnPoint{Monster: def, Level: level, X: x, Z: z, Respawn: s.Respawn})
+				out = append(out, SpawnPoint{Monster: def, Level: level, X: x, Z: z, Respawn: s.Respawn,
+					When: s.When, Region: s.Region})
 				continue
 			}
-			// Raio uniforme em área (sqrt) para não amontoar perto do centro do anel. Fora do
-			// covil do raid boss (sorteia de novo; só quem cairia lá dentro muda de lugar).
+			// Raio uniforme em área (sqrt) para não amontoar perto do centro do anel; o ângulo
+			// só dentro do setor, se houver. Fora do covil do raid boss e das áreas com dono de
+			// outras regiões (sorteia de novo; só quem cairia lá dentro muda de lugar).
 			var r, a float64
-			for range 20 {
+			for range 64 {
 				u := rng.Float64()
 				r = math.Sqrt(s.RMin*s.RMin + u*(s.RMax*s.RMax-s.RMin*s.RMin))
-				a = rng.Float64() * 2 * math.Pi
-				if math.Hypot(r*math.Cos(a)-RaidLairX, r*math.Sin(a)-RaidLairZ) > RaidLairRadius+6 {
+				if s.Sector() {
+					a = (start + rng.Float64()*span) * math.Pi / 180
+				} else {
+					a = rng.Float64() * 2 * math.Pi // a mesma conta de antes: as posições não mudam
+				}
+				if !blocked(s, r*math.Cos(a), r*math.Sin(a)) {
 					break
 				}
 			}
 			t := (r - s.RMin) / math.Max(1e-9, s.RMax-s.RMin)
 			level := s.LevelMin + int(math.Round(t*float64(s.LevelMax-s.LevelMin)))
-			out = append(out, SpawnPoint{Monster: def, Level: level, X: r * math.Cos(a), Z: r * math.Sin(a), Respawn: s.Respawn})
+			out = append(out, SpawnPoint{Monster: def, Level: level, X: r * math.Cos(a), Z: r * math.Sin(a), Respawn: s.Respawn,
+				When: s.When, Region: s.Region})
 		}
 	}
 	return out

@@ -40,6 +40,9 @@ type monsterState struct {
 	abilNext  []float64
 	abilGen   int
 	abilFight bool
+	// Fora do período do spawn (game.When): fora do mundo e sem renascer até o período
+	// voltar (spawnperiod.go).
+	dormant bool
 }
 
 func (z *Zone) spawnMonsters() {
@@ -50,7 +53,7 @@ func (z *Zone) spawnMonsters() {
 		m := &entity{
 			id: id, kind: pb.EntityKind_ENTITY_KIND_MONSTER,
 			name: sp.Monster.Name, model: sp.Monster.Model, level: sp.Level, scale: sp.Monster.Scale,
-			pos: home, dest: home,
+			pos: home, dest: home, lastCombat: -math.MaxFloat64 / 2,
 			stats: game.MonsterStats(sp.Monster, sp.Level),
 			mon: &monsterState{
 				def: sp.Monster, spawn: sp, home: home,
@@ -60,6 +63,10 @@ func (z *Zone) spawnMonsters() {
 		m.hp = m.stats.MaxHP
 		if sp.Monster.Raid {
 			z.initRaid(m) // pode começar morto (renascimento salvo no banco)
+		}
+		if !sp.When.Active(z.night) {
+			m.dead, m.hp = true, 0 // do outro período: começa fora do mundo
+			m.mon.hidden, m.mon.dormant = true, true
 		}
 		m.sentHP, m.sentMaxHP = m.hpInt(), m.maxHPInt()
 		z.monsters[id] = m
@@ -192,6 +199,8 @@ func (z *Zone) updateDeadMonster(m *entity) {
 	}
 	switch {
 	case ms.summon:
+	case ms.dormant || !ms.spawn.When.Active(z.night):
+		ms.dormant = true // morreu fora do período: só volta quando o período dele voltar
 	case ms.raid != nil:
 		z.updateDeadRaid(m)
 	case z.now >= ms.respawnAt:
