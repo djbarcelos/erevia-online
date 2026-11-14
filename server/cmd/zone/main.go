@@ -1,4 +1,4 @@
-// Comando zone: servidor de jogo do Erevia (API HTTP + WebSocket + uma zona).
+// Comando zone: servidor de jogo do Erevia (API HTTP + WebSocket + as zonas, uma por mapa).
 package main
 
 import (
@@ -19,7 +19,6 @@ import (
 	"erevia/server/internal/api"
 	gamenet "erevia/server/internal/net"
 	"erevia/server/internal/store"
-	"erevia/server/internal/world"
 	"erevia/server/internal/zone"
 )
 
@@ -68,19 +67,7 @@ func run(log *slog.Logger) error {
 	log.Info("auth providers", "google", cfg.Google != nil, "discord", cfg.Discord != nil, "dev", devLogin)
 	httpAPI := api.New(st, cfg, log)
 
-	// Persistência: a zona entrega estados por canal; uma goroutine (abaixo, depois de criar
-	// a zona, que registra os erros) grava em lote.
-	saves := make(chan []zone.SavedState, 1024)
-	persistDone := make(chan struct{})
-
-	wld, err := world.Load()
-	if err != nil {
-		return err
-	}
-	zcfg := zone.DefaultConfig()
-	zcfg.World = wld
-	zcfg.Size = wld.Size
-	zcfg.SafeRadius = wld.SafeRadius
+	zcfg := zone.DefaultConfig() // a base de todas as zonas (cada mapa troca o mundo, os monstros e os portões)
 	lctx, lcancel := context.WithTimeout(ctx, 30*time.Second)
 	clans, err := st.LoadClans(lctx)
 	lcancel()
@@ -123,20 +110,37 @@ func run(log *slog.Logger) error {
 	}
 	zcfg.DevCommands = devLogin                         // /raid no chat: só em desenvolvimento
 	zcfg.Version = env("RAILWAY_GIT_COMMIT_SHA", "dev") // a Railway define o commit do deploy
-	z := zone.New(zcfg, log.With("zone", "starter"), saves)
-	z.SetClanBackend(clanStore{st})
-	z.SetBossBackend(bossStore{st})
-	z.SetEventBackend(serverEventStore{st})
-	z.SetModBackend(modStore{st})
-	z.SetSocialBackend(socialStore{st})
-	z.SetEventSink(eventStore{st})
-	z.SetRankingBackend(rankingStore{st})
-	go func() {
-		defer close(persistDone)
-		for batch := range saves {
-			saveBatch(st, z, log, batch)
+	// Zonas: uma por mapa, cada uma com a sua goroutine e o seu canal de persistência
+	// (uma goroutine por zona grava em lote). O mapa de testes só liga com DEV_LOGIN=true
+	// ou EREVIA_ZONES=teste (zone/maps.go).
+	maps := zone.EnabledMaps(devLogin, os.Getenv("EREVIA_ZONES"))
+	m := zone.NewManager(log)
+	var persistDone []chan struct{}
+	for _, id := range maps {
+		cfg, err := zone.MapConfig(zcfg, id, maps)
+		if err != nil {
+			return err
 		}
-	}()
+		saves := make(chan []zone.SavedState, 1024)
+		z := zone.New(cfg, log.With("zone", id), saves)
+		z.SetClanBackend(clanStore{st})
+		z.SetBossBackend(bossStore{st})
+		z.SetEventBackend(serverEventStore{st})
+		z.SetModBackend(modStore{st})
+		z.SetSocialBackend(socialStore{st})
+		z.SetEventSink(eventStore{st})
+		z.SetRankingBackend(rankingStore{st})
+		m.Add(z)
+		done := make(chan struct{})
+		persistDone = append(persistDone, done)
+		go func() {
+			defer close(done)
+			for batch := range saves {
+				saveBatch(st, m, log, batch)
+			}
+		}()
+	}
+	log.Info("zones", "maps", strings.Join(maps, ","))
 
 	// Conta apagada: o banco já apagou tudo; a zona derruba quem estiver online e acerta os
 	// clãs em memória do jeito que o banco deixou.
@@ -146,17 +150,17 @@ func run(log *slog.Logger) error {
 			g.Clans = append(g.Clans, zone.ClanSuccession{ClanID: c.ClanID, LeaderID: c.LeaderID})
 		}
 		pctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		z.AccountDeleted(pctx, g)
+		m.AccountDeleted(pctx, g)
 		cancel()
 	})
 	zoneDone := make(chan struct{})
-	go func() { z.Run(ctx); close(zoneDone) }()
+	go func() { m.Run(ctx); close(zoneDone) }()
 
-	// Portal de administração (/admin e /api/admin/*): só GM; "online agora" vem da zona pelo canal.
-	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: z})
+	// Portal de administração (/admin e /api/admin/*): só GM; "online agora" vem das zonas pelo canal.
+	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: m})
 	mux := http.NewServeMux()
 	httpAPI.Register(mux)
-	mux.Handle("/ws", gamenet.NewServer(z, &wsBackend{api: httpAPI, store: st}, log, origins))
+	mux.Handle("/ws", gamenet.NewServer(m, &wsBackend{api: httpAPI, store: st}, log, origins))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		pctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -173,7 +177,7 @@ func run(log *slog.Logger) error {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           recoverHTTP(z, mux),
+		Handler:           recoverHTTP(m, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		// Conexões WebSocket herdam ctx e são encerradas no SIGINT.
 		BaseContext: func(stdnet.Listener) context.Context { return ctx },
@@ -190,18 +194,24 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
-	// Espera a zona salvar todo mundo e a persistência terminar de gravar.
+	// Espera as zonas salvarem todo mundo e a persistência terminar de gravar.
 	<-zoneDone
-	select {
-	case <-persistDone:
-	case <-time.After(10 * time.Second):
-		log.Warn("persistence did not finish in time")
+	limit := time.After(10 * time.Second)
+	for _, done := range persistDone {
+		select {
+		case <-done:
+		case <-limit:
+			log.Warn("persistence did not finish in time")
+		}
 	}
 	// E a telemetria gravar o fim das sessões de quem estava online (tempo de jogo por nível).
-	select {
-	case <-z.TelemetryDone():
-	case <-time.After(10 * time.Second):
-		log.Warn("telemetry did not finish in time")
+	limit = time.After(10 * time.Second)
+	for _, z := range m.Zones() {
+		select {
+		case <-z.TelemetryDone():
+		case <-limit:
+			log.Warn("telemetry did not finish in time")
+		}
 	}
 	log.Info("bye")
 	return nil
@@ -209,7 +219,7 @@ func run(log *slog.Logger) error {
 
 // saveBatch grava um lote de personagens (e armazéns). Falhas viram db_error; um panic
 // (dado estranho no lote) é registrado e perde só este lote, sem derrubar o processo.
-func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.SavedState) {
+func saveBatch(st *store.Store, z reporter, log *slog.Logger, batch []zone.SavedState) {
 	defer func() {
 		if r := recover(); r != nil {
 			z.ReportPanic("persist", 0, "", r, debug.Stack())
@@ -221,7 +231,7 @@ func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.Sav
 			CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP,
 			Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
 			Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
-			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec, Mastery: p.Mastery,
+			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec, Mastery: p.Mastery, Zone: p.Zone,
 		}
 		if s := p.Storage; s != nil {
 			states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
@@ -248,7 +258,7 @@ func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.Sav
 
 // recoverHTTP registra (server_error) um panic num handler HTTP e responde 500. O net/http
 // já não deixa o processo cair, mas sem isto o erro só ia para o log.
-func recoverHTTP(z *zone.Zone, h http.Handler) http.Handler {
+func recoverHTTP(z reporter, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			v := recover()
@@ -267,6 +277,12 @@ func recoverHTTP(z *zone.Zone, h http.Handler) http.Handler {
 		}()
 		h.ServeHTTP(w, r)
 	})
+}
+
+// reporter registra panics e erros do banco na telemetria (zone.Manager: a do mapa principal).
+type reporter interface {
+	ReportPanic(where string, playerID uint32, msg string, r any, stack []byte)
+	ReportDBError(op string, err error)
 }
 
 // wsBackend liga o WebSocket à sessão HTTP e ao banco.
@@ -293,7 +309,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		ClanLeftAt: derefTime(c.ClanLeftAt),
 		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
 		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
-		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery,
+		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery, Zone: c.Zone,
 	}, nil
 }
 

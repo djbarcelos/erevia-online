@@ -204,6 +204,9 @@ func (z *Zone) command(p *entity, text string) {
 		z.system(p, "Comando desconhecido: "+fields[0])
 		return
 	}
+	if z.gmElsewhere(p, cmd, args, text) { // alvo em outra zona: o comando roda lá (zones_mod.go)
+		return
+	}
 	switch cmd {
 	case "/gm":
 		z.system(p, "GM: /kick Nome [motivo] · /mute Nome minutos [motivo] · /unmute Nome · "+
@@ -276,6 +279,10 @@ func (z *Zone) gmLog(gm *entity, command, target, detail string) {
 func (z *Zone) online(gm *entity, name string) *entity {
 	if id, ok := z.byName[strings.ToLower(name)]; ok {
 		return z.players[id]
+	}
+	if where := z.elsewhere(name); where != "" {
+		z.system(gm, name+" está em outro mapa ("+where+").")
+		return nil
 	}
 	z.system(gm, name+" não está online.")
 	return nil
@@ -513,9 +520,9 @@ func (z *Zone) gmAnnounce(gm *entity, text string) {
 		z.system(gm, "Uso: /anuncio texto")
 		return
 	}
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
+	z.broadcastAll(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
 		Channel: pb.ChatChannel_CHAT_CHANNEL_SYSTEM, Text: "[Anúncio] " + text,
-	}}}, 0)
+	}}})
 	z.gmLog(gm, "anuncio", "", text)
 }
 
@@ -525,6 +532,9 @@ func (z *Zone) gmOnline(gm *entity) {
 		names = append(names, p.name)
 	}
 	slices.SortFunc(names, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
+	if z.mgr != nil { // todas as zonas, com o mapa de cada um
+		names = z.mgr.bus.names()
+	}
 	text := fmt.Sprintf("%d online: ", len(names))
 	if len(names) > maxOnlineList {
 		text += strings.Join(names[:maxOnlineList], ", ") + "…"

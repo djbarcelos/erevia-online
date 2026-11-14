@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -61,6 +62,7 @@ type Character struct {
 	Title        string
 	Spec         string            // especialização ("" = nenhuma)
 	Mastery      game.MasteryState // Maestria (nível 30)
+	Zone         string            // mapa onde está ("" = starter)
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -73,7 +75,7 @@ type Backend interface {
 }
 
 type Server struct {
-	zone           *zone.Zone
+	zones          *zone.Manager // escolhe a zona do login; o portão troca a zona da sessão
 	backend        Backend
 	log            *slog.Logger
 	originPatterns []string
@@ -81,8 +83,8 @@ type Server struct {
 
 // NewServer cria o handler de WebSocket. originPatterns segue o formato do
 // coder/websocket (ex.: "localhost:*"); requisições da mesma origem sempre passam.
-func NewServer(z *zone.Zone, backend Backend, log *slog.Logger, originPatterns []string) *Server {
-	return &Server{zone: z, backend: backend, log: log, originPatterns: originPatterns}
+func NewServer(zones *zone.Manager, backend Backend, log *slog.Logger, originPatterns []string) *Server {
+	return &Server{zones: zones, backend: backend, log: log, originPatterns: originPatterns}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -123,10 +125,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sess := &session{
 		conn: c, send: make(chan []byte, sendQueueSize),
 		closing: make(chan string, 1), cancel: cancel,
-		report: func(where string, v any, stack []byte) { s.zone.ReportPanic(where, char.ID, "", v, stack) },
+		report: func(where string, v any, stack []byte) { s.zones.ReportPanic(where, char.ID, "", v, stack) },
 	}
 	go sess.writePump(ctx)
-	s.zone.Join(ctx, zone.JoinInfo{
+	s.zones.Join(ctx, zone.JoinInfo{
 		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z,
 		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
 		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem, Look: char.Look,
@@ -134,13 +136,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage,
 		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Quests: char.Quests,
 		Achievements: char.Achievements, Title: char.Title, Spec: char.Spec, Mastery: char.Mastery, Peer: sess,
+		Zone: char.Zone,
 	})
 
 	s.readPump(ctx, sess, char.ID)
 
 	// Usa um contexto novo: ctx pode já estar cancelado, e a zona precisa saber da saída.
+	// closed antes de ler a zona: se o portão trocar a dona no meio, a zona de destino vê a
+	// conexão fechada ao receber a entrega e tira o jogador (ver zone.onArrive).
+	sess.closed.Store(true)
 	leaveCtx, leaveCancel := context.WithTimeout(context.Background(), time.Second)
-	s.zone.Leave(leaveCtx, char.ID, sess)
+	sess.zone().Leave(leaveCtx, char.ID, sess)
 	leaveCancel()
 
 	cancel()
@@ -175,7 +181,7 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 	// volta normalmente para ServeHTTP tirar o jogador da zona.
 	defer func() {
 		if r := recover(); r != nil {
-			s.zone.ReportPanic("net:readPump", id, msgCase(&msg), r, debug.Stack())
+			s.zones.ReportPanic("net:readPump", id, msgCase(&msg), r, debug.Stack())
 		}
 	}()
 	for {
@@ -192,76 +198,79 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 		if err := proto.Unmarshal(data, &msg); err != nil {
 			continue
 		}
+		z := sess.zone() // a dona da sessão agora (o portão troca)
 
 		switch m := msg.Msg.(type) {
 		case *pb.ClientMessage_MoveTo:
 			if m.MoveTo.Stop {
-				s.zone.Stop(ctx, id)
+				z.Stop(ctx, id)
 			} else {
-				s.zone.Move(ctx, id, float64(m.MoveTo.X), float64(m.MoveTo.Z))
+				z.Move(ctx, id, float64(m.MoveTo.X), float64(m.MoveTo.Z))
 			}
 		case *pb.ClientMessage_ChatSend:
-			s.zone.Chat(ctx, id, m.ChatSend.Text, m.ChatSend.To, m.ChatSend.Channel)
+			z.Chat(ctx, id, m.ChatSend.Text, m.ChatSend.To, m.ChatSend.Channel)
 		case *pb.ClientMessage_Attack:
-			s.zone.Attack(ctx, id, m.Attack.TargetId, m.Attack.Force)
+			z.Attack(ctx, id, m.Attack.TargetId, m.Attack.Force)
 		case *pb.ClientMessage_UseSkill:
-			s.zone.UseSkill(ctx, id, m.UseSkill.SkillId, m.UseSkill.TargetId, m.UseSkill.Force)
+			z.UseSkill(ctx, id, m.UseSkill.SkillId, m.UseSkill.TargetId, m.UseSkill.Force)
 		case *pb.ClientMessage_Respawn:
-			s.zone.Respawn(ctx, id)
+			z.Respawn(ctx, id)
 		case *pb.ClientMessage_PickUp:
-			s.zone.ItemAction(ctx, id, m.PickUp)
+			z.ItemAction(ctx, id, m.PickUp)
 		case *pb.ClientMessage_MoveItem:
-			s.zone.ItemAction(ctx, id, m.MoveItem)
+			z.ItemAction(ctx, id, m.MoveItem)
 		case *pb.ClientMessage_UseItem:
-			s.zone.ItemAction(ctx, id, m.UseItem)
+			z.ItemAction(ctx, id, m.UseItem)
 		case *pb.ClientMessage_DestroyItem:
-			s.zone.ItemAction(ctx, id, m.DestroyItem)
+			z.ItemAction(ctx, id, m.DestroyItem)
 		case *pb.ClientMessage_Buy:
-			s.zone.ItemAction(ctx, id, m.Buy)
+			z.ItemAction(ctx, id, m.Buy)
 		case *pb.ClientMessage_Sell:
-			s.zone.ItemAction(ctx, id, m.Sell)
+			z.ItemAction(ctx, id, m.Sell)
 		case *pb.ClientMessage_AllocateAttrs:
-			s.zone.ProgressAction(ctx, id, m.AllocateAttrs)
+			z.ProgressAction(ctx, id, m.AllocateAttrs)
 		case *pb.ClientMessage_LearnSkills:
-			s.zone.ProgressAction(ctx, id, m.LearnSkills)
+			z.ProgressAction(ctx, id, m.LearnSkills)
 		case *pb.ClientMessage_SetHotbar:
-			s.zone.ProgressAction(ctx, id, m.SetHotbar)
+			z.ProgressAction(ctx, id, m.SetHotbar)
 		case *pb.ClientMessage_Teleport:
-			s.zone.ItemAction(ctx, id, m.Teleport)
+			z.ItemAction(ctx, id, m.Teleport)
 		case *pb.ClientMessage_CancelChannel:
-			s.zone.ItemAction(ctx, id, m.CancelChannel)
+			z.ItemAction(ctx, id, m.CancelChannel)
 		case *pb.ClientMessage_StorageMove:
-			s.zone.ItemAction(ctx, id, m.StorageMove)
+			z.ItemAction(ctx, id, m.StorageMove)
 		case *pb.ClientMessage_StorageGold:
-			s.zone.ItemAction(ctx, id, m.StorageGold)
+			z.ItemAction(ctx, id, m.StorageGold)
 		case *pb.ClientMessage_Enchant:
-			s.zone.ItemAction(ctx, id, m.Enchant)
+			z.ItemAction(ctx, id, m.Enchant)
 		case *pb.ClientMessage_ChangeLook:
-			s.zone.ItemAction(ctx, id, m.ChangeLook)
+			z.ItemAction(ctx, id, m.ChangeLook)
 		case *pb.ClientMessage_PartyCmd:
-			s.zone.Social(ctx, id, m.PartyCmd)
+			z.Social(ctx, id, m.PartyCmd)
 		case *pb.ClientMessage_ClanCmd:
-			s.zone.Social(ctx, id, m.ClanCmd)
+			z.Social(ctx, id, m.ClanCmd)
 		case *pb.ClientMessage_InviteReply:
-			s.zone.Social(ctx, id, m.InviteReply)
+			z.Social(ctx, id, m.InviteReply)
 		case *pb.ClientMessage_FriendCmd:
-			s.zone.Social(ctx, id, m.FriendCmd)
+			z.Social(ctx, id, m.FriendCmd)
 		case *pb.ClientMessage_MailCmd:
-			s.zone.Social(ctx, id, m.MailCmd)
+			z.Social(ctx, id, m.MailCmd)
 		case *pb.ClientMessage_ClientStats:
-			s.zone.ClientStats(ctx, id, m.ClientStats)
+			z.ClientStats(ctx, id, m.ClientStats)
 		case *pb.ClientMessage_Craft:
-			s.zone.ItemAction(ctx, id, m.Craft)
+			z.ItemAction(ctx, id, m.Craft)
 		case *pb.ClientMessage_RankingRequest:
-			s.zone.Social(ctx, id, m.RankingRequest)
+			z.Social(ctx, id, m.RankingRequest)
 		case *pb.ClientMessage_AchievementCmd:
-			s.zone.Social(ctx, id, m.AchievementCmd)
+			z.Social(ctx, id, m.AchievementCmd)
 		case *pb.ClientMessage_SpecCmd:
-			s.zone.ProgressAction(ctx, id, m.SpecCmd)
+			z.ProgressAction(ctx, id, m.SpecCmd)
 		case *pb.ClientMessage_MasteryCmd:
-			s.zone.ProgressAction(ctx, id, m.MasteryCmd)
+			z.ProgressAction(ctx, id, m.MasteryCmd)
 		case *pb.ClientMessage_TradeCmd:
-			s.zone.Trade(ctx, id, m.TradeCmd)
+			z.Trade(ctx, id, m.TradeCmd)
+		case *pb.ClientMessage_UseGate:
+			z.UseGate(ctx, id, m.UseGate.NpcId)
 		case *pb.ClientMessage_Ping:
 			// Respondido aqui mesmo, sem passar pela zona, para medir só a rede.
 			pong, _ := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Pong{
@@ -280,7 +289,15 @@ type session struct {
 	cancel  context.CancelFunc
 	// report registra um panic recuperado no writePump (zone.ReportPanic).
 	report func(where string, r any, stack []byte)
+	// owner: a zona que recebe os pedidos (o gerente põe no login e o portão troca).
+	owner  atomic.Pointer[zone.Zone]
+	closed atomic.Bool // o readPump terminou
 }
+
+// SetZone e Closed implementam o lado "roteado" do Peer (zone.routedPeer).
+func (s *session) SetZone(z *zone.Zone) { s.owner.Store(z) }
+func (s *session) Closed() bool         { return s.closed.Load() }
+func (s *session) zone() *zone.Zone     { return s.owner.Load() }
 
 func (s *session) Send(msg []byte) bool {
 	select {

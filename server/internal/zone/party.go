@@ -59,7 +59,11 @@ func (z *Zone) onSocial(e socialEvent) {
 	case *pb.PartyCmd:
 		switch m.Kind {
 		case pb.PartyCmdKind_PARTY_CMD_INVITE:
-			z.partyInvite(p, z.findPlayer(m.TargetId, m.Name))
+			if t := z.findPlayer(m.TargetId, m.Name); t == nil && m.TargetId == 0 && z.elsewhere(m.Name) != "" {
+				z.system(p, fmt.Sprintf("%s está em outro mapa (%s): convide quando estiverem no mesmo.", m.Name, z.elsewhere(m.Name)))
+			} else {
+				z.partyInvite(p, t)
+			}
 		case pb.PartyCmdKind_PARTY_CMD_LEAVE:
 			z.partyLeave(p, "Você saiu do grupo.")
 		case pb.PartyCmdKind_PARTY_CMD_KICK:
@@ -70,6 +74,10 @@ func (z *Zone) onSocial(e socialEvent) {
 	case *pb.InviteReply:
 		z.replyInvite(p, m.InviteId, m.Accept)
 	case *pb.ClanCmd:
+		if z.cfg.NoTown { // os clãs moram na zona da cidade (maps.go)
+			z.system(p, "O clã só pode ser gerenciado no Vale de Vel'Aran, por enquanto.")
+			return
+		}
 		z.onClanCmd(p, m)
 	case *pb.FriendCmd:
 		z.onFriendCmd(p, m)
@@ -184,6 +192,10 @@ func (z *Zone) partyInvite(p, t *entity) {
 
 // partyJoin: t aceitou o convite de leader (que pode ainda não ter grupo).
 func (z *Zone) partyJoin(leader, t *entity) {
+	if z.mgr != nil { // grupo entre zonas (party_zones.go)
+		z.partyJoinZones(leader, t)
+		return
+	}
 	if t.pl.party != nil {
 		z.system(t, "Você já está em um grupo.")
 		return
@@ -211,6 +223,10 @@ func (z *Zone) partyJoin(leader, t *entity) {
 
 // partyLeave tira o jogador do grupo (sair, ser expulso ou sair do jogo).
 func (z *Zone) partyLeave(p *entity, msg string) {
+	if z.mgr != nil {
+		z.partyLeaveZones(p, msg)
+		return
+	}
 	pt := p.pl.party
 	if pt == nil {
 		if msg != "" {
@@ -256,6 +272,8 @@ func (z *Zone) partyKick(p *entity, id uint32) {
 		z.system(p, "Só o líder pode remover alguém do grupo.")
 	case id == p.id || !pt.has(id):
 		return
+	case z.mgr != nil:
+		z.partyKickZones(p, id)
 	default:
 		if t := z.players[id]; t != nil {
 			z.partyLeave(t, "Você foi removido do grupo.")
@@ -270,6 +288,8 @@ func (z *Zone) partyPromote(p *entity, id uint32) {
 		z.system(p, "Só o líder pode passar a liderança.")
 	case id == p.id || !pt.has(id):
 		return
+	case z.mgr != nil:
+		z.partyPromoteZones(p, id)
 	default:
 		pt.leader = id
 		if t := z.players[id]; t != nil {
@@ -300,6 +320,7 @@ func (z *Zone) partyPB(pt *party) *pb.PartyState {
 			X: float32(m.pos.X), Z: float32(m.pos.Z), Dead: m.dead,
 		})
 	}
+	z.partyRemotePB(pt, out) // quem está em outro mapa (party_zones.go)
 	return out
 }
 
@@ -313,6 +334,10 @@ func (z *Zone) sendParty(pt *party) {
 
 // syncParties: 1×/s cada grupo recebe vida, mana e posição dos membros.
 func (z *Zone) syncParties() {
+	if z.mgr != nil {
+		z.syncPartiesZones()
+		return
+	}
 	for _, pt := range z.parties {
 		z.sendParty(pt)
 	}
@@ -324,6 +349,9 @@ func (z *Zone) partyBroadcastSystem(pt *party, text string, skip uint32) {
 			z.system(m, text)
 		}
 	}
+	z.partySendRemote(pt, &pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
+		Channel: pb.ChatChannel_CHAT_CHANNEL_SYSTEM, Text: text,
+	}}}, skip)
 }
 
 // partyChat manda a mensagem só aos membros do grupo.
@@ -338,6 +366,7 @@ func (z *Zone) partyChat(p *entity, text string) {
 	for _, m := range z.partyMembers(p.pl.party) {
 		z.sendTo(m, msg)
 	}
+	z.partySendRemote(p.pl.party, msg, 0)
 }
 
 // ---------- XP e moedas do grupo ----------

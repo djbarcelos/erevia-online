@@ -54,6 +54,12 @@ type Config struct {
 	XP2Days        []time.Weekday // dias de XP em dobro pelo horário (nil = só por GM)
 	EventLocation  *time.Location // fuso desses dias (nil = Brasília, UTC−3)
 	Events         []EventData    // eventos de GM salvos (carregados na partida)
+	// Zonas (manager.go): id e nome do mapa, portões (gate.go) e mapa sem a cidade (sem
+	// os NPCs da praça, as pedras de teleporte e o armazém).
+	Map      string // "" = starter
+	MapTitle string
+	Gates    []GateDef
+	NoTown   bool
 }
 
 func DefaultConfig() Config {
@@ -109,6 +115,9 @@ type JoinInfo struct {
 	// Maestria (nível 30): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
 	Peer    Peer
+	// Zone: o mapa gravado no banco (o gerente escolhe a zona; "" = starter).
+	Zone string
+	hop  *hopIn // só na entrega do portão (gate.go)
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -137,6 +146,8 @@ type SavedState struct {
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
 	Seq int64
+	// Zone: o mapa onde o personagem está (no portão, o de destino).
+	Zone string
 }
 
 // recentState é o último estado de quem saiu. Ao voltar, vale mais que o banco (o
@@ -276,6 +287,8 @@ type Zone struct {
 	eventJobs    chan EventData
 
 	paths []*entity // fila de caminhos longos (ver pathqueue.go)
+
+	mgr *Manager // zonas do processo e barramento (nil = zona sozinha, como nos testes)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -317,7 +330,10 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 	}
 	z.night = game.IsNight(game.DayPhase(z.cfg.Clock()))
 	z.spawnMonsters()
-	z.spawnNPCs()
+	if !cfg.NoTown {
+		z.spawnNPCs()
+	}
+	z.spawnGates()
 	z.loadClans(cfg.Clans)
 	z.loadEvents(cfg.Events)
 	return z
@@ -552,6 +568,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 			quests:  loadQuests(info.Quests, level),
 			ach:     loadAchievements(info.Achievements, info.Title),
 			mastery: loadMastery(info.Mastery),
+			hop:     hopState{arrived: info.hop != nil},
 		},
 	}
 	p.pl.sentPvp = z.pvpState(p)
@@ -620,6 +637,8 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Enchant:      enchantRulesPB(),
 		Bosses:       z.bossList(),
 		Specs:        specCatalog(),
+		Map:          z.mapID(),
+		MapTitle:     z.mapTitle(),
 	}}})
 	z.sendSelfStats(p)
 	z.sendQuests(p, "")
@@ -634,8 +653,14 @@ func (z *Zone) onJoin(info JoinInfo) {
 	}
 
 	p.pl.joinedAt = z.cfg.Clock()
+	if info.hop != nil { // chegou pelo portão: a sessão é a mesma
+		p.pl.joinedAt = info.hop.joinedAt
+	}
 	z.socialOnJoin(p)
-	z.track(p, "session", "start", 0, nil)
+	if info.hop == nil {
+		z.track(p, "session", "start", 0, nil)
+	}
+	z.zonesOnJoin(p) // barramento e grupo entre zonas (gate.go)
 	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
 
@@ -697,16 +722,18 @@ func (z *Zone) onChat(e chatEvent) {
 	}
 
 	to := strings.TrimSpace(e.to)
-	if to == "" {
-		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
+	if to == "" { // todas as zonas (bus.go)
+		z.broadcastAll(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
 			Channel: pb.ChatChannel_CHAT_CHANNEL_GENERAL, FromId: p.id, FromName: p.name, Text: text,
-		}}}, 0)
+		}}})
 		return
 	}
 
 	targetID, ok := z.byName[strings.ToLower(to)]
 	if !ok {
-		z.system(p, to+" não está online.")
+		if !z.whisperElsewhere(p, to, text) {
+			z.system(p, to+" não está online.")
+		}
 		return
 	}
 	target := z.players[targetID]
@@ -733,6 +760,7 @@ func (z *Zone) removePlayer(id uint32) {
 	if !ok {
 		return
 	}
+	hop := z.hopping(p) // saindo pelo portão: sessão e grupo continuam (gate.go)
 	delete(z.players, id)
 	z.saveCooldowns(p)
 	if z.byName[strings.ToLower(p.name)] == id {
@@ -740,19 +768,26 @@ func (z *Zone) removePlayer(id uint32) {
 	}
 	z.forgetTarget(id)
 	z.endXPTally(p)
-	z.track(p, "session", "end", int64(z.cfg.Clock().Sub(p.pl.joinedAt).Seconds()), nil)
+	if !hop {
+		z.track(p, "session", "end", int64(z.cfg.Clock().Sub(p.pl.joinedAt).Seconds()), nil)
+	}
 	if p.pl.trade != nil {
 		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
 	}
-	z.partyLeave(p, "")
+	if !hop {
+		z.partyLeave(p, "")
+	}
 	z.dropInvites(id)
 	z.clanOnLeave(p)
 	z.socialOnLeave(p)
 	if !z.dropAfterPanic(p) { // caiu por panic: não grava o estado atual (ver errors.go)
 		st := z.savedState(p)
-		z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
+		if !z.handOff(p, &st) { // portão: o estado segue para a outra zona, não para o recent
+			z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
+		}
 		z.save([]SavedState{st}, false)
 	}
+	z.zonesOnLeave(p, hop)
 	// Quem o conhecia recebe o Despawn pela AOI no fim do tick.
 	p.gone = true
 	z.aoiDirty = true
@@ -925,10 +960,13 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
-		Mastery: p.pl.mastery.save(),
+		Mastery: p.pl.mastery.save(), Zone: z.mapID(),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
+		if z.cfg.NoTown {
+			s.Zone = world.StarterMap
+		}
 	}
 	if s.HP >= p.maxHPInt() {
 		s.HP = -1

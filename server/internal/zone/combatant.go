@@ -130,6 +130,7 @@ type playerState struct {
 	rankingNext float64
 	// Maestria (nível 30): barra, pontos da árvore e a soma dos efeitos (ver mastery.go).
 	mastery masteryState
+	hop     hopState // portão e zonas (gate.go)
 }
 
 // rank da skill (0 = não aprendida).
