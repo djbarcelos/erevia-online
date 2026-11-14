@@ -70,6 +70,7 @@ import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
 import { buildGlory } from "./ui/windows/glory";
+import { buildJournal } from "./ui/windows/journal";
 import { takeUnseenNews, whatsNewDef } from "./ui/windows/whatsnew";
 import { loadNews } from "./news";
 import { InvitePrompt } from "./ui/invite";
@@ -666,6 +667,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (v) stepStick();
     },
     me,
+    characterId: character.id,
     targetDistance: () => (isAttackable(targetId) ? entities.reachDistanceTo(targetId) : null),
     map: mapSource,
     project: projectToScreen,
@@ -1007,6 +1009,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
   });
   reg({
+    id: "quests",
+    title: "Diário de missões",
+    hotkey: keys().quests,
+    width: 640,
+    height: 700,
+    build: (close) =>
+      buildJournal({
+        quests: hud.quests,
+        go: (id) => {
+          hud.quests.track(id);
+          close();
+          goToQuest(id);
+        },
+      }),
+  });
+  reg({
     id: "party",
     title: "Grupo",
     hotkey: keys().party,
@@ -1180,6 +1198,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     const actions: Record<string, () => void> = {
       [k.inventory]: () => wm.toggle("inventory"),
       [k.skills]: () => wm.toggle("skills"),
+      [k.quests]: () => wm.toggle("quests"),
       [k.party]: () => wm.toggle("party"),
       [k.clan]: () => wm.toggle("clan"),
       [k.social]: () => wm.toggle("social"),
