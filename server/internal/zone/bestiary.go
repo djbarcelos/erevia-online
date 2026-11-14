@@ -107,7 +107,7 @@ func (z *Zone) bestiaryKill(p, dead *entity) {
 	}
 	if f := e.Family; f != nil && !famBefore && k.N >= game.BestiaryFamilyNeed(def) {
 		if _, done := b.families[f.ID]; !done {
-			if d, t := b.view().FamilyProgress(f); d >= t {
+			if d, t := b.view().FamilyProgress(f); t > 0 && d >= t {
 				b.families[f.ID] = z.cfg.Clock().UnixMilli()
 				notes = append(notes, &pb.BestiaryMark{Family: f.ID, Name: f.Name,
 					Text: fmt.Sprintf("Família %s completa! Título «%s» e a cor de roupa «%s» no barbeiro.", f.Name, f.Title, f.Outfit.Name)})

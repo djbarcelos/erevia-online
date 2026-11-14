@@ -4,8 +4,9 @@
  * - Antes do primeiro abate a entrada é uma silhueta (o servidor nem manda o nome).
  * - 10 abates: nível e vida; 100: o que ele deixa cair; 500: +1% de dano contra o tipo.
  *   Chefes e raid bosses (e os raros, quando existirem) abrem tudo com 1 abate.
- * - Famílias (esqueletos, golens): completar todas as entradas dá um título e uma cor de
- *   roupa exclusiva no barbeiro.
+ * - Famílias (esqueletos e golens até o 30; as Ancestrais com o conteúdo do 30 ao 40): completar as entradas
+ *   que nascem no mapa dá um título e uma cor de roupa exclusiva no barbeiro. Raros e
+ *   invocações são extras e não contam.
  *
  * Os retratos são SVG desenhados aqui (nada de 3D por entrada): a silhueta é o mesmo retrato
  * apagado no CSS. Tudo vem do servidor (Bestiary, pedido ao abrir); nada roda por quadro.
@@ -229,6 +230,8 @@ function detail(e: BestiaryEntry | undefined, fam: BestiaryFamily | undefined, b
   if (fam && e.familyNeed > 0) {
     const ok = e.kills >= e.familyNeed;
     box.append(el("p", `small ${ok ? "ok" : "muted"}`, ok ? `Completa para a família ${fam.name}.` : `Para a família ${fam.name}: ${fmt.format(e.familyNeed)} abates.`));
+  } else if (fam) {
+    box.append(el("p", "small muted", `Extra da família ${fam.name}: não conta para completá-la (raro ou invocação).`));
   }
   return box;
 }

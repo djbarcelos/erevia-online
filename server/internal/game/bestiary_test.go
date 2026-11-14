@@ -44,44 +44,68 @@ func TestBestiaryDamageBonusAndCap(t *testing.T) {
 
 func TestBestiaryFamilies(t *testing.T) {
 	skel, golem := BestiaryFamilyByID("skeletons"), BestiaryFamilyByID("golems")
-	if skel == nil || golem == nil {
-		t.Fatal("as famílias de esqueletos e golens existem")
+	skelHi, golemHi := BestiaryFamilyByID("skeletons_ancient"), BestiaryFamilyByID("golems_ancient")
+	if skel == nil || golem == nil || skelHi == nil || golemHi == nil {
+		t.Fatal("as famílias de base e as Ancestrais existem")
 	}
-	for _, id := range []string{"skeleton_minion", "skeleton_warrior", "skeleton_rogue", "skeleton_mage", "bone_lord", "ozrhal", "bone_guard"} {
-		if f := BestiaryFamilyOf(Monsters[id]); f != skel {
-			t.Errorf("%s deveria ser da família dos esqueletos (é %v)", id, f)
+	// Faixa pelo maior nível em que o monstro nasce: até o 30, a de base; acima, a Ancestral.
+	for id, want := range map[string]*BestiaryFamilyDef{
+		"skeleton_minion": skel, "skeleton_mage": skel, "bone_lord": skel, "stone_golem": golem,
+		"ossuary_knight": skelHi, "broken_arcanist": skelHi, "ozrhal": skelHi, "ancient_golem": golemHi,
+	} {
+		if m := Monsters[id]; m != nil && BestiaryFamilyOf(m) != want {
+			t.Errorf("%s (nasce no %d) deveria ser de %s, é de %v", id, BestiarySpawnLevel(m), want.Name, BestiaryFamilyOf(m))
 		}
 	}
-	if BestiaryFamilyOf(Monsters["stone_golem"]) != golem {
-		t.Error("o golem é da família dos golens")
-	}
-	// Um monstro novo com o modelo de esqueleto entra sozinho na família.
-	if BestiaryFamilyOf(&MonsterDef{ID: "skeleton_rare", Model: "skeleton_rogue"}) != skel ||
+	// Um monstro novo com o modelo de esqueleto entra sozinho na família da faixa dele.
+	if BestiaryFamilyOf(&MonsterDef{ID: "skeleton_new", Model: "skeleton_rogue"}) != skel ||
 		BestiaryFamilyOf(&MonsterDef{ID: "wolf", Model: "wolf"}) != nil {
 		t.Error("família pelo modelo")
 	}
-	// Invocações pedem só o primeiro marco; chefes, 1; os outros, o último.
-	for id, want := range map[string]int{"bone_guard": BestiaryMarkInfo, "bone_lord": 1, "ozrhal": 1, "skeleton_mage": BestiaryMarkBonus} {
-		if got := BestiaryFamilyNeed(Monsters[id]); got != want {
-			t.Errorf("%s pede %d para a família, quero %d", id, got, want)
+	for _, e := range BestiaryCatalog() {
+		m := e.Monster
+		// Toda família fica na faixa dela: nenhuma de base pede um monstro que nasce acima do 30.
+		if e.Family != nil && BestiaryFamilyCounts(m) && !e.Family.High && BestiarySpawnLevel(m) > BestiaryBaseMaxLevel {
+			t.Errorf("%s nasce no %d e conta para %s (de base)", m.ID, BestiarySpawnLevel(m), e.Family.Name)
+		}
+		// Raros e invocações são extras (0); os outros pedem o último marco (chefes: 1).
+		want := BestiaryMarks(m)[2]
+		if m.Rare != nil || BestiarySpawnLevel(m) == 0 {
+			want = 0
+		}
+		if got := BestiaryFamilyNeed(m); got != want {
+			t.Errorf("%s pede %d para a família, quero %d", m.ID, got, want)
+		}
+		if m.Rare != nil && e.Family != BestiaryFamilyOf(Monsters[m.Rare.Host]) {
+			t.Errorf("o raro %s fica na família do hospedeiro %s", m.ID, m.Rare.Host)
 		}
 	}
+	if BestiaryFamilyNeed(Monsters["bone_guard"]) != 0 || BestiaryFamilyNeed(Monsters["bone_lord"]) != 1 || BestiaryFamilyNeed(Monsters["skeleton_mage"]) != BestiaryMarkBonus {
+		t.Error("Guarda Ossário é extra, chefe pede 1, comum pede o último marco")
+	}
 
-	st := BestiaryState{Kills: map[string]BestiaryKill{}}
-	members := BestiaryFamilyMembers(skel)
-	if len(members) != 7 {
-		t.Fatalf("esqueletos: %d entradas, quero 7", len(members))
-	}
-	for _, e := range members {
-		st.Kills[e.Monster.ID] = BestiaryKill{N: BestiaryFamilyNeed(e.Monster)}
-	}
-	st.Kills["skeleton_rogue"] = BestiaryKill{N: BestiaryMarkBonus - 1}
-	if d, n := st.FamilyProgress(skel); d != 6 || n != 7 {
-		t.Fatalf("progresso %d/%d, quero 6/7", d, n)
-	}
-	st.Kills["skeleton_rogue"] = BestiaryKill{N: BestiaryMarkBonus}
-	if d, n := st.FamilyProgress(skel); d != n {
-		t.Fatalf("família completa: %d/%d", d, n)
+	// Completa com todas as que contam no último marco, sem os extras.
+	for _, f := range BestiaryFamilies {
+		st := BestiaryState{Kills: map[string]BestiaryKill{}}
+		var counted []*BestiaryEntryDef
+		for _, e := range BestiaryFamilyMembers(f) {
+			if BestiaryFamilyCounts(e.Monster) {
+				counted = append(counted, e)
+				st.Kills[e.Monster.ID] = BestiaryKill{N: BestiaryFamilyNeed(e.Monster)}
+			}
+		}
+		if len(counted) == 0 {
+			t.Errorf("%s não tem nenhuma entrada que conte: nunca completa", f.Name)
+			continue
+		}
+		if d, n := st.FamilyProgress(f); d != n || n != len(counted) {
+			t.Errorf("%s completa: %d/%d (quero %d)", f.Name, d, n, len(counted))
+		}
+		last := counted[len(counted)-1].Monster.ID
+		st.Kills[last] = BestiaryKill{N: st.Kills[last].N - 1}
+		if d, n := st.FamilyProgress(f); d != n-1 {
+			t.Errorf("%s com uma entrada faltando: %d/%d", f.Name, d, n)
+		}
 	}
 }
 

@@ -16,10 +16,18 @@ import (
 // Chefes, raid bosses e raros (BestiaryOneKill) abrem tudo com 1 abate e não dão bônus de
 // dano: a entrada deles é a lembrança da luta, não uma vantagem para a próxima.
 //
-// Famílias (esqueletos, golens) juntam as entradas pelo modelo 3D do monstro; um monstro
-// novo com o mesmo modelo entra sozinho na família. Completar uma família (todas as entradas
-// no último marco, ver BestiaryFamilyNeed) dá um título e uma cor de roupa exclusiva para o
-// barbeiro (a recompensa horizontal: só visual, nada de poder).
+// Famílias juntam as entradas pelo modelo 3D do monstro e pela faixa em que ele nasce: as de
+// base (Esqueletos, Golens) têm os monstros que só nascem até o nível 30 (BestiaryBaseMaxLevel)
+// e as Ancestrais, os que nascem acima disso (o conteúdo do 30 ao 40). Assim quem parou no 30 completa as de base, e o conteúdo
+// novo do 40 abre famílias novas em vez de tirar a conclusão de quem já tinha. Um monstro novo
+// com o mesmo modelo entra sozinho na família da faixa dele.
+//
+// Completar uma família pede o último marco de cada entrada que conta (BestiaryFamilyCounts):
+// só os monstros que nascem sozinhos no mapa. Os raros (aparição por sorte, com espera de
+// 45 min e às vezes só à noite) e as invocações (Guarda Ossário, Escudeiro Ossudo: só existem
+// na luta de outro monstro) ficam na família como extras, sem travar a conclusão. Completar dá
+// um título e uma cor de roupa exclusiva para o barbeiro (a recompensa horizontal: só visual,
+// nada de poder).
 
 // Marcos de abate de uma entrada comum.
 const (
@@ -56,6 +64,7 @@ type BestiaryFamilyDef struct {
 	ID     string
 	Name   string
 	Models []string // prefixos do MonsterDef.Model que entram na família
+	High   bool     // família Ancestral: monstros que nascem acima de BestiaryBaseMaxLevel
 	Title  string   // título ao completar
 	Outfit Shade    // cor de roupa exclusiva ao completar
 }
@@ -81,11 +90,53 @@ var BestiaryFamilies = []*BestiaryFamilyDef{
 		Outfit: Shade{"Marfim Ossário", "#efe6cf", "#8c7a58"}},
 	{ID: "golems", Name: "Golens", Models: []string{"stone_golem", "golem_"}, Title: "Quebra-Rochas",
 		Outfit: Shade{"Granito Rúnico", "#9fb6c4", "#3c4652"}},
+	{ID: "skeletons_ancient", Name: "Esqueletos Ancestrais", Models: []string{"skeleton_"}, High: true, Title: "Algoz da Partição",
+		Outfit: Shade{"Violeta Ossário", "#cdb6ec", "#4b3468"}},
+	{ID: "golems_ancient", Name: "Golens Ancestrais", Models: []string{"stone_golem", "golem_"}, High: true, Title: "Coração de Pedra Viva",
+		Outfit: Shade{"Musgo Rúnico", "#a4d6bb", "#2e5444"}},
 }
 
-// BestiaryFamilyOf devolve a família do monstro (nil = sem família).
+// BestiaryBaseMaxLevel: as famílias de base têm os monstros que nascem só até este nível (o
+// teto antigo do jogo); os que nascem acima dele (o Golem Ancestral, do 30 ao 35, e o que é
+// do 31 ao 40) vão para as famílias Ancestrais.
+const BestiaryBaseMaxLevel = 30
+
+var (
+	spawnLevelOnce sync.Once
+	spawnLevel     map[string]int
+)
+
+// BestiarySpawnLevel: o maior nível em que o monstro nasce sozinho no mapa (DefaultSpawns).
+// O raro usa o do hospedeiro (nasce no lugar dele); 0 = não nasce sozinho (invocação).
+func BestiarySpawnLevel(m *MonsterDef) int {
+	spawnLevelOnce.Do(func() {
+		spawnLevel = map[string]int{}
+		for _, s := range DefaultSpawns() {
+			spawnLevel[s.Monster] = max(spawnLevel[s.Monster], s.LevelMin, s.LevelMax)
+		}
+	})
+	if m.Rare != nil {
+		if h := Monsters[m.Rare.Host]; h != nil && h != m {
+			return BestiarySpawnLevel(h)
+		}
+	}
+	return spawnLevel[m.ID]
+}
+
+// BestiaryHigh: o monstro é das famílias Ancestrais (nasce acima de BestiaryBaseMaxLevel).
+func BestiaryHigh(m *MonsterDef) bool { return BestiarySpawnLevel(m) > BestiaryBaseMaxLevel }
+
+// BestiaryFamilyCounts: a entrada conta para completar a família (nasce sozinha no mapa; os
+// raros e as invocações são extras).
+func BestiaryFamilyCounts(m *MonsterDef) bool { return m.Rare == nil && BestiarySpawnLevel(m) > 0 }
+
+// BestiaryFamilyOf devolve a família do monstro pelo modelo e pela faixa (nil = sem família).
 func BestiaryFamilyOf(m *MonsterDef) *BestiaryFamilyDef {
+	high := BestiaryHigh(m)
 	for _, f := range BestiaryFamilies {
+		if f.High != high {
+			continue
+		}
 		for _, p := range f.Models {
 			if strings.HasPrefix(m.Model, p) {
 				return f
@@ -155,15 +206,13 @@ func BestiaryBonus(m *MonsterDef, kills int) float64 {
 	return math.Min(BestiaryDamageBonus, BestiaryDamageCap)
 }
 
-// BestiaryFamilyNeed: abates que a entrada pede para a família contar como completa. Em
-// geral o último marco; as invocações (NoGear: o Guarda Ossário só aparece na luta do raid
-// boss) pedem só o primeiro, senão a família pediria centenas de raids.
+// BestiaryFamilyNeed: abates que a entrada pede para a família contar como completa (o
+// último marco; 0 = extra, não conta: raro ou invocação, ver BestiaryFamilyCounts).
 func BestiaryFamilyNeed(m *MonsterDef) int {
-	marks := BestiaryMarks(m)
-	if m.NoGear && !BestiaryOneKill(m) {
-		return marks[0]
+	if !BestiaryFamilyCounts(m) {
+		return 0
 	}
-	return marks[2]
+	return BestiaryMarks(m)[2]
 }
 
 // BestiaryEntryDef é uma entrada do catálogo.
@@ -251,9 +300,13 @@ type BestiaryState struct {
 	Families map[string]int64 `json:"families,omitempty"`
 }
 
-// FamilyProgress: entradas da família já completas (para a família) e o total.
+// FamilyProgress: entradas da família que contam (BestiaryFamilyCounts) já completas e o
+// total delas; os extras (raros e invocações) ficam de fora.
 func (s BestiaryState) FamilyProgress(f *BestiaryFamilyDef) (done, total int) {
 	for _, e := range BestiaryFamilyMembers(f) {
+		if !BestiaryFamilyCounts(e.Monster) {
+			continue
+		}
 		total++
 		if s.Kills[e.Monster.ID].N >= BestiaryFamilyNeed(e.Monster) {
 			done++

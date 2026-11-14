@@ -244,8 +244,10 @@ func TestBestiaryFamilyCompleteGivesTitleAndOutfit(t *testing.T) {
 	p, peer := joinAt(z, 1, "knight", 23.5, 0, 0)
 	atLevel(z, p, 25)
 	golems := game.BestiaryFamilyByID("golems")
-	if len(game.BestiaryFamilyMembers(golems)) != 1 {
-		t.Fatal("hoje a família dos golens é só o Golem de Pedra")
+	for _, e := range game.BestiaryFamilyMembers(golems) {
+		if e.Monster.ID != "stone_golem" && game.BestiaryFamilyCounts(e.Monster) {
+			t.Fatalf("o teste supõe que só o Golem de Pedra conta para os Golens (conta também %s)", e.Monster.ID)
+		}
 	}
 	// Antes: nem título nem cor.
 	z.setTitle(p, golems.TitleID())
