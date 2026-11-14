@@ -167,8 +167,11 @@ func (z *Zone) finishQuest(p *entity, def *game.QuestDef) {
 		if d == nil {
 			continue
 		}
-		z.trackItem(p, true, d.ID, it.Count, "quest")
-		if left := p.pl.inv.add(d, it.Count); left > 0 {
+		left := p.pl.inv.add(d, it.Count)
+		if it.Count > left { // o que ficou no chão entra como loot quando alguém pegar
+			z.trackItem(p, true, d.ID, it.Count-left, "quest")
+		}
+		if left > 0 {
 			if g := z.dropItem(p.pos, d, left, 0, p.id, questRewardReserve); g != nil {
 				dropped = append(dropped, g)
 			}

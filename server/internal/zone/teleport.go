@@ -159,6 +159,7 @@ func (z *Zone) updateChannel(p *entity) {
 			return
 		}
 		inv.take(slot, 1)
+		z.trackItem(p, false, ch.itemID, 1, "return")
 		def := game.Items[ch.itemID]
 		p.pl.cooldowns[uint32(itemCooldownBase+def.Cooldown)] = z.now + game.CooldownSeconds(def.Cooldown)
 		z.sendItemCooldown(p, def.Cooldown, game.CooldownSeconds(def.Cooldown))
