@@ -130,6 +130,7 @@ type playerState struct {
 	rankingNext float64
 	// Maestria (nível máximo): barra, pontos da árvore e a soma dos efeitos (ver mastery.go).
 	mastery masteryState
+	vit     vitalityState // vitalidade e recuperação (vitality.go)
 }
 
 // rank da skill (0 = não aprendida).

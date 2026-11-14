@@ -1141,6 +1141,54 @@ section.party {
   opacity: 1;
 }
 
+/* Vitalidade (tunnel#150): a parte da barra que ainda sai com a XP de monstro em dobro. */
+.hud-xp > s.xp-vit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--v, 0%);
+  width: var(--vit, 0%);
+  background: linear-gradient(180deg, rgba(140, 220, 255, 0.5), rgba(50, 130, 210, 0.4));
+  box-shadow: inset 1px 0 0 rgba(200, 240, 255, 0.7);
+  pointer-events: none;
+}
+
+/* Selo da vitalidade (e da recuperação) no quadro do personagem. */
+.me-vit {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #bfe9ff;
+  background: rgba(16, 52, 82, 0.75);
+  border: 1px solid rgba(120, 200, 255, 0.45);
+  cursor: help;
+}
+
+.me-vit.empty {
+  color: #f1d58e;
+  background: rgba(58, 42, 16, 0.75);
+  border-color: rgba(214, 180, 110, 0.45);
+}
+
+.me-vit[hidden] {
+  display: none;
+}
+
+.hud-screen.touch .me-vit {
+  top: 4px;
+  right: 6px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+}
+
 /* ---------- Auto-caça, saque, morte, nível ---------- */
 
 .auto-pill {

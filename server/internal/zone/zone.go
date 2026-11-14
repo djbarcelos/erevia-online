@@ -108,6 +108,8 @@ type JoinInfo struct {
 	Spec string
 	// Maestria (nível máximo): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
+	// Vitalidade: o estoque, a última saída e o maior nível da conta (vitality.go).
+	Vitality game.VitalityState
 	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
 	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
 	LoadedAt time.Time
@@ -136,6 +138,7 @@ type SavedState struct {
 	Title        string
 	Spec         string // especialização ("" = nenhuma)
 	Mastery      game.MasteryState
+	Vitality     int64 // XP bônus da vitalidade (vitality.go)
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -524,6 +527,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Achievements, info.Title = st.Achievements, st.Title
 		info.Spec = st.Spec
 		info.Mastery = st.Mastery
+		info.Vitality.Stored, info.Vitality.LastSeen = st.Vitality, r.at
 		delete(z.recent, info.ID)
 	}
 
@@ -630,6 +634,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
 	z.achOnJoin(p)
 	z.masteryOnJoin(p)
+	z.vitalityOnJoin(p, info.Vitality)
 	z.eventsOnJoin(p)
 	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
@@ -816,6 +821,9 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysXP2, z.updateXP2)
 		z.runSystem(sysXPTally, z.flushXPTallies)
 		z.runSystem(sysAdminOps, z.updateAdminOps)
+		if z.tick%uint32(z.cfg.TickRate*vitalityTownEvery) == 0 {
+			z.runSystem(sysVitality, z.updateVitalityTown)
+		}
 		if len(z.pending) > 0 {
 			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}
@@ -938,6 +946,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
 		Mastery: p.pl.mastery.save(),
 	}
+	s.Vitality = p.pl.vit.stored
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
 	}

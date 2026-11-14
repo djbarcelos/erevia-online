@@ -6,6 +6,7 @@
 //	go run ./cmd/balance          # tabelas em markdown
 //	go run ./cmd/balance -csv     # uma linha por caminho, nível e encantamento
 //	go run ./cmd/balance -noite   # monstros e XP da noite
+//	go run ./cmd/balance -vitalidade # tempo até o máximo jogando 1 h por dia, com a vitalidade
 package main
 
 import (
@@ -20,7 +21,13 @@ import (
 func main() {
 	asCSV := flag.Bool("csv", false, "saída em CSV (uma linha por caminho, nível e encantamento)")
 	night := flag.Bool("noite", false, "de noite: monstros batem mais e dão mais XP")
+	vitality := flag.Bool("vitalidade", false, "tempo até o máximo jogando poucas horas por dia, com a vitalidade (tunnel#150)")
 	flag.Parse()
+
+	if *vitality {
+		balance.WriteVitalityMarkdown(os.Stdout)
+		return
+	}
 
 	r := balance.BuildReport(*night)
 	w := bufio.NewWriter(os.Stdout)

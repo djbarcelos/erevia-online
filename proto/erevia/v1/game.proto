@@ -80,6 +80,23 @@ message MasteryState {
   uint32 open_level = 14;
 }
 
+// Vitalidade (tunnel#150): XP bônus guardada que dobra a XP de monstro até acabar (no nível
+// máximo, a da barra de Maestria). Enche fora do jogo e parado na cidade. O servidor manda ao
+// entrar e quando muda (abate, subida de nível, enchimento na cidade a cada 1%).
+message VitalityState {
+  uint64 stored = 1; // XP bônus guardada (o bônus pago sai daqui)
+  uint64 cap = 2; // teto: ~1 nível da faixa (no máximo, uma barra de Maestria)
+  float mult = 3; // a XP de monstro sai mult× enquanto houver (2)
+  bool mastery = 4; // vale para a barra de Maestria (nível máximo)
+  float offline_per_hour = 5; // fração do teto que enche por hora fora do jogo
+  float town_per_hour = 6; // por hora online na cidade, sem combate
+  // Recuperação: a conta já tem um personagem no máximo; +catchup_mult na XP de monstro e de
+  // missão até o nível catchup_until (0 = não vale).
+  float catchup_mult = 7;
+  uint32 catchup_until = 8;
+  float mult_cap = 9; // teto do multiplicador da XP de monstro (noite, evento, recuperação e vitalidade)
+}
+
 message MasteryRank {
   string node = 1;
   uint32 rank = 2;
@@ -437,6 +454,7 @@ message ServerMessage {
     EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
     MasteryState mastery = 54; // Maestria (nível máximo): barra, pontos e árvore do jogador
     MasteryTree mastery_tree = 55; // a árvore da Maestria (resposta ao MASTERY_CMD_GET)
+    VitalityState vitality = 65; // vitalidade e recuperação (ao entrar e quando mudam)
   }
 }
 

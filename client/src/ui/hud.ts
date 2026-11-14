@@ -25,19 +25,25 @@ import {
   type QuestLog,
   type SelfStats,
   type SkillInfo,
+  type VitalityState,
 } from "../gen/erevia/v1/game_pb";
 import { hourLabel, isNight } from "../world/daynight";
 import type { ActiveEffect, EntityInfo } from "../world/entities";
 import { ui, uniqueIds } from "./art";
 import { effectIcon, effectName, effectText, formatSeconds, isDebuff, skillIcon } from "./icons";
 import { buildItemTip, itemIcon, type ItemStore } from "./items";
-import { art, bar, button, closeSheet, el, isTouch, keyLabel, openSheet, settings, toast, tooltip } from "./kit";
+import { art, bar, button, closeSheet, el, hideTip, isTouch, keyLabel, openSheet, settings, showTip, toast, tooltip } from "./kit";
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS, type MapSource } from "./minimap";
 import { drawQuestTarget, QuestArrow, questStepTarget, QuestTracker, type Project } from "./quest-nav";
 import { levelText, regionAt, type Region } from "./regions";
 import { createJoystick } from "./touch-controls";
 import { specInfo } from "./specs";
 import { masteryTip } from "./windows/mastery";
+
+/** Vitalidade em % do teto (0 a 100). */
+function vitalityPct(v: VitalityState): number {
+  return v.cap > 0n ? Math.min(100, (Number(v.stored) / Number(v.cap)) * 100) : 0;
+}
 
 /** Quanto tempo uma skill de alvo pode ficar "na fila" sem resposta do servidor. */
 const QUEUE_TIMEOUT_MS = 8000;
@@ -180,6 +186,10 @@ export class Hud {
   private self: SelfStats | null = null;
   private mastery: MasteryState | null = null;
   private xpIsMastery = false;
+  // Vitalidade (tunnel#150): faixa sobre a barra de XP e selo no quadro do personagem.
+  private vitality: VitalityState | null = null;
+  private xpVit = el("s", "xp-vit");
+  private vitEl = el("button", "me-vit");
   private meEl = el("div", "hud-me frame glass");
   private meLevel = el("span", "me-level", "1");
   private meName = el("div", "me-name");
@@ -256,6 +266,19 @@ export class Hud {
     crest.onclick = () => cb.openWindow("character");
     tooltip(crest, () => `Personagem <span class="muted">(${keyLabel(settings.get().keys.character)})</span>`);
     this.meEl.append(crest, el("div", "me-body", this.meName, this.hpBar.root, this.mpBar.root), this.myEffects);
+    // Selo da vitalidade: dica no hover (PC) e no toque (celular, onde a barra de XP é fina).
+    const vit = this.vitEl as HTMLButtonElement;
+    vit.type = "button";
+    vit.hidden = true;
+    vit.setAttribute("aria-label", "Vitalidade");
+    tooltip(vit, () => this.vitTip());
+    vit.onclick = (ev) => {
+      if (ev.pointerType === "mouse") return;
+      showTip(this.vitTip(), ev.clientX, ev.clientY + 24);
+      window.setTimeout(hideTip, 3000);
+    };
+    this.meEl.append(vit);
+    this.xpBar.root.insertBefore(this.xpVit, this.xpBar.root.lastChild); // embaixo do texto
     // ---------- Grupo (abaixo do personagem; some sem grupo) ----------
     const pHead = el("button", "side-head");
     pHead.type = "button";
@@ -576,6 +599,19 @@ export class Hud {
     this.renderXp();
   }
 
+  /** Vitalidade e recuperação: só quando o servidor manda (nada por quadro). */
+  setVitality(v: VitalityState): void {
+    this.vitality = v;
+    const pct = vitalityPct(v);
+    const on = v.stored > 0n || v.catchupMult > 0;
+    this.vitEl.hidden = !on;
+    if (on) {
+      this.vitEl.innerHTML = `${ui("moon", 12)}<span>${v.stored > 0n ? `${Math.floor(pct)}%` : ""}${v.catchupMult > 0 ? `${v.stored > 0n ? " " : ""}+${Math.round((v.catchupMult - 1) * 100)}%` : ""}</span>`;
+    }
+    this.vitEl.classList.toggle("empty", v.stored === 0n);
+    this.renderXp();
+  }
+
   /** Barra da borda: XP do nível ou, no máximo, a de Maestria (outra cor, com o bônus diário). */
   private renderXp(): void {
     const m = this.mastery;
@@ -591,6 +627,7 @@ export class Hud {
       const rested = m.rested > 0n ? ` · bônus diário ${m.restedMult}×` : "";
       if (m.level >= m.maxLevel) this.xpBar.set(1, 1, `Maestria ${m.level} · teto`);
       else this.xpBar.set(into, need, `Maestria ${m.level} · ${((into / need) * 100).toFixed(1).replace(".", ",")}%${rested}`);
+      this.renderVitBar(m.level >= m.maxLevel ? 0 : into, need, true);
       return;
     }
     if (!s) return;
@@ -598,18 +635,56 @@ export class Hud {
       const into = Number(s.xp - s.xpLevelStart);
       const need = Number(s.xpNextLevel - s.xpLevelStart);
       this.xpBar.set(into, need, `Nível ${s.level} · ${((into / need) * 100).toFixed(1).replace(".", ",")}%`);
-    } else this.xpBar.set(1, 1, `Nível ${s.level} · máximo`);
+      this.renderVitBar(into, need, false);
+    } else {
+      this.xpBar.set(1, 1, `Nível ${s.level} · máximo`);
+      this.renderVitBar(0, 0, false);
+    }
+  }
+
+  /**
+   * Faixa da vitalidade: a parte da barra que ainda sai com a XP de monstro em dobro (o
+   * estoque é o bônus; a XP caçada até ele acabar é estoque × mult/(mult−1)).
+   */
+  private renderVitBar(into: number, need: number, mastery: boolean): void {
+    const v = this.vitality;
+    let w = 0;
+    if (v && need > 0 && v.stored > 0n && v.mastery === mastery && v.mult > 1) {
+      const covered = (Number(v.stored) * v.mult) / (v.mult - 1);
+      w = Math.max(0, Math.min(need - into, covered) / need);
+    }
+    this.xpVit.style.setProperty("--vit", `${(w * 100).toFixed(2)}%`);
+    this.xpVit.hidden = w <= 0;
   }
 
   private xpTip(): string {
     const m = this.mastery;
-    if (m?.active) return masteryTip(m);
+    if (m?.active) return masteryTip(m) + this.vitTip();
     const s = this.self;
     if (!s) return "";
     if (s.xpNextLevel <= 0n) return `<h4>Nível ${s.level}</h4>Nível máximo.`;
     const into = Number(s.xp - s.xpLevelStart);
     const need = Number(s.xpNextLevel - s.xpLevelStart);
-    return `<h4>Nível ${s.level}</h4><div class="sub">${into.toLocaleString("pt-BR")} / ${need.toLocaleString("pt-BR")} XP</div>`;
+    return `<h4>Nível ${s.level}</h4><div class="sub">${into.toLocaleString("pt-BR")} / ${need.toLocaleString("pt-BR")} XP</div>${this.vitTip()}`;
+  }
+
+  /** Dica da vitalidade (e da recuperação, quando houver). */
+  private vitTip(): string {
+    const v = this.vitality;
+    if (!v) return "";
+    const pct = (n: number) => `${n.toFixed(1).replace(".", ",").replace(/,0$/, "")}%`;
+    const what = v.mastery ? "XP de monstro na barra de Maestria" : "XP de monstro";
+    let html = `<div class="cmp">`;
+    html +=
+      v.stored > 0n
+        ? `<div class="ok">Vitalidade: ${pct(vitalityPct(v))} (dobra a ${what})</div>`
+        : `<div class="muted">Vitalidade: 0% (quando houver, dobra a ${what})</div>`;
+    html += `<div class="muted">Enche fora do jogo (${pct(v.offlinePerHour * 100)} por hora, cheia em ~${Math.round(1 / v.offlinePerHour / 24)} dias) e parado na cidade, fora de combate. Missões não gastam.</div>`;
+    if (v.mastery && this.mastery?.rested && this.mastery.rested > 0n) html += `<div class="muted">No nível máximo ela espera o bônus diário da Maestria acabar.</div>`;
+    if (v.catchupMult > 0)
+      html += `<div class="ok">Bônus de recuperação: +${Math.round((v.catchupMult - 1) * 100)}% de XP de monstro e de missão até o nível ${v.catchupUntil} (a conta já tem um personagem no máximo)</div>`;
+    if (v.multCap > 0) html += `<div class="muted">Os bônus de XP de monstro (noite, evento, recuperação e vitalidade) somam no máximo ×${v.multCap}.</div>`;
+    return html + `</div>`;
   }
 
   /** Nome e cor do emblema no quadro do personagem. */

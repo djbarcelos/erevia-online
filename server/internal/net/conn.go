@@ -61,6 +61,8 @@ type Character struct {
 	Title        string
 	Spec         string            // especialização ("" = nenhuma)
 	Mastery      game.MasteryState // Maestria (nível máximo)
+	// Vitalidade: estoque, última saída e maior nível da conta.
+	Vitality game.VitalityState
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -135,6 +137,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage,
 		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Quests: char.Quests,
 		Achievements: char.Achievements, Title: char.Title, Spec: char.Spec, Mastery: char.Mastery, LoadedAt: loadedAt, Peer: sess,
+		Vitality: char.Vitality,
 	})
 
 	s.readPump(ctx, sess, char.ID)
