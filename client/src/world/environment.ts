@@ -211,14 +211,34 @@ export class TreeFader {
     for (const [t, copy] of this.faded) {
       const occluding = this.seen.has(t);
       copy.visibility += ((occluding ? FADED_VISIBILITY : 1) - copy.visibility) * k;
-      if (!occluding && copy.visibility > 0.98) {
-        // Voltou ao normal: devolve a árvore ao buffer e a cópia ao estoque.
-        t.kind.proto.thinInstanceSetMatrixAt(t.index, t.matrix, true);
-        copy.setEnabled(false);
-        t.kind.pool.push(copy);
-        this.faded.delete(t);
-      }
+      if (!occluding && copy.visibility > 0.98) this.restore(t, copy);
     }
+  }
+
+  /** Voltou ao normal: devolve a árvore ao buffer e a cópia ao estoque. */
+  private restore(t: Tree, copy: Mesh): void {
+    t.kind.proto.thinInstanceSetMatrixAt(t.index, t.matrix, true);
+    copy.setEnabled(false);
+    t.kind.pool.push(copy);
+    this.faded.delete(t);
+  }
+
+  /**
+   * Termina na hora as transições do último update (medição de FPS, ?bench=1): sem isso, quantas
+   * cópias ainda estão voltando ao normal depende do FPS, e o número de malhas ativas também.
+   */
+  settle(): void {
+    for (const [t, copy] of this.faded) {
+      if (this.seen.has(t)) copy.visibility = FADED_VISIBILITY;
+      else this.restore(t, copy);
+    }
+  }
+
+  /** Cópias guardadas no estoque (desligadas): quantas são depende de quantas já se precisou. */
+  pooled(): Mesh[] {
+    const out: Mesh[] = [];
+    for (const k of this.kinds.values()) out.push(...k.pool);
+    return out;
   }
 
   private collect(a: Vector3, b: Vector3): void {
