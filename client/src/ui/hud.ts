@@ -878,11 +878,12 @@ export class Hud {
     }
     this.target.classList.toggle("dead", info.dead);
     this.target.classList.toggle("boss", !!info.boss);
+    this.target.classList.toggle("rare", !!info.rare);
     // Jogador com especialização: o nome do caminho, na cor dele, depois do nível.
     const spec = pc ? specInfo(info.spec) : undefined;
     const specEl = spec ? el("span", "t-spec", ` · ${spec.name}`) : "";
     if (spec && specEl) specEl.style.color = spec.color;
-    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}`), specEl, info.boss ? el("em", null, "CHEFE") : "");
+    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}`), specEl, info.boss ? el("em", null, "CHEFE") : "", info.rare ? el("em", "t-rare", "RARO") : "");
     this.tHp.root.hidden = npc;
     this.tHp.set(info.hp, info.maxHp, info.dead ? "Morto" : undefined);
   }

@@ -283,6 +283,21 @@
   box-shadow: 0 0 24px rgba(180, 108, 255, 0.25);
 }
 
+/* Monstro raro (named): nome dourado e o selo "RARO". */
+.t-name em.t-rare {
+  background: linear-gradient(180deg, #ffd96a, #b8861c);
+  color: #2a1c04;
+}
+
+.hud-target.rare .t-name b {
+  color: #ffcf4a;
+}
+
+.hud-target.rare {
+  border-color: rgba(255, 207, 74, 0.55);
+  box-shadow: 0 0 20px rgba(255, 207, 74, 0.2);
+}
+
 .hud-target.dead {
   opacity: 0.6;
 }

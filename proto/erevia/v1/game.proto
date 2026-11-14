@@ -1151,6 +1151,7 @@ message Entity {
   bool raid = 25; // raid boss (barra no topo da tela)
   string spec = 26; // jogadores: especialização (SpecInfo.id; "" = nenhuma)
   string tint = 27; // monstros: cor da variante (#rrggbb; "" = a do modelo)
+  bool rare = 40; // monstro raro (named): nome dourado e selo no quadro do alvo
 }
 
 message EntityState {

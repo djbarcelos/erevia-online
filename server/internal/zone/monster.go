@@ -211,6 +211,7 @@ func (z *Zone) updateDeadMonster(m *entity) {
 
 // reviveMonster faz o monstro renascer no ponto de origem, inteiro.
 func (z *Zone) reviveMonster(m *entity) {
+	z.rareRevive(m) // o raro volta a ser o hospedeiro, e o hospedeiro pode nascer raro (rares.go)
 	ms := m.mon
 	m.dead = false
 	ms.hidden = false
