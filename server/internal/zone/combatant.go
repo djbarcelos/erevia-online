@@ -109,6 +109,7 @@ type playerState struct {
 	clan       *clan
 	clanLeftAt time.Time     // saiu de um clã (espera para entrar em outro)
 	channel    *channelState // canalizando teleporte ou pergaminho
+	pathGoal   *Vec2         // caminho longo esperando na fila (ver pathqueue.go)
 
 	// AOI: jogadores e monstros que este cliente conhece (e o spawnSeq do Spawn que recebeu).
 	known map[uint32]knownEntity

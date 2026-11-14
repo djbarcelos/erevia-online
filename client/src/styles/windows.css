@@ -1577,6 +1577,14 @@
   border-color: var(--zc);
 }
 
+/* Missão rastreada com o botão "Ir" ao lado */
+.wmap-quest-go {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: stretch;
+}
+
 .wmap-zone .zc {
   width: 10px;
   height: 34px;

@@ -32,7 +32,7 @@ import { effectIcon, effectName, effectText, formatSeconds, isDebuff, skillIcon 
 import { buildItemTip, itemIcon, type ItemStore } from "./items";
 import { art, bar, button, closeSheet, el, isTouch, keyLabel, openSheet, settings, toast, tooltip } from "./kit";
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS, type MapSource } from "./minimap";
-import { drawQuestTarget, QuestArrow, QuestTracker, type Project } from "./quest-nav";
+import { drawQuestTarget, QuestArrow, questStepTarget, QuestTracker, type Project } from "./quest-nav";
 import { levelText, regionAt, type Region } from "./regions";
 import { createJoystick } from "./touch-controls";
 import { specInfo } from "./specs";
@@ -80,6 +80,8 @@ export interface HudCallbacks {
   /** Botão de cancelar a canalização (teleporte, pergaminho). */
   onCancelChannel(): void;
   onCycleTarget(): void;
+  /** Botão "Ir" de uma missão do painel (o personagem anda até o lugar do passo). */
+  onQuestGo(questId: string): void;
   /** Joystick (direção relativa à câmera) ou null ao soltar. */
   onStick(v: { x: number; y: number } | null): void;
   me(): { myClass: string; myLevel: number };
@@ -685,9 +687,28 @@ export class Hud {
     this.questBoxes.clear();
     this.questList.replaceChildren(
       ...log.quests.map((q) => {
-        const box = el("button", "quest", el("b", null, q.title));
-        box.type = "button";
+        // Caixa clicável (rastreia) com o botão "Ir" dentro: div com papel de botão, porque
+        // botão dentro de botão não vale.
+        const head = el("div", "q-head", el("b", null, q.title));
+        const box = el("div", "quest", head);
+        box.tabIndex = 0;
+        box.setAttribute("role", "button");
         box.onclick = () => this.quests.track(q.id);
+        box.onkeydown = (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            this.quests.track(q.id);
+          }
+        };
+        if (questStepTarget(q)) {
+          const go = button("Ir", "btn btn-sm btn-gold q-go", (ev) => {
+            ev.stopPropagation();
+            this.quests.track(q.id);
+            this.cb.onQuestGo(q.id);
+          });
+          go.title = "Andar até o objetivo (WASD, clique no chão ou ser atacado param)";
+          head.append(go);
+        }
         this.questBoxes.set(q.id, box);
         for (const s of q.steps) {
           const row = el("div", "q-step", el("span", null, s.text), el("span", "q-count", `${s.count}/${s.need}`));

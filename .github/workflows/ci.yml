@@ -73,4 +73,5 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - run: npm run test:unit
       - run: npm run build

@@ -485,6 +485,9 @@ message QuestStepInfo {
   float z = 6;
   float radius = 7; // metros: chegou quando está dentro
   string place_name = 8; // rótulo no mapa ("Esqueleto Lacaio", "Ysolde", "Portão Leste")
+  // Matar: nomes dos monstros que contam (o "Caçar aqui" só mira neles). Vazio = qualquer
+  // monstro (ou o passo não é de caçar).
+  repeated string monsters = 9;
 }
 
 // ---------- Eventos (invasão da cidade e XP em dobro) ----------

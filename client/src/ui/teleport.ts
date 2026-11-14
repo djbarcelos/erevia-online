@@ -16,6 +16,8 @@ export class TeleportWindow {
   private note = el("p", "tp-note small");
   private goldEl = el("span", "shop-gold-value");
   private dests: TeleportDest[] = [];
+  /** Destino que o "Ir" da missão sugere (destacado; quem escolhe é o jogador). */
+  private suggested = 0;
   private unsubscribe: () => void;
   npcId = 0;
 
@@ -44,8 +46,10 @@ export class TeleportWindow {
     return !this.root.hidden;
   }
 
-  open(npcId: number, title: string, dests: TeleportDest[]): void {
+  /** `suggested`: destino destacado pelo "Ir" da missão (0 = nenhum). */
+  open(npcId: number, title: string, dests: TeleportDest[], suggested = 0): void {
     this.npcId = npcId;
+    this.suggested = suggested;
     this.title.textContent = title;
     this.dests = dests;
     this.root.hidden = false;
@@ -78,9 +82,15 @@ export class TeleportWindow {
       go.disabled = poor || karma;
       const row = el(
         "div",
-        `shop-row tp-row${poor ? " poor" : ""}`,
+        `shop-row tp-row${poor ? " poor" : ""}${d.id === this.suggested ? " suggested" : ""}`,
         el("div", "tp-icon", "✦"),
-        el("div", "shop-name", el("strong", null, d.name), el("span", "shop-price", `${fmt.format(d.price)} moedas`)),
+        el(
+          "div",
+          "shop-name",
+          el("strong", null, d.name),
+          el("span", "shop-price", `${fmt.format(d.price)} moedas`),
+          d.id === this.suggested ? el("span", "tp-quest", "◎ Caminho da missão") : null,
+        ),
         go,
       );
       this.list.append(row);

@@ -17,6 +17,7 @@ import {
   MailCmdKind,
   PartyCmdKind,
   PartyStateSchema,
+  QuestPlaceKind,
   SelfPvpSchema,
   SkillTarget,
   SpecCmdKind,
@@ -71,6 +72,9 @@ import { InvitePrompt } from "./ui/invite";
 import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
 import { AutoHunt } from "./world/autohunt";
+import { nearestAllowed, QuestGo, type GoTarget, type StoneInfo } from "./world/questgo";
+import { GoPill } from "./ui/quest-go-pill";
+import type { QuestTarget } from "./ui/quest-nav";
 import { GroundLoot } from "./world/loot";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
@@ -484,6 +488,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (dest) {
       hud.setQueued(0);
       pendingShop = 0;
+      questGo.onPlayerControl(); // WASD/joystick: o jogador assumiu, o "Ir" para
       conn.moveTo(dest.x, dest.z);
     }
   };
@@ -528,12 +533,25 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   };
 
   // ---------- Auto-caça ----------
+  /** Monstro vivo mais perto entre os desses nomes ("Caçar aqui"); 4×/s no máximo. */
+  const nearestNamed = (names: readonly string[]) => {
+    const p = entities.localPosition();
+    if (!p) return null;
+    const list: { id: number; name: string; dist: number }[] = [];
+    entities.forEachMarker((m) => {
+      if (m.kind !== EntityKind.MONSTER) return;
+      const name = entities.info(m.id)?.name;
+      if (name !== undefined) list.push({ id: m.id, name, dist: Math.hypot(m.x - p.x, m.z - p.z) });
+    });
+    return nearestAllowed(list, names);
+  };
   const auto = new AutoHunt({
     dead: () => entities.localDead,
     stats: () => lastStats,
-    nearestMonster: () => entities.nearestMonster(),
+    nearestMonster: (names) => (names && names.length ? nearestNamed(names) : entities.nearestMonster()),
     targetId: () => targetId,
     isEnemy: (id) => entities.isEnemy(id),
+    nameOf: (id) => entities.info(id)?.name,
     distanceTo: (id) => entities.reachDistanceTo(id),
     attack: attackTarget,
     hotbarSkills: () =>
@@ -591,13 +609,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // ---------- HUD ----------
   const hud = new Hud(learnedActives(), store, {
-    onSkill: useSkill,
+    onSkill: (s) => {
+      questGo.onPlayerControl(); // atacar com skill: o "Ir" para
+      useSkill(s);
+    },
     onItem: (id) => void useItemById(id),
     onRespawn: () => conn.respawn(),
     onHotbarChange: (entries) => conn.setHotbar(entries.map((e) => e ?? "")),
-    onAuto: (on) => (on ? auto.start() : auto.stop()),
+    onAuto: (on) => {
+      if (on) {
+        questGo.stop(); // F/AUTO: a auto-caça de sempre, sem filtro
+        auto.start();
+      } else auto.stop();
+    },
     openWindow: (id: WindowId) => wm.toggle(id),
     onAttack: () => {
+      questGo.onPlayerControl();
       if (entities.isEnemy(targetId)) return attackTarget(targetId);
       if (entities.isPlayer(targetId) && entities.canAttack(targetId, forcedId === targetId)) return attackPlayer(targetId, forcedId === targetId);
       const n = entities.nearestMonster();
@@ -607,8 +634,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     onTargetAction: (action) => {
       const info = entities.info(targetId);
       if (!info || !entities.isPlayer(targetId)) return;
-      if (action === "attack") attackPlayer(targetId, true);
-      else if (action === "whisper") chat.whisperTo(info.name);
+      if (action === "attack") {
+        questGo.onPlayerControl();
+        attackPlayer(targetId, true);
+      } else if (action === "whisper") chat.whisperTo(info.name);
       else if (action === "party") inviteParty(info.name);
       else if (action === "clan") inviteClan(info.name);
       else if (action === "trade") conn.tradeCmd(TradeCmdKind.TRADE_CMD_REQUEST, { targetId });
@@ -617,6 +646,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     onPartyMember: (id) => selectTarget(id),
     onCancelChannel: () => conn.cancelChannel(),
     onCycleTarget: cycleTarget,
+    onQuestGo: (id) => goToQuest(id),
     onStick: (v) => {
       stick = v;
       if (v) stepStick();
@@ -769,8 +799,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
       // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
       else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
-      else if (npc?.role === NpcRole.TELEPORT) teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests);
-      else if (npc?.role === NpcRole.STORAGE) {
+      else if (npc?.role === NpcRole.TELEPORT) {
+        // Indo pela pedra com o "Ir": o destino da missão vem destacado (quem escolhe é o jogador).
+        const o = questGo.phase === "toStone" && questGo.offer?.npcId === id ? questGo.offer : null;
+        teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests, o?.destId ?? 0);
+      } else if (npc?.role === NpcRole.STORAGE) {
         storageWin.open(id, `${info.title} · ${info.name}`);
         conn.storageGold(id, 0); // pede o conteúdo
       } else shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? [], npcRecipes.get(id) ?? []);
@@ -786,6 +819,79 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (dest) conn.moveTo(dest.x, dest.z);
     pendingShop = id;
   };
+
+  // ---------- "Ir" das missões (world/questgo.ts) ----------
+  // Anda com o mesmo comando do clique no mapa; "Caçar aqui" liga a auto-caça só com os
+  // monstros do passo. O intervalo de 250 ms do Ir só existe enquanto ele está ativo.
+  const toGoTarget = (t: QuestTarget | null): GoTarget | null =>
+    t && { questId: t.questId, step: t.step, x: t.x, z: t.z, radius: t.radius, name: t.name, hunt: t.kind === QuestPlaceKind.HUNT, monsters: t.monsters };
+  const stoneInfos = (): StoneInfo[] =>
+    welcome.npcs
+      .filter((n) => n.role === NpcRole.TELEPORT)
+      .map((n) => {
+        const root = entities.rootOf(n.id);
+        return {
+          npcId: n.id,
+          name: entities.info(n.id)?.name ?? "",
+          x: root?.position.x ?? 0,
+          z: root?.position.z ?? 0,
+          dests: n.dests.map((d) => ({ id: d.id, name: d.name, x: d.x, z: d.z, price: d.price })),
+        };
+      })
+      .filter((s) => entities.rootOf(s.npcId));
+  const questGo = new QuestGo({
+    now: () => performance.now(),
+    position: () => {
+      const p = entities.localPosition();
+      return p ? { x: p.x, z: p.z } : null;
+    },
+    dead: () => entities.localDead,
+    focused: () => document.hasFocus() && document.visibilityState === "visible",
+    keepIfHit: () => settings.get().goKeepIfHit,
+    gold: () => store.gold,
+    walk: (x, z) => {
+      hud.setQueued(0);
+      pendingShop = 0;
+      const dest = entities.predictLocalMove(x, z);
+      if (dest) conn.moveTo(dest.x, dest.z);
+    },
+    halt: () => {
+      entities.stopLocal();
+      conn.stop();
+    },
+    openStone: (npcId) => openShop(npcId),
+    startHunt: (t) => {
+      auto.stop();
+      auto.start({ names: t.monsters, label: t.name });
+      hud.setAuto(true, false);
+    },
+    stopHunt: () => {
+      auto.stop();
+      hud.setAuto(false, false);
+    },
+    hunting: () => auto.questMode,
+    notify: (text, warn) => {
+      chat.system(text);
+      toast(text, warn ? "warn" : "");
+    },
+    changed: () => goPill.update(),
+    every: (fn, ms) => {
+      const id = window.setInterval(fn, ms);
+      return () => window.clearInterval(id);
+    },
+  });
+  const goPill = new GoPill(questGo, { stone: () => questGo.takeStone(), hunt: () => questGo.huntHere(), stop: () => questGo.stop() });
+  hud.element.append(goPill.el);
+  const goToQuest = (questId: string) => {
+    const t = toGoTarget(hud.quests.targetOf(questId));
+    if (t) questGo.go(t, stoneInfos());
+  };
+  // Interação real (não sintética) do jogador: o Ir para depois de 5 min sem nenhuma.
+  const onRealInput = (ev: Event) => {
+    if (ev.isTrusted) questGo.input();
+  };
+  const REAL_INPUT = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+  for (const t of REAL_INPUT) addEventListener(t, onRealInput, { capture: true, passive: true });
 
   // ---------- Janelas ----------
   const keys = () => settings.get().keys;
@@ -961,7 +1067,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           return st && { alive: st.alive, windowStartMs: Number(st.windowStartMs), windowEndMs: Number(st.windowEndMs) };
         },
         serverNow,
+        go: goToQuest,
         moveTo: (x, z) => {
+          questGo.onPlayerControl();
           hud.setQueued(0);
           pendingShop = 0;
           const dest = entities.predictLocalMove(x, z);
@@ -1056,6 +1164,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   setupInput(world.scene, world.ground, {
     onGround: (x, z) => {
+      questGo.onPlayerControl(); // clicar no chão: o jogador assumiu
       hud.setQueued(0); // andar cancela a skill na fila
       pendingShop = 0;
       const dest = entities.predictLocalMove(x, z);
@@ -1064,6 +1173,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     onEntity: (id, force) => {
       if (id === welcome.yourId) return;
+      questGo.onPlayerControl();
       selectTarget(id);
       if (entities.isNpc(id)) {
         if (!entities.localDead) openShop(id);
@@ -1076,6 +1186,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     onLoot: (id) => {
       if (entities.localDead) return;
+      questGo.onPlayerControl();
       hud.setQueued(0);
       pendingShop = 0;
       conn.pickUp(id);
@@ -1228,6 +1339,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       setErrorContext(null);
       unwatchEngine();
       auto.stop();
+      questGo.stop();
+      for (const t of REAL_INPUT) removeEventListener(t, onRealInput, { capture: true });
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKeyUp);
       removeEventListener("resize", onResizeRect);
@@ -1275,6 +1388,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
             entities.onCombat(ev);
             // Um jogador atacou você: a auto-caça para (nunca revida sozinha).
             if (ev.targetId === welcome.yourId && ev.sourceId !== welcome.yourId && entities.isPlayer(ev.sourceId)) auto.onPlayerAttack();
+            // Levou dano andando com o "Ir": para (a não ser com "Continuar andando se atacado").
+            if (ev.targetId === welcome.yourId && ev.sourceId !== welcome.yourId) questGo.onHit(ev.damage);
           }
           for (const u of snap.hp) entities.applyHp(u);
           for (const ev of snap.effects) entities.onEffect(ev);
@@ -1372,6 +1487,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "questLog": {
           const log = msg.msg.value;
           hud.setQuests(log);
+          if (questGo.target) questGo.questUpdate(toGoTarget(hud.quests.targetOf(questGo.target.questId)));
           if (log.completed) toast(`Missão concluída: ${log.completed}`);
           break;
         }
