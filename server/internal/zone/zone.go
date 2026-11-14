@@ -284,6 +284,8 @@ type Zone struct {
 
 	paths []*entity // fila de caminhos longos (ver pathqueue.go)
 	adm *adminState // portal de administração (admin_actions.go e admin_ops.go)
+
+	rares rareWorld // monstros raros (rares.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -1033,6 +1035,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		Dead: e.dead, Scale: float32(e.scale),
 		Boss: e.mon != nil && e.mon.def.Boss,
 		Raid: e.mon != nil && e.mon.def.Raid,
+		Rare: e.mon != nil && e.mon.def.Rare != nil,
 	}
 	if e.mon != nil {
 		out.Tint = e.mon.def.Tint

@@ -1202,6 +1202,7 @@ message Entity {
   string spec = 26; // jogadores: especialização (SpecInfo.id; "" = nenhuma)
   string tint = 27; // monstros: cor da variante (#rrggbb; "" = a do modelo)
   string active_class = 28; // jogadores: classe ativa (subclasse; "" = a do modelo, a principal)
+  bool rare = 40; // monstro raro (named): nome dourado e selo no quadro do alvo
 }
 
 message EntityState {
