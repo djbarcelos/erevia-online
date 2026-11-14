@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\xb2\x03\x11\b\x02\x12\rfield_alchemy")
