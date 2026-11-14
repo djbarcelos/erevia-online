@@ -102,5 +102,5 @@ func TitleOf(id string) string {
 	if a := Achievements[id]; a != nil {
 		return a.Title
 	}
-	return ""
+	return BestiaryTitle(id) // títulos de família do bestiário ("bst:<família>")
 }

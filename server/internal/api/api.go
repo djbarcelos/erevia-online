@@ -395,6 +395,8 @@ var creationOptions = func() map[string]any {
 		// Visual do corpo: índice 0 = original da classe, i = lista[i-1].
 		"skins": game.SkinTones, "hairs": game.HairColors, "outfits": game.OutfitColors,
 		"heads": game.Heads, "hatClasses": hats, "barberPrice": game.BarberPrice,
+		// Cores de roupa do bestiário (família completa; índice próprio, fora da criação).
+		"bestiaryOutfits": game.BestiaryOutfits(),
 	}
 }()
 

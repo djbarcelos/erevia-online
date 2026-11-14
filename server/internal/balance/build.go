@@ -244,6 +244,9 @@ type Build struct {
 	Ranks   map[uint32]int
 	Gear    []Piece
 	Stats   game.Stats
+	// Bestiary: bônus de dano do Bestiário contra os monstros da caça (0 = nenhum; o teto
+	// game.BestiaryDamageCap no veterano, ver bestiary.go).
+	Bestiary float64
 }
 
 // NewBuild monta o personagem típico (o caminho só vale do 20 em diante).
