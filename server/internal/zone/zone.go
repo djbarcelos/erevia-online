@@ -106,7 +106,9 @@ type JoinInfo struct {
 	Title        string
 	// Especialização (segunda classe; "" = nenhuma).
 	Spec string
-	Peer Peer
+	// Maestria (nível 30): barra, bônus diário e pontos da árvore.
+	Mastery game.MasteryState
+	Peer    Peer
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -130,6 +132,7 @@ type SavedState struct {
 	Achievements game.AchievementState
 	Title        string
 	Spec         string // especialização ("" = nenhuma)
+	Mastery      game.MasteryState
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
@@ -516,6 +519,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Quests = st.Quests
 		info.Achievements, info.Title = st.Achievements, st.Title
 		info.Spec = st.Spec
+		info.Mastery = st.Mastery
 		delete(z.recent, info.ID)
 	}
 
@@ -545,8 +549,9 @@ func (z *Zone) onJoin(info JoinInfo) {
 			accountID: info.AccountID,
 			karma:     max(0, info.Karma), pks: max(0, info.PKs), pvpKills: max(0, info.PvPKills),
 			gm: info.GM, mutedUntil: info.MutedUntil, userAgent: truncateRunes(info.UserAgent, maxUserAgent),
-			quests: loadQuests(info.Quests, level),
-			ach:    loadAchievements(info.Achievements, info.Title),
+			quests:  loadQuests(info.Quests, level),
+			ach:     loadAchievements(info.Achievements, info.Title),
+			mastery: loadMastery(info.Mastery),
 		},
 	}
 	p.pl.sentPvp = z.pvpState(p)
@@ -620,6 +625,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.sendQuests(p, "")
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
 	z.achOnJoin(p)
+	z.masteryOnJoin(p)
 	z.eventsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
@@ -924,6 +930,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
+		Mastery: p.pl.mastery.save(),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1

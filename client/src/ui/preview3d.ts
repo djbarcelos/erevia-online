@@ -214,7 +214,15 @@ export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number
   return {
     show,
     setEmblem,
-    setBody: (l) => inst?.setLook(l),
+    setBody: (l) => {
+      if (!inst) return;
+      inst.setLook(l);
+      // Cabeça nova é outra malha (só a escolhida existe): entra na sombra também.
+      for (const mesh of inst.meshes()) {
+        shadows.addShadowCaster(mesh, false);
+        mesh.isPickable = false;
+      }
+    },
     play: (role) => anim?.play(role),
     spin: (d) => (targetSpin += d),
     ready: models.then(() => undefined),

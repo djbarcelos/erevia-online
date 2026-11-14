@@ -85,12 +85,12 @@ func (z *Zone) startTeleport(p *entity, npcID, destID uint32) {
 	switch {
 	case p.pl.karma > 0:
 		z.system(p, "A pedra não responde a quem tem karma.")
-	case p.pl.inv.gold < d.price:
-		z.system(p, fmt.Sprintf("A viagem para %s custa %d moedas.", d.name, d.price))
+	case p.pl.inv.gold < z.teleportPrice(p, d.price):
+		z.system(p, fmt.Sprintf("A viagem para %s custa %d moedas.", d.name, z.teleportPrice(p, d.price)))
 	default:
 		z.startChannel(p, &channelState{
-			kind: pb.ChannelKind_CHANNEL_KIND_TELEPORT, until: z.now + teleportChannel,
-			dest: Vec2{X: d.x, Z: d.z}, place: d.name, price: d.price,
+			kind: pb.ChannelKind_CHANNEL_KIND_TELEPORT, until: z.now + z.channelTime(p, teleportChannel),
+			dest: Vec2{X: d.x, Z: d.z}, place: d.name, price: z.teleportPrice(p, d.price),
 		}, "Viajando para "+d.name)
 	}
 }
@@ -107,7 +107,7 @@ func (z *Zone) startReturn(p *entity, def *game.ItemDef) {
 		z.system(p, "Você já está na cidade.")
 	default:
 		z.startChannel(p, &channelState{
-			kind: pb.ChannelKind_CHANNEL_KIND_RETURN, until: z.now + game.ReturnChannel,
+			kind: pb.ChannelKind_CHANNEL_KIND_RETURN, until: z.now + z.channelTime(p, game.ReturnChannel),
 			dest: Vec2{}, place: "Cidade", itemID: def.ID,
 		}, "Lendo o Pergaminho de Retorno")
 	}
@@ -160,8 +160,9 @@ func (z *Zone) updateChannel(p *entity) {
 		}
 		inv.take(slot, 1)
 		def := game.Items[ch.itemID]
-		p.pl.cooldowns[uint32(itemCooldownBase+def.Cooldown)] = z.now + game.CooldownSeconds(def.Cooldown)
-		z.sendItemCooldown(p, def.Cooldown, game.CooldownSeconds(def.Cooldown))
+		cd := z.itemCooldown(p, def.Cooldown) // Caminho de Casa (Maestria)
+		p.pl.cooldowns[uint32(itemCooldownBase+def.Cooldown)] = z.now + cd
+		z.sendItemCooldown(p, def.Cooldown, cd)
 	}
 	z.arrive(p, ch.dest)
 	z.system(p, fmt.Sprintf("Você chegou em %s.", ch.place))
