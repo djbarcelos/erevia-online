@@ -1,12 +1,15 @@
 import {
   Animation,
   AnimationGroup,
+  Bone,
   Color3,
   DynamicTexture,
   EasingFunction,
+  Matrix,
   Mesh,
   MeshBuilder,
   SineEase,
+  Skeleton,
   StandardMaterial,
   Texture,
   TransformNode,
@@ -27,6 +30,10 @@ import { heightToNormal } from "./teleport-stone";
  * cima, por cor de vértice), presas a juntas invisíveis por magia — olhos, núcleo no
  * peito e juntas brilham em âmbar. As animações são AnimationGroups por junta, então o
  * AnimController e o combate tratam o golem como qualquer outro modelo.
+ *
+ * Desenho: todas as pedras são uma malha só e todos os brilhos outra, com um esqueleto
+ * cujos ossos seguem as juntas (cada pedaço preso a um osso, peso 1). Antes era uma malha
+ * por junta (~17 por golem), e cada malha custa na escolha das ativas a cada quadro.
  */
 
 export const GOLEM_MODEL = "stone_golem";
@@ -244,15 +251,65 @@ function ember(scene: Scene, name: string, pos: V3, size: V3): Mesh {
 
 interface Part {
   joint: Joint;
-  rocks: Mesh | null;
-  glows: Mesh | null;
+  rocks: Mesh[];
+  glows: Mesh[];
 }
 
 interface Template {
   /** Posição de descanso de cada junta (relativa ao pai). */
   rest: Record<Joint, V3>;
   parent: Record<Joint, Joint | null>;
-  parts: Part[];
+  /** Juntas com brilho: cada uma ganha um osso filho que pulsa (escala) com o núcleo. */
+  glowJoints: Joint[];
+  /** Todas as pedras / todos os brilhos, já no espaço do modelo, com os ossos (desligadas). */
+  rocks: Mesh;
+  glows: Mesh;
+}
+
+/**
+ * Junta os pedaços numa malha com pele: cada pedaço vai para o espaço do modelo (posição
+ * de descanso da junta) e fica preso ao seu osso com peso 1. Os pedaços são descartados.
+ */
+function skinnedMerge(scene: Scene, name: string, pieces: { mesh: Mesh; bone: number; at: V3 }[], mat: StandardMaterial): Mesh {
+  const pos: number[] = [];
+  const nrm: number[] = [];
+  const uv: number[] = [];
+  const col: number[] = [];
+  const idx: number[] = [];
+  const mi: number[] = [];
+  const mw: number[] = [];
+  let colors = true;
+  for (const { mesh } of pieces) colors &&= mesh.isVerticesDataPresent(VertexBuffer.ColorKind);
+  for (const { mesh, bone, at } of pieces) {
+    const p = mesh.getVerticesData(VertexBuffer.PositionKind)!;
+    const n = mesh.getVerticesData(VertexBuffer.NormalKind)!;
+    const u = mesh.getVerticesData(VertexBuffer.UVKind);
+    const base = pos.length / 3;
+    for (let k = 0; k < p.length; k += 3) pos.push(p[k] + at[0], p[k + 1] + at[1], p[k + 2] + at[2]);
+    for (const x of n) nrm.push(x);
+    if (u) for (const x of u) uv.push(x);
+    else for (let k = 0; k < p.length / 3; k++) uv.push(0, 0);
+    if (colors) for (const x of mesh.getVerticesData(VertexBuffer.ColorKind)!) col.push(x);
+    for (const i of mesh.getIndices()!) idx.push(i + base);
+    for (let k = 0; k < p.length / 3; k++) {
+      mi.push(bone, 0, 0, 0);
+      mw.push(1, 0, 0, 0);
+    }
+    mesh.dispose();
+  }
+  const vd = new VertexData();
+  vd.positions = pos;
+  vd.normals = nrm;
+  vd.uvs = uv;
+  if (colors) vd.colors = col;
+  vd.indices = idx;
+  vd.matricesIndices = mi;
+  vd.matricesWeights = mw;
+  const out = new Mesh(name, scene);
+  vd.applyToMesh(out);
+  out.material = mat;
+  out.setEnabled(false);
+  return out;
 }
 
 const templates = new WeakMap<Scene, Template>();
@@ -287,66 +344,76 @@ function golemTemplate(scene: Scene): Template {
     knR: "hipR",
   };
   const { rock: rockMat, glow: glowMat } = golemMats(scene);
-  const merge = (list: Mesh[], mat: StandardMaterial): Mesh | null => {
-    if (!list.length) return null;
-    const out = list.length === 1 ? list[0] : Mesh.MergeMeshes(list, true, true)!;
-    out.material = mat;
-    out.setEnabled(false);
-    return out;
-  };
   let seed = 9000;
   const R = (pos: V3, size: V3, moss = 0.6, rot: V3 = [0, 0, 0]) => rock(scene, seed++, pos, size, moss, rot);
   const G = (pos: V3, size: V3) => ember(scene, `golemGlow-${seed++}`, pos, size);
   const side = (s: 1 | -1, v: V3): V3 => [v[0] * s, v[1], v[2]];
 
   const parts: Part[] = [
-    { joint: "hips", rocks: merge([R([0, 0, 0], [0.42, 0.26, 0.32], 0.3), R([0, -0.12, 0.12], [0.26, 0.14, 0.18], 0.2)], rockMat), glows: null },
+    { joint: "hips", rocks: [R([0, 0, 0], [0.42, 0.26, 0.32], 0.3), R([0, -0.12, 0.12], [0.26, 0.14, 0.18], 0.2)], glows: [] },
     {
       joint: "torso",
-      rocks: merge(
-        [
-          R([0, 0.58, 0], [0.62, 0.48, 0.44], 0.7, [0.1, 0, 0]),
-          R([0, 0.16, 0.04], [0.38, 0.24, 0.3], 0.3),
-          R([0.2, 0.86, -0.18], [0.3, 0.22, 0.26], 0.9),
-          R([-0.24, 0.82, -0.16], [0.28, 0.2, 0.24], 0.9),
-          R([0, 0.5, 0.38], [0.2, 0.12, 0.08], 0.2, [0, 0, 0.6]),
-        ],
-        rockMat,
-      ),
-      glows: merge([G([0, 0.36, 0.36], [0.17, 0.17, 0.12]), G([0, 0.86, 0.12], [0.1, 0.06, 0.1])], glowMat),
+      rocks: [
+        R([0, 0.58, 0], [0.62, 0.48, 0.44], 0.7, [0.1, 0, 0]),
+        R([0, 0.16, 0.04], [0.38, 0.24, 0.3], 0.3),
+        R([0.2, 0.86, -0.18], [0.3, 0.22, 0.26], 0.9),
+        R([-0.24, 0.82, -0.16], [0.28, 0.2, 0.24], 0.9),
+        R([0, 0.5, 0.38], [0.2, 0.12, 0.08], 0.2, [0, 0, 0.6]),
+      ],
+      glows: [G([0, 0.36, 0.36], [0.17, 0.17, 0.12]), G([0, 0.86, 0.12], [0.1, 0.06, 0.1])],
     },
     {
       joint: "head",
-      rocks: merge([R([0, 0.12, 0], [0.26, 0.22, 0.25], 0.8), R([0, 0.2, 0.13], [0.25, 0.07, 0.12], 0.5), R([0, 0.0, 0.14], [0.17, 0.08, 0.1], 0.2)], rockMat),
-      glows: merge([G([0.085, 0.13, 0.22], [0.075, 0.035, 0.04]), G([-0.085, 0.13, 0.22], [0.075, 0.035, 0.04])], glowMat),
+      rocks: [R([0, 0.12, 0], [0.26, 0.22, 0.25], 0.8), R([0, 0.2, 0.13], [0.25, 0.07, 0.12], 0.5), R([0, 0.0, 0.14], [0.17, 0.08, 0.1], 0.2)],
+      glows: [G([0.085, 0.13, 0.22], [0.075, 0.035, 0.04]), G([-0.085, 0.13, 0.22], [0.075, 0.035, 0.04])],
     },
     ...([1, -1] as const).flatMap((s): Part[] => {
       const L = s === 1 ? "L" : "R";
       return [
         {
           joint: `sh${L}` as Joint,
-          rocks: merge([R(side(s, [0.06, 0.06, 0]), [0.32, 0.27, 0.32], 1), R(side(s, [0.01, -0.34, 0]), [0.17, 0.26, 0.17], 0.3)], rockMat),
-          glows: null,
+          rocks: [R(side(s, [0.06, 0.06, 0]), [0.32, 0.27, 0.32], 1), R(side(s, [0.01, -0.34, 0]), [0.17, 0.26, 0.17], 0.3)],
+          glows: [],
         },
         {
           joint: `el${L}` as Joint,
-          rocks: merge([R([0, -0.26, 0.02], [0.2, 0.27, 0.2], 0.3), R([0, -0.62, 0.04], [0.28, 0.25, 0.28], 0.5), R(side(s, [0.1, -0.7, 0.1]), [0.12, 0.1, 0.12], 0.3)], rockMat),
-          glows: merge([G([0, 0.02, 0], [0.11, 0.11, 0.11])], glowMat),
+          rocks: [R([0, -0.26, 0.02], [0.2, 0.27, 0.2], 0.3), R([0, -0.62, 0.04], [0.28, 0.25, 0.28], 0.5), R(side(s, [0.1, -0.7, 0.1]), [0.12, 0.1, 0.12], 0.3)],
+          glows: [G([0, 0.02, 0], [0.11, 0.11, 0.11])],
         },
         {
           joint: `hip${L}` as Joint,
-          rocks: merge([R([0, -0.25, 0], [0.2, 0.26, 0.2], 0.3)], rockMat),
-          glows: null,
+          rocks: [R([0, -0.25, 0], [0.2, 0.26, 0.2], 0.3)],
+          glows: [],
         },
         {
           joint: `kn${L}` as Joint,
-          rocks: merge([R([0, -0.22, 0], [0.18, 0.23, 0.18], 0.2), R([0, -0.47, 0.07], [0.25, 0.11, 0.31], 0.4)], rockMat),
-          glows: merge([G([0, 0.02, 0], [0.1, 0.1, 0.1])], glowMat),
+          rocks: [R([0, -0.22, 0], [0.18, 0.23, 0.18], 0.2), R([0, -0.47, 0.07], [0.25, 0.11, 0.31], 0.4)],
+          glows: [G([0, 0.02, 0], [0.1, 0.1, 0.1])],
         },
       ];
     }),
   ];
-  t = { rest, parent, parts };
+  // Posição de descanso de cada junta no espaço do modelo (as juntas não giram no descanso
+  // do esqueleto: o osso de cada uma é só a translação até o pai).
+  const abs = {} as Record<Joint, V3>;
+  for (const j of JOINTS) {
+    const p = parent[j] ? abs[parent[j]!] : ([0, 0, 0] as V3);
+    abs[j] = [p[0] + rest[j][0], p[1] + rest[j][1], p[2] + rest[j][2]];
+  }
+  const glowJoints = parts.filter((p) => p.glows.length).map((p) => p.joint);
+  const rocks = skinnedMerge(
+    scene,
+    "golemRocks",
+    parts.flatMap((p) => p.rocks.map((mesh) => ({ mesh, bone: JOINTS.indexOf(p.joint), at: abs[p.joint] }))),
+    rockMat,
+  );
+  const glows = skinnedMerge(
+    scene,
+    "golemGlows",
+    parts.flatMap((p) => p.glows.map((mesh) => ({ mesh, bone: JOINTS.length + glowJoints.indexOf(p.joint), at: abs[p.joint] }))),
+    glowMat,
+  );
+  t = { rest, parent, glowJoints, rocks, glows };
   templates.set(scene, t);
   return t;
 }
@@ -450,7 +517,7 @@ const CLIPS: Record<Exclude<AnimRole, EmoteRole>, Clip> = {
   },
 };
 
-function buildGroup(role: keyof typeof CLIPS, id: string, nodes: Record<Joint, TransformNode>, glows: Mesh[], scene: Scene): AnimationGroup {
+function buildGroup(role: keyof typeof CLIPS, id: string, nodes: Record<Joint, TransformNode>, glows: TransformNode[], scene: Scene): AnimationGroup {
   const clip = CLIPS[role];
   const group = new AnimationGroup(`golem-${role}#${id}`, scene);
   const ease = new SineEase();
@@ -505,25 +572,39 @@ export function createGolem(scene: Scene, id: string): CharacterInstance {
     nodes[j] = n;
   }
   for (const j of JOINTS) nodes[j].parent = t.parent[j] ? nodes[t.parent[j]!] : root;
+  // Brilhos: um nó filho da junta, que pulsa (escala) com o núcleo, como a malha fazia.
+  const glows = t.glowJoints.map((j) => {
+    const n = new TransformNode(`golem-glow-${j}#${id}`, scene);
+    n.parent = nodes[j];
+    return n;
+  });
 
-  const rocks: Mesh[] = [];
-  const glows: Mesh[] = [];
-  for (const p of t.parts) {
-    for (const [src, list] of [
-      [p.rocks, rocks],
-      [p.glows, glows],
-    ] as const) {
-      if (!src) continue;
-      const c = src.clone(`${src.name}#${id}`, nodes[p.joint])!;
-      c.setEnabled(true);
-      c.isPickable = false;
-      list.push(c);
-    }
+  // Esqueleto: um osso por junta e um por brilho, cada um seguindo o seu nó.
+  const skeleton = new Skeleton(`golem#${id}`, `golem#${id}`, scene);
+  const bones: Bone[] = [];
+  for (const j of JOINTS) {
+    const p = t.parent[j];
+    const b = new Bone(`golem-${j}#${id}`, skeleton, p ? bones[JOINTS.indexOf(p)] : null, Matrix.Translation(...t.rest[j]));
+    b.linkTransformNode(nodes[j]);
+    bones.push(b);
   }
-  for (const r of rocks) r.receiveShadows = true;
+  t.glowJoints.forEach((j, k) => {
+    const b = new Bone(`golem-glow-${j}#${id}`, skeleton, bones[JOINTS.indexOf(j)], Matrix.Identity());
+    b.linkTransformNode(glows[k]);
+  });
+
+  const parts = [t.rocks, t.glows].map((src) => {
+    const c = src.clone(`${src.name}#${id}`, root)!;
+    c.skeleton = skeleton;
+    c.setEnabled(true);
+    c.isPickable = false;
+    return c;
+  });
+  const [rocks, glowMesh] = parts;
+  rocks.receiveShadows = true;
   // O brilho mágico entra na camada de brilho do mundo (se houver).
   const glowLayer = (scene as unknown as { getGlowLayerByName?: (n: string) => GlowLayer | null }).getGlowLayerByName?.("glow") ?? null;
-  for (const g of glows) glowLayer?.addIncludedOnlyMesh(g);
+  glowLayer?.addIncludedOnlyMesh(glowMesh);
 
   const anims = new Map<AnimRole, AnimationGroup>();
   for (const role of Object.keys(CLIPS) as (keyof typeof CLIPS)[]) anims.set(role, buildGroup(role, id, nodes, glows, scene));
@@ -539,7 +620,7 @@ export function createGolem(scene: Scene, id: string): CharacterInstance {
   };
   resetPose();
 
-  const all: AbstractMesh[] = [...rocks, ...glows];
+  const all: AbstractMesh[] = parts;
   return {
     root,
     anims,
@@ -551,8 +632,9 @@ export function createGolem(scene: Scene, id: string): CharacterInstance {
     meshes: () => all,
     dispose: () => {
       for (const g of anims.values()) g.dispose();
-      for (const g of glows) glowLayer?.removeIncludedOnlyMesh(g);
+      glowLayer?.removeIncludedOnlyMesh(glowMesh);
       root.dispose(false, false);
+      skeleton.dispose();
     },
   };
 }

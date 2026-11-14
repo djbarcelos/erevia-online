@@ -35,6 +35,7 @@ type groundItem struct {
 // dropLoot sorteia o que o monstro deixa e espalha perto do corpo.
 func (z *Zone) dropLoot(m *entity, owner uint32) {
 	drops := game.RollLoot(m.mon.def, m.level, z.rng)
+	z.masteryLoot(owner, m.mon.def, drops) // Bolsa Farta e Olho do Coletor (Maestria)
 	if len(drops) == 0 {
 		return
 	}
@@ -60,7 +61,10 @@ func (z *Zone) dropLoot(m *entity, owner uint32) {
 func (z *Zone) scatter(at Vec2) Vec2 {
 	a := z.rng.Float64() * 2 * math.Pi
 	r := 0.4 + z.rng.Float64()*(dropScatter-0.4)
-	if spot := (Vec2{X: at.X + r*math.Cos(a), Z: at.Z + r*math.Sin(a)}); z.walkable(spot) {
+	// Também dentro do mapa: quem morre na borda não pode deixar o saque fora dele (e ir
+	// pegar levaria o personagem para fora).
+	spot := Vec2{X: at.X + r*math.Cos(a), Z: at.Z + r*math.Sin(a)}
+	if z.walkable(spot) && clampToZone(spot, z.bounds()) == spot {
 		return spot
 	}
 	return at

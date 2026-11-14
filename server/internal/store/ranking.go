@@ -16,6 +16,7 @@ type RankRow struct {
 	PvPKills    int
 	ClanName    string
 	TitleID     string // conquista do título em uso
+	Mastery     int    // nível de Maestria (pontos ganhos no 30)
 }
 
 // ClanRankRow é uma linha do ranking de clãs.
@@ -42,8 +43,8 @@ type Rankings struct {
 
 // Ordens do ranking (as mesmas nas listas e nas posições; o id desempata de vez).
 const (
-	rankLevelOrder = "c.level DESC, c.xp DESC, c.id"
-	rankPvPOrder   = "c.pvp_kills DESC, c.level DESC, c.xp DESC, c.id"
+	rankLevelOrder = "c.level DESC, c.mastery_level DESC, c.xp DESC, c.id"
+	rankPvPOrder   = "c.pvp_kills DESC, c.level DESC, c.mastery_level DESC, c.xp DESC, c.id"
 	rankFrom       = " FROM characters c JOIN accounts a ON a.id = c.account_id"
 	rankWhere      = " WHERE NOT a.banned"
 )
@@ -96,7 +97,7 @@ func (s *Store) Rankings(ctx context.Context, limit int) (Rankings, error) {
 
 // rankRows: as primeiras limit linhas, com o clã e o título.
 func rankRows(ctx context.Context, tx pgx.Tx, where, order string, limit int) ([]RankRow, error) {
-	rows, err := tx.Query(ctx, `SELECT c.id, c.name, c.class, c.level, c.pvp_kills, coalesce(cl.name, ''), c.title`+rankFrom+`
+	rows, err := tx.Query(ctx, `SELECT c.id, c.name, c.class, c.level, c.pvp_kills, coalesce(cl.name, ''), c.title, c.mastery_level`+rankFrom+`
 		LEFT JOIN clan_members m ON m.character_id = c.id
 		LEFT JOIN clans cl ON cl.id = m.clan_id`+rankWhere+where+`
 		ORDER BY `+order+` LIMIT $1`, limit)
@@ -105,7 +106,7 @@ func rankRows(ctx context.Context, tx pgx.Tx, where, order string, limit int) ([
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (RankRow, error) {
 		var x RankRow
-		err := row.Scan(&x.CharacterID, &x.Name, &x.Class, &x.Level, &x.PvPKills, &x.ClanName, &x.TitleID)
+		err := row.Scan(&x.CharacterID, &x.Name, &x.Class, &x.Level, &x.PvPKills, &x.ClanName, &x.TitleID, &x.Mastery)
 		return x, err
 	})
 }
