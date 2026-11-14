@@ -131,13 +131,14 @@ func run(log *slog.Logger) error {
 		z.SetSocialBackend(socialStore{st})
 		z.SetEventSink(eventStore{st})
 		z.SetRankingBackend(rankingStore{st})
+		z.SetAuctionBackend(auctionStore{st})
 		m.Add(z)
 		done := make(chan struct{})
 		persistDone = append(persistDone, done)
 		go func() {
 			defer close(done)
 			for batch := range saves {
-				saveBatch(st, m, log, batch)
+				saveBatch(st, m, z, log, batch)
 			}
 		}()
 	}
@@ -244,10 +245,13 @@ func run(log *slog.Logger) error {
 
 // saveBatch grava um lote de personagens (e armazéns). Falhas viram db_error; um panic
 // (dado estranho no lote) é registrado e perde só este lote, sem derrubar o processo.
-func saveBatch(st *store.Store, z reporter, log *slog.Logger, batch []zone.SavedState) {
+// z é a zona que entregou o lote: as confirmações da casa de leilões voltam para ela (que
+// guarda as travas de compra e o recent); quem atravessou um portão no meio reenvia as
+// operações da outra zona, e o banco devolve Fresh=false.
+func saveBatch(st *store.Store, rep reporter, z *zone.Zone, log *slog.Logger, batch []zone.SavedState) {
 	defer func() {
 		if r := recover(); r != nil {
-			z.ReportPanic("persist", 0, "", r, debug.Stack())
+			rep.ReportPanic("persist", 0, "", r, debug.Stack())
 		}
 	}()
 	states := make([]store.CharacterState, len(batch))
@@ -257,6 +261,9 @@ func saveBatch(st *store.Store, z reporter, log *slog.Logger, batch []zone.Saved
 			Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
 			Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
 			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec, Mastery: p.Mastery, Zone: p.Zone,
+			Contracts: p.Contracts, Reputation: p.Reputation,
+			Auction:  auctionOps(p.Auction),
+			Bestiary: p.Bestiary,
 		}
 		if s := p.Storage; s != nil {
 			states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
@@ -267,18 +274,21 @@ func saveBatch(st *store.Store, z reporter, log *slog.Logger, batch []zone.Saved
 	var err error
 	for attempt := 1; attempt <= 3; attempt++ {
 		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err = st.SaveStates(sctx, states)
+		var results []store.AuctionResult
+		results, err = st.SaveStatesAuction(sctx, states)
 		cancel()
 		if err == nil {
+			// A zona tira da memória as operações confirmadas e avisa comprador e vendedor.
+			z.AuctionApplied(auctionResults(results))
 			return
 		}
 		log.Error("save states", "err", err, "count", len(states), "attempt", attempt)
-		z.ReportDBError("save_characters", err)
+		rep.ReportDBError("save_characters", err)
 		time.Sleep(time.Duration(attempt) * time.Second)
 	}
 	// As 3 tentativas falharam: este lote não foi gravado (o próximo salvamento do
 	// personagem, a cada 30 s, leva o estado mais novo).
-	z.ReportDBError("save_characters_lost", err)
+	rep.ReportDBError("save_characters_lost", err)
 }
 
 // recoverHTTP registra (server_error) um panic num handler HTTP e responde 500. O net/http
@@ -335,6 +345,8 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
 		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
 		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery, Zone: c.Zone,
+		Contracts: c.Contracts, Reputation: c.Reputation,
+		Bestiary: c.Bestiary,
 	}, nil
 }
 

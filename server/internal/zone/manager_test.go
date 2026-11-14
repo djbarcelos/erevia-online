@@ -2,6 +2,7 @@ package zone
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -407,6 +408,64 @@ func TestEnabledMaps(t *testing.T) {
 	}
 	if got := EnabledMaps(false, "teste, nada"); len(got) != 2 {
 		t.Fatalf("EREVIA_ZONES: %v", got)
+	}
+}
+
+// Contratos, reputação e bestiário são do personagem: atravessam o portão. As operações da
+// casa de leilões ainda sem confirmação também (o banco aplica cada uma uma vez só).
+func TestGateCarriesContractsBestiaryAndAuction(t *testing.T) {
+	m, a, b := twoZones(t, nil)
+	p := mjoin(m, 1, "Ana", "", 0, -14)
+	ana := a.players[1]
+	ana.pl.contracts = loadContracts(game.ContractState{}, game.ReputationState{Points: map[string]int{game.FactionBastion: 250}})
+	ana.pl.bst = loadBestiary(game.BestiaryState{Kills: map[string]game.BestiaryKill{"skeleton_minion": {N: 7, Lo: 1, Hi: 3}}})
+	ana.pl.auc.ops = []AuctionOp{{ID: 41, Kind: AuctionOpClaim, AccountID: 1, Name: "Ana", MailID: 5}}
+	wantC, wantR := ana.pl.contracts.save()
+	wantB := ana.pl.bst.state()
+
+	useGate(m, p, 1)
+	got := b.players[1]
+	if got == nil {
+		t.Fatal("não atravessou")
+	}
+	gotC, gotR := got.pl.contracts.save()
+	// O dia e a semana dos contratos são carimbados na entrada (contractsOnJoin).
+	if fmt.Sprint(gotC.Taken, gotR) != fmt.Sprint(wantC.Taken, wantR) || gotR.Points[game.FactionBastion] != 250 {
+		t.Fatalf("contratos/reputação: %v %v, esperava %v %v", gotC, gotR, wantC, wantR)
+	}
+	if fmt.Sprint(got.pl.bst.state()) != fmt.Sprint(wantB) {
+		t.Fatalf("bestiário: %v, esperava %v", got.pl.bst.state(), wantB)
+	}
+	if len(got.pl.auc.ops) != 1 || got.pl.auc.ops[0].ID != 41 {
+		t.Fatalf("operações do leilão: %v", got.pl.auc.ops)
+	}
+}
+
+// Na clareira só existe o portão: sem os NPCs da praça, o Quadro de Contratos e o
+// Leiloeiro (são do mapa principal); no Vale eles continuam.
+func TestClearingHasOnlyTheGate(t *testing.T) {
+	_, a, b := twoZones(t, nil)
+	for id, n := range b.npcs {
+		if n.npc.role != pb.NpcRole_NPC_ROLE_GATE {
+			t.Fatalf("NPC %d (%s) na clareira", id, n.name)
+		}
+	}
+	if len(b.npcs) != 1 {
+		t.Fatalf("%d NPCs na clareira, esperava só o portão", len(b.npcs))
+	}
+	if a.npcs[boardID] == nil || a.npcs[auctioneerID] == nil {
+		t.Fatal("o Vale perdeu o quadro ou o leiloeiro")
+	}
+	// Abrir a casa de leilões ou o quadro com os ids do Vale não faz nada na clareira.
+	p := &routedFake{}
+	b.handle(joinEvent{info: JoinInfo{ID: 9, Name: "Caio", Class: "knight", Peer: p}})
+	b.handle(socialEvent{id: 9, msg: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_OPEN, NpcId: auctioneerID}})
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, msg := range p.msgs {
+		if msg.GetAuction() != nil {
+			t.Fatal("a clareira abriu a casa de leilões")
+		}
 	}
 }
 

@@ -26,10 +26,11 @@ const (
 	xpQuest                    // recompensa de missão
 	xpInvasion                 // recompensa da defesa da cidade
 	xpDeath                    // perdida ao morrer (negativa)
+	xpContract                 // recompensa de contrato do quadro (contracts.go)
 	numXPSources
 )
 
-var xpSourceNames = [numXPSources]string{"monster", "party", "night_bonus", "event_bonus", "quest", "invasion", "death_loss"}
+var xpSourceNames = [numXPSources]string{"monster", "party", "night_bonus", "event_bonus", "quest", "invasion", "death_loss", "contract"}
 
 const xpTallyEvery = 60.0 // segundos de jogo entre as gravações
 

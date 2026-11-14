@@ -21,6 +21,7 @@ import {
   SelfPvpSchema,
   SkillTarget,
   SpecCmdKind,
+  AuctionCmdKind,
   MasteryCmdKind,
   type AchievementInfo,
   type MasteryState,
@@ -50,8 +51,10 @@ import { EntityManager } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
 import { runBench, wantBench } from "./ui/bench";
-import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
+import { enchantedName, GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
+import { contractNotice, ContractsStore, ContractsWindow } from "./ui/contracts";
+import { ContractCmdKind, ReputationCmdKind } from "./gen/erevia/v1/game_pb";
 import { TeleportWindow } from "./ui/teleport";
 import { SpecWindow } from "./ui/spec";
 import { setSpecs } from "./ui/specs";
@@ -71,7 +74,9 @@ import { buildMastery, skillsWithMastery, type SkillsTab } from "./ui/windows/ma
 import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
+import { AuctionState, buildAuction, type AuctionTab } from "./ui/windows/auction";
 import { buildGlory } from "./ui/windows/glory";
+import { BestiaryBook, buildBestiary } from "./ui/windows/bestiary";
 import { buildJournal } from "./ui/windows/journal";
 import { takeUnseenNews, whatsNewDef } from "./ui/windows/whatsnew";
 import { loadNews } from "./news";
@@ -321,6 +326,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   let mailBox: MailBox | null = null;
   let mails: Mail[] | null = null;
   let socialTab: SocialTab = "friends";
+  // Casa de leilões: o que o servidor mandou por último e a aba escolhida.
+  const auctionState = new AuctionState();
+  let auctionTab: AuctionTab = "buy";
   const socialListeners = new Set<() => void>();
   const onSocial = (fn: () => void) => {
     socialListeners.add(fn);
@@ -344,6 +352,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const achievements: AchievementInfo[] = [];
   let titleId = "";
   const achListeners = new Set<() => void>();
+  const bestiary = new BestiaryBook(); // Bestiário: o servidor manda ao entrar e quando a janela pede
   const listen = (set: Set<() => void>) => (fn: () => void) => {
     set.add(fn);
     return () => set.delete(fn);
@@ -821,6 +830,23 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     hud.element,
   );
+  // Quadro de Contratos e loja de reputação (ui/contracts.ts): clicar no quadro abre a janela.
+  const contracts = new ContractsStore();
+  const contractsWin = new ContractsWindow(
+    store,
+    itemTip,
+    contracts,
+    {
+      accept: (npc, id) => conn.contractCmd(ContractCmdKind.CONTRACT_CMD_ACCEPT, id, npc),
+      buy: (npc, offer) => conn.reputationCmd(ReputationCmdKind.REPUTATION_CMD_BUY, offer, npc),
+      request: () => {
+        conn.contractCmd(ContractCmdKind.CONTRACT_CMD_GET);
+        conn.reputationCmd(ReputationCmdKind.REPUTATION_CMD_GET);
+      },
+      me,
+    },
+    hud.element,
+  );
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma, discount: () => mastery?.teleportDiscount ?? 0 }, hud.element);
   const specWin = new SpecWindow(
     store,
@@ -831,6 +857,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     store,
     {
       change: (npc, look) => conn.changeLook(npc, look),
+      bestiaryOutfits: () => bestiary.unlockedOutfits(),
       me: () => {
         const m = me();
         const w = store.equip[0]?.info;
@@ -882,10 +909,14 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       storageWin.close();
       barberWin.close();
       specWin.close();
-      if (npc?.role === NpcRole.GATE) conn.useGate(id); // portão: o servidor confere as regras
+      contractsWin.close();
+      if (contracts.isBoard(id)) contractsWin.open(id, `${info.title} · ${info.name}`);
+      else if (npc?.role === NpcRole.GATE) conn.useGate(id); // portão: o servidor confere as regras
       else if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
       // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
       else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
+      // O Leiloeiro responde com AuctionUpdate.open (abre a janela da casa de leilões).
+      else if (npc?.role === NpcRole.AUCTION) conn.auctionCmd(AuctionCmdKind.AUCTION_CMD_OPEN, id);
       else if (npc?.role === NpcRole.TELEPORT) {
         // Indo pela pedra com o "Ir": o destino da missão vem destacado (quem escolhe é o jogador).
         const o = questGo.phase === "toStone" && questGo.offer?.npcId === id ? questGo.offer : null;
@@ -1079,6 +1110,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     build: (close) =>
       buildJournal({
         quests: hud.quests,
+        contracts,
+        level: () => me().myLevel,
         go: (id) => {
           hud.quests.track(id);
           close();
@@ -1148,6 +1181,29 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         readMail: (id) => conn.mailCmd(MailCmdKind.MAIL_CMD_READ, { mailId: id }),
         deleteMail: (id) => conn.mailCmd(MailCmdKind.MAIL_CMD_DELETE, { mailId: id }),
         sendMail: (to, subject, body) => conn.mailCmd(MailCmdKind.MAIL_CMD_SEND, { to, subject, body }),
+        claimMail: (id) => {
+          conn.auctionCmd(AuctionCmdKind.AUCTION_CMD_CLAIM, 0, { mailId: id });
+          window.setTimeout(() => conn.mailCmd(MailCmdKind.MAIL_CMD_LIST), 600); // a caixa com o anexo retirado
+        },
+        itemLabel: (id, count, enchant) => {
+          const info = store.get(id);
+          return !info ? id : enchant > 0 ? enchantedName(info, enchant) : itemLabel(info, count);
+        },
+      }),
+  });
+  reg({
+    id: "auction",
+    title: "Casa de Leilões",
+    width: 720,
+    height: 660,
+    build: () =>
+      buildAuction({
+        state: auctionState,
+        store,
+        me,
+        send: (kind, opts) => conn.auctionCmd(kind, auctionState.npcId, opts),
+        tab: auctionTab,
+        onTab: (t) => (auctionTab = t),
       }),
   });
   reg({
@@ -1165,6 +1221,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         achievements: () => achievements,
         titleId: () => titleId,
         onAchievements: listen(achListeners),
+        setTitle: (id) => conn.setTitle(id),
+        titleText: (id) => bestiary.titleOf(id),
+      }),
+  });
+  reg({
+    id: "bestiary",
+    title: "Bestiário",
+    hotkey: keys().bestiary,
+    width: 860,
+    height: 680,
+    build: () =>
+      buildBestiary({
+        book: bestiary,
+        refresh: () => conn.bestiaryCmd(),
+        titleId: () => titleId,
+        onTitle: listen(achListeners),
         setTitle: (id) => conn.setTitle(id),
       }),
   });
@@ -1245,6 +1317,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (invites.open) invites.answer(false);
       else if (hud.channeling) conn.cancelChannel();
       else if (teleportWin.isOpen) teleportWin.close();
+      else if (contractsWin.isOpen) contractsWin.close();
       else if (specWin.isOpen) specWin.close();
       else if (storageWin.isOpen) storageWin.close();
       else if (tradeWin.isOpen) conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL);
@@ -1269,6 +1342,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       [k.clan]: () => wm.toggle("clan"),
       [k.social]: () => wm.toggle("social"),
       [k.glory]: () => wm.toggle("glory"),
+      [k.bestiary]: () => wm.toggle("bestiary"),
       [k.character]: () => wm.toggle("character"),
       [k.map]: () => wm.toggle("map"),
       [k.auto]: () => hud.setAuto(!hud.autoOn, true),
@@ -1348,8 +1422,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       world.followShadows(focus.x, focus.z);
     }
     dayNight.update(clock.phase(), focus);
-    // Árvores que tapam o jogador ou o alvo ficam translúcidas.
-    env?.fader.update(dt, world.camera.position, entities.focusPoints());
+    // Árvores que tapam o jogador ou o alvo ficam translúcidas. Na medição de FPS, as que tapam
+    // o ponto medido: a linha da câmera até o jogador, lá longe, apagaria árvores ao acaso
+    // (o lugar em que o jogador nasce na praça muda), e o número de malhas deixaria de ser fixo.
+    env?.fader.update(dt, world.camera.position, benchFocus ? [benchFocus.add(new Vector3(0, 1.1, 0))] : entities.focusPoints());
     loot.update(pos);
     if (pendingShop) {
       const d = entities.distanceTo(pendingShop);
@@ -1367,9 +1443,17 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       const d = entities.distanceTo(storageWin.npcId);
       if (d === null || d > SHOP_KEEP_DIST) storageWin.close();
     }
+    if (wm.isOpen("auction")) {
+      const d = entities.distanceTo(auctionState.npcId);
+      if (d === null || d > SHOP_KEEP_DIST) wm.close("auction");
+    }
     if (barberWin.isOpen) {
       const d = entities.distanceTo(barberWin.npcId);
       if (d === null || d > SHOP_KEEP_DIST) barberWin.close();
+    }
+    if (contractsWin.isOpen) {
+      const d = entities.distanceTo(contractsWin.npcId);
+      if (d === null || d > SHOP_KEEP_DIST) contractsWin.close();
     }
   });
 
@@ -1392,6 +1476,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         setTime: (p) => clock.setFixed(p),
         setFocus: (p) => (benchFocus = p ? new Vector3(p.x, 0, p.z) : null),
         forEachMarker: entities.forEachMarker.bind(entities),
+        forEachRoot: entities.forEachRoot.bind(entities),
+        settle: () => env?.fader.settle(),
+        pooled: () => env?.fader.pooled() ?? [],
         hud: $("hud"),
       });
     }, 3000);
@@ -1517,6 +1604,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       invites.dispose();
       shop.dispose();
       teleportWin.dispose();
+      contractsWin.dispose();
       specWin.dispose();
       storageWin.dispose();
       tradeWin.dispose();
@@ -1650,6 +1738,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "storage":
           storageWin.set(msg.msg.value);
           break;
+        case "auction": {
+          const u = msg.msg.value;
+          auctionState.apply(u);
+          if (u.open) void wm.show("auction");
+          break;
+        }
         case "trade":
           tradeWin.set(msg.msg.value);
           break;
@@ -1720,6 +1814,14 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           for (const fn of achListeners) fn();
           break;
         }
+        case "bestiary":
+          bestiary.apply(msg.msg.value);
+          break;
+        case "bestiaryMark": {
+          const b = msg.msg.value;
+          toast(b.family ? `Bestiário: família ${b.name} completa!` : `Bestiário: ${b.name} — ${b.text}`);
+          break;
+        }
         case "mastery": {
           const m = msg.msg.value;
           const prev = mastery;
@@ -1771,6 +1873,23 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "eventStatus":
           hud.setEvents(msg.msg.value, serverNow);
           break;
+        case "contracts": {
+          const c = msg.msg.value;
+          contracts.setContracts(c);
+          // Contrato concluído: o aviso do HUD com a recompensa (o chat também traz).
+          if (c.completed) {
+            const done = c.contracts.find((x) => x.title === c.completed);
+            contractNotice(hud.element, "Contrato concluído", c.completed, done?.reward ?? "");
+            gameAudio.ui("enchant");
+          }
+          break;
+        }
+        case "reputation": {
+          const r = msg.msg.value;
+          contracts.setReputation(r);
+          if (r.gradeUp) toast(`Reputação: ${r.gradeUp}!`);
+          break;
+        }
       }
     },
   };

@@ -35,6 +35,10 @@ export interface SocialDeps {
   readMail(id: bigint): void;
   deleteMail(id: bigint): void;
   sendMail(to: string, subject: string, body: string): void;
+  /** Casa de leilões: retirar o anexo da carta para a bolsa. */
+  claimMail(id: bigint): void;
+  /** Nome do item (anexos), com a quantidade e o +N. */
+  itemLabel(id: string, count: number, enchant: number): string;
 }
 
 /** Enquanto a janela está aberta, a posição dos amigos é atualizada a cada tanto (ms). */
@@ -218,7 +222,7 @@ export function buildSocial(d: SocialDeps): HTMLElement {
         "sw-mail-head",
         el("span", "sw-dot", m.read ? "" : "●"),
         el("b", null, m.fromName),
-        el("span", "sw-subj", m.subject || "(sem assunto)"),
+        el("span", "sw-subj", m.attachment && !m.attachment.claimed ? el("span", "sw-clip", "[anexo] ") : "", m.subject || "(sem assunto)"),
         el("small", "muted", dateFmt.format(new Date(Number(m.sentAtMs)))),
       );
       head.type = "button";
@@ -230,26 +234,44 @@ export function buildSocial(d: SocialDeps): HTMLElement {
       };
       const item = el("div", `sw-mail-item${m.read ? "" : " unread"}`, head);
       if (opened) {
+        // Anexo da casa de leilões: retirar põe na bolsa; antes disso a carta não se apaga.
+        const a = m.attachment;
+        const parts = a ? [a.itemId ? d.itemLabel(a.itemId, a.count, a.enchant) : "", a.gold ? `${a.gold} moedas` : ""].filter(Boolean) : [];
+        const locked = !!a && !a.claimed;
+        const del = confirmButton("Apagar", "Confirmar?", "btn btn-sm btn-danger", () => {
+          openMail = null;
+          d.deleteMail(m.id);
+        });
+        del.disabled = locked;
+        if (locked) del.title = "Retire o anexo antes de apagar a carta";
         item.append(
           el("p", "sw-mail-body", m.body),
+          a
+            ? el(
+                "div",
+                `sw-attach${a.claimed ? " claimed" : ""}`,
+                el("span", "muted", "Anexo:"),
+                el("b", null, parts.join(" e ")),
+                a.claimed ? el("span", "small muted", "retirado") : button("Retirar", "btn btn-gold btn-sm", () => d.claimMail(m.id)),
+              )
+            : "",
           el(
             "div",
             "pw-acts sw-mail-acts",
-            button("Responder", "btn btn-sm", () => {
-              to.value = m.fromName;
-              if (m.subject) subject.value = m.subject.startsWith("Re: ") ? m.subject : `Re: ${m.subject}`.slice(0, subject.maxLength);
-              body.focus();
-            }),
-            confirmButton("Apagar", "Confirmar?", "btn btn-sm btn-danger", () => {
-              openMail = null;
-              d.deleteMail(m.id);
-            }),
+            m.fromName === "Casa de Leilões"
+              ? ""
+              : button("Responder", "btn btn-sm", () => {
+                  to.value = m.fromName;
+                  if (m.subject) subject.value = m.subject.startsWith("Re: ") ? m.subject : `Re: ${m.subject}`.slice(0, subject.maxLength);
+                  body.focus();
+                }),
+            del,
           ),
         );
       }
       mailList.append(item);
     }
-    mailFoot.textContent = box ? `${box.total}/${box.max} cartas guardadas. Até 10 cartas por hora; só texto por enquanto.` : "";
+    mailFoot.textContent = box ? `${box.total}/${box.max} cartas guardadas. Até 10 cartas por hora. As cartas da Casa de Leilões trazem anexos (moedas ou itens) para retirar.` : "";
   };
 
   const showTab = (id: SocialTab) => {

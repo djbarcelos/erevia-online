@@ -64,6 +64,9 @@ type hopIn struct {
 	seq       int64
 	joinedAt  time.Time
 	cooldowns map[uint32]time.Time
+	// auction: operações da casa de leilões sem confirmação do banco. Também foram na
+	// gravação da origem; o banco aplica cada uma uma vez só (repetida volta Fresh=false).
+	auction []AuctionOp
 }
 
 // UseGate repassa o pedido de atravessar o portão.
@@ -176,11 +179,14 @@ func (z *Zone) handOff(p *entity, st *SavedState) bool {
 		GM:         pl.gm, MutedUntil: pl.mutedUntil, UserAgent: pl.userAgent,
 		Quests: pl.quests.state(), Achievements: pl.ach.state(), Title: pl.ach.title,
 		Spec: pl.spec, Mastery: pl.mastery.save(), Peer: pl.peer,
-		hop: &hopIn{from: z.mapID(), seq: st.Seq, joinedAt: pl.joinedAt, cooldowns: z.savedCooldowns[p.id]},
+		Bestiary: pl.bst.state(),
+		hop: &hopIn{from: z.mapID(), seq: st.Seq, joinedAt: pl.joinedAt, cooldowns: z.savedCooldowns[p.id],
+			auction: slices.Clone(st.Auction)},
 		// O estado é o da memória agora (já com o que o portal mudou enquanto ele estava
 		// online): a recusa de Join "carregado antes de uma mudança" não vale para ele.
 		LoadedAt: time.Now(),
 	}
+	info.Contracts, info.Reputation = pl.contracts.save() // contratos e reputação são do personagem
 	if s := z.storageOf(p); s != nil {
 		info.Storage = &StorageData{Gold: s.gold, Items: s.records()}
 	} else {

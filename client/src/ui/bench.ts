@@ -1,4 +1,4 @@
-import { SceneInstrumentation, type AbstractEngine, type ArcRotateCamera, type Scene } from "@babylonjs/core";
+import { SceneInstrumentation, type AbstractEngine, type AbstractMesh, type ArcRotateCamera, type Node, type Scene, type TransformNode } from "@babylonjs/core";
 import { EntityKind } from "../gen/erevia/v1/game_pb";
 import type { MapMarker } from "../world/entities";
 import { regionAt, type Region } from "./regions";
@@ -9,8 +9,13 @@ import { regionAt, type Region } from "./regions";
  * (a mesma fica em window.__ereviaBench para testes automatizados).
  *
  * O personagem não sai do lugar: só a câmera (e as sombras e tochas) vão até a região.
- * Funciona porque hoje o servidor manda todas as entidades do mapa; com a área de interesse
- * (#88) as regiões longe do jogador vão aparecer sem monstros.
+ * O servidor só manda as entidades a até ~70 m do personagem (área de interesse), então as
+ * regiões longe dele aparecem sem monstros.
+ *
+ * Contadores do cenário (para o CI, e2e/tests/bench.spec.ts): no fim de cada ponto, um quadro
+ * a mais com as entidades escondidas mede draw calls e malhas ativas só do cenário. Os
+ * monstros andam e entram e saem da área de interesse; sem eles o número é fixo de uma
+ * rodada para outra. `?bench=contadores` encurta a amostra (os FPS saem imprecisos).
  */
 
 /** Fases do ciclo medidas: meio-dia e meia-noite (daynight.ts: dia 0–0,75). */
@@ -22,6 +27,8 @@ const PHASES = [
 const RING_ANGLES = [Math.PI / 4, (Math.PI * 11) / 12, (Math.PI * 19) / 12];
 const WARMUP_MS = 1500;
 const SAMPLE_MS = 2500;
+/** ?bench=contadores: só os contadores importam, e eles não mudam de um quadro para outro. */
+const SAMPLE_COUNTERS_MS = 500;
 /** Raio (m) em volta do ponto para contar jogadores e monstros "na tela". */
 const NEAR_RADIUS = 40;
 
@@ -36,6 +43,12 @@ export interface BenchDeps {
   /** Ponto que a câmera, as sombras e as tochas seguem (null = o jogador). */
   setFocus(p: { x: number; z: number } | null): void;
   forEachMarker(cb: (m: MapMarker) => void): void;
+  /** Nó raiz de cada entidade (jogadores, monstros, NPCs, pedras de teleporte). */
+  forEachRoot(cb: (e: { root: TransformNode; kind: EntityKind; name: string; local: boolean }) => void): void;
+  /** Termina na hora as transições do cenário (árvores que ficam translúcidas na frente da câmera). */
+  settle(): void;
+  /** Malhas guardadas para reaproveitar (desligadas): quantas são depende do FPS, então ficam fora. */
+  pooled(): AbstractMesh[];
   hud: HTMLElement;
 }
 
@@ -56,6 +69,10 @@ interface Sample {
   draws: number;
   active: number;
   meshes: number;
+  /** Só o cenário (um quadro com as entidades escondidas): draw calls, malhas ativas e total. */
+  sceneDraws: number;
+  sceneActive: number;
+  sceneMeshes: number;
   players: number;
   monsters: number;
 }
@@ -64,7 +81,20 @@ export interface BenchResult {
   device: Record<string, string | number>;
   samples: Sample[];
   table: string;
+  /** Todas as malhas da cena. */
   census: CensusRow[];
+  /** Só o cenário (sem o que está embaixo das entidades). */
+  sceneCensus: CensusRow[];
+  /** Entidades por tipo e nome, com as malhas e os nós de cada uma. */
+  entities: EntityRow[];
+}
+
+interface EntityRow {
+  /** "MONSTER: Esqueleto Lacaio"; jogadores sem o nome ("PLAYER"). */
+  type: string;
+  count: number;
+  meshes: number;
+  transformNodes: number;
 }
 
 interface CensusRow {
@@ -81,15 +111,20 @@ interface CensusRow {
  * Quantas malhas a cena tem, por grupo de nome, e quantas estão congeladas (freezeWorldMatrix):
  * o Babylon percorre todas a cada quadro para escolher as ativas.
  */
-function census(scene: Scene): CensusRow[] {
+function census(scene: Scene, skip?: Set<Node>): CensusRow[] {
   const groups = new Map<string, CensusRow>();
-  const key = (name: string) => name.replace(/[\d#:.\-_ ]+.*$/, "") || name.slice(0, 12) || "(sem nome)";
+  // "__root__#214": o número muda com a ordem de carga; sai antes de agrupar.
+  const key = (raw: string) => {
+    const name = raw.replace(/#\d+/g, "");
+    return name.replace(/[\d#:.\-_ ]+.*$/, "") || name.slice(0, 12) || "(sem nome)";
+  };
   const row = (g: string) => {
     let r = groups.get(g);
     if (!r) groups.set(g, (r = { group: g, meshes: 0, enabled: 0, frozen: 0, thin: 0, skinned: 0, transformNodes: 0 }));
     return r;
   };
   for (const m of scene.meshes) {
+    if (skip?.has(m)) continue;
     const r = row(key(m.name));
     r.meshes++;
     if (m.isEnabled()) r.enabled++;
@@ -97,8 +132,36 @@ function census(scene: Scene): CensusRow[] {
     if ((m as unknown as { thinInstanceCount?: number }).thinInstanceCount) r.thin++;
     if (m.skeleton) r.skinned++;
   }
-  for (const t of scene.transformNodes) row("[nó] " + key(t.name)).transformNodes!++;
+  for (const t of scene.transformNodes) if (!skip?.has(t)) row("[nó] " + key(t.name)).transformNodes!++;
   return [...groups.values()].sort((a, b) => b.meshes + b.transformNodes! - (a.meshes + a.transformNodes!));
+}
+
+/**
+ * O que não conta como cenário: tudo o que está embaixo das entidades (a raiz, os nós e as
+ * malhas) e as cópias de árvore guardadas no estoque.
+ */
+function notScenery(d: BenchDeps): Set<Node> {
+  const out = new Set<Node>(d.pooled());
+  d.forEachRoot(({ root }) => {
+    out.add(root);
+    for (const n of root.getDescendants(false)) out.add(n);
+  });
+  return out;
+}
+
+function entityCensus(d: BenchDeps): EntityRow[] {
+  const rows = new Map<string, EntityRow>();
+  d.forEachRoot(({ root, kind, name }) => {
+    const type = kind === EntityKind.PLAYER ? EntityKind[kind] : `${EntityKind[kind]}: ${name}`;
+    let r = rows.get(type);
+    if (!r) rows.set(type, (r = { type, count: 0, meshes: 0, transformNodes: 0 }));
+    r.count++;
+    for (const n of root.getDescendants(false)) {
+      if ((n as AbstractMesh).getTotalVertices !== undefined) r.meshes++;
+      else r.transformNodes++;
+    }
+  });
+  return [...rows.values()].sort((a, b) => a.type.localeCompare(b.type));
 }
 
 declare global {
@@ -109,6 +172,10 @@ declare global {
 
 export function wantBench(): boolean {
   return new URLSearchParams(location.search).has("bench");
+}
+
+function sampleMs(): number {
+  return new URLSearchParams(location.search).get("bench") === "contadores" ? SAMPLE_COUNTERS_MS : SAMPLE_MS;
 }
 
 export async function runBench(d: BenchDeps): Promise<BenchResult> {
@@ -167,7 +234,7 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
 
   const device = deviceInfo(d.engine);
   const table = renderTable(device, samples);
-  const result = { device, samples, table, census: census(d.scene) };
+  const result = { device, samples, table, census: census(d.scene), sceneCensus: census(d.scene, notScenery(d)), entities: entityCensus(d) };
   window.__ereviaBench = { done: true, progress: "pronto", result };
   console.log(table);
 
@@ -227,7 +294,7 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
       draws += inst.drawCallsCounter.current;
       active += d.scene.getActiveMeshes().length;
       frames++;
-      if (performance.now() - start >= SAMPLE_MS) {
+      if (performance.now() - start >= sampleMs()) {
         d.scene.onAfterRenderObservable.remove(obs);
         done();
       }
@@ -242,8 +309,10 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
     if (m.kind === EntityKind.PLAYER) players++;
     else if (m.kind === EntityKind.MONSTER) monsters++;
   });
+  const scene = await sceneOnly(d, inst);
   const f = Math.max(frames, 1);
   return {
+    ...scene,
     fps: round((frames * 1000) / elapsed, 1),
     frameMs: round(dts.reduce((s, v) => s + v, 0) / Math.max(dts.length, 1), 1),
     p95Ms: round(dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.95))] ?? 0, 1),
@@ -258,6 +327,38 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
     players,
     monsters,
   };
+}
+
+/**
+ * Um quadro com as entidades escondidas: draw calls e malhas ativas só do cenário (fora da
+ * amostra de FPS). As raízes voltam a aparecer logo depois.
+ */
+async function sceneOnly(d: BenchDeps, inst: SceneInstrumentation) {
+  const hidden: TransformNode[] = [];
+  d.forEachRoot(({ root }) => {
+    if (root.isEnabled(false)) hidden.push(root);
+  });
+  d.settle();
+  const skip = notScenery(d);
+  for (const r of hidden) r.setEnabled(false);
+  try {
+    // Malha cujo shader ainda compila (a troca de dia para noite muda os defines) fica fora do
+    // desenho: no SwiftShader isso leva segundos, e o número de draw calls mudaria com o FPS.
+    // (Com limite: uma malha que nunca fica pronta não pode travar a medição.)
+    await Promise.race([d.scene.whenReadyAsync(), wait(10_000)]);
+    return await new Promise<{ sceneDraws: number; sceneActive: number; sceneMeshes: number }>((done) => {
+      const obs = d.scene.onAfterRenderObservable.add(() => {
+        d.scene.onAfterRenderObservable.remove(obs);
+        done({
+          sceneDraws: inst.drawCallsCounter.current,
+          sceneActive: d.scene.getActiveMeshes().length,
+          sceneMeshes: d.scene.meshes.reduce((n, m) => n + (skip.has(m) ? 0 : 1), 0),
+        });
+      });
+    });
+  } finally {
+    for (const r of hidden) r.setEnabled(true);
+  }
 }
 
 function deviceInfo(engine: AbstractEngine): Record<string, string | number> {
@@ -276,8 +377,8 @@ function deviceInfo(engine: AbstractEngine): Record<string, string | number> {
 function renderTable(device: Record<string, string | number>, samples: Sample[]): string {
   const lines = Object.entries(device).map(([k, v]) => `${k}: ${v}`);
   lines.push("");
-  lines.push("| Região | Hora | FPS | Frame (ms) | p95 (ms) | CPU (ms) | Draws | Malhas ativas / total | Jogadores | Monstros |");
-  lines.push("|---|---|---|---|---|---|---|---|---|---|");
+  lines.push("| Região | Hora | FPS | Frame (ms) | p95 (ms) | CPU (ms) | Draws | Malhas ativas / total | Cenário: draws, ativas / total | Jogadores | Monstros |");
+  lines.push("|---|---|---|---|---|---|---|---|---|---|---|");
   const groups = new Map<string, Sample[]>();
   for (const s of samples) {
     const k = `${s.region}|${s.time}`;
@@ -289,6 +390,7 @@ function renderTable(device: Record<string, string | number>, samples: Sample[])
     lines.push(
       `| ${g[0].region} | ${g[0].time} | ${avg((s) => s.fps)} | ${avg((s) => s.frameMs)} | ${max((s) => s.p95Ms)} | ` +
         `${avg((s) => s.cpuMs)} | ${max((s) => s.draws)} | ${max((s) => s.active)} / ${g[0].meshes} | ` +
+        `${max((s) => s.sceneDraws)}, ${max((s) => s.sceneActive)} / ${g[0].sceneMeshes} | ` +
         `${max((s) => s.players)} | ${max((s) => s.monsters)} |`,
     );
   }

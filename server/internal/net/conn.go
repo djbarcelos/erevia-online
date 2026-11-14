@@ -62,6 +62,11 @@ type Character struct {
 	Title        string
 	Spec         string            // especialização ("" = nenhuma)
 	Mastery      game.MasteryState // Maestria (nível máximo)
+	// Contratos do quadro e reputação com as facções (tunnel#157).
+	Contracts  game.ContractState
+	Reputation game.ReputationState
+	// Bestiário: abates por monstro e famílias completas.
+	Bestiary game.BestiaryState
 	Zone         string            // mapa onde está ("" = starter)
 }
 
@@ -137,6 +142,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ClanLeftAt: char.ClanLeftAt, Storage: char.Storage,
 		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Quests: char.Quests,
 		Achievements: char.Achievements, Title: char.Title, Spec: char.Spec, Mastery: char.Mastery, LoadedAt: loadedAt, Peer: sess,
+		Contracts: char.Contracts, Reputation: char.Reputation,
+		Bestiary: char.Bestiary,
 		Zone: char.Zone,
 	})
 
@@ -266,10 +273,18 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			z.Social(ctx, id, m.AchievementCmd)
 		case *pb.ClientMessage_SpecCmd:
 			z.ProgressAction(ctx, id, m.SpecCmd)
+		case *pb.ClientMessage_ContractCmd:
+			z.ProgressAction(ctx, id, m.ContractCmd)
+		case *pb.ClientMessage_ReputationCmd:
+			z.ProgressAction(ctx, id, m.ReputationCmd)
 		case *pb.ClientMessage_MasteryCmd:
 			z.ProgressAction(ctx, id, m.MasteryCmd)
+		case *pb.ClientMessage_BestiaryCmd:
+			z.ProgressAction(ctx, id, m.BestiaryCmd)
 		case *pb.ClientMessage_TradeCmd:
 			z.Trade(ctx, id, m.TradeCmd)
+		case *pb.ClientMessage_AuctionCmd:
+			z.Social(ctx, id, m.AuctionCmd)
 		case *pb.ClientMessage_UseGate:
 			z.UseGate(ctx, id, m.UseGate.NpcId)
 		case *pb.ClientMessage_Ping:

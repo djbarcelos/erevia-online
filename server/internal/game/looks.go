@@ -86,7 +86,7 @@ const BarberPrice = 300
 // ValidAppearance confere o visual (índices dentro das paletas e cabeça conhecida).
 func ValidAppearance(a Appearance) bool {
 	if a.Skin < 0 || a.Skin > len(SkinTones) || a.Hair < 0 || a.Hair > len(HairColors) ||
-		a.Outfit < 0 || a.Outfit > len(OutfitColors) {
+		a.Outfit < 0 || a.Outfit > len(OutfitColors) && !IsBestiaryOutfit(a.Outfit) { // cores do bestiário: bestiary.go
 		return false
 	}
 	if a.Head == "" {
@@ -158,7 +158,7 @@ func DefaultLook(class string) Look {
 func ValidLook(class string, l Look) bool {
 	o, ok := StarterLooks[class]
 	return ok && contains(o.Weapons, l.Weapon) && contains(o.Offhands, l.Offhand) && ValidEmblem(l.Emblem) &&
-		ValidAppearance(l.Appearance)
+		ValidAppearance(l.Appearance) && !IsBestiaryOutfit(l.Outfit) // a cor do bestiário é ganha, não escolhida
 }
 
 // ValidEmblem: uma das cores oferecidas.
