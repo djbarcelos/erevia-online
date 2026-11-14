@@ -1,0 +1,13 @@
+{
+  "name": "erevia-e2e",
+  "private": true,
+  "description": "Testes de navegador (Playwright) contra o servidor rodando com o cliente compilado. Fora do client/ para não pesar o build.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1"
+  }
+}

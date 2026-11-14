@@ -213,3 +213,23 @@ func XPAfterDeath(xp int64, level int) int64 {
 	}
 	return xp - loss
 }
+
+// ExpectedHit é o dano médio de um golpe (RollHit sem o sorteio): chance de acerto ×
+// atk × mult × 100/(100+def) × (1 + chance de crítico × (multiplicador − 1)). O piso de 1
+// vale para o golpe sem crítico, como em RollHit; o arredondamento não muda a média.
+func ExpectedHit(in HitInput) float64 {
+	hit := 1.0
+	if !in.NoMiss && !in.ForceCrit {
+		hit = HitChance(in.Accuracy, in.Evasion)
+	}
+	crit := math.Max(0, math.Min(1, in.Crit))
+	if in.ForceCrit {
+		crit = 1
+	}
+	cm := in.CritMult
+	if cm <= 0 {
+		cm = CritMult
+	}
+	base := math.Max(1, in.Atk*in.Mult*100/(100+math.Max(0, in.Def)))
+	return hit * base * (1 + crit*(cm-1))
+}

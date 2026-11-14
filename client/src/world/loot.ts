@@ -13,6 +13,7 @@ import {
 import { AdvancedDynamicTexture, TextBlock } from "@babylonjs/gui";
 import { ItemKind, type GroundItem } from "../gen/erevia/v1/game_pb";
 import { GRADE_COLOR, itemLabel, type ItemStore } from "../ui/items";
+import { resourceFailed } from "../net/invariants";
 import type { PickAreas } from "./pick";
 
 /** Até que distância o nome do item no chão aparece (m). */
@@ -67,7 +68,8 @@ export class GroundLoot {
       mesh.bakeCurrentTransformIntoVertices();
       for (const r of c.rootNodes) if (r !== mesh) r.dispose();
       proto = mesh;
-    } catch {
+    } catch (err) {
+      resourceFailed("glb", "/models/props/loot_sack.glb", err);
       // Sem o modelo: uma caixinha.
       proto = MeshBuilder.CreateBox("loot-box", { size: 0.4 }, this.scene);
       const m = new StandardMaterial("loot-box", this.scene);
