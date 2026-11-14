@@ -19,6 +19,17 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 ### Nível 30 e o 5º degrau da árvore
 - O nível máximo agora é **30**. Do 20 em diante, cada nível pede 10% a mais de XP por nível acima do 19 (até o 19 a curva não mudou), e a caça é no **Vale das Pedras Vivas**: os golens vão do nível 20, na entrada (norte), ao 30, no fundo (sul). No **nível 20** a árvore (tecla K) ganha um 5º degrau, uma skill por ramo (3 por classe, até rank 3): Baluarte, Corte do Horizonte e Égide da Ordem (cavaleiro); Machadada Sísmica, Redemoinho Sangrento e Pele de Pedra (bárbaro); Inferno, Zero Absoluto e Rajada Arcana (mago); Golpe Fatal, Golpe das Sombras e Miasma (ladino).
 
+### Maestria (depois do nível 30)
+- No **30** a XP (de monstro, missão e invasão, com as regras de sempre: grupo, diferença de nível, noite e XP em dobro) enche a **barra de Maestria**, roxa, no lugar da barra de XP do HUD ("Maestria N"). Cada barra cheia dá **1 ponto**; uma barra custa 263.873 de XP, o mesmo que o 29 → 30 (`game.MasteryPointXP`, a rever com a curva nova). Morrer no 30 tira 4% da barra, sem tirar ponto (com karma, o dobro; para outro jogador ou defendendo a cidade, nada).
+- **Bônus diário** (como o Enlightenment do ESO): a primeira barra de cada dia (meia-noite de Brasília) sai **4× mais rápido**, e quem fica fora guarda até **7 dias**. A dica da barra mostra quanto ainda resta.
+- **Árvore** (aba **Maestria** da janela de skills, K, ou clique na barra): 3 ramos, 4 nós cada, até 5 pontos por nó com retorno decrescente (40%, 25%, 15%, 12% e 8% do total do nó); os nós do meio e do fim pedem 5 e 10 pontos no ramo. Teto: Maestria 60 (a árvore inteira).
+  - **Caça:** Alquimia de Campo (poções curam +20%), Bolsa Farta (+15% de moedas dos monstros), Olho do Coletor (15% de chance de 1 material a mais de monstros comuns; 5 pts), Instinto do Caçador (+2% de dano; 10 pts).
+  - **Sobrevivência:** Firmeza (atordoamento e lentidão −25%), Segunda Chance (−50% de perda da barra ao morrer), Fôlego (+40% de regeneração fora de combate; 5 pts), Couro Curtido (+1,5% de vida; 10 pts).
+  - **Utilidade:** Passo Leve (+4% de velocidade fora de combate, o teto), Viajante (Pedras de Teleporte −30%), Leitura Rápida (pedra e Pergaminho de Retorno −40% de tempo; 5 pts), Caminho de Casa (recarga do Pergaminho de Retorno −50%; 10 pts).
+  - **Teto de combate:** tudo o que mexe no combate (dano, defesa, vida, crítico, velocidade de ataque), com a árvore inteira, soma no máximo **5%** (hoje 3,5%; `TestMasteryCombatCap` e `TestMasteryCombatCapOnRealStats` travam).
+  - **Redistribuir:** grátis, 1 vez por dia.
+- O ranking de nível mostra a Maestria ao lado do nível (e ela desempata no 30). Cada ponto ganho vira um evento `mastery` na telemetria. Tudo fica salvo em `characters.mastery` e `characters.mastery_level` (migração 00017); nada roda por tick: só muda quando o jogador ganha XP, morre, gasta ou redistribui. GM: `/maestria xp N [Nome]` e `/maestria dia [Nome]` (simula a virada do dia). Dados em `server/internal/game/mastery.go`.
+
 ### Criação de itens (Ferreiro)
 - A aba **Criar** do Ferreiro Bruno transforma materiais que caem dos monstros + moedas em equipamento que a loja não vende: 24 receitas, de raro (ossos e crânios dos esqueletos) a épico (Essência Sombria) e lendário (Núcleo Rúnico dos golens), mais pergaminhos de encantar (inclusive os abençoados). A lista mostra quanto você tem de cada material; o botão só liga quando dá.
 - O servidor confere materiais, moedas e espaço numa cópia da bolsa e só então aplica. Receitas em `server/internal/game/recipes.go`.
@@ -39,6 +50,8 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - As missões são dados em `server/internal/game/quests.go` (objetivos: sair da cidade, matar monstros, usar skills, tomar poções, comprar, chegar a um nível, viajar). O servidor controla o progresso e salva no personagem (`characters.quests`).
 - **Onde fica cada objetivo:** cada passo pendente vai com um lugar (x, z, raio e tipo: área de caça, NPC, portão, Pedra de Teleporte ou loja), calculado pelo servidor só quando o QuestLog é enviado (ao mudar o passo e ao subir de nível, nunca por tick): matar → a área de spawn do monstro mais adequada ao nível e mais perto (no anel, o ponto na direção do jogador, longe do covil do raid); chegar a um nível → a melhor área de caça para o nível atual; falar, escolher o caminho ou comprar → o NPC (a loja mais perto que vende o item); sair da cidade → o portão mais perto; viajar → a Pedra de Teleporte da praça; usar skill e tomar poção → sem lugar. Uma missão de história pode fixar o lugar nos dados (`QuestStep.Place`). Código em `server/internal/game/questplace.go` e `server/internal/zone/questplace.go`.
 - **Missão rastreada:** clicar numa missão do painel a rastreia (uma por vez; sem escolha, a primeira ativa; a escolha fica no navegador). O minimapa e o mapa do mundo mostram a área de caça como um círculo dourado tracejado, o NPC, a loja, a Pedra de Teleporte ou o portão com um ícone e uma linha tracejada de você até lá (no minimapa, o ícone fica preso na borda quando o alvo está longe; no mapa, o painel lateral tem a missão rastreada e o clique centraliza nela). Fora de vista, uma **seta na borda da tela** aponta para o alvo com a distância em metros. Quando o passo termina, o alvo avança sozinho. Configurações → Jogo → **Marcadores de missão** desliga tudo. Custo: só os canvas 2D que já existiam (o minimapa a ~15×/s) e um elemento DOM para a seta, mexido no máximo 5×/s; nenhuma malha 3D (`client/src/ui/quest-nav.ts`).
+- **Ir e Caçar aqui:** cada missão do painel (e a rastreada no mapa do mundo) tem o botão **Ir**: o personagem anda sozinho até o lugar do passo, com o mesmo comando do clique no mapa (o servidor calcula o caminho e valida tudo). Para quando você mexe no movimento (WASD, joystick, clique no chão ou no mapa) ou ataca, quando chega (entra no raio do lugar) e quando leva dano (Configurações → Jogo → **Continuar andando se atacado**, desligado por padrão, deixa seguir). Numa área de caça aparece **Caçar aqui**: a auto-caça só com os monstros daquele passo (o QuestStepInfo leva os nomes em `monsters`), até o passo terminar; aí avisa no chat e para. Pelo F/AUTO a auto-caça continua igual. Lugar a mais de ~150 m com uma Pedra de Teleporte que encurte o caminho: a pílula oferece **Viajar pela Pedra (X moedas)**, que anda até a pedra e abre a janela com o destino destacado (quem escolhe é o jogador); depois da viagem, segue a pé. Contra bot: só com a janela do jogo em foco, e para depois de 5 minutos sem nenhuma tecla, clique ou toque de verdade. No cliente, um intervalo de 250 ms só enquanto o Ir está ativo, nada por quadro (`client/src/world/questgo.ts`, testes em `client/tests`, `npm run test:unit`).
+- **Caminhos longos:** o A* de 1 m usa uma grade de memória reaproveitada (antes eram mapas criados a cada busca: ~4× mais rápido e quase sem alocação), e pedidos de movimento acima de 40 m com obstáculo no meio entram numa fila de no máximo 2 caminhos por tick, um lugar por jogador (`server/internal/zone/pathqueue.go`). Com 50 jogadores pedindo o vale ao mesmo tempo, o pior tick caiu de ~49 ms para ~2 ms (`go test ./internal/zone -run x -bench TickLongPaths`).
 
 ### Ranking, conquistas e títulos (tecla H)
 - A janela **Glória** (H ou o troféu no menu) tem duas abas. **Ranking:** top 50 de nível (desempate pela XP), de vitórias PvP e de clãs (soma dos níveis dos membros, com a média), mais a sua posição e a do seu clã. Um worker calcula no banco a cada 5 min (contas banidas ficam de fora) e a zona guarda em memória; a janela pede quando abre e guarda a resposta por 2 min. A zona nunca consulta o banco.
@@ -63,10 +76,10 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - Dados em `server/internal/game/specs.go` e `spec_skills.go`; a escolha fica salva em `characters.spec` (migração 00015).
 
 ### Base para crescer (moderação, /bug, reconexão e CI)
-- **Comandos de GM** (contas com `accounts.gm`, ver [Moderação](#moderação)): `/gm` lista os comandos; `/kick Nome [motivo]`, `/mute Nome minutos [motivo]` e `/unmute Nome`, `/ban Nome [motivo]` (vale para a conta inteira, mesmo offline, e derruba quem está online) e `/unban Nome`, `/tp X Z`, `/goto Nome`, `/summon Nome`, `/give Nome item|moedas [qtd]`, `/anuncio texto`, `/online` e `/evento` (invasão e XP em dobro, ver [Eventos](#eventos-invasão-da-cidade-e-xp-em-dobro)). Para quem não é GM, eles aparecem como comando desconhecido. Toda ação fica no `gm_log`. O silêncio vale em todos os canais e continua depois de relogar.
-- **`/bug texto`:** qualquer jogador (mesmo silenciado), um a cada 30 s. Vai para `bug_reports` com o personagem, o nível, a posição, a versão do servidor (commit do deploy) e o navegador.
+- **Comandos de GM** (contas com `accounts.gm`, ver [Moderação](#moderação)): `/gm` lista os comandos; `/kick Nome [motivo]`, `/mute Nome minutos [motivo]` e `/unmute Nome`, `/ban Nome [motivo]` (vale para a conta inteira, mesmo offline, e derruba quem está online) e `/unban Nome`, `/tp X Z`, `/goto Nome`, `/summon Nome`, `/give Nome item|moedas [qtd]`, `/anuncio texto`, `/online`, `/evento` (invasão e XP em dobro, ver [Eventos](#eventos-invasão-da-cidade-e-xp-em-dobro)) e `/maestria xp N [Nome]` / `/maestria dia [Nome]` (teste da Maestria). Para quem não é GM, eles aparecem como comando desconhecido. Toda ação fica no `gm_log`. O silêncio vale em todos os canais e continua depois de relogar.
+- **`/bug texto`:** qualquer jogador (mesmo silenciado), um a cada 30 s. Vai para `bug_reports` com o personagem, o nível, a posição, a versão do servidor (commit do deploy) e o navegador. O cliente manda junto o contexto (erros recentes, FPS, ping, região, hora do jogo, últimas mensagens do servidor) e um print pequeno da tela do jogo; no celular, **Configurações → Sobre → Relatar problema** faz o mesmo sem teclado (ver [/bug completo](#bug-completo)).
 - **Reconexão automática:** se a conexão cair, o jogo espera o servidor responder e volta sozinho ao mesmo personagem (desiste depois de 2 min com o servidor fora do ar ou de 5 recargas). Quem foi expulso ou banido não volta.
-- **CI:** cada push e pull request roda os testes no GitHub Actions (servidor com Postgres e `-race`, tipos e build do cliente). A Railway só publica a `main` com o CI verde.
+- **CI:** cada push e pull request roda os testes no GitHub Actions (servidor com Postgres e `-race`, tipos e build do cliente, e o roteiro no navegador com Playwright). A Railway só publica a `main` com o CI verde.
 
 ### Fase 3 e interface nova (Fases A–C)
 - **13 encaixes de equipamento:** cabeça, peito, pernas, mãos, pés, capa, arma, mão secundária, colar, 2 brincos e 2 anéis. Anéis e brincos vão no encaixe livre com duplo clique, ou no que você escolher arrastando; dá para trocar anel 1 ↔ anel 2 arrastando. Itens novos nas 4 raridades com bônus novos: precisão, esquiva, velocidade de movimento, de ataque e de conjuração, regeneração de vida e mana e dano crítico.
@@ -105,13 +118,14 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Área de interesse:** cada jogador só recebe jogadores e monstros a até 70 m (com 10 m de folga) e os colegas de grupo em qualquer lugar. Quem entra no raio chega com um Spawn, quem sai some com um Despawn, e o snapshot de cada um leva só o que ele conhece. Chat, anúncios, chefes, NPCs e itens no chão continuam para todos. Isso deixa a banda por jogador quase constante com o número de jogadores (ver `cmd/loadbot`).
 - **Painel de desempenho:** tecla **F3** (ou `?debug=1` na URL) mostra tempo de frame, draw calls, malhas ativas e o tempo gasto em animação e na interface.
 - **Medição de FPS:** `?bench=1` na URL, ao entrar no mundo, leva a câmera por cada região, de dia e de noite, e no fim mostra uma tabela (FPS, tempo de frame, p95, CPU, draw calls, malhas e onde vai o tempo de CPU) com o botão **Copiar**. Leva uns 2 minutos; o personagem não sai do lugar. Serve para comparar antes e depois de cada mudança no cliente, no PC e no celular.
+- **Spawns por setor, por período e com área própria** (`game.Spawn`, base das áreas novas do [roadmap](docs/roadmap-areas.md)): além de anel, ponto fixo e disco, um spawn pode ser um **setor de anel** (`AngleMin`/`AngleMax` em graus; 0° = leste/+X, crescendo para o norte/+Z, ou seja 90° = norte, 180° = oeste, 270° = sul; `AngleMin > AngleMax` cruza o 0°, como 340°→20°). Disco ou setor com `Region` tem **dono**: os anéis das outras regiões (e o covil do raid) não sorteiam monstros lá dentro, com 6 m de folga, e quem cairia lá muda de lugar sem mudar o id. Com `When` (`WhenDay`/`WhenNight`), na virada do dia os monstros do outro período que estão **fora de combate** saem do mundo (sem morrer, sem saque) e os do período novo entram no ponto de origem; quem está lutando fica até a luta acabar (ou morrer) e segura a vaga de um do período novo, que entra no mesmo segundo em que ele sai. A troca é por região, então com a mesma quantidade de dia e de noite em cada região a contagem de monstros fica igual. O id de cada monstro é a posição na lista: spawn novo vai sempre para o **fim** de `DefaultSpawns`. O mapa do mundo desenha o setor com nome e faixa (`MapZone.angle_min`/`angle_max`), o minimapa mostra o nome ao entrar e o mapa marca "(à noite)"/"(de dia)" nos monstros de um período só. Código em `server/internal/game/monsters.go` e `server/internal/zone/spawnperiod.go`.
 - **Qualidade gráfica (Configurações → Gráficos):** presets baixa, média e alta, escolhidos pelo aparelho na primeira vez (celular → baixa ou média; computador → alta) e aplicados na hora. Todos têm tons ACES e cor/névoa por região e hora; a baixa renderiza a 80% sem brilho nem SSAO, a média liga o brilho e a vinheta, a alta soma SSAO e FXAA. Para medir: `?bench=1&quality=baixa` (força o preset sem salvar) e `?bench=1&render=antigo` (o render de antes).
 
 ## Privacidade e exclusão de conta (LGPD)
 - **Páginas legais:** [`/privacidade.html`](client/privacidade.html) e [`/termos.html`](client/termos.html), linkadas na tela de login e na de personagens. Por enquanto o responsável, o CNPJ, o e-mail (`contato@erevia.example`) e o foro são **fictícios** e precisam ser trocados pelos reais antes de abrir ao público.
 - **O que o banco guarda do login:** só o provedor, o id da conta nele e o nome de exibição (Google `openid profile`, Discord `identify`). Sem e-mail. O único cookie é o de sessão (`HttpOnly`); o chat não é gravado.
 - **Apagar a conta:** tela de personagens → **Conta** → digitar `APAGAR`. O servidor (`DELETE /api/account`, com `{"confirm":"APAGAR"}`, JSON e mesma origem como os outros pedidos de escrita) apaga numa transação a conta, identidades, sessões, personagens, itens, armazém e participação em clãs, e tira o nome dos personagens do registro dos raid bosses. O clã liderado por alguém da conta passa ao membro de cargo mais alto (o mais antigo no empate) ou é desfeito se ficar vazio; o banco não deixa apagar um líder sem isso (migração 00020). Depois a zona derruba quem estiver online com a conta (aviso "Esta conta foi apagada."), esquece o estado em memória e recusa um Join atrasado; salvamentos atrasados não acham a linha e não recriam nada.
-- **Telemetria e correio ao apagar:** os `game_events` da conta ficam anônimos (sem `account_id` e `character_id`), para as estatísticas agregadas continuarem. Um lote de eventos que chega depois da exclusão (ex.: o fim de sessão de quem foi derrubado) também entra anônimo: `InsertEvents` trava as contas do lote (`FOR KEY SHARE`) e zera as que não existem mais. As cartas enviadas ficam com quem recebeu, assinadas "Personagem apagado". O `gm_log` (moderação) é mantido.
+- **Telemetria e correio ao apagar:** os `game_events` da conta ficam anônimos (sem `account_id` e `character_id`), para as estatísticas agregadas continuarem. Um lote de eventos que chega depois da exclusão (ex.: o fim de sessão de quem foi derrubado) também entra anônimo: `InsertEvents` trava as contas do lote (`FOR KEY SHARE`) e zera as que não existem mais. As cartas enviadas ficam com quem recebeu, assinadas "Personagem apagado". O `gm_log` (moderação) é mantido. Os relatos de `/bug` da conta somem com ela, junto com o contexto e o print (cascata de `bug_reports`).
 - **Backups:** diário guardado 6 dias e semanal guardado 27 dias, então dados apagados podem ficar até 27 dias nas cópias. Se restaurar uma cópia, apague de novo as contas excluídas depois dela.
 
 ## Novidades (changelog)
@@ -140,8 +154,50 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 | `make build` | Binário do servidor e build do cliente |
 | `make docker` | Imagem de produção (a mesma que a Railway usa) |
 | `cd server && go run ./cmd/loadbot -bots 100 -duration 2m` | Teste de carga: bots que entram pelo login de dev (servidor local com `DEV_LOGIN=true`), andam, caçam e falam; imprime banda e ping a cada 10 s. O servidor registra o custo do tick no log a cada 30 s ("tick stats") |
+| `cd server && go run ./cmd/balance` | Simulador de balanceamento: por classe, caminho e nível, com o equipamento típico +0 e +3, o dano por segundo, o tempo para matar e para morrer, a XP por hora e o tempo até o 30, com as fórmulas do pacote `game` (`-csv` para planilha, `-noite`). O orçamento de poder roda no `go test` (`internal/balance`); a leitura de hoje está em [docs/balanceamento-2026-11.md](docs/balanceamento-2026-11.md) |
 
 | `make gm NAME=Fulano` | Torna GM a conta do personagem no banco local (relogue depois) |
+
+### Fuzz da entrada dos jogadores
+Um cliente pode mandar qualquer byte pelo WebSocket; nenhuma mensagem pode derrubar a zona, criar ouro ou item, nem tirar alguém do mapa. Três alvos de `go test -fuzz`:
+
+| Alvo | O que faz |
+|---|---|
+| `FuzzZoneBytes` (`internal/zone`) | Bytes → `proto.Unmarshal` em `ClientMessage` → zona (2 jogadores perto do NPC da mensagem, mapa real), mandada pelos dois, com ticks |
+| `FuzzZoneSemantic` (`internal/zone`) | Sequências de 30 mensagens de todos os tipos do oneof, montadas por reflexão com valores extremos (slots 0/255/2³²−1, quantidades 0 e máximas, ids que não existem ou de outra entidade, NaN/±Inf, textos enormes ou com controle, comandos de chat), com ticks entre elas |
+| `FuzzConnBytes` (`internal/net`) | Bytes pelo WebSocket de verdade (readJoin/readPump) até a zona rodando o próprio loop; cada entrada espera a resposta da zona |
+
+Depois de cada mensagem os alvos da zona conferem: `checkInvariants` (vida, mana, ouro, itens, posição, progressão, PvP, grupo, clã e troca; em teste dá panic); ouro + valor de venda dos itens (bolsa, equipamento, armazém e chão) nunca sobe, e nenhuma unidade de item aparece fora de compra, criação ou recompensa de missão; destino, caminho e itens no chão dentro do mapa; armazém válido; nenhuma mensagem que o cliente não consiga ler; nenhum erro no log (falha de serialização ou panic recuperado por `handleSafe`/`runSystem`; os alvos da zona chamam `handle` direto, sem o recover); nenhuma mensagem ou tick acima de 2 s.
+
+```bash
+cd server
+go test ./internal/zone -run '^$' -fuzz '^FuzzZoneSemantic$' -fuzztime 10m -parallel 4
+go test ./internal/zone -run '^$' -fuzz '^FuzzZoneBytes$' -fuzztime 10m -parallel 4
+go test ./internal/net -run '^$' -fuzz '^FuzzConnBytes$' -fuzztime 10m -parallel 4
+```
+Uma falha grava a entrada em `testdata/fuzz/<Alvo>/` e mostra a sequência de mensagens; `go test ./internal/zone -run '<Alvo>/<arquivo>'` repete. Commite o arquivo junto com a correção (o `go test` normal roda todo o corpus). O corpus inicial (uma mensagem válida de cada tipo) é gerado por `EREVIA_WRITE_FUZZ_CORPUS=1 go test ./internal/zone -run TestFuzzSeedCorpus`. Sem Go instalado: `docker run --rm -v "$PWD/server:/src" -w /src golang:1.26 go test ...`. O CI roda 10 s de cada alvo.
+
+## Testes de navegador (e2e)
+Em `e2e/` (pacote próprio, fora do build do cliente), com **Playwright** no Chromium headless e WebGL por software (SwiftShader). Pegam o que só quebra no navegador: tela branca, erro de JavaScript, botão que não faz nada, cena 3D que não carrega. Um roteiro de jogador novo, todo pelo mouse e pelo teclado: login de desenvolvimento pela tela inicial, personagem criado pela API, **Entrar no mundo**, cena 3D desenhada, fechar a janela "O que há de novo", andar com um clique no chão, abrir e fechar Configurações (Esc), Inventário (I), Personagem (C), Skills (K) e Mapa (M), comprar uma Poção de Mana Menor da Mercadora Lívia, sair da cidade pelo mapa até os Arredores, selecionar um monstro (Tab), usar a skill da tecla 1, tomar a poção (tecla 4), atacar com um clique e recarregar a página para voltar ao mesmo personagem, no mesmo lugar e com as mesmas moedas.
+
+- **Qualquer `pageerror`, `console.error` ou relatório para `POST /api/client-errors` reprova o teste.** A única exceção é o 401 de `/api/me` antes do login (lista em `e2e/tests/fixtures.ts`). Os avisos "modelos 3D indisponíveis" e "cenário indisponível" também reprovam. `e2e/tests/guarda.spec.ts` confere o próprio guarda (um `throw` e um `console.error` de propósito precisam ser pegos).
+- **WebGL por software:** o Chromium roda com SwiftShader e com o canvas 2D na CPU (`--disable-accelerated-2d-canvas`: acelerado, as texturas que o cliente pinta travavam a página por mais de 30 s e o servidor derrubava a conexão). O teste entra com a qualidade gráfica salva como **Baixa**; a Alta (SSAO, FXAA) fica de fora. Se a página ainda travar e o cliente reconectar sozinho ao carregar o mundo, o teste espera uma vez e deixa um aviso no relatório.
+- **`?e2e=1`** liga no cliente (também no build de produção) o `window.__ereviaE2E`, **só de leitura**: posição do jogador, NPCs e monstros que o cliente conhece e onde cada um aparece na tela, para o teste saber onde clicar. Nada nele manda mensagem ao servidor; as ações são cliques e teclas de verdade.
+- **No CI**, o job **Navegador (Playwright)** sobe o Postgres, compila cliente e servidor, roda o servidor com `DEV_LOGIN=true` e `STATIC_DIR=client/dist` e joga o roteiro. Se falhar, o artefato `e2e-falha` tem screenshot, vídeo, trace (`npx playwright show-trace trace.zip`) e o log do servidor.
+
+Para rodar localmente, suba o servidor com `DEV_LOGIN=true` servindo o cliente compilado (o teste usa o build de produção, não o Vite de desenvolvimento). O jeito mais simples é a imagem Docker, com o Postgres do `make db-up`:
+```bash
+docker build -t erevia-e2e .
+docker run -d --name erevia-e2e-srv -p 8087:8080 -e DEV_LOGIN=true -e PUBLIC_URL=http://localhost:8087 \
+  -e DATABASE_URL='postgres://erevia:erevia@host.docker.internal:5432/erevia?sslmode=disable' erevia-e2e
+cd e2e
+npm ci
+npx playwright install chromium        # uma vez (no Linux: --with-deps)
+E2E_BASE_URL=http://localhost:8087 npx playwright test
+E2E_BASE_URL=http://localhost:8087 E2E_CHANNEL=chrome npx playwright test   # com o Chrome instalado
+npx playwright show-report             # relatório, com o trace de uma falha
+```
+Sem `E2E_BASE_URL`, o teste usa `http://localhost:8080`. Cada execução cria uma conta e um personagem novos (`e2e…` / `Heroi…`) no banco.
 
 ## Estrutura
 ```
@@ -168,6 +224,7 @@ client/
   scripts/changelog-draft.mjs  rascunho do changelog com os PRs mergeados (via gh)
   src/net/                   conexão com o servidor
   src/gen/                   código TS gerado (não editar)
+e2e/                         testes de navegador (Playwright): e2e/tests/jogo.spec.ts
 infra/docker-compose.yml     Postgres local
 Dockerfile, .railway/        publicação (Railway: infraestrutura como código)
 ```
@@ -186,6 +243,8 @@ Dockerfile, .railway/        publicação (Railway: infraestrutura como código)
 | `DEBUG_INVARIANTS` | vazio | A zona confere o estado de cada jogador 1×/s e antes de salvar (vida e mana, ouro, pilhas, equipamento, nível e XP, posição, karma, grupo, clã e troca; ver `server/internal/zone/invariants.go`). Com `1` (e sempre nos testes), estado inválido é panic; sem ela, corrige o que é seguro e anota um evento `invariant` em `game_events` |
 | `INVASION_CHANCE` | `0.15` | Chance (0 a 1) de invasão da cidade a cada noite; `0` = só por GM |
 | `XP2_DAYS` | `sab,dom` | Dias de XP em dobro (horário de Brasília); vazio ou `nenhum` = só por GM |
+| `ALERT_WEBHOOK_URL` | vazio | Webhook do Discord dos [alertas](#alertas-no-discord). **Segredo**: só na variável da Railway, nunca no git. Vazio = os alertas só vão para o log |
+| `ALERT_SPIKE_N` | `50` | Pico de erros: avisa com mais de N ocorrências de um mesmo erro em 5 min |
 
 ## Railway
 Projeto com dois serviços no ambiente `production`:
@@ -211,7 +270,41 @@ UPDATE bug_reports SET resolved = true WHERE id = 1;
 
 -- Últimas ações de GM
 SELECT at, gm_name, command, target, detail FROM gm_log ORDER BY at DESC LIMIT 50;
+
+-- /bug completo: o contexto do cliente e se tem print
+SELECT b.id, b.at, b.character_name, b.text, b.context->>'region' AS regiao, b.context->'fps' AS fps,
+       b.context->'invariants' AS invariantes, s.report_id IS NOT NULL AS tem_print
+FROM bug_reports b LEFT JOIN bug_report_shots s ON s.report_id = b.id ORDER BY b.at DESC LIMIT 20;
 ```
+
+### /bug completo
+O relato feito pelo jogo (`/bug texto` no chat ou **Configurações → Sobre → Relatar problema**, uma caixinha para quem joga no celular sem teclado) leva o contexto do cliente e um print da tela do jogo (só o canvas 3D, sem a interface). Código: `client/src/ui/bug-report.ts`, `server/internal/api/bug_reports.go` e `server/internal/zone/bugreport.go`.
+
+1. `POST /api/bug-reports` com `{"text", "characterId", "context"}` (JSON até 40 KB; texto até 1000 caracteres; contexto: um objeto de até 32 KB). A zona confere, pelo canal, que o personagem está online e é da conta da sessão, aplica as regras do `/bug` do chat (8 caracteres no mínimo e um a cada 30 s, contado junto nos dois caminhos) e carimba nome, nível, posição, versão e navegador; a API grava e responde `201 {"id": N}`. Erros: 400 (curto ou contexto inválido), 409 (personagem fora do jogo), 413, 429 (intervalo, com `Retry-After`) e 503 (zona ocupada).
+2. `POST /api/bug-reports/{id}/shot` com o JPEG cru (`Content-Type: image/jpeg`, até 100 KB e 1280 px no lado maior; o cliente manda 640 px no lado maior, qualidade 0,6, abaixo de 80 KB). Só a conta dona, um print por relato (409 no segundo) e até 10 min depois do relato; relato de outra conta, inexistente ou vencido dão o mesmo 404. Responde 204.
+3. Limite por conta: 3 relatos e 3 prints de uma vez, depois 1 a cada 30 s (429).
+4. Servidor sem a rota, fora do ar ou com a zona ocupada: o cliente cai no `/bug` do chat (só o texto, como antes). Clientes antigos e bots continuam usando o chat.
+
+**Por que o HTTP faz o relato inteiro** (e não o chat responder com o id): o id volta direto na resposta, sem mudar o protocolo do jogo nem casar mensagens do chat com pedidos HTTP, e o dono do relato é a sessão do cookie, a mesma que autoriza o print. A zona continua sendo a única que lê o estado do jogador (pelo canal, com prazo).
+
+**Onde fica:** o contexto em `bug_reports.context` (JSONB, migração 00026; `NULL` nos relatos pelo chat). O print em `bug_report_shots` (`report_id`, `at`, `width`, `height`, `jpeg`), à parte para as listagens não arrastarem o JPEG. Os dois somem com a conta (cascata de `bug_reports.account_id`). O portal lê o print em `GET /api/admin/bug-reports/{id}/shot` (atrás do `AdminOnly`: quem não é GM vê 404; `image/jpeg`, `no-store`); no código, `store.BugReportShot(id)` e `store.BugReportContext(id)`.
+
+**Formato do contexto** (`v: 1`; campos novos podem aparecer, e quem lê ignora o que não conhece):
+
+| Campo | O quê |
+|---|---|
+| `v` | Versão do formato (1) |
+| `client` | Commit do build do cliente (`dev` local) |
+| `at` | Hora do navegador (ISO 8601) |
+| `fps` | `{avg, min, samples}`: média e mínimo do último minuto, 1 amostra por segundo (`samples` < 60 logo depois de entrar) |
+| `ping` | Último ping, em ms |
+| `region`, `x`, `z` | Região e posição do personagem (`null` se não havia) |
+| `gameTime` | `{phase, hour, night}`: fase do ciclo (0–1), hora do jogo (`"14:10"`) e se é noite |
+| `screen` | `{w, h, dpr, touch, quality, shadows, viewDistance}`: janela, densidade, toque e gráficos |
+| `players` | Jogadores na tela |
+| `invariants` | Regras das [invariantes do cliente](#invariantes-do-cliente) quebradas na sessão |
+| `errors` | Os últimos 20 erros e avisos da sessão (`recentClientErrors()`): `{level, kind, message, at, count, stack?, extra?}`, com a stack nas 3 primeiras linhas e o `extra` até 600 caracteres (cortados se o contexto passar de 30 KB) |
+| `messages` | As últimas 30 mensagens recebidas do servidor, da mais velha à mais nova: `{t, type, id?, n?}`, com `t` em segundos antes do relato (negativo), `type` o tipo da mensagem (`spawn`, `selfStats`, `chat`…; do snapshot, só `snapshot.deaths`, `.revives`, `.levelUps` e `.telegraphs`), `id` da entidade quando a mensagem tem um e `n` repetições seguidas. Só tipos e ids: nunca o texto do chat nem quem falou |
 
 ## Erros do cliente
 Todo erro de JavaScript no navegador de um jogador chega à tabela `client_errors` (`client/src/net/errors.ts` → `POST /api/client-errors`): `window.onerror`, promessas rejeitadas sem tratamento, perda do contexto WebGL, mensagens do servidor que não decodificam e modelos 3D que não carregam. Erros iguais (mensagem + primeira linha da stack) viram **uma linha por versão** do cliente, com a contagem, a primeira e a última vez, e o contexto da última ocorrência (navegador, conta, personagem, região, posição, FPS e ping). O cliente manda em lote a cada 10 s ou ao esconder/fechar a aba, no máximo 20 erros distintos por sessão; o servidor aceita até 30 lotes por minuto por IP e por conta. Apagar a conta tira a conta e o personagem das linhas dela.
@@ -245,6 +338,34 @@ node scripts/resolve-stack.mjs < stack.txt                  # com os .map de um 
 Os nomes dos `.js` levam o hash do conteúdo: se o arquivo da stack não estiver na pasta dos maps, o build é outro, e o script avisa (e tenta o de mesmo nome base).
 
 Para o código do jogo relatar algo: `reportClientError(kind, mensagem, extra?, erro?)` (vai ao servidor), `reportClientWarning(kind, mensagem, extra?)` (só em memória) e `recentClientErrors()` (os últimos 20 erros e avisos da sessão, para anexar ao /bug).
+
+### Invariantes do cliente
+O cliente percebe quando mostra algo impossível e relata com `reportClientError("client_invariant", regra, contexto)` (`client/src/net/invariants.ts`): a regra é a `message` em `client_errors` e o contexto vai no `extra`. As checagens rodam 1×/s num `setInterval` (fora do render; o HUD é conferido quando o `SelfStats` chega), e cada regra é relatada **uma vez por sessão**. As quebradas também vão no `/bug` (`invariants` do contexto).
+
+| Regra | Quando | Contexto (`extra`) |
+|---|---|---|
+| `hud_hp` / `hud_mp` | Vida ou mana acima do máximo, negativa ou não numérica | valor, máximo, nível, morto |
+| `hud_xp` | XP antes do começo do nível ou depois do próximo | XP, começo e fim da faixa, nível |
+| `entity_duplicate_id` | Spawn de um id que já está na tela | id, tipo, se é o próprio jogador |
+| `entity_no_mesh` | Entidade sem nenhuma malha viva em duas checagens seguidas | id, tipo, malhas |
+| `entity_bad_position` | Posição NaN ou Infinity | id, tipo, x, y, z |
+| `monster_dead_moving` | Monstro morto que andou mais de 1 m entre duas checagens | id, de onde, para onde |
+| `entity_server_drift` | Entidade a mais de 6 m de onde o servidor a põe (o último estado, andando até o destino como no Go) por mais de 2 s | id, distância, desenhada × servidor, idade do snapshot |
+| `camera_bad_target` | Alvo, posição ou ângulos da câmera NaN/Infinity | alvo, posição, ângulos |
+| `camera_below_ground` | Alvo ou posição da câmera abaixo do chão (y < −0,5) | alvo, posição |
+| `low_fps` | FPS abaixo de 15 por mais de 10 s (com a aba visível) | FPS, segundos, último minuto, região, entidades, jogadores, monstros, draw calls de um quadro, malhas ativas, qualidade, escala |
+| `texture_failed` | Textura que não carregou (qualquer uma, inclusive as de dentro dos .glb) | url, erro |
+| `glb_failed` | .glb que não carregou e que ninguém relatava (o saco do saque) | url, erro |
+
+Os .glb de personagens, armas e animações (`models.ts`) e o cenário continuam saindo como `kind = 'model'` e não entram de novo aqui. Os draw calls do `low_fps` são contados só naquele quadro (o contador do engine, sem `SceneInstrumentation` ligada o tempo todo).
+
+**Provocar cada regra (desenvolvimento):** com `npm run dev`, no console do jogo: `__erevia.invariants.rules` lista as regras, `__erevia.invariants.provoke("hud_hp")` provoca uma, `provokeAll()` provoca todas e `broken()` diz quais já foram relatadas. Cada uma passa pelo caminho de verdade da checagem: dados de mentira na entrada (`SelfStats`, spawn repetido, entidade sem malha, em NaN, morta andando ou longe do servidor, FPS lido como 5 por 13 s) ou uma falha real (textura e .glb que não existem; câmera com NaN só durante a checagem, sem chegar a desenhar). `window.__erevia` só existe em `import.meta.env.DEV`.
+
+```sql
+-- Invariantes do cliente quebradas na última semana
+SELECT message AS regra, count, last_seen, left(version, 7) AS versao, region, extra
+FROM client_errors WHERE kind = 'client_invariant' AND last_seen > now() - interval '7 days' ORDER BY count DESC;
+```
 
 ## Portal de administração
 `/admin` é o portal dos GMs, no mesmo servidor e no visual do jogo. Tem a página inicial (online agora, versão no ar, uptime, contas, personagens e relatos de /bug nas últimas 24 h, e as últimas ações de GM), **Jogadores** e **Operação** (abaixo); Relatos, Métricas e Economia ainda "em breve".
@@ -291,8 +412,45 @@ O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem tr
 | `v_quit_level` | Último nível de quem não joga há mais de 7 dias |
 | `v_fps` | FPS médio e dos piores momentos, por região e tipo de aparelho |
 | `v_items_daily` | Itens que entraram e saíram do jogo por dia (para caçar duplicação) |
+| `v_level_playtime` | Tempo **de jogo** (soma das sessões) para passar de cada nível, por classe: média, mediana e p75 |
+| `v_xp_sources` | XP por fonte (monstro, grupo, noite, XP em dobro, missão, invasão, morte) e por faixa de nível |
+| `v_level_kills_deaths` | Abates e mortes por nível do jogador |
+| `v_gold_per_hour` | Ouro ganho e gasto por hora de jogo, por faixa |
+| `v_level_reached` | Funil: quantos chegaram a cada nível e quantos pararam nele |
+
+**Progressão** ([docs/progressao.md](docs/progressao.md)): a XP ganha não vai uma linha por abate; a zona soma por personagem, nível e fonte e grava um evento `xp` a cada minuto, ao subir e ao sair. Ao desligar, a zona fecha a sessão de quem está online antes de a telemetria esvaziar a fila (senão todo deploy perderia o tempo de jogo). As consultas prontas estão em `server/internal/store/queries/progressao.sql`, e as tabelas aparecem no portal em `/admin#progressao`.
 
 **Erros do servidor** (também em `game_events`, no máximo 1 linha por grupo a cada minuto, com a contagem acumulada em `amount`): `server_error` é um panic recuperado (a zona segue e só o jogador da mensagem cai; `ref` = hash da stack, `extra` com onde, jogador, mensagem, stack e versão), `slow_tick` é um tick acima de 50 ms (`extra.systems` = os sistemas mais lentos) e `db_error` é uma falha ao gravar no banco (`ref` = operação). Exemplo: `SELECT kind, ref, sum(amount) AS vezes, max(at) AS ultima, max(extra->>'where') AS onde, max(extra->>'version') AS versao FROM game_events WHERE kind IN ('server_error', 'slow_tick', 'db_error') AND at > now() - interval '1 day' GROUP BY 1, 2 ORDER BY 3 DESC;`
+
+## Alertas no Discord
+O servidor avisa num canal do Discord o que precisa de atenção. Um worker próprio (`server/internal/alerts`), fora da zona, lê o banco a cada minuto e manda um embed em português, com cor por gravidade e o link para a seção do portal (`PUBLIC_URL` + `/admin#…`):
+
+| Aviso | Quando | Cor |
+|---|---|---|
+| Erro novo no servidor | Um hash de `server_error` que nunca apareceu antes | vermelho |
+| Erro novo no navegador | Um hash de `client_errors` que nunca apareceu antes (em versão nenhuma) | laranja |
+| Pico de erros | Mais de `ALERT_SPIKE_N` ocorrências de um mesmo erro em 5 min (servidor, banco ou navegador) | vermelho |
+| Invariante quebrada | A primeira quebra de cada regra no dia (horário de Brasília) | amarelo |
+| Tick lento | O p95 do tick acima de 50 ms por 2 min (mais de 5% dos ticks acima de 50 ms, pelos `slow_tick`) | laranja |
+| Servidor no ar | Cada subida, com a versão (`RAILWAY_GIT_COMMIT_SHA`): deploy (outra versão), reinício ou queda (mesma versão, e o anterior não desligou normalmente). Sai 90 s depois de subir, quando o servidor anterior já desligou | verde, azul ou vermelho |
+| Relato de bug | Cada `/bug`, com o texto, o personagem, a posição, a região e a versão | azul |
+
+- **Limite:** no máximo 1 aviso por tipo e chave (o erro, a regra, a conta do `/bug`, a versão) a cada 15 min. O seguinte diz quantos o limite segurou. Os `/bug` da mesma conta esperam o limite e saem juntos; numa enxurrada de erros novos, 5 têm aviso próprio e o resto vai num resumo.
+- **Já visto:** fica na tabela `alert_state` (migração 00029) e vale depois de um reinício. Na primeira vez, tudo o que já existia conta como visto (nada de enxurrada de avisos antigos).
+- **Robustez:** timeout de 10 s por envio, nova tentativa em erro de rede e 5xx, e no 429 do Discord espera o `retry_after` pedido (até 30 s; mais que isso, tenta na verificação seguinte). A zona nunca espera pelos alertas, e um panic no worker vira `server_error` e ele recomeça.
+- Texto de jogador (o `/bug`) não formata, não vira link e não menciona ninguém (`@everyone` não chama).
+
+**Como configurar:**
+1. No Discord, no canal dos alertas: **Configurações do canal → Integrações → Webhooks → Novo webhook**. Dê um nome (ex.: Erevia) e clique em **Copiar URL do webhook**.
+2. Na Railway, no serviço **erevia** → **Variables**, crie `ALERT_WEBHOOK_URL` com a URL copiada (e, se quiser, `ALERT_SPIKE_N`). A Railway publica de novo, e o aviso "Servidor no ar" chega ao canal em uns 2 min.
+3. A URL tem o token do webhook: não ponha no git, num print nem no board. O servidor nunca a escreve no log. Se vazar, apague o webhook no Discord e crie outro.
+
+Local, sem a variável, cada aviso vai para o log como `alerta (sem ALERT_WEBHOOK_URL)`. Para testar com um canal de verdade, ponha a URL em `ALERT_WEBHOOK_URL` no `.env` (que não vai para o git) e rode `make server`.
+
+```sql
+-- O que os alertas já avisaram (pico, invariante do dia, tick lento, /bug por conta, subidas)
+SELECT kind, key, sent_at, suppressed, pos, info FROM alert_state WHERE kind <> 'seen' ORDER BY sent_at DESC LIMIT 50;
+```
 
 ## Pipeline de arte (remaster)
 Ferramentas open source: **Blender**, **blender-mcp** (o Claude Code controla o Blender, com `DISABLE_TELEMETRY=true`) e a skill **blender-image-to-3d** (referência → asset pronto para jogo). A regra de todo asset novo é o [guia de arte](docs/guia-de-arte.md).

@@ -17,10 +17,14 @@ import {
   MailCmdKind,
   PartyCmdKind,
   PartyStateSchema,
+  QuestPlaceKind,
   SelfPvpSchema,
   SkillTarget,
   SpecCmdKind,
+  MasteryCmdKind,
   type AchievementInfo,
+  type MasteryState,
+  type MasteryTree,
   type ClanState,
   type FriendList,
   type Mail,
@@ -37,8 +41,10 @@ import {
 import { classInfo } from "./classes";
 import { Connection } from "./net/connection";
 import { startPerfSampler } from "./net/perf-sampler";
+import { ClientInvariants } from "./net/invariants";
 import { clearResume, readResume, reconnect, type Resume } from "./net/resume";
 import { Chat } from "./ui/chat";
+import { bugFromChat, noteServerMessage, openBugDialog, type BugDeps } from "./ui/bug-report";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
@@ -61,6 +67,7 @@ import { buildWorldMap } from "./ui/windows/worldmap";
 import { buildSettings } from "./ui/windows/settings";
 import { buildCharacter } from "./ui/windows/character";
 import { buildSkills } from "./ui/windows/skills";
+import { buildMastery, skillsWithMastery, type SkillsTab } from "./ui/windows/mastery";
 import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
@@ -71,9 +78,13 @@ import { InvitePrompt } from "./ui/invite";
 import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
 import { AutoHunt } from "./world/autohunt";
+import { nearestAllowed, QuestGo, type GoTarget, type StoneInfo } from "./world/questgo";
+import { GoPill } from "./ui/quest-go-pill";
+import type { QuestTarget } from "./ui/quest-nav";
 import { GroundLoot } from "./world/loot";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
+import { PickAreas } from "./world/pick";
 import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
 import { loadEnvironment, type Environment } from "./world/environment";
@@ -146,6 +157,7 @@ function play(character: CharacterInfo, resume?: Resume): void {
   const backlog: ServerMessage[] = [];
 
   conn.onMessage = (msg) => {
+    noteServerMessage(msg); // tipos e ids das últimas mensagens, para o /bug
     if (msg.msg.case === "welcome") {
       started = true;
       clearResume();
@@ -197,7 +209,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const dayNight = new DayNight(world, worldData);
   const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
   const collision = new Collision(worldData);
-  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision);
+  const picks = new PickAreas();
+  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision, picks);
   setSpecs(welcome.specs);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
   for (const e of welcome.entities) entities.add(e);
@@ -314,6 +327,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     return () => progressListeners.delete(fn);
   };
   const rankOf = (id: number) => progress?.ranks.find((r) => r.skillId === id)?.rank ?? 0;
+  // ---------- Maestria (nível 30): barra, pontos e árvore (só mudam quando chega mensagem) ----------
+  let mastery: MasteryState | null = null;
+  let masteryTree: MasteryTree | null = null;
+  const masteryListeners = new Set<() => void>();
+  let skillsTab: SkillsTab = "tree";
+  /** Troca a aba da janela de skills aberta (null = fechada). */
+  let selectSkillsTab: ((t: SkillsTab) => void) | null = null;
   /**
    * Skill como ela é agora: valores do rank aprendido, mana com Sobrecarga e recarga
    * dividida pela velocidade de conjuração (mesma conta do servidor).
@@ -345,7 +365,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const npcStock = new Map(welcome.npcs.map((n) => [n.id, n.stock]));
   const npcRecipes = new Map(welcome.npcs.map((n) => [n.id, n.recipes]));
   const npcInfo = new Map(welcome.npcs.map((n) => [n.id, n]));
-  const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId);
+  const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId, picks);
   loot.add(welcome.groundItems);
 
   // ---------- Barra de atalhos (10 teclas): salva no servidor ----------
@@ -484,6 +504,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (dest) {
       hud.setQueued(0);
       pendingShop = 0;
+      questGo.onPlayerControl(); // WASD/joystick: o jogador assumiu, o "Ir" para
       conn.moveTo(dest.x, dest.z);
     }
   };
@@ -505,6 +526,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     return { characterId: character.id, region: p ? regionAt(regions, p.x, p.z).name : undefined, x: p?.x, z: p?.z, fps: world.engine.getFps(), ping: conn.ping };
   });
   dayNight.setRegions(regions);
+  // Invariantes do cliente: checagens baratas 1×/s (net/invariants.ts).
+  const invariants = new ClientInvariants({
+    engine: world.engine,
+    scene: world.scene,
+    camera: world.camera,
+    localId: welcome.yourId,
+    forEachEntity: (cb) => entities.forEachProbe(cb),
+    regionAt: (x, z) => regionAt(regions, x, z).name,
+    focus: () => entities.localPosition(),
+  });
   const mapSource = {
     world: worldData,
     mapCanvas: renderMapCanvas(worldData),
@@ -528,12 +559,25 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   };
 
   // ---------- Auto-caça ----------
+  /** Monstro vivo mais perto entre os desses nomes ("Caçar aqui"); 4×/s no máximo. */
+  const nearestNamed = (names: readonly string[]) => {
+    const p = entities.localPosition();
+    if (!p) return null;
+    const list: { id: number; name: string; dist: number }[] = [];
+    entities.forEachMarker((m) => {
+      if (m.kind !== EntityKind.MONSTER) return;
+      const name = entities.info(m.id)?.name;
+      if (name !== undefined) list.push({ id: m.id, name, dist: Math.hypot(m.x - p.x, m.z - p.z) });
+    });
+    return nearestAllowed(list, names);
+  };
   const auto = new AutoHunt({
     dead: () => entities.localDead,
     stats: () => lastStats,
-    nearestMonster: () => entities.nearestMonster(),
+    nearestMonster: (names) => (names && names.length ? nearestNamed(names) : entities.nearestMonster()),
     targetId: () => targetId,
     isEnemy: (id) => entities.isEnemy(id),
+    nameOf: (id) => entities.info(id)?.name,
     distanceTo: (id) => entities.reachDistanceTo(id),
     attack: attackTarget,
     hotbarSkills: () =>
@@ -591,13 +635,23 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // ---------- HUD ----------
   const hud = new Hud(learnedActives(), store, {
-    onSkill: useSkill,
+    onSkill: (s) => {
+      questGo.onPlayerControl(); // atacar com skill: o "Ir" para
+      useSkill(s);
+    },
     onItem: (id) => void useItemById(id),
     onRespawn: () => conn.respawn(),
     onHotbarChange: (entries) => conn.setHotbar(entries.map((e) => e ?? "")),
-    onAuto: (on) => (on ? auto.start() : auto.stop()),
+    onAuto: (on) => {
+      if (on) {
+        questGo.stop(); // F/AUTO: a auto-caça de sempre, sem filtro
+        auto.start();
+      } else auto.stop();
+    },
     openWindow: (id: WindowId) => wm.toggle(id),
+    openMastery: () => openMastery(),
     onAttack: () => {
+      questGo.onPlayerControl();
       if (entities.isEnemy(targetId)) return attackTarget(targetId);
       if (entities.isPlayer(targetId) && entities.canAttack(targetId, forcedId === targetId)) return attackPlayer(targetId, forcedId === targetId);
       const n = entities.nearestMonster();
@@ -607,8 +661,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     onTargetAction: (action) => {
       const info = entities.info(targetId);
       if (!info || !entities.isPlayer(targetId)) return;
-      if (action === "attack") attackPlayer(targetId, true);
-      else if (action === "whisper") chat.whisperTo(info.name);
+      if (action === "attack") {
+        questGo.onPlayerControl();
+        attackPlayer(targetId, true);
+      } else if (action === "whisper") chat.whisperTo(info.name);
       else if (action === "party") inviteParty(info.name);
       else if (action === "clan") inviteClan(info.name);
       else if (action === "trade") conn.tradeCmd(TradeCmdKind.TRADE_CMD_REQUEST, { targetId });
@@ -617,6 +673,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     onPartyMember: (id) => selectTarget(id),
     onCancelChannel: () => conn.cancelChannel(),
     onCycleTarget: cycleTarget,
+    onQuestGo: (id) => goToQuest(id),
     onStick: (v) => {
       stick = v;
       if (v) stepStick();
@@ -634,11 +691,37 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   migrateLocalHotbar();
   /** Pontos livres viram uma bolinha nos botões de Personagem e Skills. */
   const refreshBadges = () =>
-    hud.setBadges({ character: progress?.freeAttrPoints ?? 0, skills: progress?.freeSkillPoints ?? 0, social: mailBox?.unread ?? 0 });
+    hud.setBadges({
+      character: progress?.freeAttrPoints ?? 0,
+      skills: (progress?.freeSkillPoints ?? 0) + (mastery?.active ? mastery.free : 0),
+      social: mailBox?.unread ?? 0,
+    });
   refreshBadges();
+  /** Barra de Maestria do HUD: abre a janela de skills na aba Maestria. */
+  const openMastery = () => {
+    skillsTab = "mastery";
+    if (selectSkillsTab) selectSkillsTab("mastery");
+    else void wm.show("skills");
+  };
 
   const chat = new Chat(hud.chatRoot, character.name, (text, to, channel) => conn.chat(text, to, channel));
   chat.onPartyInvite = inviteParty;
+  // /bug completo (chat e Configurações → Sobre → Relatar problema): contexto + print.
+  const bugDeps: BugDeps = {
+    characterId: character.id,
+    scene: world.scene,
+    ping: () => conn.ping,
+    position: () => entities.localPosition(),
+    region: () => {
+      const p = entities.localPosition();
+      return p ? regionAt(regions, p.x, p.z).name : undefined;
+    },
+    phase: () => clock.phase(),
+    fps: () => invariants.fpsSummary(),
+    players: () => entities.count,
+    viaChat: (text) => conn.chat(`/bug ${text}`, ""),
+  };
+  chat.onBug = (text) => bugFromChat(text, bugDeps, (line) => chat.system(line));
   // Raid boss: barra no topo, anúncios, avisos no chão e o estado dos chefes no mapa.
   const serverOffset = Number(welcome.serverTimeMs) - Date.now();
   const serverNow = () => Date.now() + serverOffset;
@@ -705,7 +788,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     hud.element,
   );
-  const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma }, hud.element);
+  const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma, discount: () => mastery?.teleportDiscount ?? 0 }, hud.element);
   const specWin = new SpecWindow(
     store,
     { choose: (npc, spec) => conn.specCmd(SpecCmdKind.SPEC_CMD_CHOOSE, npc, spec), myClass: () => character.class, skills: () => welcome.skills },
@@ -769,8 +852,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
       // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
       else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
-      else if (npc?.role === NpcRole.TELEPORT) teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests);
-      else if (npc?.role === NpcRole.STORAGE) {
+      else if (npc?.role === NpcRole.TELEPORT) {
+        // Indo pela pedra com o "Ir": o destino da missão vem destacado (quem escolhe é o jogador).
+        const o = questGo.phase === "toStone" && questGo.offer?.npcId === id ? questGo.offer : null;
+        teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests, o?.destId ?? 0);
+      } else if (npc?.role === NpcRole.STORAGE) {
         storageWin.open(id, `${info.title} · ${info.name}`);
         conn.storageGold(id, 0); // pede o conteúdo
       } else shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? [], npcRecipes.get(id) ?? []);
@@ -786,6 +872,79 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (dest) conn.moveTo(dest.x, dest.z);
     pendingShop = id;
   };
+
+  // ---------- "Ir" das missões (world/questgo.ts) ----------
+  // Anda com o mesmo comando do clique no mapa; "Caçar aqui" liga a auto-caça só com os
+  // monstros do passo. O intervalo de 250 ms do Ir só existe enquanto ele está ativo.
+  const toGoTarget = (t: QuestTarget | null): GoTarget | null =>
+    t && { questId: t.questId, step: t.step, x: t.x, z: t.z, radius: t.radius, name: t.name, hunt: t.kind === QuestPlaceKind.HUNT, monsters: t.monsters };
+  const stoneInfos = (): StoneInfo[] =>
+    welcome.npcs
+      .filter((n) => n.role === NpcRole.TELEPORT)
+      .map((n) => {
+        const root = entities.rootOf(n.id);
+        return {
+          npcId: n.id,
+          name: entities.info(n.id)?.name ?? "",
+          x: root?.position.x ?? 0,
+          z: root?.position.z ?? 0,
+          dests: n.dests.map((d) => ({ id: d.id, name: d.name, x: d.x, z: d.z, price: d.price })),
+        };
+      })
+      .filter((s) => entities.rootOf(s.npcId));
+  const questGo = new QuestGo({
+    now: () => performance.now(),
+    position: () => {
+      const p = entities.localPosition();
+      return p ? { x: p.x, z: p.z } : null;
+    },
+    dead: () => entities.localDead,
+    focused: () => document.hasFocus() && document.visibilityState === "visible",
+    keepIfHit: () => settings.get().goKeepIfHit,
+    gold: () => store.gold,
+    walk: (x, z) => {
+      hud.setQueued(0);
+      pendingShop = 0;
+      const dest = entities.predictLocalMove(x, z);
+      if (dest) conn.moveTo(dest.x, dest.z);
+    },
+    halt: () => {
+      entities.stopLocal();
+      conn.stop();
+    },
+    openStone: (npcId) => openShop(npcId),
+    startHunt: (t) => {
+      auto.stop();
+      auto.start({ names: t.monsters, label: t.name });
+      hud.setAuto(true, false);
+    },
+    stopHunt: () => {
+      auto.stop();
+      hud.setAuto(false, false);
+    },
+    hunting: () => auto.questMode,
+    notify: (text, warn) => {
+      chat.system(text);
+      toast(text, warn ? "warn" : "");
+    },
+    changed: () => goPill.update(),
+    every: (fn, ms) => {
+      const id = window.setInterval(fn, ms);
+      return () => window.clearInterval(id);
+    },
+  });
+  const goPill = new GoPill(questGo, { stone: () => questGo.takeStone(), hunt: () => questGo.huntHere(), stop: () => questGo.stop() });
+  hud.element.append(goPill.el);
+  const goToQuest = (questId: string) => {
+    const t = toGoTarget(hud.quests.targetOf(questId));
+    if (t) questGo.go(t, stoneInfos());
+  };
+  // Interação real (não sintética) do jogador: o Ir para depois de 5 min sem nenhuma.
+  const onRealInput = (ev: Event) => {
+    if (ev.isTrusted) questGo.input();
+  };
+  const REAL_INPUT = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+  for (const t of REAL_INPUT) addEventListener(t, onRealInput, { capture: true, passive: true });
 
   // ---------- Janelas ----------
   const keys = () => settings.get().keys;
@@ -847,16 +1006,34 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hotkey: keys().skills,
     width: 1000,
     height: 820, // 5 degraus (a janela nunca passa da altura da tela)
-    build: () =>
-      buildSkills({
-        skills: welcome.skills,
-        branches: welcome.branches,
-        level: () => me().myLevel,
-        progress: () => progress,
-        onProgress,
-        learn: (ranks) => conn.learnSkills(ranks),
-        toHotbar: (id, i) => toHotbar(`skill:${id}`, i),
-      }),
+    // Duas abas: a árvore da classe e a Maestria (nível 30).
+    build: () => {
+      const w = skillsWithMastery({
+        tree: buildSkills({
+          skills: welcome.skills,
+          branches: welcome.branches,
+          level: () => me().myLevel,
+          progress: () => progress,
+          onProgress,
+          learn: (ranks) => conn.learnSkills(ranks),
+          toHotbar: (id, i) => toHotbar(`skill:${id}`, i),
+        }),
+        mastery: () =>
+          buildMastery({
+            tree: () => masteryTree,
+            state: () => mastery,
+            onChange: listen(masteryListeners),
+            request: () => conn.masteryCmd(MasteryCmdKind.MASTERY_CMD_GET),
+            spend: (node) => conn.masteryCmd(MasteryCmdKind.MASTERY_CMD_SPEND, node),
+            respec: () => conn.masteryCmd(MasteryCmdKind.MASTERY_CMD_RESPEC),
+          }),
+        tab: skillsTab,
+        onTab: (t) => (skillsTab = t),
+      });
+      selectSkillsTab = w.select;
+      w.root.addEventListener("win-close", () => (selectSkillsTab = null));
+      return w.root;
+    },
   });
   reg({
     id: "party",
@@ -961,7 +1138,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           return st && { alive: st.alive, windowStartMs: Number(st.windowStartMs), windowEndMs: Number(st.windowEndMs) };
         },
         serverNow,
+        go: goToQuest,
         moveTo: (x, z) => {
+          questGo.onPlayerControl();
           hud.setQueued(0);
           pendingShop = 0;
           const dest = entities.predictLocalMove(x, z);
@@ -985,6 +1164,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         },
         info: () => ({ account: "", character: character.name, level: me().myLevel, ping: conn.ping, online: entities.count }),
         news: () => void wm.show("news"),
+        reportBug: () => {
+          close();
+          openBugDialog(bugDeps);
+        },
       }),
   });
   reg(whatsNewDef());
@@ -1056,6 +1239,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   setupInput(world.scene, world.ground, {
     onGround: (x, z) => {
+      questGo.onPlayerControl(); // clicar no chão: o jogador assumiu
       hud.setQueued(0); // andar cancela a skill na fila
       pendingShop = 0;
       const dest = entities.predictLocalMove(x, z);
@@ -1064,6 +1248,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     onEntity: (id, force) => {
       if (id === welcome.yourId) return;
+      questGo.onPlayerControl();
       selectTarget(id);
       if (entities.isNpc(id)) {
         if (!entities.localDead) openShop(id);
@@ -1076,12 +1261,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     onLoot: (id) => {
       if (entities.localDead) return;
+      questGo.onPlayerControl();
       hud.setQueued(0);
       pendingShop = 0;
       conn.pickUp(id);
     },
     isEnemy: (id, force) => entities.isEnemy(id) || entities.canAttack(id, force || forcedId === id),
-  });
+  }, picks);
   const stopTouchCamera = setupTouchCamera(canvas, world.camera);
   const stopAudio = gameAudio.attachWorld({
     scene: world.scene,
@@ -1219,6 +1405,33 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       raid: () => raid.all(),
       raidCmd: (args: string) => conn.chat(`/raid ${args}`, ""),
       clanCmd: (kind: number, opts: { name?: string; targetId?: number; text?: string }) => conn.clanCmd(kind, opts),
+      /** Invariantes do cliente: rules, broken(), provoke(regra), provokeAll(). */
+      invariants: invariants.devHooks(),
+      /** /bug completo sem passar pelo campo do chat (testes). */
+      bug: (text: string) => bugFromChat(text, bugDeps, (line) => chat.system(line)),
+    };
+  }
+
+  // Testes de navegador (e2e/, no CI contra o build de produção): com ?e2e=1 na URL, só
+  // leitura, para achar na tela onde clicar (NPC, monstro). Toda ação do teste passa pelo
+  // mouse e pelo teclado; nada aqui manda mensagem ao servidor ou muda o estado do jogo.
+  if (new URLSearchParams(location.search).has("e2e")) {
+    (window as unknown as Record<string, unknown>).__ereviaE2E = {
+      me: () => {
+        const p = entities.localPosition();
+        return p ? { x: p.x, z: p.z } : null;
+      },
+      screenPos: (id: number) => entities.screenPos(id, world.scene),
+      /** Entidades vivas que o cliente conhece: NPCs ou monstros (sem os chefes), com nome e posição. */
+      entities: (kind: "npc" | "monster") => {
+        const want = kind === "npc" ? EntityKind.NPC : EntityKind.MONSTER;
+        const out: { id: number; name: string; x: number; z: number }[] = [];
+        entities.forEachMarker((m) => {
+          if (m.kind === want && !m.boss) out.push({ id: m.id, name: entities.info(m.id)?.name ?? "", x: m.x, z: m.z });
+        });
+        return out;
+      },
+      targetId: () => targetId,
     };
   }
 
@@ -1226,8 +1439,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   return {
     dispose() {
       setErrorContext(null);
+      invariants.dispose();
       unwatchEngine();
       auto.stop();
+      questGo.stop();
+      for (const t of REAL_INPUT) removeEventListener(t, onRealInput, { capture: true });
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKeyUp);
       removeEventListener("resize", onResizeRect);
@@ -1256,6 +1472,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "spawn": {
           const e = msg.msg.value.entity;
           if (e) {
+            invariants.noteSpawn(e.id, entities.info(e.id) !== undefined, e.kind);
             entities.add(e, true);
             raid.onSpawn(e.id, e.model, e.x, e.z);
           }
@@ -1264,10 +1481,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "despawn":
           if (msg.msg.value.id === targetId) selectTarget(0);
           entities.remove(msg.msg.value.id);
+          invariants.noteDespawn(msg.msg.value.id);
           break;
         case "snapshot": {
           const snap = msg.msg.value;
           for (const s of snap.states) entities.applyState(s);
+          invariants.noteStates(snap.states);
           // Ordem de encenação: primeiro os golpes (cada um sabe quando encosta), depois a
           // vida, os efeitos e as mortes, que esperam o golpe chegar no alvo.
           for (const ev of snap.casts) entities.onSkillCast(ev);
@@ -1275,6 +1494,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
             entities.onCombat(ev);
             // Um jogador atacou você: a auto-caça para (nunca revida sozinha).
             if (ev.targetId === welcome.yourId && ev.sourceId !== welcome.yourId && entities.isPlayer(ev.sourceId)) auto.onPlayerAttack();
+            // Levou dano andando com o "Ir": para (a não ser com "Continuar andando se atacado").
+            if (ev.targetId === welcome.yourId && ev.sourceId !== welcome.yourId) questGo.onHit(ev.damage);
           }
           for (const u of snap.hp) entities.applyHp(u);
           for (const ev of snap.effects) entities.onEffect(ev);
@@ -1309,6 +1530,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           lastXp = s.xp;
           lastStats = s;
           hud.setStats(s);
+          invariants.stats(s);
           if (castChanged) hud.setSkills(learnedActives());
           for (const fn of statsListeners) fn();
           break;
@@ -1372,6 +1594,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "questLog": {
           const log = msg.msg.value;
           hud.setQuests(log);
+          if (questGo.target) questGo.questUpdate(toGoTarget(hud.quests.targetOf(questGo.target.questId)));
           if (log.completed) toast(`Missão concluída: ${log.completed}`);
           break;
         }
@@ -1435,6 +1658,24 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           for (const fn of achListeners) fn();
           break;
         }
+        case "mastery": {
+          const m = msg.msg.value;
+          const prev = mastery;
+          mastery = m;
+          hud.setMastery(m);
+          // XP ganha no 30 vira o aviso do canto, e o ponto ganho, o banner (o chat avisa também).
+          if (prev?.active && m.active) {
+            if (m.level > prev.level) hud.masteryBanner(m.level);
+            else if (m.xp > prev.xp) hud.lootLine(`+${(m.xp - prev.xp).toLocaleString("pt-BR")} XP de Maestria`, "xp");
+          }
+          refreshBadges();
+          for (const fn of masteryListeners) fn();
+          break;
+        }
+        case "masteryTree":
+          masteryTree = msg.msg.value;
+          for (const fn of masteryListeners) fn();
+          break;
         case "specChoice": {
           const c = msg.msg.value;
           const info = entities.info(c.npcId);

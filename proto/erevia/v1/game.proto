@@ -41,7 +41,69 @@ message ClientMessage {
     RankingRequest ranking_request = 31;
     AchievementCmd achievement_cmd = 32;
     SpecCmd spec_cmd = 50;
+    MasteryCmd mastery_cmd = 54; // Maestria: pedir o estado, gastar ponto, redistribuir
   }
+}
+
+// ---------- Maestria (depois do nível 30) ----------
+
+enum MasteryCmdKind {
+  MASTERY_CMD_UNSPECIFIED = 0;
+  MASTERY_CMD_GET = 1; // pedir a árvore e o estado (a janela abriu)
+  MASTERY_CMD_SPEND = 2; // gastar 1 ponto no nó `node`
+  MASTERY_CMD_RESPEC = 3; // devolver todos os pontos (grátis, 1 vez por dia)
+}
+
+message MasteryCmd {
+  MasteryCmdKind kind = 1;
+  string node = 2;
+}
+
+// Estado da Maestria (só para o dono). Sai ao entrar no 30, a cada XP ganha no 30, ao
+// morrer e quando a árvore muda. No 30 a barra de XP do HUD vira esta barra.
+message MasteryState {
+  bool active = 1; // nível 30: a barra enche e os pontos podem ser gastos
+  uint32 level = 2; // pontos ganhos no total ("Maestria N")
+  uint32 free = 3; // pontos para gastar
+  uint64 xp = 4; // XP na barra atual
+  uint64 need = 5; // XP de uma barra cheia (1 ponto)
+  uint64 rested = 6; // bônus diário guardado: XP de barra que ainda enche rested_mult× mais rápido
+  uint64 rested_max = 7; // o máximo guardado (rested_days barras)
+  uint32 rested_mult = 8;
+  uint32 rested_days = 9;
+  repeated MasteryRank ranks = 10;
+  bool respec_ready = 11; // o Redistribuir de hoje está livre
+  uint32 max_level = 12; // teto da Maestria (a árvore inteira)
+  float teleport_discount = 13; // Viajante: desconto nas Pedras de Teleporte (0–1)
+}
+
+message MasteryRank {
+  string node = 1;
+  uint32 rank = 2;
+}
+
+// A árvore da Maestria (o cliente pede ao abrir a janela e guarda).
+message MasteryTree {
+  repeated MasteryBranchInfo branches = 1;
+  repeated MasteryNodeInfo nodes = 2;
+  uint32 node_max = 3; // pontos por nó
+  float combat_cap = 4; // teto da soma dos bônus de combate com a árvore cheia (0,05)
+}
+
+message MasteryBranchInfo {
+  string name = 1;
+  string description = 2;
+  string color = 3; // "#rrggbb"
+}
+
+message MasteryNodeInfo {
+  string id = 1;
+  string name = 2;
+  uint32 branch = 3;
+  uint32 req = 4; // pontos no ramo para abrir
+  string icon = 5; // glifo (GLYPHS em client/src/ui/art.ts)
+  repeated string ranks = 6; // texto do efeito com 1..node_max pontos (retorno decrescente)
+  bool combat = 7; // entra no teto de combate
 }
 
 // ---------- Especialização (segunda classe, nível 20) ----------
@@ -370,6 +432,8 @@ message ServerMessage {
     Achievements achievements = 32;
     SpecChoice spec_choice = 50;
     EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
+    MasteryState mastery = 54; // Maestria (nível 30): barra, pontos e árvore do jogador
+    MasteryTree mastery_tree = 55; // a árvore da Maestria (resposta ao MASTERY_CMD_GET)
   }
 }
 
@@ -395,6 +459,7 @@ message RankEntry {
   uint32 pvp_kills = 6;
   string clan_name = 7;
   string title = 8;
+  uint32 mastery = 9; // nível de Maestria (0 = abaixo do 30 ou nenhum ponto)
 }
 
 message ClanRankEntry {
@@ -485,6 +550,9 @@ message QuestStepInfo {
   float z = 6;
   float radius = 7; // metros: chegou quando está dentro
   string place_name = 8; // rótulo no mapa ("Esqueleto Lacaio", "Ysolde", "Portão Leste")
+  // Matar: nomes dos monstros que contam (o "Caçar aqui" só mira neles). Vazio = qualquer
+  // monstro (ou o passo não é de caçar).
+  repeated string monsters = 9;
 }
 
 // ---------- Eventos (invasão da cidade e XP em dobro) ----------
@@ -546,9 +614,19 @@ enum TelegraphKind {
   TELEGRAPH_KIND_WAVE = 1; // Onda de Ossos: em volta do chefe
   TELEGRAPH_KIND_RAIN = 2; // Chuva de Ossos: em cima de um jogador
   TELEGRAPH_KIND_MARK = 3; // Marca da Morte: segue o marcado e explode em volta dele
+  TELEGRAPH_KIND_STRIKE = 4; // habilidade de monstro comum ou chefe de campo (pancada no chão)
 }
 
-// Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro do círculo.
+// Forma do aviso. x, z é a origem: o centro (círculo e anel) ou o ponto de onde sai o
+// cone ou a linha, na direção angle.
+enum TelegraphShape {
+  TELEGRAPH_SHAPE_CIRCLE = 0; // raio radius
+  TELEGRAPH_SHAPE_CONE = 1; // raio radius e abertura total arc
+  TELEGRAPH_SHAPE_LINE = 2; // retângulo de length × width saindo de x, z
+  TELEGRAPH_SHAPE_DONUT = 3; // anel entre inner_radius e radius (o buraco é seguro)
+}
+
+// Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro da forma.
 message Telegraph {
   uint32 id = 1;
   TelegraphKind kind = 2;
@@ -559,7 +637,13 @@ message Telegraph {
   uint32 source_id = 7;
   uint32 follow_id = 8; // segue esta entidade (Marca da Morte)
   bool resolved = 9; // o golpe caiu agora (em x, z)
-  bool cancelled = 10; // o chefe reiniciou ou morreu antes
+  bool cancelled = 10; // o monstro desistiu da luta ou morreu antes
+  TelegraphShape shape = 11;
+  float angle = 12; // direção do cone e da linha (rad, em Y: 0 = +Z, π/2 = +X)
+  float arc = 13; // cone: abertura total (rad)
+  float length = 14; // linha: comprimento (m)
+  float width = 15; // linha: largura (m)
+  float inner_radius = 16; // anel: raio do buraco seguro (m)
 }
 
 enum PvpState {
@@ -766,7 +850,8 @@ message Welcome {
   repeated SpecInfo specs = 22; // as especializações de todas as classes
 }
 
-// Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
+// Zona de caça: um anel (ou setor de anel) ao redor da cidade, um disco próprio ou um ponto
+// fixo (chefe).
 message MapZone {
   string name = 1; // nomes dos monstros
   float r_min = 2;
@@ -781,6 +866,10 @@ message MapZone {
   float radius = 11;
   string region = 12; // nome da região ("Vale das Pedras Vivas")
   bool raid = 13; // raid boss (covil próprio)
+  // Setor de anel (r_min–r_max), em graus: 0° = leste (+x), crescendo para o norte (+z).
+  // angle_max > angle_min no setor (passa de 360 quando cruza o 0°); os dois 0 = anel inteiro.
+  float angle_min = 40;
+  float angle_max = 41;
 }
 
 message Spawn {

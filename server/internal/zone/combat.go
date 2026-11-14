@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	outOfCombatAfter = 5.0  // segundos sem lutar para regenerar rápido
-	approachFactor   = 0.75 // para a esta fração do alcance (folga para o alvo andar)
-	calmRegenMult    = 5.0  // fora de combate, a vida regenera 5× mais rápido
-	calmMPRegenMult  = 3.3  // e a mana, 3,3×
+	outOfCombatAfter = game.OutOfCombatAfter // segundos sem lutar para regenerar rápido
+	approachFactor   = 0.75                  // para a esta fração do alcance (folga para o alvo andar)
+	calmRegenMult    = game.CalmHPRegenMult  // fora de combate, a vida regenera 5× mais rápido
+	calmMPRegenMult  = game.CalmMPRegenMult  // e a mana, 3,3×
 	tauntHate        = 100.0
 	chargeStop       = 1.5 // Investida para a esta distância do alvo
 )
@@ -116,20 +116,12 @@ func (z *Zone) basicAttack(src, dst *entity) {
 
 // skillMP: custo de mana no rank (Sobrecarga encarece 10%).
 func skillMP(p *entity, s *game.SkillDef) float64 {
-	cost := s.MPCost(p.pl.rank(s.ID))
-	if p.pl.rank(game.SkillOverload) > 0 {
-		cost *= game.OverloadMPCost
-	}
-	return math.Round(cost)
+	return game.SkillMPCost(s, p.pl.rank(s.ID), p.pl.rank(game.SkillOverload) > 0)
 }
 
 // skillCD: recarga no rank, dividida pela velocidade de conjuração.
 func skillCD(p *entity, s *game.SkillDef) float64 {
-	cs := p.stats.CastSpeed
-	if cs <= 0 {
-		cs = 1
-	}
-	return s.Cooldown(p.pl.rank(s.ID)) / cs
+	return game.SkillCooldownFor(s, p.pl.rank(s.ID), p.stats.CastSpeed)
 }
 
 // requestSkill valida o pedido do jogador e executa (si mesmo/área) ou agenda (alvo).
@@ -349,6 +341,13 @@ func (z *Zone) applyEffect(src, e *entity, def *game.EffectDef) {
 	if e.dead || (e.mon != nil && e.mon.def.ImmuneTo(def.Kind)) {
 		return
 	}
+	if e.pl != nil && (def.Kind == game.EffectStun || def.Kind == game.EffectSlow) {
+		if v := e.pl.mastery.of(game.MStatCCResist); v > 0 { // Firmeza (Maestria)
+			short := *def
+			short.Duration *= 1 - v
+			def = &short
+		}
+	}
 	e.addEffect(def, z.now, src.id)
 	z.frame.effects = append(z.frame.effects, &pb.EffectEvent{
 		TargetId: e.id, Effect: pb.Effect(def.Kind), DurationMs: uint32(def.Duration * 1000),
@@ -501,6 +500,10 @@ func (z *Zone) regen(e *entity, dt float64) {
 	if calm {
 		hp *= calmRegenMult
 		mp *= calmMPRegenMult
+		if e.pl != nil { // Fôlego (Maestria)
+			v := 1 + e.pl.mastery.of(game.MStatCalmRegen)
+			hp, mp = hp*v, mp*v
+		}
 	}
 	if v, ok := e.effect(game.EffectCourage, z.now); ok {
 		hp += v

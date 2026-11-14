@@ -29,6 +29,15 @@ export interface GMLogEntry {
   detail: string;
 }
 
+/** Uma view da progressão (migração 00018), com as colunas na ordem do SQL. */
+export interface ProgressionTable {
+  id: string;
+  title: string;
+  note: string;
+  columns: string[];
+  rows: (string | number | boolean | null)[][];
+}
+
 export class AdminError extends Error {
   constructor(
     readonly status: number,
@@ -70,4 +79,5 @@ export const adminApi = {
   me: () => call<{ accountId: number; displayName: string }>("GET", "/api/admin/me"),
   overview: () => call<Overview>("GET", "/api/admin/overview"),
   gmLog: (limit = 10) => call<{ entries: GMLogEntry[] }>("GET", `/api/admin/gm-log?limit=${limit}`),
+  progression: () => call<{ tables: ProgressionTable[] }>("GET", "/api/admin/progression"),
 };

@@ -355,6 +355,23 @@ td code {
   overflow-wrap: anywhere;
 }
 
+/* Progressão (views da telemetria) */
+.adm-prog-list {
+  display: grid;
+  gap: 16px;
+}
+
+.adm-prog-note {
+  margin: -4px 0 10px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+td.is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Páginas "em breve" */
 .adm-soon {
   display: flex;
@@ -512,6 +529,15 @@ td code {
 
   .adm-detail {
     max-width: none;
+  }
+
+  /* Os nomes das colunas da progressão são longos (minutos mediana, abates por morte). */
+  .adm-prog td {
+    grid-template-columns: 130px minmax(0, 1fr);
+  }
+
+  td.is-num {
+    text-align: left;
   }
 
   .adm-soon {

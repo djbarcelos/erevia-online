@@ -196,6 +196,10 @@ func (z *Zone) command(p *entity, text string) {
 		z.devRaid(p, args)
 		return
 	}
+	if cmd == "/avisos" && z.cfg.DevCommands { // avisos no chão de teste (abilities.go)
+		z.devWarnings(p)
+		return
+	}
 	if !p.pl.gm {
 		z.system(p, "Comando desconhecido: "+fields[0])
 		return
@@ -205,7 +209,7 @@ func (z *Zone) command(p *entity, text string) {
 		z.system(p, "GM: /kick Nome [motivo] · /mute Nome minutos [motivo] · /unmute Nome · "+
 			"/ban Nome [motivo] · /unban Nome · /tp X Z · /goto Nome · /summon Nome · "+
 			"/give Nome item|moedas [qtd] · /anuncio texto · /online · "+
-			"/evento invasao [agora|parar] · /evento xp2 horas|off")
+			"/evento invasao [agora|parar] · /evento xp2 horas|off · /maestria xp N [Nome] · /maestria dia [Nome]")
 	case "/kick":
 		z.gmKick(p, args)
 	case "/mute":
@@ -230,24 +234,20 @@ func (z *Zone) command(p *entity, text string) {
 		z.gmOnline(p)
 	case "/evento":
 		z.gmEvent(p, args)
+	case "/maestria":
+		z.gmMastery(p, args)
 	default:
 		z.system(p, "Comando desconhecido: "+fields[0]+" (/gm lista os comandos)")
 	}
 }
 
+// bugReport: /bug pelo chat (sem o contexto do cliente; o cliente novo manda por
+// POST /api/bug-reports, ver bugreport.go).
 func (z *Zone) bugReport(p *entity, text string) {
-	if len([]rune(text)) < bugMinRunes {
-		z.system(p, "Uso: /bug o que aconteceu (conte com algumas palavras).")
+	r, err := z.takeBug(p, text)
+	if err != nil {
+		z.system(p, BugErrorText(err))
 		return
-	}
-	if z.now < p.pl.nextBug {
-		z.system(p, fmt.Sprintf("Espere %d s para relatar outro bug.", int(math.Ceil(p.pl.nextBug-z.now))))
-		return
-	}
-	p.pl.nextBug = z.now + bugCooldown
-	r := BugReport{
-		AccountID: p.pl.accountID, CharacterID: p.id, Name: p.name, Level: p.level,
-		X: p.pos.X, Z: p.pos.Z, Version: z.cfg.Version, UserAgent: p.pl.userAgent, Text: text,
 	}
 	if !z.queueMod(modJob{
 		run:   func(ctx context.Context, b ModBackend) error { return b.SaveBug(ctx, r) },

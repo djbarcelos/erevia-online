@@ -1,5 +1,6 @@
 import {
   AbstractMesh,
+  BoundingInfo,
   Color3,
   Matrix,
   Mesh,
@@ -38,11 +39,13 @@ import type { Fx, FxBody, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
 import { GOLEM_BODY, GOLEM_MODEL } from "./golem";
 import { buildTeleportStone } from "./teleport-stone";
+import type { PickAreas } from "./pick";
 import type { Bounds, Collision } from "./world-data";
 import { specInfo } from "../ui/specs";
 import { GRADE_COLOR } from "../ui/items";
 import { settings } from "../ui/kit";
 import { skillFxColors } from "../ui/skill-themes";
+import type { EntityProbe } from "../net/invariants";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -227,6 +230,17 @@ interface View extends EntityInfo {
   faceYaw: number | null;
   /** Encaixe da mão da arma (rastro do golpe); undefined = ainda não procurado. */
   hand: TransformNode | null | undefined;
+  /**
+   * Caixa fixa e generosa do corpo, dividida por todas as malhas com esqueleto do modelo
+   * (doNotSyncBoundingInfo): o Babylon não refaz a caixa de cada malha a cada quadro; ela
+   * só anda junto com a entidade (ver moveBounds). null = sem modelo com esqueleto.
+   */
+  bounds: BoundingInfo | null;
+  boundsAt: Matrix;
+  /** Onde a caixa estava da última vez (NaN = refazer). */
+  boundsX: number;
+  boundsY: number;
+  boundsZ: number;
 }
 
 /** Jogadores e monstros na tela: criação, movimento suave, animações e combate. */
@@ -274,6 +288,8 @@ export class EntityManager {
     private fx: Fx,
     private shadows: ShadowGenerator,
     private collision: Collision,
+    /** Áreas de clique (cilindros testados em código, sem malha na cena). */
+    private picks: PickAreas,
   ) {
     this.ringMat = new StandardMaterial("localRing", scene);
     this.ringMat.emissiveColor = new Color3(0.95, 0.8, 0.4);
@@ -405,6 +421,7 @@ export class EntityManager {
     v.model3d.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
     v.meshes = v.model3d.meshes();
     this.notPickable(v.meshes);
+    this.fixBounds(v); // a cabeça nova é outra malha
   }
 
   isEnemy(id: number): boolean {
@@ -445,20 +462,15 @@ export class EntityManager {
     const visual = new TransformNode(`visual${e.id}`, this.scene);
     visual.parent = root;
 
-    // Área de clique estável (invisível): o modelo animado não serve, porque o picking de
-    // malha com esqueleto usa a pose parada e braços/pernas entram e saem do cursor.
+    // Área de clique estável: um cilindro nos pés, testado em código (world/pick.ts). O
+    // modelo animado não serve, porque o picking de malha com esqueleto usa a pose parada e
+    // braços/pernas entram e saem do cursor.
     const isObject = e.kind === EntityKind.OBJECT;
     const body = MODEL_BODY[e.model];
     if (!isObject) {
       // Monstros grandes (golem) ganham uma área do tamanho do corpo, senão o clique
       // passa pelos ombros e braços sem selecionar.
-      const h = (body?.height ?? 2.1) * scale;
-      const hit = MeshBuilder.CreateCylinder(`hit${e.id}`, { height: h, diameter: (body?.width ?? 1.2) * scale, tessellation: 12 }, this.scene);
-      hit.parent = root;
-      hit.position.y = h / 2;
-      hit.isVisible = false;
-      hit.isPickable = true;
-      hit.metadata = { entityId: e.id };
+      this.picks.addEntity(e.id, root, ((body?.width ?? 1.2) * scale) / 2, (body?.height ?? 2.1) * scale);
     }
 
     // Anel no chão: na cor do emblema para jogadores (o seu, mais forte), dourado sem emblema.
@@ -550,6 +562,7 @@ export class EntityManager {
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
       impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, hand: undefined,
+      bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
     };
     this.views.set(e.id, v);
     // NPCs ficam parados, virados para o centro da praça.
@@ -630,6 +643,7 @@ export class EntityManager {
     this.dropStage(id);
     v.label.dispose();
     this.views.delete(id);
+    this.picks.removeEntity(id);
     // Corpo de monstro: afunda e desbota antes de sumir.
     if (v.shownDead && v.kind === EntityKind.MONSTER) this.sinkAndDispose(v);
     else this.disposeView(v);
@@ -1457,18 +1471,19 @@ export class EntityManager {
       }
 
       const pos = v.root.position;
+      // Só escreve na posição quando ela muda: escrever (mesmo o mesmo valor) marca o nó
+      // como sujo, e aí o Babylon refaz a matriz de tudo que está embaixo dele no quadro.
+      // As aproximações suaves encostam no destino abaixo de 1 mm (invisível) e param.
       if (v.id === this.localId && this.localDriven && !v.dead) {
         // Cliente dirigindo: desenha a previsão (a câmera vai junto, sem trancos) mais o
         // resto de alguma correção, que some suavemente.
         const k = Math.exp(-LOCAL_SMOOTH_RATE * dt);
-        this.drawOffset.x *= k;
-        this.drawOffset.z *= k;
-        pos.x = v.server.x + this.drawOffset.x;
-        pos.z = v.server.z + this.drawOffset.z;
+        this.drawOffset.x = settle(this.drawOffset.x * k, 0);
+        this.drawOffset.z = settle(this.drawOffset.z * k, 0);
+        setIfChanged(pos, v.server.x + this.drawOffset.x, v.server.z + this.drawOffset.z);
       } else {
         // Aproxima suavemente a posição desenhada da posição extrapolada.
-        pos.x += (v.server.x - pos.x) * blend;
-        pos.z += (v.server.z - pos.z) * blend;
+        setIfChanged(pos, settle(pos.x + (v.server.x - pos.x) * blend, v.server.x), settle(pos.z + (v.server.z - pos.z) * blend, v.server.z));
       }
       if (v.id === this.localId) this.recordLocal(v);
 
@@ -1478,14 +1493,22 @@ export class EntityManager {
         v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
         v.faceYaw = null;
       } else if (v.faceYaw !== null) {
-        v.visual.rotation.y = lerpAngle(v.visual.rotation.y, v.faceYaw, 1 - Math.exp(-FACE_RATE * dt));
+        const yaw = lerpAngle(v.visual.rotation.y, v.faceYaw, 1 - Math.exp(-FACE_RATE * dt));
+        // Já virou: fixa o ângulo e para de girar (senão o nó fica sujo todo quadro).
+        if (Math.abs(lerpAngle(yaw, v.faceYaw, 1) - yaw) < 1e-3) {
+          v.visual.rotation.y = v.faceYaw;
+          v.faceYaw = null;
+        } else {
+          v.visual.rotation.y = yaw;
+        }
       }
+      if (v.bounds) this.moveBounds(v);
       if (v.anim) {
         // LOD de animação: quem está fora da tela ou longe não tem os ossos recalculados.
         let active = always;
         if (!active) {
           const near = !cam || Vector3.DistanceSquared(cam, pos) < ANIM_DISTANCE * ANIM_DISTANCE;
-          active = near && (!planes || v.meshes.some((m) => m.isInFrustum(planes)));
+          active = near && (!planes || (v.bounds ? v.bounds.isInFrustum(planes) : v.meshes.some((m) => m.isInFrustum(planes))));
         }
         // Andar acaba com o emote na hora (o aviso do servidor chega depois).
         if (moving && v.anim.emoting) v.anim.endEmote();
@@ -1552,6 +1575,11 @@ export class EntityManager {
         party: this.partyIds.has(v.id),
       });
     }
+  }
+
+  /** Todas as entidades, para as invariantes do cliente (net/invariants.ts, 1×/s). */
+  forEachProbe(cb: (e: EntityProbe) => void): void {
+    for (const v of this.views.values()) cb(v);
   }
 
   /** Pontos que a câmera precisa enxergar (meio do corpo do jogador e do alvo). */
@@ -1643,11 +1671,50 @@ export class EntityManager {
     this.setShadow(v, false);
     v.meshes = meshes;
     v.model3d = inst;
+    this.fixBounds(v);
     v.anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
     v.hand = undefined; // modelo novo: procura o encaixe da mão de novo no próximo golpe
     v.capsule?.dispose();
     v.capsule = null;
     if (v.dead) this.showDead(v, true);
+  }
+
+  /**
+   * Malhas com esqueleto: caixa fixa e generosa (cobre qualquer pose, inclusive deitado na
+   * morte), a mesma para todas, sem sincronizar com a matriz de cada uma (o Babylon refazia
+   * a caixa de cada malha a cada quadro em que a entidade anda). As armas seguem normais.
+   */
+  private fixBounds(v: View): void {
+    if (!v.bounds) {
+      const body = MODEL_BODY[v.model];
+      const h = (body?.height ?? 2.1) * v.scale;
+      const w = 0.85 * h; // deitado: o corpo inteiro para um lado
+      v.bounds = new BoundingInfo(new Vector3(-w, -0.3 * v.scale, -w), new Vector3(w, h + 0.5 * v.scale, w));
+    }
+    let any = false;
+    for (const m of v.meshes) {
+      if (!m.skeleton || (m.subMeshes?.length ?? 0) > 1) continue;
+      if (m.getBoundingInfo() === v.bounds) {
+        any = true;
+        continue;
+      }
+      m.doNotSyncBoundingInfo = true;
+      m.setBoundingInfo(v.bounds);
+      any = true;
+    }
+    if (!any) v.bounds = null;
+    v.boundsX = NaN; // reposiciona no próximo quadro
+  }
+
+  /** Leva a caixa fixa até onde a entidade está (só quando ela se mexeu). */
+  private moveBounds(v: View): void {
+    const p = v.root.position;
+    if (p.x === v.boundsX && p.y === v.boundsY && p.z === v.boundsZ) return;
+    v.boundsX = p.x;
+    v.boundsY = p.y;
+    v.boundsZ = p.z;
+    Matrix.TranslationToRef(p.x, p.y, p.z, v.boundsAt);
+    v.bounds!.update(v.boundsAt);
   }
 
   private createCapsule(v: View): Mesh {
@@ -1663,7 +1730,7 @@ export class EntityManager {
     return body;
   }
 
-  /** O clique usa a área invisível do add(); as malhas visíveis ficam de fora. */
+  /** O clique usa o cilindro do add() (world/pick.ts); as malhas ficam fora do picking. */
   private notPickable(meshes: AbstractMesh[]): void {
     for (const m of meshes) m.isPickable = false;
   }
@@ -1789,6 +1856,17 @@ function showDamage(): boolean {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/** Valor de uma aproximação suave, já no destino quando falta menos de 1 mm. */
+function settle(v: number, target: number): number {
+  return Math.abs(target - v) < 1e-3 ? target : v;
+}
+
+/** Muda x/z só se mudaram (escrever no Vector3 marca o nó como sujo). */
+function setIfChanged(p: Vector3, x: number, z: number): void {
+  if (p.x !== x) p.x = x;
+  if (p.z !== z) p.z = z;
 }
 
 function lerpAngle(a: number, b: number, t: number): number {

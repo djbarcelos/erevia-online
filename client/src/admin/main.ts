@@ -1,7 +1,7 @@
 /** Portal de administração (/admin): menu, rotas por #seção e a página inicial. */
 
 import "./admin.css";
-import { AdminError, adminApi, type GMLogEntry, type Overview } from "./api";
+import { AdminError, adminApi, type GMLogEntry, type Overview, type ProgressionTable } from "./api";
 import { mountOps } from "./ops";
 import { mountPlayers } from "./players";
 
@@ -25,6 +25,7 @@ const ICONS: Record<string, string> = {
   jogadores: '<circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3"/><circle cx="17" cy="9" r="2.4"/><path d="M16.5 14.4c2.3.2 3.9 1.8 4.5 4.6"/>',
   relatos: '<path d="M5 4.5h14v11H10l-5 4v-15z"/><path d="M12 8v3.5"/><path d="M12 13.6v.1"/>',
   metricas: '<path d="M4 19.5h16"/><path d="M7 16v-5"/><path d="M12 16V6"/><path d="M17 16v-8"/>',
+  progressao: '<path d="M4 19.5h16"/><path d="M5 16l4.5-4.5 3.5 3L19 8"/><path d="M15 8h4v4"/>',
   economia: '<ellipse cx="12" cy="7" rx="7" ry="2.8"/><path d="M5 7v5c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V7"/><path d="M5 12v5c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-5"/>',
   operacao: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/>',
 };
@@ -59,6 +60,7 @@ const SECTIONS: Section[] = [
     label: "Métricas",
     soon: "Jogadores por hora, tempo até cada nível, mortes por região e o FPS por aparelho, a partir da telemetria.",
   },
+  { id: "progressao", label: "Progressão" },
   {
     id: "economia",
     label: "Economia",
@@ -125,6 +127,7 @@ function route(): void {
   leavePage = null;
   main.replaceChildren();
   if (s.id === "inicio") home();
+  else if (s.id === "progressao") progression();
   else if (PAGES[s.id]) leavePage = PAGES[s.id](main);
   else soon(s);
 }
@@ -257,6 +260,67 @@ function home(): void {
   tickTimer = window.setInterval(() => {
     if (uptimeEl) uptimeEl.textContent = fmtUptime(base.uptime + (performance.now() - base.at) / 1000);
   }, 1000);
+}
+
+// ---------- Progressão ----------
+
+/** "minutos_mediana" → "minutos mediana" (o nome da coluna da view, legível). */
+function colLabel(c: string): string {
+  return c.replace(/_/g, " ");
+}
+
+function fmtCell(v: string | number | boolean | null): string {
+  if (v === null) return "—";
+  if (typeof v === "number") return nf.format(v);
+  if (typeof v === "boolean") return v ? "sim" : "não";
+  return v;
+}
+
+function progressionTable(t: ProgressionTable): HTMLElement {
+  const card = h("section", { class: "adm-card adm-log adm-prog" }, h("h2", {}, t.title), h("p", { class: "adm-prog-note" }, t.note));
+  if (t.rows.length === 0) {
+    card.append(h("p", { class: "adm-empty" }, "Ainda sem dados."));
+    return card;
+  }
+  const labels = t.columns.map(colLabel);
+  const rows = t.rows.map((r) =>
+    h("tr", {}, ...r.map((v, i) => h("td", { "data-label": labels[i], class: typeof v === "number" ? "is-num" : "" }, fmtCell(v)))),
+  );
+  const table = h(
+    "table",
+    {},
+    h("thead", {}, h("tr", {}, ...labels.map((l) => h("th", { scope: "col" }, l)))),
+    h("tbody", {}, ...rows),
+  );
+  card.append(h("div", { class: "adm-table" }, table));
+  return card;
+}
+
+/** As views da progressão (docs/progressao.md). Sem atualização automática: são consultas pesadas. */
+function progression(): void {
+  const updated = h("span", { class: "adm-updated" });
+  const refresh = h("button", { class: "adm-btn", type: "button" }, "Atualizar");
+  const error = h("p", { class: "adm-error", role: "alert", hidden: "" });
+  const body = h("div", { class: "adm-prog-list", "aria-live": "polite" });
+  main.append(header("Progressão", h("div", { class: "adm-head-tools" }, updated, refresh)), error, body);
+
+  const load = async () => {
+    refresh.disabled = true;
+    try {
+      const { tables } = await adminApi.progression();
+      body.replaceChildren(...tables.map(progressionTable));
+      error.hidden = true;
+      updated.textContent = `Atualizado às ${new Date().toLocaleTimeString("pt-BR")}`;
+    } catch (e) {
+      error.textContent = e instanceof Error ? e.message : String(e);
+      error.hidden = false;
+    } finally {
+      refresh.disabled = false;
+    }
+  };
+  refresh.addEventListener("click", load);
+  body.append(h("div", { class: "adm-card adm-stat is-loading" }));
+  void load();
 }
 
 // ---------- Início do app ----------
