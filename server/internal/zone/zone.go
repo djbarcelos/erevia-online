@@ -138,6 +138,9 @@ type SavedState struct {
 	Mastery      game.MasteryState
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
+	// Auction: operações da casa de leilões ainda sem confirmação do banco (vão na mesma
+	// transação; o banco aplica cada uma uma vez só; ver auction.go).
+	Auction []AuctionOp
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
 	Seq int64
 }
@@ -280,6 +283,8 @@ type Zone struct {
 
 	paths []*entity // fila de caminhos longos (ver pathqueue.go)
 	adm *adminState // portal de administração (admin_actions.go e admin_ops.go)
+
+	auction auctionHouse // casa de leilões (auction.go)
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -342,7 +347,8 @@ func (z *Zone) Chat(ctx context.Context, id uint32, text, to string, channel pb.
 }
 
 // Social repassa um pedido de grupo, clã, resposta a convite, amigos ou correio
-// (*pb.PartyCmd, *pb.ClanCmd, *pb.InviteReply, *pb.FriendCmd, *pb.MailCmd).
+// (*pb.PartyCmd, *pb.ClanCmd, *pb.InviteReply, *pb.FriendCmd, *pb.MailCmd) ou da casa de
+// leilões (*pb.AuctionCmd).
 func (z *Zone) Social(ctx context.Context, id uint32, msg any) {
 	z.post(ctx, socialEvent{id: id, msg: msg})
 }
@@ -400,6 +406,7 @@ func (z *Zone) Run(ctx context.Context) {
 	z.goWorker(ctx, "social", z.runSocialWorker)
 	z.goWorker(ctx, "ranking", z.runRankingWorker)
 	z.goWorker(ctx, "event", z.runEventWorker)
+	z.goWorker(ctx, "auction", z.runAuctionWorker)
 
 	for {
 		select {
@@ -514,6 +521,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	}
 
 	// O estado de quem acabou de sair (ainda salvando) vale mais que o do banco.
+	var aucOps []AuctionOp // casa de leilões: operações ainda sem confirmação
 	if r, ok := z.recent[info.ID]; ok {
 		st := r.state
 		info.X, info.Z, info.XP, info.HP, info.MP, info.Gold, info.Items = st.X, st.Z, st.XP, st.HP, st.MP, st.Gold, st.Items
@@ -524,6 +532,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Achievements, info.Title = st.Achievements, st.Title
 		info.Spec = st.Spec
 		info.Mastery = st.Mastery
+		aucOps = st.Auction
 		delete(z.recent, info.ID)
 	}
 
@@ -573,6 +582,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.byName[strings.ToLower(p.name)] = p.id
 	z.clanOnJoin(p, info.ClanLeftAt)
 	z.storageOnJoin(p, info.Storage)
+	z.auctionOnJoin(p, aucOps)
 
 	// Os outros ficam sabendo pela AOI (updateAOI, no fim do tick), só quem está perto.
 	z.aoiDirty = true
@@ -936,7 +946,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
-		Mastery: p.pl.mastery.save(),
+		Mastery: p.pl.mastery.save(), Auction: z.auctionSave(p),
 	}
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
@@ -960,7 +970,7 @@ func (z *Zone) saveAll(blocking bool) {
 	wall := z.cfg.Clock()
 	z.pruneStorages()
 	for id, r := range z.recent {
-		if wall.Sub(r.at) > recentKeep {
+		if wall.Sub(r.at) > recentKeep && !keepRecent(r) {
 			delete(z.recent, id)
 		}
 	}
@@ -1002,6 +1012,11 @@ func (z *Zone) save(batch []SavedState, blocking bool) {
 			// O armazém só vai no salvamento em que mudou: o mais novo herda o do pendente.
 			if old, ok := z.pending[s.ID]; ok && s.Storage == nil && old.Storage != nil {
 				batch[i].Storage = old.Storage
+			}
+			// Operações da casa de leilões: o mais novo já leva todas as sem confirmação; o que
+			// só o pendente tem vai junto (o banco ignora as repetidas).
+			if old, ok := z.pending[s.ID]; ok {
+				batch[i].Auction = mergeOps(batch[i].Auction, old.Auction)
 			}
 		}
 		for id, s := range z.pending {

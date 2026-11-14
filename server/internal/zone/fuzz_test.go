@@ -116,6 +116,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.ProgressAction(ctx, id, m.SpecCmd)
 	case *pb.ClientMessage_TradeCmd:
 		z.Trade(ctx, id, m.TradeCmd)
+	case *pb.ClientMessage_AuctionCmd:
+		z.Social(ctx, id, m.AuctionCmd)
 	default:
 		// Join (só vale como primeira mensagem), Ping (respondido na conexão) e vazio.
 		return false
@@ -267,6 +269,9 @@ type fuzzHarness struct {
 	spots  []Vec2
 	trace  []string
 	social *fakeSocial
+	// Casa de leilões: o banco falso e a fila de salvamentos (as operações vão nela).
+	auction *fakeAuction
+	saves   chan []SavedState
 }
 
 // Lugares de partida: perto de cada NPC (loja, ferreiro, barbeiro, armazém, pedras),
@@ -343,7 +348,8 @@ func newFuzzHarness(t *testing.T, r *fuzzReader) *fuzzHarness {
 	// começar uma com /evento, e com GM a contabilidade não vale).
 	cfg.InvasionChance, cfg.XP2Days = 0, nil
 	lg := &fuzzLog{}
-	h := &fuzzHarness{t: t, log: lg, z: New(cfg, slog.New(lg), nil)}
+	saves := make(chan []SavedState, 4096)
+	h := &fuzzHarness{t: t, log: lg, z: New(cfg, slog.New(lg), saves), saves: saves}
 	h.spots = fuzzSpots(h.z)
 	h.ids = [2]uint32{1, 2}
 	h.names = [2]string{"Ana", "Beto"}
@@ -355,6 +361,11 @@ func newFuzzHarness(t *testing.T, r *fuzzReader) *fuzzHarness {
 	h.social = newFakeSocial(FriendData{ID: 1, Name: "Ana"}, FriendData{ID: 2, Name: "Beto"},
 		FriendData{ID: 3, Name: "Caio"})
 	h.z.SetSocialBackend(h.social)
+	h.auction = newFakeAuction(h.social)
+	h.z.SetAuctionBackend(h.auction)
+	for i := range 2 {
+		h.auction.char(h.ids[i], h.accts[i], h.names[i])
+	}
 
 	first := h.spots[r.pick(len(h.spots))]
 	for i := range 2 {
@@ -437,6 +448,15 @@ func (h *fuzzHarness) pump() {
 			}
 		case <-z.telemetry:
 		case <-z.bossJobs:
+		case job := <-z.auction.jobs:
+			if fn := job(ctx, z.auction.backend); fn != nil {
+				fn()
+			}
+		case b := <-h.saves:
+			// A persistência: grava as operações da casa de leilões e confirma na zona.
+			if res, ok := h.auction.apply(b); ok {
+				z.onAuctionResults(res)
+			}
 		default:
 			return
 		}
@@ -584,6 +604,13 @@ func (h *fuzzHarness) ledger() fuzzLedger {
 				}
 			}
 		}
+	}
+	// Casa de leilões: o que está em custódia (anúncios ativos) e nos anexos não retirados.
+	cg, cu := h.auction.custody(h.ids[:])
+	l.gold += cg
+	l.value += cg
+	for id, n := range cu {
+		addItem(game.Items[id], n)
 	}
 	for _, g := range z.ground {
 		addItem(g.def, g.count)
@@ -762,7 +789,7 @@ func fuzzSpotFor(msg *pb.ClientMessage) byte {
 		return 0
 	}
 	id := uint32(inner.Get(nf).Uint())
-	if n := id - npcIDBase; id >= npcIDBase && n <= fuzzMasterID-npcIDBase {
+	if n := id - npcIDBase; id >= npcIDBase && n <= fuzzAuctioneerID-npcIDBase {
 		return byte(n)
 	}
 	return 0
@@ -789,8 +816,11 @@ func fuzzFixedSetup(spot byte) []byte {
 	return b
 }
 
-// fuzzMasterID: a Mestra dos Caminhos, o último NPC (ver spawnNPCs).
+// fuzzMasterID: a Mestra dos Caminhos (ver spawnNPCs).
 var fuzzMasterID = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1)
+
+// fuzzAuctioneerID: o Leiloeiro (casa de leilões), o último NPC (ver spawnNPCs).
+var fuzzAuctioneerID = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+2)
 
 // fuzzValidMessages: uma mensagem válida de cada tipo do oneof (o corpus inicial).
 func fuzzValidMessages() []*pb.ClientMessage {
@@ -838,6 +868,14 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: &pb.MasteryCmd{Kind: pb.MasteryCmdKind_MASTERY_CMD_GET}}},
 		{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: &pb.MasteryCmd{Kind: pb.MasteryCmdKind_MASTERY_CMD_SPEND, Node: game.MasteryNodes[0].ID}}},
 		{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: &pb.MasteryCmd{Kind: pb.MasteryCmdKind_MASTERY_CMD_RESPEC}}},
+		// Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, meus anúncios e retirar.
+		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_OPEN, NpcId: fuzzAuctioneerID}}},
+		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_SEARCH, NpcId: fuzzAuctioneerID, Query: &pb.AuctionQuery{Name: "poção", MyClass: true}}}},
+		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_LIST, NpcId: fuzzAuctioneerID, Slot: 9, Count: 3, Price: 100, Hours: 24}}},
+		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_BUY, NpcId: fuzzAuctioneerID, AuctionId: 1, Price: 100}}},
+		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_CANCEL, NpcId: fuzzAuctioneerID, AuctionId: 1}}},
+		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_MINE}}},
+		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_CLAIM}}},
 	}
 	return out
 }
@@ -1134,10 +1172,22 @@ func (g *fuzzGen) named(fd protoreflect.FieldDescriptor) (protoreflect.Value, bo
 			return u32(uint32(r.byte() % 8))
 		case name == "id": // PickUp
 			return u32(fuzzPickKey(r, z.ground, groundIDBase+1))
+		case name == "hours": // casa de leilões
+			return u32([]uint32{12, 24, 48, 0, 1, 1000}[r.pick(6)])
 		case name == "rank":
 			return u32(uint32(r.byte() % 6))
 		}
 	case protoreflect.Int64Kind:
+		if name == "price" || name == "min_price" || name == "max_price" { // casa de leilões
+			vals := []int64{AuctionMinPrice, 100, 1000, AuctionMaxPrice, AuctionMaxPrice + 1, AuctionMinPrice - 1, 0, -1}
+			var listed []int64 // em ordem (o fuzz tem de ser reproduzível)
+			for _, a := range g.h.auction.auctions {
+				listed = append(listed, a.Price)
+			}
+			slices.Sort(listed)
+			vals = append(vals, listed...)
+			return protoreflect.ValueOfInt64(vals[r.pick(len(vals))]), true
+		}
 		if name == "amount" || name == "gold" {
 			var gold, stored int64
 			if p := z.players[g.h.ids[0]]; p != nil {
@@ -1147,6 +1197,23 @@ func (g *fuzzGen) named(fd protoreflect.FieldDescriptor) (protoreflect.Value, bo
 				stored = st.gold
 			}
 			return protoreflect.ValueOfInt64([]int64{1, 10, gold, gold + 1, -stored, -stored - 1, -1}[r.pick(7)]), true
+		}
+	case protoreflect.Uint64Kind:
+		// Casa de leilões e correio: um anúncio ou uma carta que existem.
+		switch name {
+		case "auction_id":
+			ids := []uint64{0, 1}
+			for id := range g.h.auction.auctions {
+				ids = append(ids, uint64(id))
+			}
+			slices.Sort(ids)
+			return protoreflect.ValueOfUint64(ids[r.pick(len(ids))]), true
+		case "mail_id":
+			ids := []uint64{0}
+			for _, m := range g.h.social.mails {
+				ids = append(ids, uint64(m.ID))
+			}
+			return protoreflect.ValueOfUint64(ids[r.pick(len(ids))]), true
 		}
 	case protoreflect.StringKind:
 		switch name {

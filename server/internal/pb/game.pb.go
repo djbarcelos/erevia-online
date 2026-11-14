@@ -830,6 +830,7 @@ const (
 	NpcRole_NPC_ROLE_STORAGE  NpcRole = 2
 	NpcRole_NPC_ROLE_BARBER   NpcRole = 3
 	NpcRole_NPC_ROLE_MASTER   NpcRole = 4 // Mestra dos Caminhos (especialização)
+	NpcRole_NPC_ROLE_AUCTION  NpcRole = 5 // Leiloeiro (casa de leilões)
 )
 
 // Enum value maps for NpcRole.
@@ -840,6 +841,7 @@ var (
 		2: "NPC_ROLE_STORAGE",
 		3: "NPC_ROLE_BARBER",
 		4: "NPC_ROLE_MASTER",
+		5: "NPC_ROLE_AUCTION",
 	}
 	NpcRole_value = map[string]int32{
 		"NPC_ROLE_SHOP":     0,
@@ -847,6 +849,7 @@ var (
 		"NPC_ROLE_STORAGE":  2,
 		"NPC_ROLE_BARBER":   3,
 		"NPC_ROLE_MASTER":   4,
+		"NPC_ROLE_AUCTION":  5,
 	}
 )
 
@@ -1509,6 +1512,174 @@ func (QuestCategory) EnumDescriptor() ([]byte, []int) {
 	return file_erevia_v1_game_proto_rawDescGZIP(), []int{25}
 }
 
+type AuctionCmdKind int32
+
+const (
+	AuctionCmdKind_AUCTION_CMD_UNSPECIFIED AuctionCmdKind = 0
+	AuctionCmdKind_AUCTION_CMD_OPEN        AuctionCmdKind = 1 // falou com o leiloeiro (npc_id): regras e meus anúncios
+	AuctionCmdKind_AUCTION_CMD_SEARCH      AuctionCmdKind = 2 // query
+	AuctionCmdKind_AUCTION_CMD_LIST        AuctionCmdKind = 3 // anunciar: slot (bolsa), count (0 = a pilha toda), price (total), hours
+	AuctionCmdKind_AUCTION_CMD_BUY         AuctionCmdKind = 4 // auction_id, price (o que o cliente viu)
+	AuctionCmdKind_AUCTION_CMD_CANCEL      AuctionCmdKind = 5 // auction_id
+	AuctionCmdKind_AUCTION_CMD_MINE        AuctionCmdKind = 6 // meus anúncios
+	AuctionCmdKind_AUCTION_CMD_CLAIM       AuctionCmdKind = 7 // mail_id: retirar o anexo da carta (0 = todos os que couberem)
+)
+
+// Enum value maps for AuctionCmdKind.
+var (
+	AuctionCmdKind_name = map[int32]string{
+		0: "AUCTION_CMD_UNSPECIFIED",
+		1: "AUCTION_CMD_OPEN",
+		2: "AUCTION_CMD_SEARCH",
+		3: "AUCTION_CMD_LIST",
+		4: "AUCTION_CMD_BUY",
+		5: "AUCTION_CMD_CANCEL",
+		6: "AUCTION_CMD_MINE",
+		7: "AUCTION_CMD_CLAIM",
+	}
+	AuctionCmdKind_value = map[string]int32{
+		"AUCTION_CMD_UNSPECIFIED": 0,
+		"AUCTION_CMD_OPEN":        1,
+		"AUCTION_CMD_SEARCH":      2,
+		"AUCTION_CMD_LIST":        3,
+		"AUCTION_CMD_BUY":         4,
+		"AUCTION_CMD_CANCEL":      5,
+		"AUCTION_CMD_MINE":        6,
+		"AUCTION_CMD_CLAIM":       7,
+	}
+)
+
+func (x AuctionCmdKind) Enum() *AuctionCmdKind {
+	p := new(AuctionCmdKind)
+	*p = x
+	return p
+}
+
+func (x AuctionCmdKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AuctionCmdKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_erevia_v1_game_proto_enumTypes[26].Descriptor()
+}
+
+func (AuctionCmdKind) Type() protoreflect.EnumType {
+	return &file_erevia_v1_game_proto_enumTypes[26]
+}
+
+func (x AuctionCmdKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AuctionCmdKind.Descriptor instead.
+func (AuctionCmdKind) EnumDescriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{26}
+}
+
+type AuctionSort int32
+
+const (
+	AuctionSort_AUCTION_SORT_PRICE_ASC  AuctionSort = 0
+	AuctionSort_AUCTION_SORT_PRICE_DESC AuctionSort = 1
+	AuctionSort_AUCTION_SORT_NEWEST     AuctionSort = 2
+	AuctionSort_AUCTION_SORT_ENDING     AuctionSort = 3 // vence antes
+)
+
+// Enum value maps for AuctionSort.
+var (
+	AuctionSort_name = map[int32]string{
+		0: "AUCTION_SORT_PRICE_ASC",
+		1: "AUCTION_SORT_PRICE_DESC",
+		2: "AUCTION_SORT_NEWEST",
+		3: "AUCTION_SORT_ENDING",
+	}
+	AuctionSort_value = map[string]int32{
+		"AUCTION_SORT_PRICE_ASC":  0,
+		"AUCTION_SORT_PRICE_DESC": 1,
+		"AUCTION_SORT_NEWEST":     2,
+		"AUCTION_SORT_ENDING":     3,
+	}
+)
+
+func (x AuctionSort) Enum() *AuctionSort {
+	p := new(AuctionSort)
+	*p = x
+	return p
+}
+
+func (x AuctionSort) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AuctionSort) Descriptor() protoreflect.EnumDescriptor {
+	return file_erevia_v1_game_proto_enumTypes[27].Descriptor()
+}
+
+func (AuctionSort) Type() protoreflect.EnumType {
+	return &file_erevia_v1_game_proto_enumTypes[27]
+}
+
+func (x AuctionSort) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AuctionSort.Descriptor instead.
+func (AuctionSort) EnumDescriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{27}
+}
+
+type AuctionStatus int32
+
+const (
+	AuctionStatus_AUCTION_STATUS_ACTIVE    AuctionStatus = 0
+	AuctionStatus_AUCTION_STATUS_SOLD      AuctionStatus = 1
+	AuctionStatus_AUCTION_STATUS_CANCELLED AuctionStatus = 2
+	AuctionStatus_AUCTION_STATUS_EXPIRED   AuctionStatus = 3
+)
+
+// Enum value maps for AuctionStatus.
+var (
+	AuctionStatus_name = map[int32]string{
+		0: "AUCTION_STATUS_ACTIVE",
+		1: "AUCTION_STATUS_SOLD",
+		2: "AUCTION_STATUS_CANCELLED",
+		3: "AUCTION_STATUS_EXPIRED",
+	}
+	AuctionStatus_value = map[string]int32{
+		"AUCTION_STATUS_ACTIVE":    0,
+		"AUCTION_STATUS_SOLD":      1,
+		"AUCTION_STATUS_CANCELLED": 2,
+		"AUCTION_STATUS_EXPIRED":   3,
+	}
+)
+
+func (x AuctionStatus) Enum() *AuctionStatus {
+	p := new(AuctionStatus)
+	*p = x
+	return p
+}
+
+func (x AuctionStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AuctionStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_erevia_v1_game_proto_enumTypes[28].Descriptor()
+}
+
+func (AuctionStatus) Type() protoreflect.EnumType {
+	return &file_erevia_v1_game_proto_enumTypes[28]
+}
+
+func (x AuctionStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AuctionStatus.Descriptor instead.
+func (AuctionStatus) EnumDescriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{28}
+}
+
 type ClientMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Msg:
@@ -1547,6 +1718,7 @@ type ClientMessage struct {
 	//	*ClientMessage_AchievementCmd
 	//	*ClientMessage_SpecCmd
 	//	*ClientMessage_MasteryCmd
+	//	*ClientMessage_AuctionCmd
 	Msg           isClientMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1895,6 +2067,15 @@ func (x *ClientMessage) GetMasteryCmd() *MasteryCmd {
 	return nil
 }
 
+func (x *ClientMessage) GetAuctionCmd() *AuctionCmd {
+	if x != nil {
+		if x, ok := x.Msg.(*ClientMessage_AuctionCmd); ok {
+			return x.AuctionCmd
+		}
+	}
+	return nil
+}
+
 type isClientMessage_Msg interface {
 	isClientMessage_Msg()
 }
@@ -2035,6 +2216,10 @@ type ClientMessage_MasteryCmd struct {
 	MasteryCmd *MasteryCmd `protobuf:"bytes,54,opt,name=mastery_cmd,json=masteryCmd,proto3,oneof"` // Maestria: pedir o estado, gastar ponto, redistribuir
 }
 
+type ClientMessage_AuctionCmd struct {
+	AuctionCmd *AuctionCmd `protobuf:"bytes,44,opt,name=auction_cmd,json=auctionCmd,proto3,oneof"` // Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, retirar do correio
+}
+
 func (*ClientMessage_Join) isClientMessage_Msg() {}
 
 func (*ClientMessage_MoveTo) isClientMessage_Msg() {}
@@ -2102,6 +2287,8 @@ func (*ClientMessage_AchievementCmd) isClientMessage_Msg() {}
 func (*ClientMessage_SpecCmd) isClientMessage_Msg() {}
 
 func (*ClientMessage_MasteryCmd) isClientMessage_Msg() {}
+
+func (*ClientMessage_AuctionCmd) isClientMessage_Msg() {}
 
 type MasteryCmd struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -4698,6 +4885,7 @@ type ServerMessage struct {
 	//	*ServerMessage_EventStatus
 	//	*ServerMessage_Mastery
 	//	*ServerMessage_MasteryTree
+	//	*ServerMessage_Auction
 	Msg           isServerMessage_Msg `protobuf_oneof:"msg"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -5064,6 +5252,15 @@ func (x *ServerMessage) GetMasteryTree() *MasteryTree {
 	return nil
 }
 
+func (x *ServerMessage) GetAuction() *AuctionUpdate {
+	if x != nil {
+		if x, ok := x.Msg.(*ServerMessage_Auction); ok {
+			return x.Auction
+		}
+	}
+	return nil
+}
+
 type isServerMessage_Msg interface {
 	isServerMessage_Msg()
 }
@@ -5212,6 +5409,10 @@ type ServerMessage_MasteryTree struct {
 	MasteryTree *MasteryTree `protobuf:"bytes,55,opt,name=mastery_tree,json=masteryTree,proto3,oneof"` // a árvore da Maestria (resposta ao MASTERY_CMD_GET)
 }
 
+type ServerMessage_Auction struct {
+	Auction *AuctionUpdate `protobuf:"bytes,44,opt,name=auction,proto3,oneof"` // Casa de leilões: janela, busca, meus anúncios e avisos
+}
+
 func (*ServerMessage_Welcome) isServerMessage_Msg() {}
 
 func (*ServerMessage_Spawn) isServerMessage_Msg() {}
@@ -5283,6 +5484,8 @@ func (*ServerMessage_EventStatus) isServerMessage_Msg() {}
 func (*ServerMessage_Mastery) isServerMessage_Msg() {}
 
 func (*ServerMessage_MasteryTree) isServerMessage_Msg() {}
+
+func (*ServerMessage_Auction) isServerMessage_Msg() {}
 
 // Ranking calculado no banco a cada poucos minutos (o servidor guarda em memória).
 type Ranking struct {
@@ -11532,6 +11735,7 @@ type Mail struct {
 	Body          string                 `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
 	SentAtMs      int64                  `protobuf:"varint,5,opt,name=sent_at_ms,json=sentAtMs,proto3" json:"sent_at_ms,omitempty"`
 	Read          bool                   `protobuf:"varint,6,opt,name=read,proto3" json:"read,omitempty"`
+	Attachment    *MailAttachment        `protobuf:"bytes,7,opt,name=attachment,proto3" json:"attachment,omitempty"` // anexo (casa de leilões); vazio = só texto
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -11606,6 +11810,13 @@ func (x *Mail) GetRead() bool {
 		return x.Read
 	}
 	return false
+}
+
+func (x *Mail) GetAttachment() *MailAttachment {
+	if x != nil {
+		return x.Attachment
+	}
+	return nil
 }
 
 // Caixa de entrada. listed = false: só os contadores (aviso de carta nova ou ao entrar).
@@ -11868,11 +12079,688 @@ func (x *QuestDone) GetCategory() QuestCategory {
 	return QuestCategory_QUEST_CATEGORY_UNSPECIFIED
 }
 
+// Anexo de uma carta do sistema (casa de leilões): moedas e/ou um item. Retirar põe na
+// bolsa (AUCTION_CMD_CLAIM); a carta não pode ser apagada antes.
+type MailAttachment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemId        string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"` // vazio = só moedas
+	Count         uint32                 `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	Enchant       uint32                 `protobuf:"varint,3,opt,name=enchant,proto3" json:"enchant,omitempty"`
+	Gold          int64                  `protobuf:"varint,4,opt,name=gold,proto3" json:"gold,omitempty"`
+	Claimed       bool                   `protobuf:"varint,5,opt,name=claimed,proto3" json:"claimed,omitempty"` // já retirado
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MailAttachment) Reset() {
+	*x = MailAttachment{}
+	mi := &file_erevia_v1_game_proto_msgTypes[117]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MailAttachment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MailAttachment) ProtoMessage() {}
+
+func (x *MailAttachment) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[117]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MailAttachment.ProtoReflect.Descriptor instead.
+func (*MailAttachment) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{117}
+}
+
+func (x *MailAttachment) GetItemId() string {
+	if x != nil {
+		return x.ItemId
+	}
+	return ""
+}
+
+func (x *MailAttachment) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *MailAttachment) GetEnchant() uint32 {
+	if x != nil {
+		return x.Enchant
+	}
+	return 0
+}
+
+func (x *MailAttachment) GetGold() int64 {
+	if x != nil {
+		return x.Gold
+	}
+	return 0
+}
+
+func (x *MailAttachment) GetClaimed() bool {
+	if x != nil {
+		return x.Claimed
+	}
+	return false
+}
+
+// Filtros da busca (0/vazio = qualquer).
+type AuctionQuery struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // parte do nome do item (sem diferenciar acento e maiúsculas)
+	Kind          ItemKind               `protobuf:"varint,2,opt,name=kind,proto3,enum=erevia.v1.ItemKind" json:"kind,omitempty"`
+	Grade         uint32                 `protobuf:"varint,3,opt,name=grade,proto3" json:"grade,omitempty"`                       // raridade
+	MinLevel      uint32                 `protobuf:"varint,4,opt,name=min_level,json=minLevel,proto3" json:"min_level,omitempty"` // nível exigido pelo item
+	MaxLevel      uint32                 `protobuf:"varint,5,opt,name=max_level,json=maxLevel,proto3" json:"max_level,omitempty"`
+	MinPrice      int64                  `protobuf:"varint,6,opt,name=min_price,json=minPrice,proto3" json:"min_price,omitempty"`
+	MaxPrice      int64                  `protobuf:"varint,7,opt,name=max_price,json=maxPrice,proto3" json:"max_price,omitempty"`
+	MyClass       bool                   `protobuf:"varint,8,opt,name=my_class,json=myClass,proto3" json:"my_class,omitempty"` // só o que a minha classe usa
+	Sort          AuctionSort            `protobuf:"varint,9,opt,name=sort,proto3,enum=erevia.v1.AuctionSort" json:"sort,omitempty"`
+	Page          uint32                 `protobuf:"varint,10,opt,name=page,proto3" json:"page,omitempty"` // a partir de 0
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuctionQuery) Reset() {
+	*x = AuctionQuery{}
+	mi := &file_erevia_v1_game_proto_msgTypes[118]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuctionQuery) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuctionQuery) ProtoMessage() {}
+
+func (x *AuctionQuery) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[118]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuctionQuery.ProtoReflect.Descriptor instead.
+func (*AuctionQuery) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{118}
+}
+
+func (x *AuctionQuery) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AuctionQuery) GetKind() ItemKind {
+	if x != nil {
+		return x.Kind
+	}
+	return ItemKind_ITEM_KIND_UNSPECIFIED
+}
+
+func (x *AuctionQuery) GetGrade() uint32 {
+	if x != nil {
+		return x.Grade
+	}
+	return 0
+}
+
+func (x *AuctionQuery) GetMinLevel() uint32 {
+	if x != nil {
+		return x.MinLevel
+	}
+	return 0
+}
+
+func (x *AuctionQuery) GetMaxLevel() uint32 {
+	if x != nil {
+		return x.MaxLevel
+	}
+	return 0
+}
+
+func (x *AuctionQuery) GetMinPrice() int64 {
+	if x != nil {
+		return x.MinPrice
+	}
+	return 0
+}
+
+func (x *AuctionQuery) GetMaxPrice() int64 {
+	if x != nil {
+		return x.MaxPrice
+	}
+	return 0
+}
+
+func (x *AuctionQuery) GetMyClass() bool {
+	if x != nil {
+		return x.MyClass
+	}
+	return false
+}
+
+func (x *AuctionQuery) GetSort() AuctionSort {
+	if x != nil {
+		return x.Sort
+	}
+	return AuctionSort_AUCTION_SORT_PRICE_ASC
+}
+
+func (x *AuctionQuery) GetPage() uint32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+type AuctionCmd struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          AuctionCmdKind         `protobuf:"varint,1,opt,name=kind,proto3,enum=erevia.v1.AuctionCmdKind" json:"kind,omitempty"`
+	NpcId         uint32                 `protobuf:"varint,2,opt,name=npc_id,json=npcId,proto3" json:"npc_id,omitempty"` // o leiloeiro (abrir, buscar, anunciar, comprar e cancelar exigem estar perto)
+	Query         *AuctionQuery          `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
+	Slot          uint32                 `protobuf:"varint,4,opt,name=slot,proto3" json:"slot,omitempty"`
+	Count         uint32                 `protobuf:"varint,5,opt,name=count,proto3" json:"count,omitempty"`
+	Price         int64                  `protobuf:"varint,6,opt,name=price,proto3" json:"price,omitempty"`
+	Hours         uint32                 `protobuf:"varint,7,opt,name=hours,proto3" json:"hours,omitempty"`
+	AuctionId     uint64                 `protobuf:"varint,8,opt,name=auction_id,json=auctionId,proto3" json:"auction_id,omitempty"`
+	MailId        uint64                 `protobuf:"varint,9,opt,name=mail_id,json=mailId,proto3" json:"mail_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuctionCmd) Reset() {
+	*x = AuctionCmd{}
+	mi := &file_erevia_v1_game_proto_msgTypes[119]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuctionCmd) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuctionCmd) ProtoMessage() {}
+
+func (x *AuctionCmd) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[119]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuctionCmd.ProtoReflect.Descriptor instead.
+func (*AuctionCmd) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *AuctionCmd) GetKind() AuctionCmdKind {
+	if x != nil {
+		return x.Kind
+	}
+	return AuctionCmdKind_AUCTION_CMD_UNSPECIFIED
+}
+
+func (x *AuctionCmd) GetNpcId() uint32 {
+	if x != nil {
+		return x.NpcId
+	}
+	return 0
+}
+
+func (x *AuctionCmd) GetQuery() *AuctionQuery {
+	if x != nil {
+		return x.Query
+	}
+	return nil
+}
+
+func (x *AuctionCmd) GetSlot() uint32 {
+	if x != nil {
+		return x.Slot
+	}
+	return 0
+}
+
+func (x *AuctionCmd) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *AuctionCmd) GetPrice() int64 {
+	if x != nil {
+		return x.Price
+	}
+	return 0
+}
+
+func (x *AuctionCmd) GetHours() uint32 {
+	if x != nil {
+		return x.Hours
+	}
+	return 0
+}
+
+func (x *AuctionCmd) GetAuctionId() uint64 {
+	if x != nil {
+		return x.AuctionId
+	}
+	return 0
+}
+
+func (x *AuctionCmd) GetMailId() uint64 {
+	if x != nil {
+		return x.MailId
+	}
+	return 0
+}
+
+type AuctionListing struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	ItemId        string                 `protobuf:"bytes,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Count         uint32                 `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	Enchant       uint32                 `protobuf:"varint,4,opt,name=enchant,proto3" json:"enchant,omitempty"`
+	Price         int64                  `protobuf:"varint,5,opt,name=price,proto3" json:"price,omitempty"` // total
+	SellerName    string                 `protobuf:"bytes,6,opt,name=seller_name,json=sellerName,proto3" json:"seller_name,omitempty"`
+	CreatedAtMs   int64                  `protobuf:"varint,7,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	ExpiresAtMs   int64                  `protobuf:"varint,8,opt,name=expires_at_ms,json=expiresAtMs,proto3" json:"expires_at_ms,omitempty"`
+	Status        AuctionStatus          `protobuf:"varint,9,opt,name=status,proto3,enum=erevia.v1.AuctionStatus" json:"status,omitempty"`
+	BuyerName     string                 `protobuf:"bytes,10,opt,name=buyer_name,json=buyerName,proto3" json:"buyer_name,omitempty"` // vendido: para quem
+	Mine          bool                   `protobuf:"varint,11,opt,name=mine,proto3" json:"mine,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuctionListing) Reset() {
+	*x = AuctionListing{}
+	mi := &file_erevia_v1_game_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuctionListing) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuctionListing) ProtoMessage() {}
+
+func (x *AuctionListing) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuctionListing.ProtoReflect.Descriptor instead.
+func (*AuctionListing) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *AuctionListing) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *AuctionListing) GetItemId() string {
+	if x != nil {
+		return x.ItemId
+	}
+	return ""
+}
+
+func (x *AuctionListing) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *AuctionListing) GetEnchant() uint32 {
+	if x != nil {
+		return x.Enchant
+	}
+	return 0
+}
+
+func (x *AuctionListing) GetPrice() int64 {
+	if x != nil {
+		return x.Price
+	}
+	return 0
+}
+
+func (x *AuctionListing) GetSellerName() string {
+	if x != nil {
+		return x.SellerName
+	}
+	return ""
+}
+
+func (x *AuctionListing) GetCreatedAtMs() int64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+func (x *AuctionListing) GetExpiresAtMs() int64 {
+	if x != nil {
+		return x.ExpiresAtMs
+	}
+	return 0
+}
+
+func (x *AuctionListing) GetStatus() AuctionStatus {
+	if x != nil {
+		return x.Status
+	}
+	return AuctionStatus_AUCTION_STATUS_ACTIVE
+}
+
+func (x *AuctionListing) GetBuyerName() string {
+	if x != nil {
+		return x.BuyerName
+	}
+	return ""
+}
+
+func (x *AuctionListing) GetMine() bool {
+	if x != nil {
+		return x.Mine
+	}
+	return false
+}
+
+// Regras (vêm ao abrir a janela).
+type AuctionRules struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	MaxListings       uint32                 `protobuf:"varint,1,opt,name=max_listings,json=maxListings,proto3" json:"max_listings,omitempty"` // por conta
+	MinPrice          int64                  `protobuf:"varint,2,opt,name=min_price,json=minPrice,proto3" json:"min_price,omitempty"`
+	MaxPrice          int64                  `protobuf:"varint,3,opt,name=max_price,json=maxPrice,proto3" json:"max_price,omitempty"`
+	FeePercent        uint32                 `protobuf:"varint,4,opt,name=fee_percent,json=feePercent,proto3" json:"fee_percent,omitempty"` // taxa do anúncio (não volta)
+	FeeMin            int64                  `protobuf:"varint,5,opt,name=fee_min,json=feeMin,proto3" json:"fee_min,omitempty"`
+	CommissionPercent uint32                 `protobuf:"varint,6,opt,name=commission_percent,json=commissionPercent,proto3" json:"commission_percent,omitempty"` // sai do que o vendedor recebe
+	Hours             []uint32               `protobuf:"varint,7,rep,packed,name=hours,proto3" json:"hours,omitempty"`                                           // prazos aceitos
+	PageSize          uint32                 `protobuf:"varint,8,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *AuctionRules) Reset() {
+	*x = AuctionRules{}
+	mi := &file_erevia_v1_game_proto_msgTypes[121]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuctionRules) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuctionRules) ProtoMessage() {}
+
+func (x *AuctionRules) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[121]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuctionRules.ProtoReflect.Descriptor instead.
+func (*AuctionRules) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{121}
+}
+
+func (x *AuctionRules) GetMaxListings() uint32 {
+	if x != nil {
+		return x.MaxListings
+	}
+	return 0
+}
+
+func (x *AuctionRules) GetMinPrice() int64 {
+	if x != nil {
+		return x.MinPrice
+	}
+	return 0
+}
+
+func (x *AuctionRules) GetMaxPrice() int64 {
+	if x != nil {
+		return x.MaxPrice
+	}
+	return 0
+}
+
+func (x *AuctionRules) GetFeePercent() uint32 {
+	if x != nil {
+		return x.FeePercent
+	}
+	return 0
+}
+
+func (x *AuctionRules) GetFeeMin() int64 {
+	if x != nil {
+		return x.FeeMin
+	}
+	return 0
+}
+
+func (x *AuctionRules) GetCommissionPercent() uint32 {
+	if x != nil {
+		return x.CommissionPercent
+	}
+	return 0
+}
+
+func (x *AuctionRules) GetHours() []uint32 {
+	if x != nil {
+		return x.Hours
+	}
+	return nil
+}
+
+func (x *AuctionRules) GetPageSize() uint32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+// Só o que mudou vem preenchido.
+type AuctionUpdate struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Open          bool                   `protobuf:"varint,1,opt,name=open,proto3" json:"open,omitempty"` // abrir a janela (resposta ao OPEN)
+	NpcId         uint32                 `protobuf:"varint,2,opt,name=npc_id,json=npcId,proto3" json:"npc_id,omitempty"`
+	Rules         *AuctionRules          `protobuf:"bytes,3,opt,name=rules,proto3" json:"rules,omitempty"`
+	Searched      bool                   `protobuf:"varint,4,opt,name=searched,proto3" json:"searched,omitempty"` // results/total/page são de uma busca
+	Results       []*AuctionListing      `protobuf:"bytes,5,rep,name=results,proto3" json:"results,omitempty"`
+	Total         uint32                 `protobuf:"varint,6,opt,name=total,proto3" json:"total,omitempty"`
+	Page          uint32                 `protobuf:"varint,7,opt,name=page,proto3" json:"page,omitempty"`
+	MineListed    bool                   `protobuf:"varint,8,opt,name=mine_listed,json=mineListed,proto3" json:"mine_listed,omitempty"` // mine/active são a lista dos meus anúncios
+	Mine          []*AuctionListing      `protobuf:"bytes,9,rep,name=mine,proto3" json:"mine,omitempty"`                                // ativos e os últimos encerrados
+	Active        uint32                 `protobuf:"varint,10,opt,name=active,proto3" json:"active,omitempty"`                          // anúncios ativos da conta
+	Notice        string                 `protobuf:"bytes,11,opt,name=notice,proto3" json:"notice,omitempty"`                           // aviso (anunciado, vendido, comprado…); também sai no chat
+	GoneId        uint64                 `protobuf:"varint,12,opt,name=gone_id,json=goneId,proto3" json:"gone_id,omitempty"`            // anúncio que saiu (comprado ou cancelado): o cliente tira da lista
+	Pending       uint32                 `protobuf:"varint,13,opt,name=pending,proto3" json:"pending,omitempty"`                        // operações da casa de leilões ainda sem confirmação do banco
+	Claimable     uint32                 `protobuf:"varint,14,opt,name=claimable,proto3" json:"claimable,omitempty"`                    // anexos no correio esperando para retirar (os que o servidor conhece)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuctionUpdate) Reset() {
+	*x = AuctionUpdate{}
+	mi := &file_erevia_v1_game_proto_msgTypes[122]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuctionUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuctionUpdate) ProtoMessage() {}
+
+func (x *AuctionUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_erevia_v1_game_proto_msgTypes[122]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuctionUpdate.ProtoReflect.Descriptor instead.
+func (*AuctionUpdate) Descriptor() ([]byte, []int) {
+	return file_erevia_v1_game_proto_rawDescGZIP(), []int{122}
+}
+
+func (x *AuctionUpdate) GetOpen() bool {
+	if x != nil {
+		return x.Open
+	}
+	return false
+}
+
+func (x *AuctionUpdate) GetNpcId() uint32 {
+	if x != nil {
+		return x.NpcId
+	}
+	return 0
+}
+
+func (x *AuctionUpdate) GetRules() *AuctionRules {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+func (x *AuctionUpdate) GetSearched() bool {
+	if x != nil {
+		return x.Searched
+	}
+	return false
+}
+
+func (x *AuctionUpdate) GetResults() []*AuctionListing {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+func (x *AuctionUpdate) GetTotal() uint32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *AuctionUpdate) GetPage() uint32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *AuctionUpdate) GetMineListed() bool {
+	if x != nil {
+		return x.MineListed
+	}
+	return false
+}
+
+func (x *AuctionUpdate) GetMine() []*AuctionListing {
+	if x != nil {
+		return x.Mine
+	}
+	return nil
+}
+
+func (x *AuctionUpdate) GetActive() uint32 {
+	if x != nil {
+		return x.Active
+	}
+	return 0
+}
+
+func (x *AuctionUpdate) GetNotice() string {
+	if x != nil {
+		return x.Notice
+	}
+	return ""
+}
+
+func (x *AuctionUpdate) GetGoneId() uint64 {
+	if x != nil {
+		return x.GoneId
+	}
+	return 0
+}
+
+func (x *AuctionUpdate) GetPending() uint32 {
+	if x != nil {
+		return x.Pending
+	}
+	return 0
+}
+
+func (x *AuctionUpdate) GetClaimable() uint32 {
+	if x != nil {
+		return x.Claimable
+	}
+	return 0
+}
+
 var File_erevia_v1_game_proto protoreflect.FileDescriptor
 
 const file_erevia_v1_game_proto_rawDesc = "" +
 	"\n" +
-	"\x14erevia/v1/game.proto\x12\terevia.v1\"\x9f\x0e\n" +
+	"\x14erevia/v1/game.proto\x12\terevia.v1\"\xd9\x0e\n" +
 	"\rClientMessage\x12%\n" +
 	"\x04join\x18\x01 \x01(\v2\x0f.erevia.v1.JoinH\x00R\x04join\x12,\n" +
 	"\amove_to\x18\x02 \x01(\v2\x11.erevia.v1.MoveToH\x00R\x06moveTo\x12%\n" +
@@ -11912,7 +12800,9 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x0fachievement_cmd\x18  \x01(\v2\x19.erevia.v1.AchievementCmdH\x00R\x0eachievementCmd\x12/\n" +
 	"\bspec_cmd\x182 \x01(\v2\x12.erevia.v1.SpecCmdH\x00R\aspecCmd\x128\n" +
 	"\vmastery_cmd\x186 \x01(\v2\x15.erevia.v1.MasteryCmdH\x00R\n" +
-	"masteryCmdB\x05\n" +
+	"masteryCmd\x128\n" +
+	"\vauction_cmd\x18, \x01(\v2\x15.erevia.v1.AuctionCmdH\x00R\n" +
+	"auctionCmdB\x05\n" +
 	"\x03msg\"O\n" +
 	"\n" +
 	"MasteryCmd\x12-\n" +
@@ -12095,7 +12985,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x04Sell\x12\x15\n" +
 	"\x06npc_id\x18\x01 \x01(\rR\x05npcId\x12\x12\n" +
 	"\x04slot\x18\x02 \x01(\rR\x04slot\x12\x14\n" +
-	"\x05count\x18\x03 \x01(\rR\x05count\"\x93\x0f\n" +
+	"\x05count\x18\x03 \x01(\rR\x05count\"\xc9\x0f\n" +
 	"\rServerMessage\x12.\n" +
 	"\awelcome\x18\x01 \x01(\v2\x12.erevia.v1.WelcomeH\x00R\awelcome\x12(\n" +
 	"\x05spawn\x18\x02 \x01(\v2\x10.erevia.v1.SpawnH\x00R\x05spawn\x12.\n" +
@@ -12139,7 +13029,8 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"specChoice\x12;\n" +
 	"\fevent_status\x184 \x01(\v2\x16.erevia.v1.EventStatusH\x00R\veventStatus\x123\n" +
 	"\amastery\x186 \x01(\v2\x17.erevia.v1.MasteryStateH\x00R\amastery\x12;\n" +
-	"\fmastery_tree\x187 \x01(\v2\x16.erevia.v1.MasteryTreeH\x00R\vmasteryTreeB\x05\n" +
+	"\fmastery_tree\x187 \x01(\v2\x16.erevia.v1.MasteryTreeH\x00R\vmasteryTree\x124\n" +
+	"\aauction\x18, \x01(\v2\x18.erevia.v1.AuctionUpdateH\x00R\aauctionB\x05\n" +
 	"\x03msg\"\xb0\x02\n" +
 	"\aRanking\x12*\n" +
 	"\x05level\x18\x01 \x03(\v2\x14.erevia.v1.RankEntryR\x05level\x12&\n" +
@@ -12729,7 +13620,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\n" +
 	"FriendList\x12+\n" +
 	"\afriends\x18\x01 \x03(\v2\x11.erevia.v1.FriendR\afriends\x12\x10\n" +
-	"\x03max\x18\x02 \x01(\rR\x03max\"\x93\x01\n" +
+	"\x03max\x18\x02 \x01(\rR\x03max\"\xce\x01\n" +
 	"\x04Mail\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
 	"\tfrom_name\x18\x02 \x01(\tR\bfromName\x12\x18\n" +
@@ -12737,7 +13628,10 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x04body\x18\x04 \x01(\tR\x04body\x12\x1c\n" +
 	"\n" +
 	"sent_at_ms\x18\x05 \x01(\x03R\bsentAtMs\x12\x12\n" +
-	"\x04read\x18\x06 \x01(\bR\x04read\"\xc4\x01\n" +
+	"\x04read\x18\x06 \x01(\bR\x04read\x129\n" +
+	"\n" +
+	"attachment\x18\a \x01(\v2\x19.erevia.v1.MailAttachmentR\n" +
+	"attachment\"\xc4\x01\n" +
 	"\aMailBox\x12%\n" +
 	"\x05mails\x18\x01 \x03(\v2\x0f.erevia.v1.MailR\x05mails\x12\x16\n" +
 	"\x06unread\x18\x02 \x01(\rR\x06unread\x12\x14\n" +
@@ -12756,7 +13650,79 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\tQuestDone\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x124\n" +
-	"\bcategory\x18\x03 \x01(\x0e2\x18.erevia.v1.QuestCategoryR\bcategory*q\n" +
+	"\bcategory\x18\x03 \x01(\x0e2\x18.erevia.v1.QuestCategoryR\bcategory\"\x87\x01\n" +
+	"\x0eMailAttachment\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\rR\x05count\x12\x18\n" +
+	"\aenchant\x18\x03 \x01(\rR\aenchant\x12\x12\n" +
+	"\x04gold\x18\x04 \x01(\x03R\x04gold\x12\x18\n" +
+	"\aclaimed\x18\x05 \x01(\bR\aclaimed\"\xb0\x02\n" +
+	"\fAuctionQuery\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12'\n" +
+	"\x04kind\x18\x02 \x01(\x0e2\x13.erevia.v1.ItemKindR\x04kind\x12\x14\n" +
+	"\x05grade\x18\x03 \x01(\rR\x05grade\x12\x1b\n" +
+	"\tmin_level\x18\x04 \x01(\rR\bminLevel\x12\x1b\n" +
+	"\tmax_level\x18\x05 \x01(\rR\bmaxLevel\x12\x1b\n" +
+	"\tmin_price\x18\x06 \x01(\x03R\bminPrice\x12\x1b\n" +
+	"\tmax_price\x18\a \x01(\x03R\bmaxPrice\x12\x19\n" +
+	"\bmy_class\x18\b \x01(\bR\amyClass\x12*\n" +
+	"\x04sort\x18\t \x01(\x0e2\x16.erevia.v1.AuctionSortR\x04sort\x12\x12\n" +
+	"\x04page\x18\n" +
+	" \x01(\rR\x04page\"\x8f\x02\n" +
+	"\n" +
+	"AuctionCmd\x12-\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x19.erevia.v1.AuctionCmdKindR\x04kind\x12\x15\n" +
+	"\x06npc_id\x18\x02 \x01(\rR\x05npcId\x12-\n" +
+	"\x05query\x18\x03 \x01(\v2\x17.erevia.v1.AuctionQueryR\x05query\x12\x12\n" +
+	"\x04slot\x18\x04 \x01(\rR\x04slot\x12\x14\n" +
+	"\x05count\x18\x05 \x01(\rR\x05count\x12\x14\n" +
+	"\x05price\x18\x06 \x01(\x03R\x05price\x12\x14\n" +
+	"\x05hours\x18\a \x01(\rR\x05hours\x12\x1d\n" +
+	"\n" +
+	"auction_id\x18\b \x01(\x04R\tauctionId\x12\x17\n" +
+	"\amail_id\x18\t \x01(\x04R\x06mailId\"\xcd\x02\n" +
+	"\x0eAuctionListing\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x17\n" +
+	"\aitem_id\x18\x02 \x01(\tR\x06itemId\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\rR\x05count\x12\x18\n" +
+	"\aenchant\x18\x04 \x01(\rR\aenchant\x12\x14\n" +
+	"\x05price\x18\x05 \x01(\x03R\x05price\x12\x1f\n" +
+	"\vseller_name\x18\x06 \x01(\tR\n" +
+	"sellerName\x12\"\n" +
+	"\rcreated_at_ms\x18\a \x01(\x03R\vcreatedAtMs\x12\"\n" +
+	"\rexpires_at_ms\x18\b \x01(\x03R\vexpiresAtMs\x120\n" +
+	"\x06status\x18\t \x01(\x0e2\x18.erevia.v1.AuctionStatusR\x06status\x12\x1d\n" +
+	"\n" +
+	"buyer_name\x18\n" +
+	" \x01(\tR\tbuyerName\x12\x12\n" +
+	"\x04mine\x18\v \x01(\bR\x04mine\"\x87\x02\n" +
+	"\fAuctionRules\x12!\n" +
+	"\fmax_listings\x18\x01 \x01(\rR\vmaxListings\x12\x1b\n" +
+	"\tmin_price\x18\x02 \x01(\x03R\bminPrice\x12\x1b\n" +
+	"\tmax_price\x18\x03 \x01(\x03R\bmaxPrice\x12\x1f\n" +
+	"\vfee_percent\x18\x04 \x01(\rR\n" +
+	"feePercent\x12\x17\n" +
+	"\afee_min\x18\x05 \x01(\x03R\x06feeMin\x12-\n" +
+	"\x12commission_percent\x18\x06 \x01(\rR\x11commissionPercent\x12\x14\n" +
+	"\x05hours\x18\a \x03(\rR\x05hours\x12\x1b\n" +
+	"\tpage_size\x18\b \x01(\rR\bpageSize\"\xb5\x03\n" +
+	"\rAuctionUpdate\x12\x12\n" +
+	"\x04open\x18\x01 \x01(\bR\x04open\x12\x15\n" +
+	"\x06npc_id\x18\x02 \x01(\rR\x05npcId\x12-\n" +
+	"\x05rules\x18\x03 \x01(\v2\x17.erevia.v1.AuctionRulesR\x05rules\x12\x1a\n" +
+	"\bsearched\x18\x04 \x01(\bR\bsearched\x123\n" +
+	"\aresults\x18\x05 \x03(\v2\x19.erevia.v1.AuctionListingR\aresults\x12\x14\n" +
+	"\x05total\x18\x06 \x01(\rR\x05total\x12\x12\n" +
+	"\x04page\x18\a \x01(\rR\x04page\x12\x1f\n" +
+	"\vmine_listed\x18\b \x01(\bR\n" +
+	"mineListed\x12-\n" +
+	"\x04mine\x18\t \x03(\v2\x19.erevia.v1.AuctionListingR\x04mine\x12\x16\n" +
+	"\x06active\x18\n" +
+	" \x01(\rR\x06active\x12\x16\n" +
+	"\x06notice\x18\v \x01(\tR\x06notice\x12\x17\n" +
+	"\agone_id\x18\f \x01(\x04R\x06goneId\x12\x18\n" +
+	"\apending\x18\r \x01(\rR\apending\x12\x1c\n" +
+	"\tclaimable\x18\x0e \x01(\rR\tclaimable*q\n" +
 	"\x0eMasteryCmdKind\x12\x1b\n" +
 	"\x17MASTERY_CMD_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fMASTERY_CMD_GET\x10\x01\x12\x15\n" +
@@ -12838,13 +13804,14 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\vChannelKind\x12\x15\n" +
 	"\x11CHANNEL_KIND_NONE\x10\x00\x12\x19\n" +
 	"\x15CHANNEL_KIND_TELEPORT\x10\x01\x12\x17\n" +
-	"\x13CHANNEL_KIND_RETURN\x10\x02*s\n" +
+	"\x13CHANNEL_KIND_RETURN\x10\x02*\x89\x01\n" +
 	"\aNpcRole\x12\x11\n" +
 	"\rNPC_ROLE_SHOP\x10\x00\x12\x15\n" +
 	"\x11NPC_ROLE_TELEPORT\x10\x01\x12\x14\n" +
 	"\x10NPC_ROLE_STORAGE\x10\x02\x12\x13\n" +
 	"\x0fNPC_ROLE_BARBER\x10\x03\x12\x13\n" +
-	"\x0fNPC_ROLE_MASTER\x10\x04*\xa7\x01\n" +
+	"\x0fNPC_ROLE_MASTER\x10\x04\x12\x14\n" +
+	"\x10NPC_ROLE_AUCTION\x10\x05*\xa7\x01\n" +
 	"\vChatChannel\x12\x1c\n" +
 	"\x18CHAT_CHANNEL_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14CHAT_CHANNEL_GENERAL\x10\x01\x12\x18\n" +
@@ -12935,7 +13902,26 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x14QUEST_CATEGORY_STORY\x10\x01\x12\x19\n" +
 	"\x15QUEST_CATEGORY_REGION\x10\x02\x12\x18\n" +
 	"\x14QUEST_CATEGORY_DAILY\x10\x03\x12\x1b\n" +
-	"\x17QUEST_CATEGORY_TUTORIAL\x10\x04B\x1eZ\x1cerevia/server/internal/pb;pbb\x06proto3"
+	"\x17QUEST_CATEGORY_TUTORIAL\x10\x04*\xcb\x01\n" +
+	"\x0eAuctionCmdKind\x12\x1b\n" +
+	"\x17AUCTION_CMD_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10AUCTION_CMD_OPEN\x10\x01\x12\x16\n" +
+	"\x12AUCTION_CMD_SEARCH\x10\x02\x12\x14\n" +
+	"\x10AUCTION_CMD_LIST\x10\x03\x12\x13\n" +
+	"\x0fAUCTION_CMD_BUY\x10\x04\x12\x16\n" +
+	"\x12AUCTION_CMD_CANCEL\x10\x05\x12\x14\n" +
+	"\x10AUCTION_CMD_MINE\x10\x06\x12\x15\n" +
+	"\x11AUCTION_CMD_CLAIM\x10\a*x\n" +
+	"\vAuctionSort\x12\x1a\n" +
+	"\x16AUCTION_SORT_PRICE_ASC\x10\x00\x12\x1b\n" +
+	"\x17AUCTION_SORT_PRICE_DESC\x10\x01\x12\x17\n" +
+	"\x13AUCTION_SORT_NEWEST\x10\x02\x12\x17\n" +
+	"\x13AUCTION_SORT_ENDING\x10\x03*}\n" +
+	"\rAuctionStatus\x12\x19\n" +
+	"\x15AUCTION_STATUS_ACTIVE\x10\x00\x12\x17\n" +
+	"\x13AUCTION_STATUS_SOLD\x10\x01\x12\x1c\n" +
+	"\x18AUCTION_STATUS_CANCELLED\x10\x02\x12\x1a\n" +
+	"\x16AUCTION_STATUS_EXPIRED\x10\x03B\x1eZ\x1cerevia/server/internal/pb;pbb\x06proto3"
 
 var (
 	file_erevia_v1_game_proto_rawDescOnce sync.Once
@@ -12949,8 +13935,8 @@ func file_erevia_v1_game_proto_rawDescGZIP() []byte {
 	return file_erevia_v1_game_proto_rawDescData
 }
 
-var file_erevia_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 26)
-var file_erevia_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 117)
+var file_erevia_v1_game_proto_enumTypes = make([]protoimpl.EnumInfo, 29)
+var file_erevia_v1_game_proto_msgTypes = make([]protoimpl.MessageInfo, 123)
 var file_erevia_v1_game_proto_goTypes = []any{
 	(MasteryCmdKind)(0),        // 0: erevia.v1.MasteryCmdKind
 	(SpecCmdKind)(0),           // 1: erevia.v1.SpecCmdKind
@@ -12978,297 +13964,317 @@ var file_erevia_v1_game_proto_goTypes = []any{
 	(MailCmdKind)(0),           // 23: erevia.v1.MailCmdKind
 	(EmoteKind)(0),             // 24: erevia.v1.EmoteKind
 	(QuestCategory)(0),         // 25: erevia.v1.QuestCategory
-	(*ClientMessage)(nil),      // 26: erevia.v1.ClientMessage
-	(*MasteryCmd)(nil),         // 27: erevia.v1.MasteryCmd
-	(*MasteryState)(nil),       // 28: erevia.v1.MasteryState
-	(*MasteryRank)(nil),        // 29: erevia.v1.MasteryRank
-	(*MasteryTree)(nil),        // 30: erevia.v1.MasteryTree
-	(*MasteryBranchInfo)(nil),  // 31: erevia.v1.MasteryBranchInfo
-	(*MasteryNodeInfo)(nil),    // 32: erevia.v1.MasteryNodeInfo
-	(*SpecCmd)(nil),            // 33: erevia.v1.SpecCmd
-	(*SpecChoice)(nil),         // 34: erevia.v1.SpecChoice
-	(*SpecInfo)(nil),           // 35: erevia.v1.SpecInfo
-	(*RankingRequest)(nil),     // 36: erevia.v1.RankingRequest
-	(*AchievementCmd)(nil),     // 37: erevia.v1.AchievementCmd
-	(*ClientStats)(nil),        // 38: erevia.v1.ClientStats
-	(*Craft)(nil),              // 39: erevia.v1.Craft
-	(*TradeCmd)(nil),           // 40: erevia.v1.TradeCmd
-	(*BodyLook)(nil),           // 41: erevia.v1.BodyLook
-	(*ChangeLook)(nil),         // 42: erevia.v1.ChangeLook
-	(*PartyCmd)(nil),           // 43: erevia.v1.PartyCmd
-	(*ClanCmd)(nil),            // 44: erevia.v1.ClanCmd
-	(*InviteReply)(nil),        // 45: erevia.v1.InviteReply
-	(*Teleport)(nil),           // 46: erevia.v1.Teleport
-	(*CancelChannel)(nil),      // 47: erevia.v1.CancelChannel
-	(*Enchant)(nil),            // 48: erevia.v1.Enchant
-	(*StorageMove)(nil),        // 49: erevia.v1.StorageMove
-	(*StorageGold)(nil),        // 50: erevia.v1.StorageGold
-	(*AllocateAttrs)(nil),      // 51: erevia.v1.AllocateAttrs
-	(*LearnSkills)(nil),        // 52: erevia.v1.LearnSkills
-	(*SetHotbar)(nil),          // 53: erevia.v1.SetHotbar
-	(*Attrs)(nil),              // 54: erevia.v1.Attrs
-	(*SkillRank)(nil),          // 55: erevia.v1.SkillRank
-	(*Join)(nil),               // 56: erevia.v1.Join
-	(*MoveTo)(nil),             // 57: erevia.v1.MoveTo
-	(*Ping)(nil),               // 58: erevia.v1.Ping
-	(*ChatSend)(nil),           // 59: erevia.v1.ChatSend
-	(*Attack)(nil),             // 60: erevia.v1.Attack
-	(*UseSkill)(nil),           // 61: erevia.v1.UseSkill
-	(*Respawn)(nil),            // 62: erevia.v1.Respawn
-	(*PickUp)(nil),             // 63: erevia.v1.PickUp
-	(*MoveItem)(nil),           // 64: erevia.v1.MoveItem
-	(*UseItem)(nil),            // 65: erevia.v1.UseItem
-	(*DestroyItem)(nil),        // 66: erevia.v1.DestroyItem
-	(*Buy)(nil),                // 67: erevia.v1.Buy
-	(*Sell)(nil),               // 68: erevia.v1.Sell
-	(*ServerMessage)(nil),      // 69: erevia.v1.ServerMessage
-	(*Ranking)(nil),            // 70: erevia.v1.Ranking
-	(*RankEntry)(nil),          // 71: erevia.v1.RankEntry
-	(*ClanRankEntry)(nil),      // 72: erevia.v1.ClanRankEntry
-	(*Achievements)(nil),       // 73: erevia.v1.Achievements
-	(*AchievementInfo)(nil),    // 74: erevia.v1.AchievementInfo
-	(*TradeState)(nil),         // 75: erevia.v1.TradeState
-	(*TradeOffer)(nil),         // 76: erevia.v1.TradeOffer
-	(*TradeItem)(nil),          // 77: erevia.v1.TradeItem
-	(*QuestLog)(nil),           // 78: erevia.v1.QuestLog
-	(*QuestInfo)(nil),          // 79: erevia.v1.QuestInfo
-	(*QuestStepInfo)(nil),      // 80: erevia.v1.QuestStepInfo
-	(*EventStatus)(nil),        // 81: erevia.v1.EventStatus
-	(*Announce)(nil),           // 82: erevia.v1.Announce
-	(*BossStatus)(nil),         // 83: erevia.v1.BossStatus
-	(*Telegraph)(nil),          // 84: erevia.v1.Telegraph
-	(*PlayerStatus)(nil),       // 85: erevia.v1.PlayerStatus
-	(*SelfPvp)(nil),            // 86: erevia.v1.SelfPvp
-	(*Invite)(nil),             // 87: erevia.v1.Invite
-	(*PartyMember)(nil),        // 88: erevia.v1.PartyMember
-	(*PartyState)(nil),         // 89: erevia.v1.PartyState
-	(*ClanMember)(nil),         // 90: erevia.v1.ClanMember
-	(*ClanState)(nil),          // 91: erevia.v1.ClanState
-	(*ChannelBar)(nil),         // 92: erevia.v1.ChannelBar
-	(*EnchantResult)(nil),      // 93: erevia.v1.EnchantResult
-	(*Storage)(nil),            // 94: erevia.v1.Storage
-	(*EnchantRules)(nil),       // 95: erevia.v1.EnchantRules
-	(*TeleportDest)(nil),       // 96: erevia.v1.TeleportDest
-	(*Progress)(nil),           // 97: erevia.v1.Progress
-	(*StatBlock)(nil),          // 98: erevia.v1.StatBlock
-	(*Hotbar)(nil),             // 99: erevia.v1.Hotbar
-	(*SkillBranch)(nil),        // 100: erevia.v1.SkillBranch
-	(*Welcome)(nil),            // 101: erevia.v1.Welcome
-	(*MapZone)(nil),            // 102: erevia.v1.MapZone
-	(*Spawn)(nil),              // 103: erevia.v1.Spawn
-	(*Despawn)(nil),            // 104: erevia.v1.Despawn
-	(*Snapshot)(nil),           // 105: erevia.v1.Snapshot
-	(*Pong)(nil),               // 106: erevia.v1.Pong
-	(*ChatMessage)(nil),        // 107: erevia.v1.ChatMessage
-	(*Kicked)(nil),             // 108: erevia.v1.Kicked
-	(*SelfStats)(nil),          // 109: erevia.v1.SelfStats
-	(*SkillCooldown)(nil),      // 110: erevia.v1.SkillCooldown
-	(*Inventory)(nil),          // 111: erevia.v1.Inventory
-	(*GroundItemsAdded)(nil),   // 112: erevia.v1.GroundItemsAdded
-	(*GroundItemsRemoved)(nil), // 113: erevia.v1.GroundItemsRemoved
-	(*ItemCooldown)(nil),       // 114: erevia.v1.ItemCooldown
-	(*Appearance)(nil),         // 115: erevia.v1.Appearance
-	(*ItemStack)(nil),          // 116: erevia.v1.ItemStack
-	(*GroundItem)(nil),         // 117: erevia.v1.GroundItem
-	(*NpcInfo)(nil),            // 118: erevia.v1.NpcInfo
-	(*RecipeInfo)(nil),         // 119: erevia.v1.RecipeInfo
-	(*RecipeMaterial)(nil),     // 120: erevia.v1.RecipeMaterial
-	(*ItemBonus)(nil),          // 121: erevia.v1.ItemBonus
-	(*ItemInfo)(nil),           // 122: erevia.v1.ItemInfo
-	(*Entity)(nil),             // 123: erevia.v1.Entity
-	(*EntityState)(nil),        // 124: erevia.v1.EntityState
-	(*HpUpdate)(nil),           // 125: erevia.v1.HpUpdate
-	(*CombatEvent)(nil),        // 126: erevia.v1.CombatEvent
-	(*EffectEvent)(nil),        // 127: erevia.v1.EffectEvent
-	(*EffectEnd)(nil),          // 128: erevia.v1.EffectEnd
-	(*SkillCast)(nil),          // 129: erevia.v1.SkillCast
-	(*Revive)(nil),             // 130: erevia.v1.Revive
-	(*LevelUp)(nil),            // 131: erevia.v1.LevelUp
-	(*SkillInfo)(nil),          // 132: erevia.v1.SkillInfo
-	(*SkillRankInfo)(nil),      // 133: erevia.v1.SkillRankInfo
-	(*FriendCmd)(nil),          // 134: erevia.v1.FriendCmd
-	(*MailCmd)(nil),            // 135: erevia.v1.MailCmd
-	(*Friend)(nil),             // 136: erevia.v1.Friend
-	(*FriendList)(nil),         // 137: erevia.v1.FriendList
-	(*Mail)(nil),               // 138: erevia.v1.Mail
-	(*MailBox)(nil),            // 139: erevia.v1.MailBox
-	(*SocialUpdate)(nil),       // 140: erevia.v1.SocialUpdate
-	(*Emote)(nil),              // 141: erevia.v1.Emote
-	(*QuestDone)(nil),          // 142: erevia.v1.QuestDone
+	(AuctionCmdKind)(0),        // 26: erevia.v1.AuctionCmdKind
+	(AuctionSort)(0),           // 27: erevia.v1.AuctionSort
+	(AuctionStatus)(0),         // 28: erevia.v1.AuctionStatus
+	(*ClientMessage)(nil),      // 29: erevia.v1.ClientMessage
+	(*MasteryCmd)(nil),         // 30: erevia.v1.MasteryCmd
+	(*MasteryState)(nil),       // 31: erevia.v1.MasteryState
+	(*MasteryRank)(nil),        // 32: erevia.v1.MasteryRank
+	(*MasteryTree)(nil),        // 33: erevia.v1.MasteryTree
+	(*MasteryBranchInfo)(nil),  // 34: erevia.v1.MasteryBranchInfo
+	(*MasteryNodeInfo)(nil),    // 35: erevia.v1.MasteryNodeInfo
+	(*SpecCmd)(nil),            // 36: erevia.v1.SpecCmd
+	(*SpecChoice)(nil),         // 37: erevia.v1.SpecChoice
+	(*SpecInfo)(nil),           // 38: erevia.v1.SpecInfo
+	(*RankingRequest)(nil),     // 39: erevia.v1.RankingRequest
+	(*AchievementCmd)(nil),     // 40: erevia.v1.AchievementCmd
+	(*ClientStats)(nil),        // 41: erevia.v1.ClientStats
+	(*Craft)(nil),              // 42: erevia.v1.Craft
+	(*TradeCmd)(nil),           // 43: erevia.v1.TradeCmd
+	(*BodyLook)(nil),           // 44: erevia.v1.BodyLook
+	(*ChangeLook)(nil),         // 45: erevia.v1.ChangeLook
+	(*PartyCmd)(nil),           // 46: erevia.v1.PartyCmd
+	(*ClanCmd)(nil),            // 47: erevia.v1.ClanCmd
+	(*InviteReply)(nil),        // 48: erevia.v1.InviteReply
+	(*Teleport)(nil),           // 49: erevia.v1.Teleport
+	(*CancelChannel)(nil),      // 50: erevia.v1.CancelChannel
+	(*Enchant)(nil),            // 51: erevia.v1.Enchant
+	(*StorageMove)(nil),        // 52: erevia.v1.StorageMove
+	(*StorageGold)(nil),        // 53: erevia.v1.StorageGold
+	(*AllocateAttrs)(nil),      // 54: erevia.v1.AllocateAttrs
+	(*LearnSkills)(nil),        // 55: erevia.v1.LearnSkills
+	(*SetHotbar)(nil),          // 56: erevia.v1.SetHotbar
+	(*Attrs)(nil),              // 57: erevia.v1.Attrs
+	(*SkillRank)(nil),          // 58: erevia.v1.SkillRank
+	(*Join)(nil),               // 59: erevia.v1.Join
+	(*MoveTo)(nil),             // 60: erevia.v1.MoveTo
+	(*Ping)(nil),               // 61: erevia.v1.Ping
+	(*ChatSend)(nil),           // 62: erevia.v1.ChatSend
+	(*Attack)(nil),             // 63: erevia.v1.Attack
+	(*UseSkill)(nil),           // 64: erevia.v1.UseSkill
+	(*Respawn)(nil),            // 65: erevia.v1.Respawn
+	(*PickUp)(nil),             // 66: erevia.v1.PickUp
+	(*MoveItem)(nil),           // 67: erevia.v1.MoveItem
+	(*UseItem)(nil),            // 68: erevia.v1.UseItem
+	(*DestroyItem)(nil),        // 69: erevia.v1.DestroyItem
+	(*Buy)(nil),                // 70: erevia.v1.Buy
+	(*Sell)(nil),               // 71: erevia.v1.Sell
+	(*ServerMessage)(nil),      // 72: erevia.v1.ServerMessage
+	(*Ranking)(nil),            // 73: erevia.v1.Ranking
+	(*RankEntry)(nil),          // 74: erevia.v1.RankEntry
+	(*ClanRankEntry)(nil),      // 75: erevia.v1.ClanRankEntry
+	(*Achievements)(nil),       // 76: erevia.v1.Achievements
+	(*AchievementInfo)(nil),    // 77: erevia.v1.AchievementInfo
+	(*TradeState)(nil),         // 78: erevia.v1.TradeState
+	(*TradeOffer)(nil),         // 79: erevia.v1.TradeOffer
+	(*TradeItem)(nil),          // 80: erevia.v1.TradeItem
+	(*QuestLog)(nil),           // 81: erevia.v1.QuestLog
+	(*QuestInfo)(nil),          // 82: erevia.v1.QuestInfo
+	(*QuestStepInfo)(nil),      // 83: erevia.v1.QuestStepInfo
+	(*EventStatus)(nil),        // 84: erevia.v1.EventStatus
+	(*Announce)(nil),           // 85: erevia.v1.Announce
+	(*BossStatus)(nil),         // 86: erevia.v1.BossStatus
+	(*Telegraph)(nil),          // 87: erevia.v1.Telegraph
+	(*PlayerStatus)(nil),       // 88: erevia.v1.PlayerStatus
+	(*SelfPvp)(nil),            // 89: erevia.v1.SelfPvp
+	(*Invite)(nil),             // 90: erevia.v1.Invite
+	(*PartyMember)(nil),        // 91: erevia.v1.PartyMember
+	(*PartyState)(nil),         // 92: erevia.v1.PartyState
+	(*ClanMember)(nil),         // 93: erevia.v1.ClanMember
+	(*ClanState)(nil),          // 94: erevia.v1.ClanState
+	(*ChannelBar)(nil),         // 95: erevia.v1.ChannelBar
+	(*EnchantResult)(nil),      // 96: erevia.v1.EnchantResult
+	(*Storage)(nil),            // 97: erevia.v1.Storage
+	(*EnchantRules)(nil),       // 98: erevia.v1.EnchantRules
+	(*TeleportDest)(nil),       // 99: erevia.v1.TeleportDest
+	(*Progress)(nil),           // 100: erevia.v1.Progress
+	(*StatBlock)(nil),          // 101: erevia.v1.StatBlock
+	(*Hotbar)(nil),             // 102: erevia.v1.Hotbar
+	(*SkillBranch)(nil),        // 103: erevia.v1.SkillBranch
+	(*Welcome)(nil),            // 104: erevia.v1.Welcome
+	(*MapZone)(nil),            // 105: erevia.v1.MapZone
+	(*Spawn)(nil),              // 106: erevia.v1.Spawn
+	(*Despawn)(nil),            // 107: erevia.v1.Despawn
+	(*Snapshot)(nil),           // 108: erevia.v1.Snapshot
+	(*Pong)(nil),               // 109: erevia.v1.Pong
+	(*ChatMessage)(nil),        // 110: erevia.v1.ChatMessage
+	(*Kicked)(nil),             // 111: erevia.v1.Kicked
+	(*SelfStats)(nil),          // 112: erevia.v1.SelfStats
+	(*SkillCooldown)(nil),      // 113: erevia.v1.SkillCooldown
+	(*Inventory)(nil),          // 114: erevia.v1.Inventory
+	(*GroundItemsAdded)(nil),   // 115: erevia.v1.GroundItemsAdded
+	(*GroundItemsRemoved)(nil), // 116: erevia.v1.GroundItemsRemoved
+	(*ItemCooldown)(nil),       // 117: erevia.v1.ItemCooldown
+	(*Appearance)(nil),         // 118: erevia.v1.Appearance
+	(*ItemStack)(nil),          // 119: erevia.v1.ItemStack
+	(*GroundItem)(nil),         // 120: erevia.v1.GroundItem
+	(*NpcInfo)(nil),            // 121: erevia.v1.NpcInfo
+	(*RecipeInfo)(nil),         // 122: erevia.v1.RecipeInfo
+	(*RecipeMaterial)(nil),     // 123: erevia.v1.RecipeMaterial
+	(*ItemBonus)(nil),          // 124: erevia.v1.ItemBonus
+	(*ItemInfo)(nil),           // 125: erevia.v1.ItemInfo
+	(*Entity)(nil),             // 126: erevia.v1.Entity
+	(*EntityState)(nil),        // 127: erevia.v1.EntityState
+	(*HpUpdate)(nil),           // 128: erevia.v1.HpUpdate
+	(*CombatEvent)(nil),        // 129: erevia.v1.CombatEvent
+	(*EffectEvent)(nil),        // 130: erevia.v1.EffectEvent
+	(*EffectEnd)(nil),          // 131: erevia.v1.EffectEnd
+	(*SkillCast)(nil),          // 132: erevia.v1.SkillCast
+	(*Revive)(nil),             // 133: erevia.v1.Revive
+	(*LevelUp)(nil),            // 134: erevia.v1.LevelUp
+	(*SkillInfo)(nil),          // 135: erevia.v1.SkillInfo
+	(*SkillRankInfo)(nil),      // 136: erevia.v1.SkillRankInfo
+	(*FriendCmd)(nil),          // 137: erevia.v1.FriendCmd
+	(*MailCmd)(nil),            // 138: erevia.v1.MailCmd
+	(*Friend)(nil),             // 139: erevia.v1.Friend
+	(*FriendList)(nil),         // 140: erevia.v1.FriendList
+	(*Mail)(nil),               // 141: erevia.v1.Mail
+	(*MailBox)(nil),            // 142: erevia.v1.MailBox
+	(*SocialUpdate)(nil),       // 143: erevia.v1.SocialUpdate
+	(*Emote)(nil),              // 144: erevia.v1.Emote
+	(*QuestDone)(nil),          // 145: erevia.v1.QuestDone
+	(*MailAttachment)(nil),     // 146: erevia.v1.MailAttachment
+	(*AuctionQuery)(nil),       // 147: erevia.v1.AuctionQuery
+	(*AuctionCmd)(nil),         // 148: erevia.v1.AuctionCmd
+	(*AuctionListing)(nil),     // 149: erevia.v1.AuctionListing
+	(*AuctionRules)(nil),       // 150: erevia.v1.AuctionRules
+	(*AuctionUpdate)(nil),      // 151: erevia.v1.AuctionUpdate
 }
 var file_erevia_v1_game_proto_depIdxs = []int32{
-	56,  // 0: erevia.v1.ClientMessage.join:type_name -> erevia.v1.Join
-	57,  // 1: erevia.v1.ClientMessage.move_to:type_name -> erevia.v1.MoveTo
-	58,  // 2: erevia.v1.ClientMessage.ping:type_name -> erevia.v1.Ping
-	59,  // 3: erevia.v1.ClientMessage.chat_send:type_name -> erevia.v1.ChatSend
-	60,  // 4: erevia.v1.ClientMessage.attack:type_name -> erevia.v1.Attack
-	61,  // 5: erevia.v1.ClientMessage.use_skill:type_name -> erevia.v1.UseSkill
-	62,  // 6: erevia.v1.ClientMessage.respawn:type_name -> erevia.v1.Respawn
-	63,  // 7: erevia.v1.ClientMessage.pick_up:type_name -> erevia.v1.PickUp
-	64,  // 8: erevia.v1.ClientMessage.move_item:type_name -> erevia.v1.MoveItem
-	65,  // 9: erevia.v1.ClientMessage.use_item:type_name -> erevia.v1.UseItem
-	66,  // 10: erevia.v1.ClientMessage.destroy_item:type_name -> erevia.v1.DestroyItem
-	67,  // 11: erevia.v1.ClientMessage.buy:type_name -> erevia.v1.Buy
-	68,  // 12: erevia.v1.ClientMessage.sell:type_name -> erevia.v1.Sell
-	51,  // 13: erevia.v1.ClientMessage.allocate_attrs:type_name -> erevia.v1.AllocateAttrs
-	52,  // 14: erevia.v1.ClientMessage.learn_skills:type_name -> erevia.v1.LearnSkills
-	53,  // 15: erevia.v1.ClientMessage.set_hotbar:type_name -> erevia.v1.SetHotbar
-	43,  // 16: erevia.v1.ClientMessage.party_cmd:type_name -> erevia.v1.PartyCmd
-	44,  // 17: erevia.v1.ClientMessage.clan_cmd:type_name -> erevia.v1.ClanCmd
-	45,  // 18: erevia.v1.ClientMessage.invite_reply:type_name -> erevia.v1.InviteReply
-	46,  // 19: erevia.v1.ClientMessage.teleport:type_name -> erevia.v1.Teleport
-	47,  // 20: erevia.v1.ClientMessage.cancel_channel:type_name -> erevia.v1.CancelChannel
-	48,  // 21: erevia.v1.ClientMessage.enchant:type_name -> erevia.v1.Enchant
-	49,  // 22: erevia.v1.ClientMessage.storage_move:type_name -> erevia.v1.StorageMove
-	50,  // 23: erevia.v1.ClientMessage.storage_gold:type_name -> erevia.v1.StorageGold
-	42,  // 24: erevia.v1.ClientMessage.change_look:type_name -> erevia.v1.ChangeLook
-	40,  // 25: erevia.v1.ClientMessage.trade_cmd:type_name -> erevia.v1.TradeCmd
-	39,  // 26: erevia.v1.ClientMessage.craft:type_name -> erevia.v1.Craft
-	38,  // 27: erevia.v1.ClientMessage.client_stats:type_name -> erevia.v1.ClientStats
-	134, // 28: erevia.v1.ClientMessage.friend_cmd:type_name -> erevia.v1.FriendCmd
-	135, // 29: erevia.v1.ClientMessage.mail_cmd:type_name -> erevia.v1.MailCmd
-	36,  // 30: erevia.v1.ClientMessage.ranking_request:type_name -> erevia.v1.RankingRequest
-	37,  // 31: erevia.v1.ClientMessage.achievement_cmd:type_name -> erevia.v1.AchievementCmd
-	33,  // 32: erevia.v1.ClientMessage.spec_cmd:type_name -> erevia.v1.SpecCmd
-	27,  // 33: erevia.v1.ClientMessage.mastery_cmd:type_name -> erevia.v1.MasteryCmd
-	0,   // 34: erevia.v1.MasteryCmd.kind:type_name -> erevia.v1.MasteryCmdKind
-	29,  // 35: erevia.v1.MasteryState.ranks:type_name -> erevia.v1.MasteryRank
-	31,  // 36: erevia.v1.MasteryTree.branches:type_name -> erevia.v1.MasteryBranchInfo
-	32,  // 37: erevia.v1.MasteryTree.nodes:type_name -> erevia.v1.MasteryNodeInfo
-	1,   // 38: erevia.v1.SpecCmd.kind:type_name -> erevia.v1.SpecCmdKind
-	54,  // 39: erevia.v1.SpecInfo.bonus:type_name -> erevia.v1.Attrs
-	2,   // 40: erevia.v1.AchievementCmd.kind:type_name -> erevia.v1.AchievementCmdKind
-	3,   // 41: erevia.v1.TradeCmd.kind:type_name -> erevia.v1.TradeCmdKind
-	41,  // 42: erevia.v1.ChangeLook.look:type_name -> erevia.v1.BodyLook
-	4,   // 43: erevia.v1.PartyCmd.kind:type_name -> erevia.v1.PartyCmdKind
-	5,   // 44: erevia.v1.ClanCmd.kind:type_name -> erevia.v1.ClanCmdKind
-	6,   // 45: erevia.v1.ClanCmd.rank:type_name -> erevia.v1.ClanRank
-	54,  // 46: erevia.v1.AllocateAttrs.add:type_name -> erevia.v1.Attrs
-	55,  // 47: erevia.v1.LearnSkills.ranks:type_name -> erevia.v1.SkillRank
-	16,  // 48: erevia.v1.ChatSend.channel:type_name -> erevia.v1.ChatChannel
-	101, // 49: erevia.v1.ServerMessage.welcome:type_name -> erevia.v1.Welcome
-	103, // 50: erevia.v1.ServerMessage.spawn:type_name -> erevia.v1.Spawn
-	104, // 51: erevia.v1.ServerMessage.despawn:type_name -> erevia.v1.Despawn
-	105, // 52: erevia.v1.ServerMessage.snapshot:type_name -> erevia.v1.Snapshot
-	106, // 53: erevia.v1.ServerMessage.pong:type_name -> erevia.v1.Pong
-	107, // 54: erevia.v1.ServerMessage.chat:type_name -> erevia.v1.ChatMessage
-	108, // 55: erevia.v1.ServerMessage.kicked:type_name -> erevia.v1.Kicked
-	109, // 56: erevia.v1.ServerMessage.self_stats:type_name -> erevia.v1.SelfStats
-	110, // 57: erevia.v1.ServerMessage.skill_cooldown:type_name -> erevia.v1.SkillCooldown
-	111, // 58: erevia.v1.ServerMessage.inventory:type_name -> erevia.v1.Inventory
-	112, // 59: erevia.v1.ServerMessage.ground_added:type_name -> erevia.v1.GroundItemsAdded
-	113, // 60: erevia.v1.ServerMessage.ground_removed:type_name -> erevia.v1.GroundItemsRemoved
-	114, // 61: erevia.v1.ServerMessage.item_cooldown:type_name -> erevia.v1.ItemCooldown
-	115, // 62: erevia.v1.ServerMessage.appearance:type_name -> erevia.v1.Appearance
-	97,  // 63: erevia.v1.ServerMessage.progress:type_name -> erevia.v1.Progress
-	99,  // 64: erevia.v1.ServerMessage.hotbar:type_name -> erevia.v1.Hotbar
-	85,  // 65: erevia.v1.ServerMessage.player_status:type_name -> erevia.v1.PlayerStatus
-	86,  // 66: erevia.v1.ServerMessage.self_pvp:type_name -> erevia.v1.SelfPvp
-	87,  // 67: erevia.v1.ServerMessage.invite:type_name -> erevia.v1.Invite
-	89,  // 68: erevia.v1.ServerMessage.party:type_name -> erevia.v1.PartyState
-	91,  // 69: erevia.v1.ServerMessage.clan:type_name -> erevia.v1.ClanState
-	92,  // 70: erevia.v1.ServerMessage.channel_bar:type_name -> erevia.v1.ChannelBar
-	93,  // 71: erevia.v1.ServerMessage.enchant_result:type_name -> erevia.v1.EnchantResult
-	94,  // 72: erevia.v1.ServerMessage.storage:type_name -> erevia.v1.Storage
-	82,  // 73: erevia.v1.ServerMessage.announce:type_name -> erevia.v1.Announce
-	83,  // 74: erevia.v1.ServerMessage.boss_status:type_name -> erevia.v1.BossStatus
-	78,  // 75: erevia.v1.ServerMessage.quest_log:type_name -> erevia.v1.QuestLog
-	75,  // 76: erevia.v1.ServerMessage.trade:type_name -> erevia.v1.TradeState
-	140, // 77: erevia.v1.ServerMessage.social:type_name -> erevia.v1.SocialUpdate
-	141, // 78: erevia.v1.ServerMessage.emote:type_name -> erevia.v1.Emote
-	70,  // 79: erevia.v1.ServerMessage.ranking:type_name -> erevia.v1.Ranking
-	73,  // 80: erevia.v1.ServerMessage.achievements:type_name -> erevia.v1.Achievements
-	34,  // 81: erevia.v1.ServerMessage.spec_choice:type_name -> erevia.v1.SpecChoice
-	81,  // 82: erevia.v1.ServerMessage.event_status:type_name -> erevia.v1.EventStatus
-	28,  // 83: erevia.v1.ServerMessage.mastery:type_name -> erevia.v1.MasteryState
-	30,  // 84: erevia.v1.ServerMessage.mastery_tree:type_name -> erevia.v1.MasteryTree
-	71,  // 85: erevia.v1.Ranking.level:type_name -> erevia.v1.RankEntry
-	71,  // 86: erevia.v1.Ranking.pvp:type_name -> erevia.v1.RankEntry
-	72,  // 87: erevia.v1.Ranking.clans:type_name -> erevia.v1.ClanRankEntry
-	74,  // 88: erevia.v1.Achievements.list:type_name -> erevia.v1.AchievementInfo
-	76,  // 89: erevia.v1.TradeState.mine:type_name -> erevia.v1.TradeOffer
-	76,  // 90: erevia.v1.TradeState.theirs:type_name -> erevia.v1.TradeOffer
-	77,  // 91: erevia.v1.TradeOffer.items:type_name -> erevia.v1.TradeItem
-	79,  // 92: erevia.v1.QuestLog.quests:type_name -> erevia.v1.QuestInfo
-	142, // 93: erevia.v1.QuestLog.done:type_name -> erevia.v1.QuestDone
-	80,  // 94: erevia.v1.QuestInfo.steps:type_name -> erevia.v1.QuestStepInfo
-	25,  // 95: erevia.v1.QuestInfo.category:type_name -> erevia.v1.QuestCategory
-	7,   // 96: erevia.v1.QuestStepInfo.place:type_name -> erevia.v1.QuestPlaceKind
-	8,   // 97: erevia.v1.EventStatus.invasion:type_name -> erevia.v1.InvasionPhase
-	9,   // 98: erevia.v1.Announce.kind:type_name -> erevia.v1.AnnounceKind
-	10,  // 99: erevia.v1.Telegraph.kind:type_name -> erevia.v1.TelegraphKind
-	11,  // 100: erevia.v1.Telegraph.shape:type_name -> erevia.v1.TelegraphShape
-	12,  // 101: erevia.v1.PlayerStatus.pvp_state:type_name -> erevia.v1.PvpState
-	13,  // 102: erevia.v1.Invite.kind:type_name -> erevia.v1.InviteKind
-	88,  // 103: erevia.v1.PartyState.members:type_name -> erevia.v1.PartyMember
-	6,   // 104: erevia.v1.ClanMember.rank:type_name -> erevia.v1.ClanRank
-	6,   // 105: erevia.v1.ClanState.my_rank:type_name -> erevia.v1.ClanRank
-	90,  // 106: erevia.v1.ClanState.members:type_name -> erevia.v1.ClanMember
-	14,  // 107: erevia.v1.ChannelBar.kind:type_name -> erevia.v1.ChannelKind
-	116, // 108: erevia.v1.Storage.items:type_name -> erevia.v1.ItemStack
-	54,  // 109: erevia.v1.Progress.base:type_name -> erevia.v1.Attrs
-	54,  // 110: erevia.v1.Progress.spent:type_name -> erevia.v1.Attrs
-	55,  // 111: erevia.v1.Progress.ranks:type_name -> erevia.v1.SkillRank
-	98,  // 112: erevia.v1.Progress.per_point:type_name -> erevia.v1.StatBlock
-	123, // 113: erevia.v1.Welcome.entities:type_name -> erevia.v1.Entity
-	132, // 114: erevia.v1.Welcome.skills:type_name -> erevia.v1.SkillInfo
-	102, // 115: erevia.v1.Welcome.zones:type_name -> erevia.v1.MapZone
-	132, // 116: erevia.v1.Welcome.skill_catalog:type_name -> erevia.v1.SkillInfo
-	122, // 117: erevia.v1.Welcome.item_catalog:type_name -> erevia.v1.ItemInfo
-	111, // 118: erevia.v1.Welcome.inventory:type_name -> erevia.v1.Inventory
-	117, // 119: erevia.v1.Welcome.ground_items:type_name -> erevia.v1.GroundItem
-	118, // 120: erevia.v1.Welcome.npcs:type_name -> erevia.v1.NpcInfo
-	97,  // 121: erevia.v1.Welcome.progress:type_name -> erevia.v1.Progress
-	99,  // 122: erevia.v1.Welcome.hotbar:type_name -> erevia.v1.Hotbar
-	100, // 123: erevia.v1.Welcome.branches:type_name -> erevia.v1.SkillBranch
-	86,  // 124: erevia.v1.Welcome.pvp:type_name -> erevia.v1.SelfPvp
-	91,  // 125: erevia.v1.Welcome.clan:type_name -> erevia.v1.ClanState
-	95,  // 126: erevia.v1.Welcome.enchant:type_name -> erevia.v1.EnchantRules
-	83,  // 127: erevia.v1.Welcome.bosses:type_name -> erevia.v1.BossStatus
-	35,  // 128: erevia.v1.Welcome.specs:type_name -> erevia.v1.SpecInfo
-	123, // 129: erevia.v1.Spawn.entity:type_name -> erevia.v1.Entity
-	124, // 130: erevia.v1.Snapshot.states:type_name -> erevia.v1.EntityState
-	125, // 131: erevia.v1.Snapshot.hp:type_name -> erevia.v1.HpUpdate
-	126, // 132: erevia.v1.Snapshot.combat:type_name -> erevia.v1.CombatEvent
-	127, // 133: erevia.v1.Snapshot.effects:type_name -> erevia.v1.EffectEvent
-	130, // 134: erevia.v1.Snapshot.revives:type_name -> erevia.v1.Revive
-	131, // 135: erevia.v1.Snapshot.level_ups:type_name -> erevia.v1.LevelUp
-	128, // 136: erevia.v1.Snapshot.effect_ends:type_name -> erevia.v1.EffectEnd
-	129, // 137: erevia.v1.Snapshot.casts:type_name -> erevia.v1.SkillCast
-	84,  // 138: erevia.v1.Snapshot.telegraphs:type_name -> erevia.v1.Telegraph
-	16,  // 139: erevia.v1.ChatMessage.channel:type_name -> erevia.v1.ChatChannel
-	116, // 140: erevia.v1.Inventory.items:type_name -> erevia.v1.ItemStack
-	117, // 141: erevia.v1.GroundItemsAdded.items:type_name -> erevia.v1.GroundItem
-	41,  // 142: erevia.v1.Appearance.look:type_name -> erevia.v1.BodyLook
-	15,  // 143: erevia.v1.NpcInfo.role:type_name -> erevia.v1.NpcRole
-	96,  // 144: erevia.v1.NpcInfo.dests:type_name -> erevia.v1.TeleportDest
-	119, // 145: erevia.v1.NpcInfo.recipes:type_name -> erevia.v1.RecipeInfo
-	120, // 146: erevia.v1.RecipeInfo.materials:type_name -> erevia.v1.RecipeMaterial
-	17,  // 147: erevia.v1.ItemInfo.kind:type_name -> erevia.v1.ItemKind
-	121, // 148: erevia.v1.ItemInfo.bonus:type_name -> erevia.v1.ItemBonus
-	18,  // 149: erevia.v1.ItemInfo.scroll:type_name -> erevia.v1.ScrollKind
-	19,  // 150: erevia.v1.Entity.kind:type_name -> erevia.v1.EntityKind
-	12,  // 151: erevia.v1.Entity.pvp_state:type_name -> erevia.v1.PvpState
-	41,  // 152: erevia.v1.Entity.look:type_name -> erevia.v1.BodyLook
-	20,  // 153: erevia.v1.CombatEvent.dot:type_name -> erevia.v1.Effect
-	20,  // 154: erevia.v1.EffectEvent.effect:type_name -> erevia.v1.Effect
-	20,  // 155: erevia.v1.EffectEnd.effect:type_name -> erevia.v1.Effect
-	21,  // 156: erevia.v1.SkillInfo.target:type_name -> erevia.v1.SkillTarget
-	20,  // 157: erevia.v1.SkillInfo.effect:type_name -> erevia.v1.Effect
-	133, // 158: erevia.v1.SkillInfo.ranks:type_name -> erevia.v1.SkillRankInfo
-	22,  // 159: erevia.v1.FriendCmd.kind:type_name -> erevia.v1.FriendCmdKind
-	23,  // 160: erevia.v1.MailCmd.kind:type_name -> erevia.v1.MailCmdKind
-	136, // 161: erevia.v1.FriendList.friends:type_name -> erevia.v1.Friend
-	138, // 162: erevia.v1.MailBox.mails:type_name -> erevia.v1.Mail
-	137, // 163: erevia.v1.SocialUpdate.friends:type_name -> erevia.v1.FriendList
-	139, // 164: erevia.v1.SocialUpdate.mail:type_name -> erevia.v1.MailBox
-	24,  // 165: erevia.v1.Emote.kind:type_name -> erevia.v1.EmoteKind
-	25,  // 166: erevia.v1.QuestDone.category:type_name -> erevia.v1.QuestCategory
-	167, // [167:167] is the sub-list for method output_type
-	167, // [167:167] is the sub-list for method input_type
-	167, // [167:167] is the sub-list for extension type_name
-	167, // [167:167] is the sub-list for extension extendee
-	0,   // [0:167] is the sub-list for field type_name
+	59,  // 0: erevia.v1.ClientMessage.join:type_name -> erevia.v1.Join
+	60,  // 1: erevia.v1.ClientMessage.move_to:type_name -> erevia.v1.MoveTo
+	61,  // 2: erevia.v1.ClientMessage.ping:type_name -> erevia.v1.Ping
+	62,  // 3: erevia.v1.ClientMessage.chat_send:type_name -> erevia.v1.ChatSend
+	63,  // 4: erevia.v1.ClientMessage.attack:type_name -> erevia.v1.Attack
+	64,  // 5: erevia.v1.ClientMessage.use_skill:type_name -> erevia.v1.UseSkill
+	65,  // 6: erevia.v1.ClientMessage.respawn:type_name -> erevia.v1.Respawn
+	66,  // 7: erevia.v1.ClientMessage.pick_up:type_name -> erevia.v1.PickUp
+	67,  // 8: erevia.v1.ClientMessage.move_item:type_name -> erevia.v1.MoveItem
+	68,  // 9: erevia.v1.ClientMessage.use_item:type_name -> erevia.v1.UseItem
+	69,  // 10: erevia.v1.ClientMessage.destroy_item:type_name -> erevia.v1.DestroyItem
+	70,  // 11: erevia.v1.ClientMessage.buy:type_name -> erevia.v1.Buy
+	71,  // 12: erevia.v1.ClientMessage.sell:type_name -> erevia.v1.Sell
+	54,  // 13: erevia.v1.ClientMessage.allocate_attrs:type_name -> erevia.v1.AllocateAttrs
+	55,  // 14: erevia.v1.ClientMessage.learn_skills:type_name -> erevia.v1.LearnSkills
+	56,  // 15: erevia.v1.ClientMessage.set_hotbar:type_name -> erevia.v1.SetHotbar
+	46,  // 16: erevia.v1.ClientMessage.party_cmd:type_name -> erevia.v1.PartyCmd
+	47,  // 17: erevia.v1.ClientMessage.clan_cmd:type_name -> erevia.v1.ClanCmd
+	48,  // 18: erevia.v1.ClientMessage.invite_reply:type_name -> erevia.v1.InviteReply
+	49,  // 19: erevia.v1.ClientMessage.teleport:type_name -> erevia.v1.Teleport
+	50,  // 20: erevia.v1.ClientMessage.cancel_channel:type_name -> erevia.v1.CancelChannel
+	51,  // 21: erevia.v1.ClientMessage.enchant:type_name -> erevia.v1.Enchant
+	52,  // 22: erevia.v1.ClientMessage.storage_move:type_name -> erevia.v1.StorageMove
+	53,  // 23: erevia.v1.ClientMessage.storage_gold:type_name -> erevia.v1.StorageGold
+	45,  // 24: erevia.v1.ClientMessage.change_look:type_name -> erevia.v1.ChangeLook
+	43,  // 25: erevia.v1.ClientMessage.trade_cmd:type_name -> erevia.v1.TradeCmd
+	42,  // 26: erevia.v1.ClientMessage.craft:type_name -> erevia.v1.Craft
+	41,  // 27: erevia.v1.ClientMessage.client_stats:type_name -> erevia.v1.ClientStats
+	137, // 28: erevia.v1.ClientMessage.friend_cmd:type_name -> erevia.v1.FriendCmd
+	138, // 29: erevia.v1.ClientMessage.mail_cmd:type_name -> erevia.v1.MailCmd
+	39,  // 30: erevia.v1.ClientMessage.ranking_request:type_name -> erevia.v1.RankingRequest
+	40,  // 31: erevia.v1.ClientMessage.achievement_cmd:type_name -> erevia.v1.AchievementCmd
+	36,  // 32: erevia.v1.ClientMessage.spec_cmd:type_name -> erevia.v1.SpecCmd
+	30,  // 33: erevia.v1.ClientMessage.mastery_cmd:type_name -> erevia.v1.MasteryCmd
+	148, // 34: erevia.v1.ClientMessage.auction_cmd:type_name -> erevia.v1.AuctionCmd
+	0,   // 35: erevia.v1.MasteryCmd.kind:type_name -> erevia.v1.MasteryCmdKind
+	32,  // 36: erevia.v1.MasteryState.ranks:type_name -> erevia.v1.MasteryRank
+	34,  // 37: erevia.v1.MasteryTree.branches:type_name -> erevia.v1.MasteryBranchInfo
+	35,  // 38: erevia.v1.MasteryTree.nodes:type_name -> erevia.v1.MasteryNodeInfo
+	1,   // 39: erevia.v1.SpecCmd.kind:type_name -> erevia.v1.SpecCmdKind
+	57,  // 40: erevia.v1.SpecInfo.bonus:type_name -> erevia.v1.Attrs
+	2,   // 41: erevia.v1.AchievementCmd.kind:type_name -> erevia.v1.AchievementCmdKind
+	3,   // 42: erevia.v1.TradeCmd.kind:type_name -> erevia.v1.TradeCmdKind
+	44,  // 43: erevia.v1.ChangeLook.look:type_name -> erevia.v1.BodyLook
+	4,   // 44: erevia.v1.PartyCmd.kind:type_name -> erevia.v1.PartyCmdKind
+	5,   // 45: erevia.v1.ClanCmd.kind:type_name -> erevia.v1.ClanCmdKind
+	6,   // 46: erevia.v1.ClanCmd.rank:type_name -> erevia.v1.ClanRank
+	57,  // 47: erevia.v1.AllocateAttrs.add:type_name -> erevia.v1.Attrs
+	58,  // 48: erevia.v1.LearnSkills.ranks:type_name -> erevia.v1.SkillRank
+	16,  // 49: erevia.v1.ChatSend.channel:type_name -> erevia.v1.ChatChannel
+	104, // 50: erevia.v1.ServerMessage.welcome:type_name -> erevia.v1.Welcome
+	106, // 51: erevia.v1.ServerMessage.spawn:type_name -> erevia.v1.Spawn
+	107, // 52: erevia.v1.ServerMessage.despawn:type_name -> erevia.v1.Despawn
+	108, // 53: erevia.v1.ServerMessage.snapshot:type_name -> erevia.v1.Snapshot
+	109, // 54: erevia.v1.ServerMessage.pong:type_name -> erevia.v1.Pong
+	110, // 55: erevia.v1.ServerMessage.chat:type_name -> erevia.v1.ChatMessage
+	111, // 56: erevia.v1.ServerMessage.kicked:type_name -> erevia.v1.Kicked
+	112, // 57: erevia.v1.ServerMessage.self_stats:type_name -> erevia.v1.SelfStats
+	113, // 58: erevia.v1.ServerMessage.skill_cooldown:type_name -> erevia.v1.SkillCooldown
+	114, // 59: erevia.v1.ServerMessage.inventory:type_name -> erevia.v1.Inventory
+	115, // 60: erevia.v1.ServerMessage.ground_added:type_name -> erevia.v1.GroundItemsAdded
+	116, // 61: erevia.v1.ServerMessage.ground_removed:type_name -> erevia.v1.GroundItemsRemoved
+	117, // 62: erevia.v1.ServerMessage.item_cooldown:type_name -> erevia.v1.ItemCooldown
+	118, // 63: erevia.v1.ServerMessage.appearance:type_name -> erevia.v1.Appearance
+	100, // 64: erevia.v1.ServerMessage.progress:type_name -> erevia.v1.Progress
+	102, // 65: erevia.v1.ServerMessage.hotbar:type_name -> erevia.v1.Hotbar
+	88,  // 66: erevia.v1.ServerMessage.player_status:type_name -> erevia.v1.PlayerStatus
+	89,  // 67: erevia.v1.ServerMessage.self_pvp:type_name -> erevia.v1.SelfPvp
+	90,  // 68: erevia.v1.ServerMessage.invite:type_name -> erevia.v1.Invite
+	92,  // 69: erevia.v1.ServerMessage.party:type_name -> erevia.v1.PartyState
+	94,  // 70: erevia.v1.ServerMessage.clan:type_name -> erevia.v1.ClanState
+	95,  // 71: erevia.v1.ServerMessage.channel_bar:type_name -> erevia.v1.ChannelBar
+	96,  // 72: erevia.v1.ServerMessage.enchant_result:type_name -> erevia.v1.EnchantResult
+	97,  // 73: erevia.v1.ServerMessage.storage:type_name -> erevia.v1.Storage
+	85,  // 74: erevia.v1.ServerMessage.announce:type_name -> erevia.v1.Announce
+	86,  // 75: erevia.v1.ServerMessage.boss_status:type_name -> erevia.v1.BossStatus
+	81,  // 76: erevia.v1.ServerMessage.quest_log:type_name -> erevia.v1.QuestLog
+	78,  // 77: erevia.v1.ServerMessage.trade:type_name -> erevia.v1.TradeState
+	143, // 78: erevia.v1.ServerMessage.social:type_name -> erevia.v1.SocialUpdate
+	144, // 79: erevia.v1.ServerMessage.emote:type_name -> erevia.v1.Emote
+	73,  // 80: erevia.v1.ServerMessage.ranking:type_name -> erevia.v1.Ranking
+	76,  // 81: erevia.v1.ServerMessage.achievements:type_name -> erevia.v1.Achievements
+	37,  // 82: erevia.v1.ServerMessage.spec_choice:type_name -> erevia.v1.SpecChoice
+	84,  // 83: erevia.v1.ServerMessage.event_status:type_name -> erevia.v1.EventStatus
+	31,  // 84: erevia.v1.ServerMessage.mastery:type_name -> erevia.v1.MasteryState
+	33,  // 85: erevia.v1.ServerMessage.mastery_tree:type_name -> erevia.v1.MasteryTree
+	151, // 86: erevia.v1.ServerMessage.auction:type_name -> erevia.v1.AuctionUpdate
+	74,  // 87: erevia.v1.Ranking.level:type_name -> erevia.v1.RankEntry
+	74,  // 88: erevia.v1.Ranking.pvp:type_name -> erevia.v1.RankEntry
+	75,  // 89: erevia.v1.Ranking.clans:type_name -> erevia.v1.ClanRankEntry
+	77,  // 90: erevia.v1.Achievements.list:type_name -> erevia.v1.AchievementInfo
+	79,  // 91: erevia.v1.TradeState.mine:type_name -> erevia.v1.TradeOffer
+	79,  // 92: erevia.v1.TradeState.theirs:type_name -> erevia.v1.TradeOffer
+	80,  // 93: erevia.v1.TradeOffer.items:type_name -> erevia.v1.TradeItem
+	82,  // 94: erevia.v1.QuestLog.quests:type_name -> erevia.v1.QuestInfo
+	145, // 95: erevia.v1.QuestLog.done:type_name -> erevia.v1.QuestDone
+	83,  // 96: erevia.v1.QuestInfo.steps:type_name -> erevia.v1.QuestStepInfo
+	25,  // 97: erevia.v1.QuestInfo.category:type_name -> erevia.v1.QuestCategory
+	7,   // 98: erevia.v1.QuestStepInfo.place:type_name -> erevia.v1.QuestPlaceKind
+	8,   // 99: erevia.v1.EventStatus.invasion:type_name -> erevia.v1.InvasionPhase
+	9,   // 100: erevia.v1.Announce.kind:type_name -> erevia.v1.AnnounceKind
+	10,  // 101: erevia.v1.Telegraph.kind:type_name -> erevia.v1.TelegraphKind
+	11,  // 102: erevia.v1.Telegraph.shape:type_name -> erevia.v1.TelegraphShape
+	12,  // 103: erevia.v1.PlayerStatus.pvp_state:type_name -> erevia.v1.PvpState
+	13,  // 104: erevia.v1.Invite.kind:type_name -> erevia.v1.InviteKind
+	91,  // 105: erevia.v1.PartyState.members:type_name -> erevia.v1.PartyMember
+	6,   // 106: erevia.v1.ClanMember.rank:type_name -> erevia.v1.ClanRank
+	6,   // 107: erevia.v1.ClanState.my_rank:type_name -> erevia.v1.ClanRank
+	93,  // 108: erevia.v1.ClanState.members:type_name -> erevia.v1.ClanMember
+	14,  // 109: erevia.v1.ChannelBar.kind:type_name -> erevia.v1.ChannelKind
+	119, // 110: erevia.v1.Storage.items:type_name -> erevia.v1.ItemStack
+	57,  // 111: erevia.v1.Progress.base:type_name -> erevia.v1.Attrs
+	57,  // 112: erevia.v1.Progress.spent:type_name -> erevia.v1.Attrs
+	58,  // 113: erevia.v1.Progress.ranks:type_name -> erevia.v1.SkillRank
+	101, // 114: erevia.v1.Progress.per_point:type_name -> erevia.v1.StatBlock
+	126, // 115: erevia.v1.Welcome.entities:type_name -> erevia.v1.Entity
+	135, // 116: erevia.v1.Welcome.skills:type_name -> erevia.v1.SkillInfo
+	105, // 117: erevia.v1.Welcome.zones:type_name -> erevia.v1.MapZone
+	135, // 118: erevia.v1.Welcome.skill_catalog:type_name -> erevia.v1.SkillInfo
+	125, // 119: erevia.v1.Welcome.item_catalog:type_name -> erevia.v1.ItemInfo
+	114, // 120: erevia.v1.Welcome.inventory:type_name -> erevia.v1.Inventory
+	120, // 121: erevia.v1.Welcome.ground_items:type_name -> erevia.v1.GroundItem
+	121, // 122: erevia.v1.Welcome.npcs:type_name -> erevia.v1.NpcInfo
+	100, // 123: erevia.v1.Welcome.progress:type_name -> erevia.v1.Progress
+	102, // 124: erevia.v1.Welcome.hotbar:type_name -> erevia.v1.Hotbar
+	103, // 125: erevia.v1.Welcome.branches:type_name -> erevia.v1.SkillBranch
+	89,  // 126: erevia.v1.Welcome.pvp:type_name -> erevia.v1.SelfPvp
+	94,  // 127: erevia.v1.Welcome.clan:type_name -> erevia.v1.ClanState
+	98,  // 128: erevia.v1.Welcome.enchant:type_name -> erevia.v1.EnchantRules
+	86,  // 129: erevia.v1.Welcome.bosses:type_name -> erevia.v1.BossStatus
+	38,  // 130: erevia.v1.Welcome.specs:type_name -> erevia.v1.SpecInfo
+	126, // 131: erevia.v1.Spawn.entity:type_name -> erevia.v1.Entity
+	127, // 132: erevia.v1.Snapshot.states:type_name -> erevia.v1.EntityState
+	128, // 133: erevia.v1.Snapshot.hp:type_name -> erevia.v1.HpUpdate
+	129, // 134: erevia.v1.Snapshot.combat:type_name -> erevia.v1.CombatEvent
+	130, // 135: erevia.v1.Snapshot.effects:type_name -> erevia.v1.EffectEvent
+	133, // 136: erevia.v1.Snapshot.revives:type_name -> erevia.v1.Revive
+	134, // 137: erevia.v1.Snapshot.level_ups:type_name -> erevia.v1.LevelUp
+	131, // 138: erevia.v1.Snapshot.effect_ends:type_name -> erevia.v1.EffectEnd
+	132, // 139: erevia.v1.Snapshot.casts:type_name -> erevia.v1.SkillCast
+	87,  // 140: erevia.v1.Snapshot.telegraphs:type_name -> erevia.v1.Telegraph
+	16,  // 141: erevia.v1.ChatMessage.channel:type_name -> erevia.v1.ChatChannel
+	119, // 142: erevia.v1.Inventory.items:type_name -> erevia.v1.ItemStack
+	120, // 143: erevia.v1.GroundItemsAdded.items:type_name -> erevia.v1.GroundItem
+	44,  // 144: erevia.v1.Appearance.look:type_name -> erevia.v1.BodyLook
+	15,  // 145: erevia.v1.NpcInfo.role:type_name -> erevia.v1.NpcRole
+	99,  // 146: erevia.v1.NpcInfo.dests:type_name -> erevia.v1.TeleportDest
+	122, // 147: erevia.v1.NpcInfo.recipes:type_name -> erevia.v1.RecipeInfo
+	123, // 148: erevia.v1.RecipeInfo.materials:type_name -> erevia.v1.RecipeMaterial
+	17,  // 149: erevia.v1.ItemInfo.kind:type_name -> erevia.v1.ItemKind
+	124, // 150: erevia.v1.ItemInfo.bonus:type_name -> erevia.v1.ItemBonus
+	18,  // 151: erevia.v1.ItemInfo.scroll:type_name -> erevia.v1.ScrollKind
+	19,  // 152: erevia.v1.Entity.kind:type_name -> erevia.v1.EntityKind
+	12,  // 153: erevia.v1.Entity.pvp_state:type_name -> erevia.v1.PvpState
+	44,  // 154: erevia.v1.Entity.look:type_name -> erevia.v1.BodyLook
+	20,  // 155: erevia.v1.CombatEvent.dot:type_name -> erevia.v1.Effect
+	20,  // 156: erevia.v1.EffectEvent.effect:type_name -> erevia.v1.Effect
+	20,  // 157: erevia.v1.EffectEnd.effect:type_name -> erevia.v1.Effect
+	21,  // 158: erevia.v1.SkillInfo.target:type_name -> erevia.v1.SkillTarget
+	20,  // 159: erevia.v1.SkillInfo.effect:type_name -> erevia.v1.Effect
+	136, // 160: erevia.v1.SkillInfo.ranks:type_name -> erevia.v1.SkillRankInfo
+	22,  // 161: erevia.v1.FriendCmd.kind:type_name -> erevia.v1.FriendCmdKind
+	23,  // 162: erevia.v1.MailCmd.kind:type_name -> erevia.v1.MailCmdKind
+	139, // 163: erevia.v1.FriendList.friends:type_name -> erevia.v1.Friend
+	146, // 164: erevia.v1.Mail.attachment:type_name -> erevia.v1.MailAttachment
+	141, // 165: erevia.v1.MailBox.mails:type_name -> erevia.v1.Mail
+	140, // 166: erevia.v1.SocialUpdate.friends:type_name -> erevia.v1.FriendList
+	142, // 167: erevia.v1.SocialUpdate.mail:type_name -> erevia.v1.MailBox
+	24,  // 168: erevia.v1.Emote.kind:type_name -> erevia.v1.EmoteKind
+	25,  // 169: erevia.v1.QuestDone.category:type_name -> erevia.v1.QuestCategory
+	17,  // 170: erevia.v1.AuctionQuery.kind:type_name -> erevia.v1.ItemKind
+	27,  // 171: erevia.v1.AuctionQuery.sort:type_name -> erevia.v1.AuctionSort
+	26,  // 172: erevia.v1.AuctionCmd.kind:type_name -> erevia.v1.AuctionCmdKind
+	147, // 173: erevia.v1.AuctionCmd.query:type_name -> erevia.v1.AuctionQuery
+	28,  // 174: erevia.v1.AuctionListing.status:type_name -> erevia.v1.AuctionStatus
+	150, // 175: erevia.v1.AuctionUpdate.rules:type_name -> erevia.v1.AuctionRules
+	149, // 176: erevia.v1.AuctionUpdate.results:type_name -> erevia.v1.AuctionListing
+	149, // 177: erevia.v1.AuctionUpdate.mine:type_name -> erevia.v1.AuctionListing
+	178, // [178:178] is the sub-list for method output_type
+	178, // [178:178] is the sub-list for method input_type
+	178, // [178:178] is the sub-list for extension type_name
+	178, // [178:178] is the sub-list for extension extendee
+	0,   // [0:178] is the sub-list for field type_name
 }
 
 func init() { file_erevia_v1_game_proto_init() }
@@ -13311,6 +14317,7 @@ func file_erevia_v1_game_proto_init() {
 		(*ClientMessage_AchievementCmd)(nil),
 		(*ClientMessage_SpecCmd)(nil),
 		(*ClientMessage_MasteryCmd)(nil),
+		(*ClientMessage_AuctionCmd)(nil),
 	}
 	file_erevia_v1_game_proto_msgTypes[43].OneofWrappers = []any{
 		(*ServerMessage_Welcome)(nil),
@@ -13349,14 +14356,15 @@ func file_erevia_v1_game_proto_init() {
 		(*ServerMessage_EventStatus)(nil),
 		(*ServerMessage_Mastery)(nil),
 		(*ServerMessage_MasteryTree)(nil),
+		(*ServerMessage_Auction)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_erevia_v1_game_proto_rawDesc), len(file_erevia_v1_game_proto_rawDesc)),
-			NumEnums:      26,
-			NumMessages:   117,
+			NumEnums:      29,
+			NumMessages:   123,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -79,6 +79,8 @@ func (z *Zone) onSocial(e socialEvent) {
 		z.sendRanking(p)
 	case *pb.AchievementCmd:
 		z.onAchievementCmd(p, m)
+	case *pb.AuctionCmd:
+		z.onAuctionCmd(p, m)
 	}
 }
 

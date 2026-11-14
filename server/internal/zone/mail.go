@@ -42,6 +42,10 @@ func (z *Zone) onMailCmd(p *entity, m *pb.MailCmd) {
 		owner, id := p.id, int64(m.MailId)
 		z.mailJob(p, "read mail", func(ctx context.Context, b SocialBackend) error { return b.MarkMailRead(ctx, owner, id) })
 	case pb.MailCmdKind_MAIL_CMD_DELETE:
+		if z.auctionMailLocked(p, int64(m.MailId)) {
+			z.system(p, "Retire o anexo antes de apagar a carta.")
+			return
+		}
 		owner, id, at := p.id, int64(m.MailId), z.cfg.Clock()
 		z.mailJob(p, "delete mail", func(ctx context.Context, b SocialBackend) error { return b.DeleteMail(ctx, owner, id, at) })
 	}
@@ -66,6 +70,10 @@ func (z *Zone) mailJob(p *entity, what string, op func(ctx context.Context, b So
 				return err
 			})
 		}
+		var atts []MailAttachment
+		if err == nil {
+			atts, err = z.auctionAttachments(ctx, id)
+		}
 		return func() {
 			if z.players[id] != p {
 				return
@@ -83,6 +91,7 @@ func (z *Zone) mailJob(p *entity, what string, op func(ctx context.Context, b So
 					SentAtMs: m.SentAt.UnixMilli(), Read: m.Read,
 				})
 			}
+			z.auctionInbox(p, box, atts) // anexos da casa de leilões
 			z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Social{Social: &pb.SocialUpdate{Mail: box}}})
 		}
 	})
