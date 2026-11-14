@@ -87,6 +87,8 @@ func MapConfig(base Config, id string, enabled []string) (Config, error) {
 		cfg.NoTown = true
 		cfg.InvasionChance = 0
 		cfg.Clans, cfg.Bosses = nil, nil
+		// Raros: só no mapa principal (um de cada no mundo; a hora salva é uma linha só).
+		cfg.NoRares = true
 	}
 	return cfg, nil
 }

@@ -10320,6 +10320,7 @@ type Entity struct {
 	Raid          bool                   `protobuf:"varint,25,opt,name=raid,proto3" json:"raid,omitempty"` // raid boss (barra no topo da tela)
 	Spec          string                 `protobuf:"bytes,26,opt,name=spec,proto3" json:"spec,omitempty"`  // jogadores: especialização (SpecInfo.id; "" = nenhuma)
 	Tint          string                 `protobuf:"bytes,27,opt,name=tint,proto3" json:"tint,omitempty"`  // monstros: cor da variante (#rrggbb; "" = a do modelo)
+	Rare          bool                   `protobuf:"varint,40,opt,name=rare,proto3" json:"rare,omitempty"` // monstro raro (named): nome dourado e selo no quadro do alvo
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -10541,6 +10542,13 @@ func (x *Entity) GetTint() string {
 		return x.Tint
 	}
 	return ""
+}
+
+func (x *Entity) GetRare() bool {
+	if x != nil {
+		return x.Rare
+	}
+	return false
 }
 
 type EntityState struct {
@@ -12829,7 +12837,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\vweapon_type\x18\x15 \x01(\tR\n" +
 	"weaponType\x12-\n" +
 	"\x06scroll\x18\x16 \x01(\x0e2\x15.erevia.v1.ScrollKindR\x06scroll\x12\x18\n" +
-	"\ablessed\x18\x17 \x01(\bR\ablessed\"\xae\x05\n" +
+	"\ablessed\x18\x17 \x01(\bR\ablessed\"\xc2\x05\n" +
 	"\x06Entity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\f\n" +
@@ -12858,7 +12866,8 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x04look\x18\x18 \x01(\v2\x13.erevia.v1.BodyLookR\x04look\x12\x12\n" +
 	"\x04raid\x18\x19 \x01(\bR\x04raid\x12\x12\n" +
 	"\x04spec\x18\x1a \x01(\tR\x04spec\x12\x12\n" +
-	"\x04tint\x18\x1b \x01(\tR\x04tint\"\xa1\x01\n" +
+	"\x04tint\x18\x1b \x01(\tR\x04tint\x12\x12\n" +
+	"\x04rare\x18( \x01(\bR\x04rare\"\xa1\x01\n" +
 	"\vEntityState\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x02R\x01x\x12\f\n" +

@@ -60,6 +60,9 @@ type Config struct {
 	MapTitle string
 	Gates    []GateDef
 	NoTown   bool
+	// NoRares: sem monstros raros (rares.go). Eles são do mapa principal: a área de cada um
+	// está nas coordenadas dele e a hora da próxima aparição é uma linha só no banco.
+	NoRares bool
 }
 
 func DefaultConfig() Config {
@@ -291,6 +294,8 @@ type Zone struct {
 
 	paths []*entity   // fila de caminhos longos (ver pathqueue.go)
 	adm   *adminState // portal de administração (admin_actions.go e admin_ops.go)
+
+	rares rareWorld // monstros raros (rares.go)
 
 	mgr *Manager // zonas do processo e barramento (nil = zona sozinha, como nos testes)
 }
@@ -1077,6 +1082,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		Dead: e.dead, Scale: float32(e.scale),
 		Boss: e.mon != nil && e.mon.def.Boss,
 		Raid: e.mon != nil && e.mon.def.Raid,
+		Rare: e.mon != nil && e.mon.def.Rare != nil,
 	}
 	if e.mon != nil {
 		out.Tint = e.mon.def.Tint

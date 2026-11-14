@@ -1,6 +1,9 @@
 package game
 
-import "strings"
+import (
+	"math/bits"
+	"strings"
+)
 
 // Conquistas: definidas por dados, como as missões. Cada uma anda com um acontecimento
 // que o servidor já valida (abate, nível, encantamento, troca, criação, missão, PvP e
@@ -30,6 +33,27 @@ type AchievementDef struct {
 	Goal   AchGoal
 	Target string
 	Count  int
+	// Each: cada alvo de Target conta uma vez só (Count = quantos alvos). O progresso fica
+	// salvo como um conjunto de bits (o bit i é o i-ésimo alvo); ver Mark e Progress.
+	Each bool
+}
+
+// Mark: o progresso depois de um acontecimento com o alvo target (Each: liga o bit dele).
+func (a *AchievementDef) Mark(cur int, target string) int {
+	for i, t := range strings.Split(a.Target, "|") {
+		if t == target {
+			return cur | 1<<i
+		}
+	}
+	return cur
+}
+
+// Progress: quanto do Count já foi feito (Each: quantos alvos diferentes).
+func (a *AchievementDef) Progress(cur int) int {
+	if a.Each {
+		return bits.OnesCount(uint(cur))
+	}
+	return cur
 }
 
 // Threshold: o acontecimento traz um valor (nível, +N, raridade) comparado com Count; as
@@ -60,7 +84,8 @@ type AchievementState struct {
 }
 
 // skeletons: monstros que contam para "Quebra-Ossos".
-const skeletons = "skeleton_minion|skeleton_warrior|skeleton_rogue|skeleton_mage|bone_guard|bone_lord|ozrhal"
+const skeletons = "skeleton_minion|skeleton_warrior|skeleton_rogue|skeleton_mage|bone_guard|bone_lord|ozrhal|" +
+	"rare_ossudo|rare_captain|rare_vossk|captain_guard"
 
 // AchievementList: o catálogo, na ordem em que o cliente mostra.
 var AchievementList = []*AchievementDef{
@@ -78,6 +103,8 @@ var AchievementList = []*AchievementDef{
 	{ID: "first_trade", Name: "Negócio Fechado", Text: "Concluir uma troca com outro jogador.", Title: "Mercador", Goal: AchTrade, Count: 1},
 	{ID: "craft_legend", Name: "Forja Lendária", Text: "Criar um item lendário no Ferreiro.", Title: "Mestre Ferreiro", Goal: AchCraft, Count: int(GradeLegendary)},
 	{ID: "pvp_win", Name: "Duelista", Text: "Vencer um jogador em combate (que estava lutando).", Title: "Duelista", Goal: AchPvPWin, Count: 1},
+	{ID: "rare_hunter", Name: "Caçador de Raros", Text: "Derrotar os 4 monstros raros: Ossudo, o Teimoso; Capitão Ossudo; Vossk, o Cinzento; e Ômrun, Golem Ancião.",
+		Title: "Caçador de Raros", Goal: AchKill, Target: "rare_ossudo|rare_captain|rare_vossk|rare_omrun", Count: 4, Each: true},
 }
 
 // Achievements: as conquistas por id.

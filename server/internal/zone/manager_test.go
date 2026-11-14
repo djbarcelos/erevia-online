@@ -409,3 +409,24 @@ func TestEnabledMaps(t *testing.T) {
 		t.Fatalf("EREVIA_ZONES: %v", got)
 	}
 }
+
+// Os raros são do mapa principal: na clareira, o hospedeiro (o mesmo esqueleto) nunca
+// renasce raro, mesmo com a chance forçada (senão haveria dois do mesmo raro no mundo e
+// duas zonas gravando a mesma linha da hora da aparição).
+func TestRaresOnlyOnTheMainMap(t *testing.T) {
+	now := noon
+	z := rareZone(&now, fixed("skeleton_minion", 3, 60, 0))
+	z.cfg.NoRares = true
+	m := z.onlyMonster()
+	z.respawn(t, m)
+	if m.mon.def.Rare != nil {
+		t.Fatalf("raro (%s) numa zona sem raros", m.mon.def.ID)
+	}
+	cfg, err := MapConfig(testConfig(), MapTest, []string{world.StarterMap, MapTest})
+	if err != nil || !cfg.NoRares {
+		t.Fatalf("a clareira tem de vir sem raros (%v)", err)
+	}
+	if cfg, _ := MapConfig(testConfig(), world.StarterMap, []string{world.StarterMap}); cfg.NoRares {
+		t.Fatal("o mapa principal tem raros")
+	}
+}
