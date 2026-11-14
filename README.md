@@ -276,6 +276,13 @@ O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem tr
 | `v_quit_level` | Último nível de quem não joga há mais de 7 dias |
 | `v_fps` | FPS médio e dos piores momentos, por região e tipo de aparelho |
 | `v_items_daily` | Itens que entraram e saíram do jogo por dia (para caçar duplicação) |
+| `v_level_playtime` | Tempo **de jogo** (soma das sessões) para passar de cada nível, por classe: média, mediana e p75 |
+| `v_xp_sources` | XP por fonte (monstro, grupo, noite, XP em dobro, missão, invasão, morte) e por faixa de nível |
+| `v_level_kills_deaths` | Abates e mortes por nível do jogador |
+| `v_gold_per_hour` | Ouro ganho e gasto por hora de jogo, por faixa |
+| `v_level_reached` | Funil: quantos chegaram a cada nível e quantos pararam nele |
+
+**Progressão** ([docs/progressao.md](docs/progressao.md)): a XP ganha não vai uma linha por abate; a zona soma por personagem, nível e fonte e grava um evento `xp` a cada minuto, ao subir e ao sair. Ao desligar, a zona fecha a sessão de quem está online antes de a telemetria esvaziar a fila (senão todo deploy perderia o tempo de jogo). As consultas prontas estão em `server/internal/store/queries/progressao.sql`, e as tabelas aparecem no portal em `/admin#progressao`.
 
 **Erros do servidor** (também em `game_events`, no máximo 1 linha por grupo a cada minuto, com a contagem acumulada em `amount`): `server_error` é um panic recuperado (a zona segue e só o jogador da mensagem cai; `ref` = hash da stack, `extra` com onde, jogador, mensagem, stack e versão), `slow_tick` é um tick acima de 50 ms (`extra.systems` = os sistemas mais lentos) e `db_error` é uma falha ao gravar no banco (`ref` = operação). Exemplo: `SELECT kind, ref, sum(amount) AS vezes, max(at) AS ultima, max(extra->>'where') AS onde, max(extra->>'version') AS versao FROM game_events WHERE kind IN ('server_error', 'slow_tick', 'db_error') AND at > now() - interval '1 day' GROUP BY 1, 2 ORDER BY 3 DESC;`
 

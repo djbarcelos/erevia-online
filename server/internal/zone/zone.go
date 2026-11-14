@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -245,6 +246,10 @@ type Zone struct {
 	telemetry     chan GameEvent
 	eventSink     EventSink
 	droppedEvents int
+	xpTally       xpTallies     // XP por fonte, gravada a cada minuto (xptally.go)
+	stopped       chan struct{} // fechado quando a zona para (a telemetria espera o fim das sessões)
+	telemetryDone chan struct{} // fechado quando a telemetria gravou o que faltava (TelemetryDone)
+	telemetryOnce sync.Once
 	bossBackend   BossBackend
 	bossJobs      chan BossData
 	telegraphs    []*telegraph
@@ -295,6 +300,8 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		storages:       map[int64]*storage{},
 		modJobs:        make(chan modJob, modJobQueue),
 		telemetry:      make(chan GameEvent, telemetryQueue),
+		stopped:        make(chan struct{}),
+		telemetryDone:  make(chan struct{}),
 		bossJobs:       make(chan BossData, 16),
 		eventJobs:      make(chan EventData, 16),
 		socialJobs:     make(chan socialJob, socialJobQueue),
@@ -390,6 +397,8 @@ func (z *Zone) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			z.runSystem(sysXPTally, z.endSessions) // fim de sessão e XP de quem estava online (telemetry.go)
+			close(z.stopped)
 			z.saveAll(true)
 			if z.saves != nil {
 				close(z.saves)
@@ -724,6 +733,7 @@ func (z *Zone) removePlayer(id uint32) {
 		delete(z.byName, strings.ToLower(p.name))
 	}
 	z.forgetTarget(id)
+	z.endXPTally(p)
 	z.track(p, "session", "end", int64(z.cfg.Clock().Sub(p.pl.joinedAt).Seconds()), nil)
 	if p.pl.trade != nil {
 		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
@@ -788,6 +798,7 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysLeaveTown, z.checkLeaveTown)
 		z.runSystem(sysTrades, z.checkTrades)
 		z.runSystem(sysXP2, z.updateXP2)
+		z.runSystem(sysXPTally, z.flushXPTallies)
 		if len(z.pending) > 0 {
 			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}

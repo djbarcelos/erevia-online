@@ -87,6 +87,7 @@ func (z *Zone) kill(dead, killer *entity) {
 	case !byPlayer && (killer == nil || killer.mon == nil || !killer.mon.invader):
 		dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level) // morrer defendendo a cidade não custa XP
 	}
+	z.tallyXP(dead, xpDeath, dead.pl.xp-before) // telemetria (xptally.go)
 	dead.pl.statsDirty = true
 	z.forgetTarget(dead.id)
 	if chaotic {
