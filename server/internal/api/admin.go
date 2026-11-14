@@ -91,6 +91,7 @@ func (a *API) registerAdmin(mux *http.ServeMux) {
 	m.HandleFunc("GET /api/admin/me", a.handleAdminMe)
 	m.HandleFunc("GET /api/admin/overview", a.handleAdminOverview)
 	m.HandleFunc("GET /api/admin/gm-log", a.handleAdminGMLog)
+	a.registerAdminBugReports(m)
 	m.HandleFunc("GET /api/admin/progression", a.handleAdminProgression)
 	mux.Handle("/api/admin/", a.AdminOnly(m))
 }

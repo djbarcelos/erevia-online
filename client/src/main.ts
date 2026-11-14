@@ -41,8 +41,10 @@ import {
 import { classInfo } from "./classes";
 import { Connection } from "./net/connection";
 import { startPerfSampler } from "./net/perf-sampler";
+import { ClientInvariants } from "./net/invariants";
 import { clearResume, readResume, reconnect, type Resume } from "./net/resume";
 import { Chat } from "./ui/chat";
+import { bugFromChat, noteServerMessage, openBugDialog, type BugDeps } from "./ui/bug-report";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
@@ -156,6 +158,7 @@ function play(character: CharacterInfo, resume?: Resume): void {
   const backlog: ServerMessage[] = [];
 
   conn.onMessage = (msg) => {
+    noteServerMessage(msg); // tipos e ids das últimas mensagens, para o /bug
     if (msg.msg.case === "welcome") {
       started = true;
       clearResume();
@@ -524,6 +527,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     return { characterId: character.id, region: p ? regionAt(regions, p.x, p.z).name : undefined, x: p?.x, z: p?.z, fps: world.engine.getFps(), ping: conn.ping };
   });
   dayNight.setRegions(regions);
+  // Invariantes do cliente: checagens baratas 1×/s (net/invariants.ts).
+  const invariants = new ClientInvariants({
+    engine: world.engine,
+    scene: world.scene,
+    camera: world.camera,
+    localId: welcome.yourId,
+    forEachEntity: (cb) => entities.forEachProbe(cb),
+    regionAt: (x, z) => regionAt(regions, x, z).name,
+    focus: () => entities.localPosition(),
+  });
   const mapSource = {
     world: worldData,
     mapCanvas: renderMapCanvas(worldData),
@@ -695,6 +708,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   const chat = new Chat(hud.chatRoot, character.name, (text, to, channel) => conn.chat(text, to, channel));
   chat.onPartyInvite = inviteParty;
+  // /bug completo (chat e Configurações → Sobre → Relatar problema): contexto + print.
+  const bugDeps: BugDeps = {
+    characterId: character.id,
+    scene: world.scene,
+    ping: () => conn.ping,
+    position: () => entities.localPosition(),
+    region: () => {
+      const p = entities.localPosition();
+      return p ? regionAt(regions, p.x, p.z).name : undefined;
+    },
+    phase: () => clock.phase(),
+    fps: () => invariants.fpsSummary(),
+    players: () => entities.count,
+    viaChat: (text) => conn.chat(`/bug ${text}`, ""),
+  };
+  chat.onBug = (text) => bugFromChat(text, bugDeps, (line) => chat.system(line));
   // Raid boss: barra no topo, anúncios, avisos no chão e o estado dos chefes no mapa.
   const serverOffset = Number(welcome.serverTimeMs) - Date.now();
   const serverNow = () => Date.now() + serverOffset;
@@ -1153,6 +1182,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         },
         info: () => ({ account: "", character: character.name, level: me().myLevel, ping: conn.ping, online: entities.count }),
         news: () => void wm.show("news"),
+        reportBug: () => {
+          close();
+          openBugDialog(bugDeps);
+        },
       }),
   });
   reg(whatsNewDef());
@@ -1391,6 +1424,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       raid: () => raid.all(),
       raidCmd: (args: string) => conn.chat(`/raid ${args}`, ""),
       clanCmd: (kind: number, opts: { name?: string; targetId?: number; text?: string }) => conn.clanCmd(kind, opts),
+      /** Invariantes do cliente: rules, broken(), provoke(regra), provokeAll(). */
+      invariants: invariants.devHooks(),
+      /** /bug completo sem passar pelo campo do chat (testes). */
+      bug: (text: string) => bugFromChat(text, bugDeps, (line) => chat.system(line)),
     };
   }
 
@@ -1421,6 +1458,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   return {
     dispose() {
       setErrorContext(null);
+      invariants.dispose();
       unwatchEngine();
       auto.stop();
       questGo.stop();
@@ -1453,6 +1491,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "spawn": {
           const e = msg.msg.value.entity;
           if (e) {
+            invariants.noteSpawn(e.id, entities.info(e.id) !== undefined, e.kind);
             entities.add(e, true);
             raid.onSpawn(e.id, e.model, e.x, e.z);
           }
@@ -1461,10 +1500,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "despawn":
           if (msg.msg.value.id === targetId) selectTarget(0);
           entities.remove(msg.msg.value.id);
+          invariants.noteDespawn(msg.msg.value.id);
           break;
         case "snapshot": {
           const snap = msg.msg.value;
           for (const s of snap.states) entities.applyState(s);
+          invariants.noteStates(snap.states);
           // Ordem de encenação: primeiro os golpes (cada um sabe quando encosta), depois a
           // vida, os efeitos e as mortes, que esperam o golpe chegar no alvo.
           for (const ev of snap.casts) entities.onSkillCast(ev);
@@ -1508,6 +1549,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           lastXp = s.xp;
           lastStats = s;
           hud.setStats(s);
+          invariants.stats(s);
           if (castChanged) hud.setSkills(learnedActives());
           for (const fn of statsListeners) fn();
           break;

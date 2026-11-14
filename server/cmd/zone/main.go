@@ -158,6 +158,7 @@ func run(log *slog.Logger) error {
 
 	// Portal de administração (/admin e /api/admin/*): só GM; "online agora" vem da zona pelo canal.
 	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: z})
+	httpAPI.SetBugZone(z)
 	mux := http.NewServeMux()
 	httpAPI.Register(mux)
 	mux.Handle("/ws", gamenet.NewServer(z, &wsBackend{api: httpAPI, store: st}, log, origins))
