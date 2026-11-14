@@ -101,7 +101,7 @@ func runChaos(cfg chaosConfig) int {
 		cfg: cfg, seed: seed, tag: shortTag(cfg.prefix),
 		actions: map[string]int64{}, sent: map[string]int64{}, kicks: map[string]int64{}, errs: map[string]int64{},
 		trades: map[string]int64{},
-		sig: make([]uint64, cfg.bots), steps: make([]int, cfg.bots),
+		sig:    make([]uint64, cfg.bots), steps: make([]int, cfg.bots),
 	}
 	for i := range cfg.bots {
 		run.names = append(run.names, fmt.Sprintf("%s%03d", cfg.prefix, i))

@@ -102,7 +102,7 @@ type chaosSession struct {
 	mails      []uint64
 	titles     []string
 	channel    bool
-	asked      uint32    // último convidado para trocar (o bot fica perto dele)
+	asked      uint32 // último convidado para trocar (o bot fica perto dele)
 	askedAt    time.Time
 }
 

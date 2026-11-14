@@ -574,7 +574,6 @@ func actParty(b *chaosBot, s *chaosSession, r [6]uint64) {
 	b.emit(s, label, &pb.ClientMessage{Msg: &pb.ClientMessage_PartyCmd{PartyCmd: m}})
 }
 
-
 func (b *chaosBot) clanName(r uint64) string {
 	return fmt.Sprintf("K%s%02d", b.run.tag, pickN(r, 12)) // poucos nomes: colisões de propósito
 }
