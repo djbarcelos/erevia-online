@@ -6,6 +6,8 @@ export interface TeleportActions {
   travel(npcId: number, destId: number): void;
   /** Karma impede o teleporte (o servidor confere de novo). */
   karma(): number;
+  /** Viajante (Maestria): desconto no preço (0–1; o servidor cobra o mesmo). */
+  discount(): number;
 }
 
 /** Pedra de Teleporte: lista de destinos com o preço; viajar leva 2 s parado. */
@@ -66,6 +68,12 @@ export class TeleportWindow {
     this.root.remove();
   }
 
+  /** Preço com o desconto, arredondado como no servidor. */
+  private priceOf(base: number): number {
+    const d = this.actions.discount();
+    return d > 0 ? Math.round(base * (1 - d)) : base;
+  }
+
   private render(): void {
     this.goldEl.textContent = fmt.format(this.store.gold);
     if (!this.isOpen) return;
@@ -74,7 +82,8 @@ export class TeleportWindow {
     this.note.hidden = !karma;
     this.list.replaceChildren();
     for (const d of this.dests) {
-      const poor = this.store.gold < d.price;
+      const price = this.priceOf(d.price);
+      const poor = this.store.gold < price;
       const go = button("Viajar", "btn btn-gold shop-btn", () => {
         this.actions.travel(this.npcId, d.id);
         this.close();
@@ -88,7 +97,7 @@ export class TeleportWindow {
           "div",
           "shop-name",
           el("strong", null, d.name),
-          el("span", "shop-price", `${fmt.format(d.price)} moedas`),
+          el("span", "shop-price", `${fmt.format(price)} moedas${price < d.price ? " (Viajante)" : ""}`),
           d.id === this.suggested ? el("span", "tp-quest", "◎ Caminho da missão") : null,
         ),
         go,

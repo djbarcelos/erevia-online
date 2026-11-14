@@ -79,13 +79,19 @@ func (z *Zone) kill(dead, killer *entity) {
 	}
 	z.track(dead, "death", cause, 0, nil)
 	before := dead.pl.xp
+	losses := 0
 	switch {
 	case chaotic:
-		for range pkXPLossFactor {
-			dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level)
-		}
+		losses = pkXPLossFactor
 	case !byPlayer && (killer == nil || killer.mon == nil || !killer.mon.invader):
-		dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level) // morrer defendendo a cidade não custa XP
+		losses = 1 // morrer defendendo a cidade não custa XP
+	}
+	for range losses {
+		dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level)
+	}
+	var barLost int64
+	if losses > 0 && dead.level >= game.MasteryLevel {
+		barLost = z.masteryDeath(dead, losses) // no 30, sai da barra de Maestria (sem tirar ponto)
 	}
 	dead.pl.statsDirty = true
 	z.forgetTarget(dead.id)
@@ -105,12 +111,17 @@ func (z *Zone) kill(dead, killer *entity) {
 	if lost := before - dead.pl.xp; lost > 0 {
 		msg += fmt.Sprintf(" e perdeu %d de XP", lost)
 	}
+	if barLost > 0 {
+		msg += fmt.Sprintf(" e perdeu %d de XP da barra de Maestria", barLost)
+	}
 	z.system(dead, msg+". Clique em \"Voltar à cidade\".")
 }
 
-// grantXP soma XP e sobe de nível quantas vezes for preciso.
+// grantXP soma XP e sobe de nível quantas vezes for preciso. No nível máximo, a XP enche
+// a barra de Maestria (mastery.go).
 func (z *Zone) grantXP(p *entity, xp int64) {
 	if p.level >= game.MaxLevel {
+		z.grantMasteryXP(p, xp)
 		return
 	}
 	p.pl.xp += xp
@@ -135,6 +146,9 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	z.questLevelUp(p) // também reenvia o lugar dos objetivos que dependem do nível
 	z.achValue(p, game.AchLevel, "", p.level)
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
+	if p.level >= game.MasteryLevel {
+		z.masteryOpened(p)
+	}
 }
 
 // respawnPlayer leva o jogador morto de volta à cidade, com vida e mana cheias.

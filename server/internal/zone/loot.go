@@ -35,6 +35,7 @@ type groundItem struct {
 // dropLoot sorteia o que o monstro deixa e espalha perto do corpo.
 func (z *Zone) dropLoot(m *entity, owner uint32) {
 	drops := game.RollLoot(m.mon.def, m.level, z.rng)
+	z.masteryLoot(owner, m.mon.def, drops) // Bolsa Farta e Olho do Coletor (Maestria)
 	if len(drops) == 0 {
 		return
 	}
