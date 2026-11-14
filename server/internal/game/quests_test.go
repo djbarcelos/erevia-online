@@ -10,26 +10,35 @@ func TestQuestDataIsConsistent(t *testing.T) {
 	if Quests[TutorialStart] == nil {
 		t.Fatalf("tutorial start %q missing", TutorialStart)
 	}
+	// Toda missão sem Unlock vem de uma sequência: a do tutorial ou a que começa numa
+	// missão de nível (ex.: a da subclasse).
 	seen := map[string]bool{}
-	for id := TutorialStart; id != ""; id = Quests[id].Next {
-		if seen[id] {
-			t.Fatalf("quest chain loops at %q", id)
-		}
-		seen[id] = true
-		if Quests[id] == nil {
-			t.Fatalf("chain points to missing quest %q", id)
+	follow := func(start string) {
+		for id := start; id != ""; id = Quests[id].Next {
+			if Quests[id] == nil {
+				t.Fatalf("chain points to missing quest %q", id)
+			}
+			if Quests[id].Unlock == 0 && seen[id] {
+				t.Fatalf("quest chain loops at %q", id)
+			}
+			if Quests[id].Unlock == 0 {
+				seen[id] = true
+			}
 		}
 	}
+	follow(TutorialStart)
 	chained := 0
 	for _, q := range Quests {
 		if q.Unlock == 0 {
 			chained++
 		} else if q.Unlock < 1 || q.Unlock > MaxLevel || q.Next != "" && Quests[q.Next] == nil {
 			t.Errorf("%s: unlock level %d or next %q is wrong", q.ID, q.Unlock, q.Next)
+		} else {
+			follow(q.Next)
 		}
 	}
 	if len(seen) != chained {
-		t.Fatalf("tutorial chain reaches %d of %d quests", len(seen), chained)
+		t.Fatalf("as sequências chegam a %d de %d missões", len(seen), chained)
 	}
 	for _, q := range Quests {
 		if q.Title == "" || q.Text == "" || len(q.Steps) == 0 {
@@ -39,7 +48,7 @@ func TestQuestDataIsConsistent(t *testing.T) {
 			if s.Count < 1 || s.Text == "" {
 				t.Errorf("%s: step %+v needs count and text", q.ID, s)
 			}
-			if s.Goal == GoalTalk && s.Target != TalkMaster {
+			if s.Goal == GoalTalk && s.Target != TalkMaster && s.Target != TalkGuardian {
 				t.Errorf("%s: unknown talk target %q", q.ID, s.Target)
 			}
 			if s.Goal == GoalKill && s.Target != "" {

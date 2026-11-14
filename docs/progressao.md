@@ -225,6 +225,19 @@ noite (`night_bonus`); o resto é `monster` (sozinho) ou `party` (em grupo). Por
 o extra da recuperação do 2º personagem (`catchup`, também nas missões) e o da vitalidade
 (`vitality`). A soma das fontes é a XP que o jogador ganhou. No nível máximo a XP não entra, então não é somada.
 
+### Subclasse (tunnel#156)
+
+A subclasse começa no 20 e sobe pela mesma `xpTable`: do 20 ao 30 são mais ~40 h de jogo,
+um pouco menos com o bônus Duas Sendas (+5% de XP para a classe mais baixa, depois que
+uma subclasse chega ao 30). Para não misturar essa subida com a da classe principal:
+
+- a subida de nível de uma subclasse vai como `level` com `ref = 'subclass'` (e
+  `extra.class`); a da principal continua com `ref` vazio. As views da migração 00018 ainda
+  não separam as duas: quem quiser só a principal filtra `ref <> 'subclass'`;
+- o extra do Duas Sendas é a fonte `subclass_bonus` do `xp`;
+- `class_switch` (ref = a classe nova, amount = o nível dela, `extra.from`, `from_level` e
+  `unequipped`) anota cada troca, e `subclass` (ref = a classe) cada subclasse obtida.
+
 ## O que olhar quando houver dados
 
 | Pergunta | View | O que comparar |

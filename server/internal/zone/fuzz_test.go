@@ -120,6 +120,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.ProgressAction(ctx, id, m.BestiaryCmd)
 	case *pb.ClientMessage_SpecCmd:
 		z.ProgressAction(ctx, id, m.SpecCmd)
+	case *pb.ClientMessage_SubclassCmd:
+		z.ProgressAction(ctx, id, m.SubclassCmd)
 	case *pb.ClientMessage_TradeCmd:
 		z.Trade(ctx, id, m.TradeCmd)
 	case *pb.ClientMessage_AuctionCmd:
@@ -421,12 +423,13 @@ func newFuzzHarness(t *testing.T, r *fuzzReader) *fuzzHarness {
 			node := game.MasteryNodes[r.pick(len(game.MasteryNodes))].ID
 			mastery.Ranks = map[string]int{node: []int{1, 3, game.MasteryNodeMax, 99}[r.pick(4)]}
 		}
+		classes, quests := fuzzSubclass(class, level)
 		h.peers[i] = &fuzzPeer{}
 		h.z.handle(joinEvent{info: JoinInfo{
 			ID: h.ids[i], Name: h.names[i], Class: class, X: pos.X, Z: pos.Z,
 			XP: game.XPLevelStart(level), Gold: fuzzGold[r.pick(len(fuzzGold))], Items: items,
 			AccountID: h.accts[i], Karma: karma, Storage: st, GM: h.gm && i == 0,
-			Spec: spec, Mastery: mastery, Peer: h.peers[i],
+			Spec: spec, Mastery: mastery, Classes: classes, Quests: quests, Peer: h.peers[i],
 		}})
 		// Reputação: neutro ou exaltado com as duas facções (a loja do quadro abre tudo).
 		if r.byte()&1 != 0 {
@@ -830,7 +833,7 @@ func fuzzSpotFor(msg *pb.ClientMessage) byte {
 		return 0
 	}
 	id := uint32(inner.Get(nf).Uint())
-	if n := id - npcIDBase; id >= npcIDBase && n <= fuzzAuctioneerID-npcIDBase {
+	if n := id - npcIDBase; id >= npcIDBase && n <= fuzzGuardianID-npcIDBase {
 		return byte(n)
 	}
 	return 0
@@ -858,9 +861,23 @@ func fuzzFixedSetup(spot byte) []byte {
 	return b
 }
 
-// fuzzMasterID: a Mestra dos Caminhos (depois dela só o Quadro de Contratos, boardID; ver spawnNPCs).
-// fuzzMasterID: a Mestra dos Caminhos (ver spawnNPCs).
-var fuzzMasterID = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1)
+// fuzzMasterID: a Mestra dos Caminhos (depois dela vêm o Quadro de Contratos, boardID, o
+// Leiloeiro e o Guardião das Sendas, o último NPC; ver spawnNPCs).
+var (
+	fuzzMasterID   = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1)
+	fuzzGuardianID = guardianID
+)
+
+// fuzzSubclass: a subclasse de quem começa no 30 (a classe seguinte na lista), já com o
+// juramento feito. Não lê bytes: o formato da montagem continua o mesmo.
+func fuzzSubclass(class string, level int) (game.ClassSet, game.QuestState) {
+	if level < game.SubclassQuestLevel {
+		return game.ClassSet{}, game.QuestState{}
+	}
+	sub := fuzzClasses[(slices.Index(fuzzClasses, class)+1)%len(fuzzClasses)]
+	set := game.ClassSet{Main: class, Active: class, List: []game.ClassProgress{{Class: class}, game.NewSubclass(sub)}}
+	return set, game.QuestState{Done: []string{game.SubclassQuestCall, game.SubclassQuestTrial, game.SubclassQuestOath}}
+}
 
 // fuzzAuctioneerID: o Leiloeiro (casa de leilões), o último NPC (ver spawnNPCs).
 var fuzzAuctioneerID = auctioneerID
@@ -930,6 +947,11 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_BestiaryCmd{BestiaryCmd: &pb.BestiaryCmd{Kind: pb.BestiaryCmdKind_BESTIARY_CMD_GET}}},
 		// Portão (zonas): sem gerente, a zona sozinha responde "fechado".
 		{Msg: &pb.ClientMessage_UseGate{UseGate: &pb.UseGate{NpcId: gateIDBase}}},
+		// Guardião das Sendas: falar, escolher (recusado: já tem a subclasse) e trocar de classe
+		// (o equipamento que a classe nova não usa vai para a bolsa: nada some nem duplica).
+		{Msg: &pb.ClientMessage_SubclassCmd{SubclassCmd: &pb.SubclassCmd{Kind: pb.SubclassCmdKind_SUBCLASS_CMD_TALK, NpcId: fuzzGuardianID}}},
+		{Msg: &pb.ClientMessage_SubclassCmd{SubclassCmd: &pb.SubclassCmd{Kind: pb.SubclassCmdKind_SUBCLASS_CMD_CHOOSE, NpcId: fuzzGuardianID, Class: "rogue"}}},
+		{Msg: &pb.ClientMessage_SubclassCmd{SubclassCmd: &pb.SubclassCmd{Kind: pb.SubclassCmdKind_SUBCLASS_CMD_SWITCH, NpcId: fuzzGuardianID, Class: "mage"}}},
 	}
 	return out
 }

@@ -47,6 +47,7 @@ message ClientMessage {
     MasteryCmd mastery_cmd = 54; // Maestria: pedir o estado, gastar ponto, redistribuir
     AuctionCmd auction_cmd = 44; // Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, retirar do correio
     UseGate use_gate = 60; // zonas: atravessar o portão para outro mapa
+    SubclassCmd subclass_cmd = 67; // Subclasse: falar com o Guardião das Sendas, escolher e trocar de classe
   }
 }
 
@@ -145,6 +146,51 @@ message MasteryNodeInfo {
   string icon = 5; // glifo (GLYPHS em client/src/ui/art.ts)
   repeated string ranks = 6; // texto do efeito com 1..node_max pontos (retorno decrescente)
   bool combat = 7; // entra no teto de combate
+}
+
+// ---------- Subclasse (classe principal no 30) ----------
+
+enum SubclassCmdKind {
+  SUBCLASS_CMD_UNSPECIFIED = 0;
+  SUBCLASS_CMD_TALK = 1; // falar com o Guardião das Sendas (npc_id): anda a missão e abre a janela
+  SUBCLASS_CMD_CHOOSE = 2; // escolher a subclasse class (missão concluída e vaga livre)
+  SUBCLASS_CMD_SWITCH = 3; // trocar a classe ativa para class (uma das do personagem)
+}
+
+message SubclassCmd {
+  SubclassCmdKind kind = 1;
+  uint32 npc_id = 2;
+  string class = 3;
+}
+
+// Uma classe do personagem (a principal ou uma subclasse) e o nível dela.
+message ClassLevel {
+  string class = 1;
+  uint32 level = 2;
+  bool main = 3; // a classe principal (a do corpo)
+  string spec = 4; // especialização dessa classe ("" = nenhuma)
+}
+
+// Classes do personagem. Sai ao entrar no jogo (npc_id 0, só atualiza), na conversa com o
+// Guardião (npc_id dele: abre a janela) e depois de escolher ou trocar de classe.
+message SubclassState {
+  uint32 npc_id = 1; // NPC da janela (0 = não abre a janela)
+  string main = 2; // classe principal
+  string active = 3; // classe ativa (skills, atributos, nível e XP são dela)
+  repeated ClassLevel classes = 4; // todas, a principal primeiro
+  bool can_choose = 5; // missão concluída e ainda há vaga: a janela mostra as classes para escolher
+  uint32 max_subclasses = 6;
+  uint32 cooldown_ms = 7; // falta para poder trocar de novo (0 = livre)
+  uint32 cooldown_total_ms = 8; // recarga da troca
+  bool bonus = 9; // Duas Sendas: uma subclasse chegou ao bonus_level
+  float bonus_xp = 10; // +XP para a classe mais baixa (0,05)
+  uint32 bonus_level = 11;
+  uint32 start_level = 12; // nível em que a subclasse começa
+  uint32 quest_level = 13; // nível da classe principal para a missão
+  // A classe ativa acabou de mudar: a árvore dela (como Welcome.skills e Welcome.branches).
+  bool switched = 14;
+  repeated SkillInfo skills = 15;
+  repeated SkillBranch branches = 16;
 }
 
 // ---------- Especialização (segunda classe, nível 20) ----------
@@ -493,6 +539,7 @@ message ServerMessage {
     AuctionUpdate auction = 44; // Casa de leilões: janela, busca, meus anúncios e avisos
     ZoneChange zone_change = 60; // saiu pelo portão: o próximo Welcome é o do outro mapa
     VitalityState vitality = 65; // vitalidade e recuperação (ao entrar e quando mudam)
+    SubclassState subclass = 67; // Subclasse: as classes do personagem e a ativa (janela do Guardião das Sendas)
   }
 }
 
@@ -791,6 +838,8 @@ message PlayerStatus {
   string clan_name = 3;
   string title = 4; // título escolhido (de uma conquista; "" = nenhum)
   string spec = 5; // especialização (SpecInfo.id; "" = nenhuma)
+  string active_class = 6; // classe ativa (subclasse; "" = a do modelo)
+  uint32 level = 7; // nível da classe ativa (muda ao trocar de classe; 0 = não mudou)
 }
 
 // PvP do próprio personagem.
@@ -914,6 +963,7 @@ enum NpcRole {
   NPC_ROLE_MASTER = 4; // Mestra dos Caminhos (especialização)
   NPC_ROLE_AUCTION = 5; // Leiloeiro (casa de leilões)
   NPC_ROLE_GATE = 6; // portão para outro mapa (UseGate)
+  NPC_ROLE_SUBCLASS = 7; // Guardião das Sendas (subclasse)
 }
 
 // Atributos e skills aprendidas do jogador.
@@ -1280,6 +1330,7 @@ message Entity {
   bool raid = 25; // raid boss (barra no topo da tela)
   string spec = 26; // jogadores: especialização (SpecInfo.id; "" = nenhuma)
   string tint = 27; // monstros: cor da variante (#rrggbb; "" = a do modelo)
+  string active_class = 28; // jogadores: classe ativa (subclasse; "" = a do modelo, a principal)
   bool rare = 40; // monstro raro (named): nome dourado e selo no quadro do alvo
 }
 

@@ -37,7 +37,7 @@ func (z *Zone) changeLook(p *entity, npcID uint32, l *pb.BodyLook) {
 	if n == nil || n.npc.role != pb.NpcRole_NPC_ROLE_BARBER {
 		return
 	}
-	a := game.NormalAppearance(p.pl.class, lookFromPB(l))
+	a := game.NormalAppearance(p.pl.mainClass, lookFromPB(l)) // o corpo é o da classe principal
 	if !game.ValidAppearance(a) {
 		z.system(p, "Visual inválido.")
 		return

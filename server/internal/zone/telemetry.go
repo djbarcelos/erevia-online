@@ -153,6 +153,21 @@ func (z *Zone) onClientStats(p *entity, m *pb.ClientStats) {
 	z.track(p, "fps", "", int64(m.FpsAvg+0.5), map[string]any{"fps_low": m.FpsLow, "device": dev, "seconds": m.Seconds})
 }
 
+// trackClassSwitch: kind "class_switch", troca da classe ativa (ref = a classe nova,
+// amount e level = o nível dela; extra: a classe e o nível de antes, a principal e as
+// peças de equipamento que foram para a bolsa).
+func (z *Zone) trackClassSwitch(p *entity, from string, fromLevel, unequipped int) {
+	z.track(p, "class_switch", p.pl.class, int64(p.level), map[string]any{
+		"from": from, "from_level": fromLevel, "main": p.pl.mainClass, "unequipped": unequipped,
+	})
+}
+
+// trackSubclass: kind "subclass", subclasse obtida no Guardião das Sendas (ref = a classe;
+// amount = quantas o personagem tem agora; extra: a principal).
+func (z *Zone) trackSubclass(p *entity, class string) {
+	z.track(p, "subclass", class, int64(p.pl.classes.Subclasses()), map[string]any{"main": p.pl.mainClass})
+}
+
 // trackMastery: kind "mastery", ponto de Maestria ganho no nível máximo (ref "point", amount =
 // a Maestria nova, extra.gained = pontos de uma vez).
 func (z *Zone) trackMastery(p *entity, level, gained int) {

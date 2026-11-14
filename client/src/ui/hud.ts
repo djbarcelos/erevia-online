@@ -965,7 +965,9 @@ export class Hud {
     const spec = pc ? specInfo(info.spec) : undefined;
     const specEl = spec ? el("span", "t-spec", ` · ${spec.name}`) : "";
     if (spec && specEl) specEl.style.color = spec.color;
-    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}`), specEl, info.boss ? el("em", null, "CHEFE") : "", info.rare ? el("em", "t-rare", "RARO") : "");
+    // Jogador: a classe ativa (a subclasse em uso) depois do nível.
+    const clsText = pc && info.cls ? ` ${classInfo(info.cls).label}` : "";
+    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}${clsText}`), specEl, info.boss ? el("em", null, "CHEFE") : "", info.rare ? el("em", "t-rare", "RARO") : "");
     this.tHp.root.hidden = npc;
     this.tHp.set(info.hp, info.maxHp, info.dead ? "Morto" : undefined);
   }

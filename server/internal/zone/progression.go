@@ -122,12 +122,17 @@ func (z *Zone) kill(dead, killer *entity) {
 	z.system(dead, msg+". Clique em \"Voltar à cidade\".")
 }
 
-// grantXP soma XP e sobe de nível quantas vezes for preciso. No nível máximo, a XP enche
-// a barra de Maestria (mastery.go).
+// grantXP soma XP à classe ativa e sobe de nível quantas vezes for preciso. No nível
+// máximo, a XP enche a barra de Maestria (mastery.go), que é do personagem. Com o bônus
+// Duas Sendas, a classe ativa mais baixa ganha 5% a mais (subclass.go).
 func (z *Zone) grantXP(p *entity, xp int64) {
 	if p.level >= game.MaxLevel {
 		z.grantMasteryXP(p, xp)
 		return
+	}
+	if extra := subclassXP(p, xp); extra > 0 {
+		z.tallyXP(p, xpSubclass, extra) // telemetria (xptally.go)
+		xp += extra
 	}
 	p.pl.xp += xp
 	p.pl.statsDirty = true
@@ -148,7 +153,12 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	z.vitalityLevelUp(p) // teto novo da vitalidade e o fim da recuperação (vitality.go)
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
 	z.systemAfterFlush(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
-	z.track(p, "level", "", int64(p.level), nil)
+	if p.pl.class != p.pl.mainClass { // subclasse: ref "subclass", para separar da progressão da principal
+		z.track(p, "level", "subclass", int64(p.level), map[string]any{"class": p.pl.class})
+		z.achValue(p, game.AchSubclass, "", p.level)
+	} else {
+		z.track(p, "level", "", int64(p.level), nil)
+	}
 	z.questLevelUp(p) // também reenvia o lugar dos objetivos que dependem do nível
 	z.achValue(p, game.AchLevel, "", p.level)
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
