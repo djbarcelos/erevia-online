@@ -37,8 +37,9 @@ type ProgressionRow struct {
 	Hours     float64
 }
 
-// huntXP é a XP média por abate no nível l e os nomes dos monstros caçados (regra acima).
-func huntXP(l int) (float64, string) {
+// huntGroup: os spawns caçados no nível l (o grupo de começo mais alto que cobre o nível,
+// sem chefes nem pontos fixos).
+func huntGroup(l int) []Spawn {
 	best := -1
 	var group []Spawn
 	for _, s := range DefaultSpawns() {
@@ -57,6 +58,23 @@ func huntXP(l int) (float64, string) {
 			group = append(group, s)
 		}
 	}
+	return group
+}
+
+// huntMonsters: os ids dos monstros caçados no nível l, sem repetir, na ordem do mapa.
+func huntMonsters(l int) []string {
+	var ids []string
+	for _, s := range huntGroup(l) {
+		if !slices.Contains(ids, s.Monster) {
+			ids = append(ids, s.Monster)
+		}
+	}
+	return ids
+}
+
+// huntXP é a XP média por abate no nível l e os nomes dos monstros caçados (regra acima).
+func huntXP(l int) (float64, string) {
+	group := huntGroup(l)
 	if len(group) == 0 {
 		return 0, ""
 	}
@@ -105,17 +123,26 @@ type ProgressionBand struct {
 	From, To    int
 	Kills       int
 	Hours       float64
-	TargetHours float64 // proposta do documento (a aprovar)
+	TargetHours float64 // tempo-alvo do dono do jogo (tunnel#149)
+	XP, QuestXP int64   // XP da faixa e quanto dela vem de missões
 }
 
-// ProgressionBands resume a tabela nas faixas 1→10, 10→20 e 20→30.
+// ProgressionTargets: as faixas e o tempo-alvo de cada uma (tunnel#149, ~150 h até o 40).
+var ProgressionTargets = []ProgressionBand{
+	{From: 1, To: 10, TargetHours: 3}, {From: 10, To: 20, TargetHours: 15},
+	{From: 20, To: 30, TargetHours: 40}, {From: 30, To: MaxLevel, TargetHours: 90},
+}
+
+// ProgressionBands resume a tabela nas faixas de ProgressionTargets.
 func ProgressionBands(rows []ProgressionRow) []ProgressionBand {
-	bands := []ProgressionBand{{From: 1, To: 10, TargetHours: 3}, {From: 10, To: 20, TargetHours: 15}, {From: 20, To: MaxLevel, TargetHours: 40}}
+	bands := slices.Clone(ProgressionTargets)
 	for i := range bands {
 		for _, r := range rows {
 			if r.Level >= bands[i].From && r.Level < bands[i].To {
 				bands[i].Kills += r.Kills
 				bands[i].Hours += r.Hours
+				bands[i].XP += r.XPToNext
+				bands[i].QuestXP += r.QuestXP
 			}
 		}
 	}
@@ -146,10 +173,12 @@ func ProgressionMarkdown(secPerKill float64) string {
 			num(int64(math.Round(r.XPPerKill))), num(r.QuestXP), num(int64(r.Kills)), num(int64(math.Round(r.Hours*60))), dec(total))
 	}
 	fmt.Fprintf(&b, "| **1 → %d** | **%s** | | | | **%s** | **%s** | **%s h** |\n", MaxLevel, num(XPLevelStart(MaxLevel)), num(int64(kills)), num(int64(math.Round(total*60))), dec(total))
-	b.WriteString("\n| Faixa | Abates | Horas hoje | Tempo-alvo (proposta) | Alvo ÷ hoje |\n")
-	b.WriteString("|---|---:|---:|---:|---:|\n")
+	b.WriteString("\n| Faixa | Abates | Horas | Tempo-alvo | Diferença | XP de missões |\n")
+	b.WriteString("|---|---:|---:|---:|---:|---:|\n")
 	for _, f := range ProgressionBands(rows) {
-		fmt.Fprintf(&b, "| %d → %d | %s | %s | %s | %s |\n", f.From, f.To, num(int64(f.Kills)), dec(f.Hours), dec(f.TargetHours), fmt.Sprintf("%.0f×", f.TargetHours/f.Hours))
+		diff := (f.Hours/f.TargetHours - 1) * 100
+		fmt.Fprintf(&b, "| %d → %d | %s | %s | %s | %s%% | %s%% |\n", f.From, f.To, num(int64(f.Kills)), dec(f.Hours), dec(f.TargetHours),
+			strings.Replace(fmt.Sprintf("%+.1f", diff), ".", ",", 1), strings.Replace(fmt.Sprintf("%.0f", 100*float64(f.QuestXP)/float64(f.XP)), ".", ",", 1))
 	}
 	return b.String()
 }

@@ -136,6 +136,9 @@ type ItemDef struct {
 	HealMP      float64
 	Scroll      ScrollKind // pergaminhos: o que faz
 	Blessed     bool       // encantar: falhar não quebra (volta a +0)
+	// Bridge: equipamento ponte do 30 ao 40 (bridge.go). Só cai de quem o tem na lista de
+	// saque, fora do sorteio por raridade.
+	Bridge bool
 }
 
 // SellPrice é quanto a loja paga por uma unidade.
@@ -441,6 +444,7 @@ var Items = func() map[string]*ItemDef {
 		{ID: GoldID, Name: "Moedas de ouro", Kind: KindGold, Grade: GradeCommon, Stack: math.MaxInt32, Icon: "gold",
 			Description: "Dinheiro corrente em Erevia."},
 	}
+	list = append(list, bridgeItems()...)
 	m := make(map[string]*ItemDef, len(list))
 	for _, d := range list {
 		m[d.ID] = d
@@ -524,12 +528,13 @@ type Drop struct {
 	Count int
 }
 
-// gearByGrade: equipamentos de cada raridade, em ordem de id (sorteio estável).
+// gearByGrade: equipamentos de cada raridade, em ordem de id (sorteio estável). O
+// equipamento ponte fica de fora (só cai de quem o tem no saque).
 var gearByGrade = func() map[Grade][]*ItemDef {
 	m := map[Grade][]*ItemDef{}
 	for _, id := range ItemIDs() {
 		d := Items[id]
-		if d.Equippable() {
+		if d.Equippable() && !d.Bridge {
 			m[d.Grade] = append(m[d.Grade], d)
 		}
 	}

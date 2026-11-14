@@ -95,6 +95,7 @@ var AchievementList = []*AchievementDef{
 	{ID: "level_10", Name: "Aventureiro", Text: "Chegar ao nível 10.", Title: "Aventureiro", Goal: AchLevel, Count: 10},
 	{ID: "level_20", Name: "Veterano", Text: "Chegar ao nível 20.", Title: "Veterano", Goal: AchLevel, Count: 20},
 	{ID: "level_30", Name: "Lenda Viva", Text: "Chegar ao nível 30.", Title: "Lenda Viva", Goal: AchLevel, Count: 30},
+	{ID: "level_40", Name: "Lenda de Erevia", Text: "Chegar ao nível 40.", Title: "Lenda de Erevia", Goal: AchLevel, Count: MaxLevel},
 	{ID: "bone_lord", Name: "O Senhor Caiu", Text: "Derrotar o Senhor dos Ossos.", Title: "Algoz do Senhor dos Ossos", Goal: AchKill, Target: "bone_lord", Count: 1},
 	{ID: "raid_ozrhal", Name: "Regicida", Text: "Participar da morte de Ozrhal, o Rei Ossário.", Title: "Regicida", Goal: AchRaid, Target: "ozrhal", Count: 1},
 	{ID: "invasion", Name: "A Cidade Resiste", Text: "Ajudar a cidade a resistir a uma invasão de esqueletos.", Title: "Defensor de Vel'Aran", Goal: AchDefense, Count: 1},

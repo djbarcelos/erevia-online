@@ -13,6 +13,21 @@ Como escrever (o client/scripts/build-changelog.mjs lê exatamente este formato)
 O rascunho sai de "node client/scripts/changelog-draft.mjs" (PRs mergeados desde a última versão).
 -->
 
+## 2026-11-13.2 · Nível 40
+
+### Novidades
+- **Nível 40:** o nível máximo subiu de 30 para 40. Subir ficou bem mais longo, como num MMO de verdade: ~3 h até o 10, ~15 h do 10 ao 20, ~40 h do 20 ao 30 e ~90 h do 30 ao 40. **Ninguém perde nível nem progresso:** a sua barra de XP fica no mesmo ponto do nível em que você está. Quem estava no 30 continua no 30 e começa o caminho para o 31.
+- **Contratos de caça:** do nível 5 ao 39, a cada nível chega um contrato no painel Missões: derrote monstros do seu nível e ganhe uma boa parte da XP do nível. O botão Ir leva até a caça certa.
+- **Novas caçadas do 30 ao 40:** o **Fundo do Vale**, na borda sul do Vale das Pedras Vivas, com os Golens Ancestrais (30–35); a **Vigília Ossária**, dois grupos de Cavaleiros e Devotos do Ossário ao lado da Cripta Esquecida (33–38); e os **Confins Partidos**, nos três cantos vazios do mapa, com Ceifadores e Arcanistas Partidos (35–40). São elites: batem mais forte e avisam os golpes no chão.
+- **Equipamento do 30 e do 35:** armas e armaduras Rúnicas (nível 30) e da Partição (nível 35) para cada classe, em versão comum e Desperta (rara). Caem das elites novas, e o Ozrhal deixa cair as Despertas da Partição.
+- Conquista **Lenda de Erevia**, com o título, para quem chegar ao nível 40.
+
+### Melhorias
+- **Maestria no 40:** a barra de Maestria agora abre no nível 40, e cada ponto custa o mesmo que o nível 39 → 40. Quem já tinha pontos de Maestria fica com eles e continua gastando e redistribuindo do 30 ao 39; só os pontos novos esperam o 40.
+- **Ozrhal, o Rei Ossário,** agora é de nível 35.
+- Do 31 ao 40 cada nível dá 3 pontos de atributo. Os pontos de skill vão até o 30, para a escolha da árvore continuar valendo.
+- **Morrer do nível 30 em diante** tira 2% da XP do nível (antes, 4%), porque cada nível ficou bem mais longo. No 40, o mesmo vale para a barra de Maestria.
+
 ## 2026-11-13 · A Cripta, a Glória e a segunda classe
 
 ### Novidades
