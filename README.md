@@ -186,6 +186,8 @@ Dockerfile, .railway/        publicação (Railway: infraestrutura como código)
 | `DEBUG_INVARIANTS` | vazio | A zona confere o estado de cada jogador 1×/s e antes de salvar (vida e mana, ouro, pilhas, equipamento, nível e XP, posição, karma, grupo, clã e troca; ver `server/internal/zone/invariants.go`). Com `1` (e sempre nos testes), estado inválido é panic; sem ela, corrige o que é seguro e anota um evento `invariant` em `game_events` |
 | `INVASION_CHANCE` | `0.15` | Chance (0 a 1) de invasão da cidade a cada noite; `0` = só por GM |
 | `XP2_DAYS` | `sab,dom` | Dias de XP em dobro (horário de Brasília); vazio ou `nenhum` = só por GM |
+| `ALERT_WEBHOOK_URL` | vazio | Webhook do Discord dos [alertas](#alertas-no-discord). **Segredo**: só na variável da Railway, nunca no git. Vazio = os alertas só vão para o log |
+| `ALERT_SPIKE_N` | `50` | Pico de erros: avisa com mais de N ocorrências de um mesmo erro em 5 min |
 
 ## Railway
 Projeto com dois serviços no ambiente `production`:
@@ -276,6 +278,36 @@ O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem tr
 | `v_items_daily` | Itens que entraram e saíram do jogo por dia (para caçar duplicação) |
 
 **Erros do servidor** (também em `game_events`, no máximo 1 linha por grupo a cada minuto, com a contagem acumulada em `amount`): `server_error` é um panic recuperado (a zona segue e só o jogador da mensagem cai; `ref` = hash da stack, `extra` com onde, jogador, mensagem, stack e versão), `slow_tick` é um tick acima de 50 ms (`extra.systems` = os sistemas mais lentos) e `db_error` é uma falha ao gravar no banco (`ref` = operação). Exemplo: `SELECT kind, ref, sum(amount) AS vezes, max(at) AS ultima, max(extra->>'where') AS onde, max(extra->>'version') AS versao FROM game_events WHERE kind IN ('server_error', 'slow_tick', 'db_error') AND at > now() - interval '1 day' GROUP BY 1, 2 ORDER BY 3 DESC;`
+
+## Alertas no Discord
+O servidor avisa num canal do Discord o que precisa de atenção. Um worker próprio (`server/internal/alerts`), fora da zona, lê o banco a cada minuto e manda um embed em português, com cor por gravidade e o link para a seção do portal (`PUBLIC_URL` + `/admin#…`):
+
+| Aviso | Quando | Cor |
+|---|---|---|
+| Erro novo no servidor | Um hash de `server_error` que nunca apareceu antes | vermelho |
+| Erro novo no navegador | Um hash de `client_errors` que nunca apareceu antes (em versão nenhuma) | laranja |
+| Pico de erros | Mais de `ALERT_SPIKE_N` ocorrências de um mesmo erro em 5 min (servidor, banco ou navegador) | vermelho |
+| Invariante quebrada | A primeira quebra de cada regra no dia (horário de Brasília) | amarelo |
+| Tick lento | O p95 do tick acima de 50 ms por 2 min (mais de 5% dos ticks acima de 50 ms, pelos `slow_tick`) | laranja |
+| Servidor no ar | Cada subida, com a versão (`RAILWAY_GIT_COMMIT_SHA`): deploy (outra versão), reinício ou queda (mesma versão, e o anterior não desligou normalmente). Sai 90 s depois de subir, quando o servidor anterior já desligou | verde, azul ou vermelho |
+| Relato de bug | Cada `/bug`, com o texto, o personagem, a posição, a região e a versão | azul |
+
+- **Limite:** no máximo 1 aviso por tipo e chave (o erro, a regra, a conta do `/bug`, a versão) a cada 15 min. O seguinte diz quantos o limite segurou. Os `/bug` da mesma conta esperam o limite e saem juntos; numa enxurrada de erros novos, 5 têm aviso próprio e o resto vai num resumo.
+- **Já visto:** fica na tabela `alert_state` (migração 00029) e vale depois de um reinício. Na primeira vez, tudo o que já existia conta como visto (nada de enxurrada de avisos antigos).
+- **Robustez:** timeout de 10 s por envio, nova tentativa em erro de rede e 5xx, e no 429 do Discord espera o `retry_after` pedido (até 30 s; mais que isso, tenta na verificação seguinte). A zona nunca espera pelos alertas, e um panic no worker vira `server_error` e ele recomeça.
+- Texto de jogador (o `/bug`) não formata, não vira link e não menciona ninguém (`@everyone` não chama).
+
+**Como configurar:**
+1. No Discord, no canal dos alertas: **Configurações do canal → Integrações → Webhooks → Novo webhook**. Dê um nome (ex.: Erevia) e clique em **Copiar URL do webhook**.
+2. Na Railway, no serviço **erevia** → **Variables**, crie `ALERT_WEBHOOK_URL` com a URL copiada (e, se quiser, `ALERT_SPIKE_N`). A Railway publica de novo, e o aviso "Servidor no ar" chega ao canal em uns 2 min.
+3. A URL tem o token do webhook: não ponha no git, num print nem no board. O servidor nunca a escreve no log. Se vazar, apague o webhook no Discord e crie outro.
+
+Local, sem a variável, cada aviso vai para o log como `alerta (sem ALERT_WEBHOOK_URL)`. Para testar com um canal de verdade, ponha a URL em `ALERT_WEBHOOK_URL` no `.env` (que não vai para o git) e rode `make server`.
+
+```sql
+-- O que os alertas já avisaram (pico, invariante do dia, tick lento, /bug por conta, subidas)
+SELECT kind, key, sent_at, suppressed, pos, info FROM alert_state WHERE kind <> 'seen' ORDER BY sent_at DESC LIMIT 50;
+```
 
 ## Pipeline de arte (remaster)
 Ferramentas open source: **Blender**, **blender-mcp** (o Claude Code controla o Blender, com `DISABLE_TELEMETRY=true`) e a skill **blender-image-to-3d** (referência → asset pronto para jogo). A regra de todo asset novo é o [guia de arte](docs/guia-de-arte.md).
