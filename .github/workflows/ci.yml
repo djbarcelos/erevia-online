@@ -82,7 +82,8 @@ jobs:
     # roteiro de e2e/tests no Chromium headless com WebGL por software (SwiftShader).
     name: Navegador (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 15 min do roteiro + ~2 min da medição de FPS (e a segunda chance de cada um, no pior caso).
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17
@@ -139,9 +140,21 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
+      # Inclui tests/bench.spec.ts (no mesmo servidor e no mesmo navegador): a medição de FPS
+      # (?bench=contadores) comparada com e2e/bench-baseline.json, por draw calls e malhas do
+      # cenário, nunca por FPS. Acrescenta ~2 min; a tabela antes e depois vai para o
+      # resumo do job. Piorou de propósito: `npm run bench:baseline` e commitar o diff.
       - name: Testes de navegador
         working-directory: e2e
         run: npx playwright test
+      - name: Medição de FPS (contadores e relatório)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench
+          path: e2e/test-results/**/bench-*
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Log do servidor
         if: failure()
         run: cp "$RUNNER_TEMP/server.log" e2e/server.log || true
