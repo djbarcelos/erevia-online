@@ -150,7 +150,7 @@ func (e *env) serverError(ref, panicText string, amount int64, at time.Time) {
 		At: at, Kind: "server_error", Ref: ref, Amount: amount, X: 10, Z: 20,
 		Extra: map[string]any{
 			"where": "msg", "player": 7, "msg": "UseSkill", "panic": panicText,
-			"frames": []string{"zone.(*Zone).useSkill skills.go", "zone.(*Zone).handle zone.go"},
+			"frames":  []string{"zone.(*Zone).useSkill skills.go", "zone.(*Zone).handle zone.go"},
 			"version": "abc1234def", "total": amount,
 		},
 	}})

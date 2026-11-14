@@ -97,9 +97,9 @@ type Worker struct {
 	bootID     string
 	bootAt     time.Time
 	prevBoot   string // chave da subida anterior (alert_state boot)
-	registered bool // a subida já está em alert_state
-	bootDone   bool // o aviso de servidor no ar já foi tratado
-	ready      bool // AlertBootstrap feito
+	registered bool   // a subida já está em alert_state
+	bootDone   bool   // o aviso de servidor no ar já foi tratado
+	ready      bool   // AlertBootstrap feito
 	lastPrune  time.Time
 	clients    spikeTracker
 }

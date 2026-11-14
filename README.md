@@ -369,7 +369,24 @@ FROM client_errors WHERE kind = 'client_invariant' AND last_seen > now() - inter
 ```
 
 ## Portal de administração
-`/admin` é o portal dos GMs, no mesmo servidor e no visual do jogo. Hoje tem a página inicial (online agora, versão no ar, uptime, contas, personagens e relatos de /bug nas últimas 24 h, e as últimas ações de GM) e o menu com Jogadores, Relatos, Métricas, Economia e Operação, ainda "em breve".
+`/admin` é o portal dos GMs, no mesmo servidor e no visual do jogo. Tem a página inicial (online agora, versão no ar, uptime, contas, personagens e relatos de /bug nas últimas 24 h, e as últimas ações de GM), **Jogadores** e **Operação** (abaixo); Relatos, Métricas e Economia ainda "em breve".
+
+**Jogadores** (`#jogadores`; código em `client/src/admin/players.ts`, `server/internal/api/admin_players.go`, `server/internal/zone/admin_actions.go` e `server/internal/store/admin_players.go`):
+- **Busca** por parte do nome do personagem, id do personagem ou da conta, ou identidade (o id do Google/Discord, `google:123…`, ou o nome no provedor), com online e offline juntos; sem busca, a lista de quem está online agora (com a região).
+- **Ficha** (`#jogadores/<id>`): nível e XP, moedas, região e posição, vida e mana (online), karma, PKs e vitórias PvP, classe e especialização, título, clã e cargo, grupo, inventário (equipado e bolsa) e armazém, missões ativas (com o progresso) e concluídas, conquistas, as últimas sessões e eventos de `game_events`, a conta (identidades, criação, último login, banimento, silêncio, os outros personagens) e o **histórico de moderação** (o `gm_log` do jogo e do portal contra qualquer personagem da conta). Com o personagem online ou que saiu há pouco, os dados vêm da zona (mais novos que o banco); a ficha diz de onde vieram.
+- **Ações:** expulsar (só online), silenciar por N minutos e tirar o silêncio, banir e desbanir (com motivo obrigatório), teleportar (X, Z; a cidade é 0, 0), dar e tirar item (tira da bolsa e, se faltar, do equipamento) e moedas, marcar e desmarcar GM (não dá para se banir nem tirar o próprio GM). O motivo vai para o jogador quando ele vê a mensagem e para o `gm_log`; um pedido que falhou fica registrado como `portal:<ação>:falhou`.
+- **Onde a ação acontece (nada duplica nem se perde):** quem decide é a zona, dona do estado (`zone.AdminEdit`):
+  - *online*: na memória, e o personagem é salvo na hora com `save_seq` novo (um panic depois não volta ao estado de antes);
+  - *saiu há pouco* (o `recent` da zona, 10 min): relogar usa a memória antes do banco, então a ação muda esse estado e o salva com `save_seq` novo; mexer no banco aí seria perdido (dar) ou duplicado (tirar) no próximo login;
+  - *offline*: a zona **trava** o personagem e a API faz a transação no banco (linha com `FOR UPDATE`, itens pelas mesmas regras da bolsa, `save_seq = GREATEST(…)` e a telemetria `gm` na mesma transação). Durante a trava, entrar com o personagem é recusado; depois, um login que leu o banco **antes** da mudança (o WebSocket anota a hora da leitura, `JoinInfo.LoadedAt`) também é recusado sem `Kicked`, e o cliente reconecta e lê de novo. A trava vence sozinha em 30 s se a API sumir.
+  - Silenciar, banir e GM vão primeiro para o banco (é de onde o login lê) e depois a zona aplica em quem está online da conta, com a mesma recusa para um login lido antes.
+  - Se a zona pegou o pedido e não respondeu em 10 s, a resposta é "não confirmado: confira a ficha antes de repetir" (nunca "falhou", que levaria a repetir e duplicar).
+
+**Operação** (`#operacao`; `client/src/admin/ops.ts`, `server/internal/api/admin_ops.go`, `server/internal/zone/admin_ops.go`), tudo pela zona e no `gm_log`:
+- **Anúncio para todos** (banner e linha dourada no chat), na hora ou **agendado** (30 s a 30 dias; fica em `scheduled_announcements`, migração 00027, e volta à fila depois de um reinício). Os agendados aparecem com o botão de cancelar.
+- **Aviso de manutenção:** "o servidor reinicia em N min" para todos, repetido em 60, 30, 15, 10, 5, 3, 2 e 1 min, 30 e 10 s; quem entra durante a contagem também é avisado; cancelar avisa todos. Não reinicia sozinho: é o aviso antes do deploy (e só existe na memória: o reinício o encerra).
+- **Eventos:** invasão (anunciar com 2 min, começar agora, parar sem recompensa) e XP em dobro por N horas ou desligar (os mesmos do `/evento`), com a **agenda dos automáticos**: os dias de `XP2_DAYS` e a próxima janela, o próximo anoitecer e a chance de invasão (`INVASION_CHANCE`).
+- **Chefes:** vivo (vida, fase do raid, fúria, há quanto tempo em luta) ou morto (a hora exata do renascimento, a janela mostrada no mapa e quando morreu), e **renascer agora** (o raid fica salvo como "renasce agora", para um reinício não o esconder de novo).
 
 **Como abrir:**
 1. Entre no jogo uma vez com a conta (Google, Discord ou, local, o login de desenvolvimento) e crie um personagem.
@@ -381,7 +398,7 @@ FROM client_errors WHERE kind = 'client_invariant' AND last_seen > now() - inter
 - **O que fica público:** só o que o jogo já usa (as fontes Cinzel e o polyfill de módulos do Vite). O código e o CSS do portal saem em `assets/admin/` (ver `client/vite.config.ts`), e nenhum arquivo público menciona o portal.
 - **Escrita:** todo pedido que muda algo exige o cabeçalho `X-Erevia-Admin: 1`, JSON e a mesma origem (contra CSRF), tem limite por conta (leitura: 60 de uma vez e 2/s; escrita: 10 de uma vez e 1 a cada 2 s) e vai para o `gm_log` com o comando `portal:…`, a conta e o nome do GM e o alvo.
 - Respostas do portal com `Cache-Control: no-store`, `X-Frame-Options: DENY`, CSP e `nosniff`. O log do servidor guarda só conta, método, rota e status (nada de corpo, cookie ou query).
-- **Jogadores online:** o portal nunca mexe no estado da zona nem grava no banco um personagem que está em memória; pede à zona pelo canal e espera a resposta com prazo (`askZone` em `server/internal/zone/admin.go`, hoje usado pelo "online agora").
+- **Jogadores online:** o portal nunca mexe no estado da zona nem grava no banco um personagem que está em memória; pede à zona pelo canal e espera a resposta com prazo (`askZone` em `server/internal/zone/admin.go` para leitura; `askZoneAction` em `admin_actions.go` para as ações, que depois de entregues esperam a resposta em vez de desistir).
 
 A versão no ar vem de `RAILWAY_GIT_COMMIT_SHA` (a Railway define; local aparece `dev`).
 
