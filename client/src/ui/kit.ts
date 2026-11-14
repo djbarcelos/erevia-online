@@ -110,6 +110,7 @@ export interface Settings {
 export const DEFAULT_KEYS: Record<string, string> = {
   inventory: "KeyI",
   skills: "KeyK",
+  quests: "KeyJ",
   party: "KeyP",
   clan: "KeyN",
   social: "KeyO",
