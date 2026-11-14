@@ -31,9 +31,9 @@ export interface Environment {
  * tipo de item com thin instances — milhares de objetos em poucas dezenas de draw calls.
  */
 export async function loadEnvironment(scene: Scene, world: WorldData, shadows: ShadowGenerator): Promise<Environment> {
-  const containers = await Promise.all(
-    ["/models/env-forest.glb", "/models/env-town.glb"].map((f) => LoadAssetContainerAsync(f, scene)),
-  );
+  // Os kits do mapa (o principal usa os dois; os outros dizem quais no world.json).
+  const kits = world.kits ?? ["/models/env-forest.glb", "/models/env-town.glb"];
+  const containers = await Promise.all(kits.map((f) => LoadAssetContainerAsync(f, scene)));
 
   // nome do item → malha (já sem a hierarquia do glTF, com o transform aplicado nos vértices)
   const protos = new Map<string, Mesh>();

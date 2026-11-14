@@ -30,6 +30,9 @@ export interface WorldData {
   objects: { k: string; x: number; z: number; r: number; s: [number, number, number] }[];
   /** Tochas que acendem à noite. */
   torches?: { x: number; z: number }[];
+  /** Mapas além do principal: id e os kits de cenário (.glb) que ele usa (sem o campo: os dois de sempre). */
+  id?: string;
+  kits?: string[];
 }
 
 /** Limites do mapa (sem `bounds` no arquivo: o quadrado `size` centrado na cidade). */
@@ -55,9 +58,15 @@ export function rockyAt(world: WorldData, x: number, z: number): number {
   return t * t * (3 - 2 * t);
 }
 
-export async function loadWorldData(): Promise<WorldData> {
-  const res = await fetch("/world.json");
-  if (!res.ok) throw new Error(`world.json: ${res.status}`);
+/** O layout do mapa: o principal em /world.json, os outros em /worlds/<id>.json (scripts/build-maps.mjs). */
+export function worldUrl(map = ""): string {
+  return !map || map === "starter" ? "/world.json" : `/worlds/${encodeURIComponent(map)}.json`;
+}
+
+export async function loadWorldData(map = ""): Promise<WorldData> {
+  const url = worldUrl(map);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: ${res.status}`);
   return res.json();
 }
 

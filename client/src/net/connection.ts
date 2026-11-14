@@ -109,6 +109,11 @@ export class Connection {
     this.send({ case: "changeLook", value: { npcId, look } });
   }
 
+  /** Portão: atravessar para outro mapa (o servidor responde com ZoneChange e um Welcome novo). */
+  useGate(npcId: number): void {
+    this.send({ case: "useGate", value: { npcId } });
+  }
+
   /** Pedra de Teleporte: viajar para um destino. */
   teleport(npcId: number, destId: number): void {
     this.send({ case: "teleport", value: { npcId, destId } });

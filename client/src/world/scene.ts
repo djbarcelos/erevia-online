@@ -46,14 +46,20 @@ export interface WorldScene {
   outerMat: StandardMaterial;
   /** Move a área de sombra para acompanhar o jogador. */
   followShadows(x: number, z: number): void;
+  /**
+   * Troca de mapa (zonas): para o desenho e descarta a cena com tudo o que é dela (malhas,
+   * materiais, texturas, luzes, GUI e pós). O engine fica para o próximo mapa.
+   */
+  disposeScene(): void;
 }
 
 /**
  * Cria engine, cena, céu, luz com sombras, chão pintado e câmera.
  * WebGL2 por padrão; WebGPU pode ser testado com ?webgpu=1 na URL.
  */
-export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldData): Promise<WorldScene> {
-  const engine = await createEngine(canvas);
+export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldData, reuse?: AbstractEngine): Promise<WorldScene> {
+  // Troca de mapa: o mesmo engine (um contexto WebGL só); a cena é nova.
+  const engine = reuse ?? (await createEngine(canvas));
   // Material de paleta em todo material Standard/PBR criado daqui em diante (só GLSL).
   if (!engine.isWebGPU) registerPaletteMaterial();
   const scene = new Scene(engine);
@@ -149,14 +155,16 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   const pointers = camera.inputs.attached.pointers as unknown as { buttons: number[] } | undefined;
   if (pointers) pointers.buttons = [2];
   camera.inputs.remove(camera.inputs.attached.keyboard);
-  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  if (!reuse) canvas.addEventListener("contextmenu", (e) => e.preventDefault()); // uma vez por canvas
 
   const gui = AdvancedDynamicTexture.CreateFullscreenUI("ui", true, scene);
   // Nomes, barras e números de dano ficam fora do pós-processamento (SSAO e FXAA do preset alto).
   if (gui.layer) gui.layer.applyPostProcess = false;
 
-  window.addEventListener("resize", () => engine.resize());
-  engine.runRenderLoop(() => scene.render());
+  const onResize = () => engine.resize();
+  window.addEventListener("resize", onResize);
+  const render = () => scene.render();
+  engine.runRenderLoop(render);
 
   return {
     engine,
@@ -173,6 +181,11 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
       // Usa a direção atual da luz (o ciclo dia/noite move o sol e a lua).
       const d = sun.direction;
       sun.position.set(x - d.x * SUN_DISTANCE, -d.y * SUN_DISTANCE, z - d.z * SUN_DISTANCE);
+    },
+    disposeScene() {
+      window.removeEventListener("resize", onResize);
+      engine.stopRenderLoop(render);
+      scene.dispose();
     },
   };
 }

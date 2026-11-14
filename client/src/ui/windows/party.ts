@@ -65,7 +65,7 @@ export function buildParty(d: PartyDeps): HTMLElement {
         "pw-name",
         m.id === st.leaderId ? el("span", "m-lead", "♛") : "",
         el("b", null, m.name),
-        el("small", null, ` ${info.label} · Nv ${m.level}${isMe ? " · você" : ""}${m.dead ? " · morto" : ""}`),
+        el("small", null, ` ${info.label} · Nv ${m.level}${isMe ? " · você" : ""}${m.dead ? " · morto" : ""}${m.map ? ` · em ${m.map}` : ""}`),
       );
       const acts = el("div", "pw-acts");
       if (amLeader && !isMe) {

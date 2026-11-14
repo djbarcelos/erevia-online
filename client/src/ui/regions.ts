@@ -43,12 +43,16 @@ function tierRgb(levelMax: number): string {
   return "200,90,220";
 }
 
-export function buildRegions(zones: MapZone[], safeRadius: number): { regions: Region[]; bosses: BossPoint[] } {
+/**
+ * mapTitle: nome do mapa de outra zona (os anéis do mapa principal têm nomes próprios; nos
+ * outros mapas, a praça e os anéis levam o nome do mapa).
+ */
+export function buildRegions(zones: MapZone[], safeRadius: number, mapTitle = ""): { regions: Region[]; bosses: BossPoint[] } {
   const rings = zones.filter((z) => !z.fixed && !z.area).sort((a, b) => a.rMin - b.rMin);
   const regions: Region[] = [
-    { name: "Cidade", monsters: "", rMin: 0, rMax: safeRadius, levelMin: 0, levelMax: 0, safe: true, rgb: "120,190,255" },
+    { name: mapTitle ? "Praça" : "Cidade", monsters: "", rMin: 0, rMax: safeRadius, levelMin: 0, levelMax: 0, safe: true, rgb: "120,190,255" },
     ...rings.map((z, i) => ({
-      name: RING_NAMES[i] ?? `Região ${i + 1}`,
+      name: mapTitle || (RING_NAMES[i] ?? `Região ${i + 1}`),
       monsters: z.name,
       rMin: z.rMin,
       rMax: z.rMax,

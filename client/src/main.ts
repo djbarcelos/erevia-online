@@ -2,7 +2,7 @@
 import { reportClientError, setErrorContext, watchEngine } from "./net/errors";
 import { api, ApiError, type CharacterInfo } from "./api";
 import { gameAudio } from "./audio";
-import { Color3, Matrix, Vector3 } from "@babylonjs/core";
+import { type AbstractEngine, Color3, Matrix, Vector3 } from "@babylonjs/core";
 import { create } from "@bufbuild/protobuf";
 import {
   EntityKind,
@@ -151,17 +151,34 @@ function play(character: CharacterInfo, resume?: Resume): void {
   let started = false;
   let kickedReason = "";
   let game: Game | undefined;
-  // Mensagens que chegam enquanto a cena 3D ainda está sendo criada.
+  // Mensagens que chegam enquanto a cena 3D ainda está sendo criada (ou trocando de mapa).
   const backlog: ServerMessage[] = [];
+  // Troca de mapa (portão): o engine fica; a cena, o HUD e as janelas são refeitos.
+  let engine: AbstractEngine | undefined;
+  let loading: Promise<void> = Promise.resolve();
 
   conn.onMessage = (msg) => {
+    if (msg.msg.case === "zoneChange") {
+      // O servidor tirou o personagem deste mapa: tela de carregamento, descarta a cena
+      // inteira (entidades, cenário, minimapa) e espera o Welcome do mapa novo.
+      const zc = msg.msg.value;
+      showScreen("screen-loading", `Viajando para ${zc.title || zc.map}…`);
+      const old = game;
+      game = undefined;
+      loading = loading.then(() => old?.unload());
+      return;
+    }
     if (msg.msg.case === "welcome") {
       started = true;
       clearResume();
-      void startGame(conn, character, msg.msg.value).then((g) => {
-        game = g;
-        for (const m of backlog.splice(0)) g.apply(m);
-      });
+      const welcome = msg.msg.value;
+      loading = loading
+        .then(() => startGame(conn, character, welcome, engine))
+        .then((g) => {
+          game = g;
+          engine = g.engine;
+          for (const m of backlog.splice(0)) g.apply(m);
+        });
       return;
     }
     if (msg.msg.case === "kicked") {
@@ -174,7 +191,7 @@ function play(character: CharacterInfo, resume?: Resume): void {
 
   conn.onClose = (reason) => {
     game?.dispose();
-    for (const e of document.querySelectorAll(".hud, .gwin-layer, .toasts, .tip, [data-menu], [data-sheet]")) e.remove();
+    removeGameDom();
     // Caiu sem expulsão (estava jogando, ou é uma tentativa de voltar que ainda não entrou): reconecta sozinho.
     if (!kickedReason && (started || resume)) {
       const r: Resume = !started && resume ? resume : { id: character.id, since: Date.now(), reloads: 0 };
@@ -194,13 +211,21 @@ interface Game {
   apply(msg: ServerMessage): void;
   /** Para os loops e ouvintes do jogo (ao desconectar). */
   dispose(): void;
+  /** Troca de mapa: dispose, tira o HUD e as janelas e descarta a cena (o engine fica). */
+  unload(): void;
+  engine: AbstractEngine;
 }
 
-async function startGame(conn: Connection, character: CharacterInfo, welcome: Welcome): Promise<Game> {
-  showScreen(null);
+/** HUD, janelas e dicas do jogo (saem ao desconectar e ao trocar de mapa). */
+function removeGameDom(): void {
+  for (const e of document.querySelectorAll(".hud, .gwin-layer, .toasts, .tip, [data-menu], [data-sheet]")) e.remove();
+}
 
-  const worldData = await loadWorldData();
-  const world = await createWorldScene(canvas, worldData);
+async function startGame(conn: Connection, character: CharacterInfo, welcome: Welcome, engine?: AbstractEngine): Promise<Game> {
+  // Mapa de cada zona: o principal em /world.json, os outros em /worlds/<id>.json.
+  const worldData = await loadWorldData(welcome.map);
+  showScreen(null);
+  const world = await createWorldScene(canvas, worldData, engine);
   const unwatchEngine = watchEngine(world.engine, "jogo");
   const clock = new WorldClock(Number(welcome.serverTimeMs), welcome.dayCycleMs);
   const dayNight = new DayNight(world, worldData);
@@ -516,7 +541,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   };
 
   // ---------- Mapa e regiões ----------
-  const { regions, bosses } = buildRegions(welcome.zones, welcome.safeRadius);
+  // Minimapa e mapa do mundo do mapa desta zona (o principal mantém os nomes de sempre).
+  const otherMap = welcome.map !== "" && welcome.map !== "starter";
+  const { regions, bosses } = buildRegions(welcome.zones, welcome.safeRadius, otherMap ? welcome.mapTitle : "");
   // Contexto dos relatórios de erro enquanto o jogo roda.
   setErrorContext(() => {
     const p = entities.localPosition();
@@ -820,7 +847,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       storageWin.close();
       barberWin.close();
       specWin.close();
-      if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
+      if (npc?.role === NpcRole.GATE) conn.useGate(id); // portão: o servidor confere as regras
+      else if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
       // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
       else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
       else if (npc?.role === NpcRole.TELEPORT) {
@@ -1090,7 +1118,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   });
   reg({
     id: "map",
-    title: "Mapa do mundo",
+    title: otherMap ? `Mapa · ${welcome.mapTitle}` : "Mapa do mundo",
     hotkey: keys().map,
     width: 1080,
     height: 740,
@@ -1294,7 +1322,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (auto.on) hud.setAutoStatus(auto.status());
     hud.setAttacking(isAttackable(targetId));
   }, 100);
-  setupPerfPanel(world.scene, world.gui, $("hud"));
+  const stopPerfPanel = setupPerfPanel(world.scene, world.gui, $("hud"));
   if (wantBench()) {
     // Espera a cena assentar (modelos, sombras) antes de medir.
     window.setTimeout(() => {
@@ -1377,6 +1405,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   let lastXp: bigint | null = null;
   return {
+    engine: world.engine,
+    unload(this: Game) {
+      this.dispose();
+      stopPerfPanel();
+      removeGameDom();
+      world.disposeScene();
+    },
     dispose() {
       setErrorContext(null);
       unwatchEngine();
