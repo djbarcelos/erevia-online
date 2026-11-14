@@ -75,3 +75,83 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run test:unit
       - run: npm run build
+
+  e2e:
+    # O que só quebra no navegador: tela branca, erro de JavaScript, botão que não faz nada,
+    # cena 3D que não carrega. Sobe o servidor de verdade (com o cliente compilado) e joga o
+    # roteiro de e2e/tests no Chromium headless com WebGL por software (SwiftShader).
+    name: Navegador (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: erevia
+          POSTGRES_PASSWORD: erevia
+          POSTGRES_DB: erevia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erevia"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://erevia:erevia@localhost:5432/erevia?sslmode=disable
+      DEV_LOGIN: "true"
+      STATIC_DIR: client/dist
+      PORT: "8080"
+      PUBLIC_URL: http://localhost:8080
+      E2E_BASE_URL: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            client/package-lock.json
+            e2e/package-lock.json
+      - name: Build do cliente
+        working-directory: client
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Build do servidor
+        working-directory: server
+        run: go build -o "$RUNNER_TEMP/zone" ./cmd/zone
+      - name: Subir o servidor (DEV_LOGIN, cliente em client/dist)
+        run: |
+          nohup "$RUNNER_TEMP/zone" > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8080/healthz > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/server.log"
+          exit 1
+      - name: Playwright (dependências e Chromium)
+        working-directory: e2e
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Testes de navegador
+        working-directory: e2e
+        run: npx playwright test
+      - name: Log do servidor
+        if: failure()
+        run: cp "$RUNNER_TEMP/server.log" e2e/server.log || true
+      - name: Screenshots, vídeo e trace
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-falha
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+            e2e/server.log
+          retention-days: 7
