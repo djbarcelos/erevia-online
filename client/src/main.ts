@@ -21,7 +21,10 @@ import {
   SelfPvpSchema,
   SkillTarget,
   SpecCmdKind,
+  MasteryCmdKind,
   type AchievementInfo,
+  type MasteryState,
+  type MasteryTree,
   type ClanState,
   type FriendList,
   type Mail,
@@ -62,6 +65,7 @@ import { buildWorldMap } from "./ui/windows/worldmap";
 import { buildSettings } from "./ui/windows/settings";
 import { buildCharacter } from "./ui/windows/character";
 import { buildSkills } from "./ui/windows/skills";
+import { buildMastery, skillsWithMastery, type SkillsTab } from "./ui/windows/mastery";
 import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
@@ -78,6 +82,7 @@ import type { QuestTarget } from "./ui/quest-nav";
 import { GroundLoot } from "./world/loot";
 import { Fx } from "./world/fx";
 import { setupInput } from "./world/input";
+import { PickAreas } from "./world/pick";
 import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
 import { loadEnvironment, type Environment } from "./world/environment";
@@ -201,7 +206,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const dayNight = new DayNight(world, worldData);
   const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
   const collision = new Collision(worldData);
-  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision);
+  const picks = new PickAreas();
+  const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision, picks);
   setSpecs(welcome.specs);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
   for (const e of welcome.entities) entities.add(e);
@@ -318,6 +324,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     return () => progressListeners.delete(fn);
   };
   const rankOf = (id: number) => progress?.ranks.find((r) => r.skillId === id)?.rank ?? 0;
+  // ---------- Maestria (nível 30): barra, pontos e árvore (só mudam quando chega mensagem) ----------
+  let mastery: MasteryState | null = null;
+  let masteryTree: MasteryTree | null = null;
+  const masteryListeners = new Set<() => void>();
+  let skillsTab: SkillsTab = "tree";
+  /** Troca a aba da janela de skills aberta (null = fechada). */
+  let selectSkillsTab: ((t: SkillsTab) => void) | null = null;
   /**
    * Skill como ela é agora: valores do rank aprendido, mana com Sobrecarga e recarga
    * dividida pela velocidade de conjuração (mesma conta do servidor).
@@ -349,7 +362,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const npcStock = new Map(welcome.npcs.map((n) => [n.id, n.stock]));
   const npcRecipes = new Map(welcome.npcs.map((n) => [n.id, n.recipes]));
   const npcInfo = new Map(welcome.npcs.map((n) => [n.id, n]));
-  const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId);
+  const loot = new GroundLoot(world.scene, world.gui, store, welcome.yourId, picks);
   loot.add(welcome.groundItems);
 
   // ---------- Barra de atalhos (10 teclas): salva no servidor ----------
@@ -623,6 +636,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       } else auto.stop();
     },
     openWindow: (id: WindowId) => wm.toggle(id),
+    openMastery: () => openMastery(),
     onAttack: () => {
       questGo.onPlayerControl();
       if (entities.isEnemy(targetId)) return attackTarget(targetId);
@@ -664,8 +678,18 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   migrateLocalHotbar();
   /** Pontos livres viram uma bolinha nos botões de Personagem e Skills. */
   const refreshBadges = () =>
-    hud.setBadges({ character: progress?.freeAttrPoints ?? 0, skills: progress?.freeSkillPoints ?? 0, social: mailBox?.unread ?? 0 });
+    hud.setBadges({
+      character: progress?.freeAttrPoints ?? 0,
+      skills: (progress?.freeSkillPoints ?? 0) + (mastery?.active ? mastery.free : 0),
+      social: mailBox?.unread ?? 0,
+    });
   refreshBadges();
+  /** Barra de Maestria do HUD: abre a janela de skills na aba Maestria. */
+  const openMastery = () => {
+    skillsTab = "mastery";
+    if (selectSkillsTab) selectSkillsTab("mastery");
+    else void wm.show("skills");
+  };
 
   const chat = new Chat(hud.chatRoot, character.name, (text, to, channel) => conn.chat(text, to, channel));
   chat.onPartyInvite = inviteParty;
@@ -735,7 +759,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     hud.element,
   );
-  const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma }, hud.element);
+  const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma, discount: () => mastery?.teleportDiscount ?? 0 }, hud.element);
   const specWin = new SpecWindow(
     store,
     { choose: (npc, spec) => conn.specCmd(SpecCmdKind.SPEC_CMD_CHOOSE, npc, spec), myClass: () => character.class, skills: () => welcome.skills },
@@ -953,16 +977,34 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     hotkey: keys().skills,
     width: 1000,
     height: 820, // 5 degraus (a janela nunca passa da altura da tela)
-    build: () =>
-      buildSkills({
-        skills: welcome.skills,
-        branches: welcome.branches,
-        level: () => me().myLevel,
-        progress: () => progress,
-        onProgress,
-        learn: (ranks) => conn.learnSkills(ranks),
-        toHotbar: (id, i) => toHotbar(`skill:${id}`, i),
-      }),
+    // Duas abas: a árvore da classe e a Maestria (nível 30).
+    build: () => {
+      const w = skillsWithMastery({
+        tree: buildSkills({
+          skills: welcome.skills,
+          branches: welcome.branches,
+          level: () => me().myLevel,
+          progress: () => progress,
+          onProgress,
+          learn: (ranks) => conn.learnSkills(ranks),
+          toHotbar: (id, i) => toHotbar(`skill:${id}`, i),
+        }),
+        mastery: () =>
+          buildMastery({
+            tree: () => masteryTree,
+            state: () => mastery,
+            onChange: listen(masteryListeners),
+            request: () => conn.masteryCmd(MasteryCmdKind.MASTERY_CMD_GET),
+            spend: (node) => conn.masteryCmd(MasteryCmdKind.MASTERY_CMD_SPEND, node),
+            respec: () => conn.masteryCmd(MasteryCmdKind.MASTERY_CMD_RESPEC),
+          }),
+        tab: skillsTab,
+        onTab: (t) => (skillsTab = t),
+      });
+      selectSkillsTab = w.select;
+      w.root.addEventListener("win-close", () => (selectSkillsTab = null));
+      return w.root;
+    },
   });
   reg({
     id: "party",
@@ -1192,7 +1234,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       conn.pickUp(id);
     },
     isEnemy: (id, force) => entities.isEnemy(id) || entities.canAttack(id, force || forcedId === id),
-  });
+  }, picks);
   const stopTouchCamera = setupTouchCamera(canvas, world.camera);
   const stopAudio = gameAudio.attachWorld({
     scene: world.scene,
@@ -1574,6 +1616,24 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           for (const fn of achListeners) fn();
           break;
         }
+        case "mastery": {
+          const m = msg.msg.value;
+          const prev = mastery;
+          mastery = m;
+          hud.setMastery(m);
+          // XP ganha no 30 vira o aviso do canto, e o ponto ganho, o banner (o chat avisa também).
+          if (prev?.active && m.active) {
+            if (m.level > prev.level) hud.masteryBanner(m.level);
+            else if (m.xp > prev.xp) hud.lootLine(`+${(m.xp - prev.xp).toLocaleString("pt-BR")} XP de Maestria`, "xp");
+          }
+          refreshBadges();
+          for (const fn of masteryListeners) fn();
+          break;
+        }
+        case "masteryTree":
+          masteryTree = msg.msg.value;
+          for (const fn of masteryListeners) fn();
+          break;
         case "specChoice": {
           const c = msg.msg.value;
           const info = entities.info(c.npcId);

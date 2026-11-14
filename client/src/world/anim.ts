@@ -56,6 +56,20 @@ export class AnimController {
   private stopLeft = 0;
   /** Velocidade da corrida no último quadro (para devolver depois da pausa). */
   private runRatio = 1;
+  /**
+   * LOD de animação: false = fora da tela ou longe. Os grupos ficam pausados (pose
+   * congelada) e as ações não tocam: nada de stop()/start(), que varrem todas as animações
+   * ativas da cena no Babylon.
+   */
+  private active = true;
+  /** Grupos distintos do personagem (ataque e skill podem ser o mesmo clipe). */
+  private groups: AnimationGroup[];
+  /** Grupos pausados ao sair de cena, retomados ao voltar. */
+  private paused: AnimationGroup[] = [];
+  /** Morte ou emote em loop pedidos fora de cena: tocam ao voltar (a morte já no fim). */
+  private deferred: { role: AnimRole; opts: PlayOpts } | null = null;
+  /** Uma ação foi cortada fora de cena: volta à pose de descanso antes de retomar. */
+  private resetOnWake = false;
 
   /**
    * resetPose: devolve os ossos à pose de descanso quando uma ação sai.
@@ -66,6 +80,7 @@ export class AnimController {
     private resetPose: () => void = () => {},
     private impacts: Partial<Record<AnimRole, number>> = {},
   ) {
+    this.groups = [...new Set(anims.values())];
     const idle = anims.get("idle");
     const run = anims.get("run");
     if (idle) {
@@ -132,6 +147,23 @@ export class AnimController {
     const speed = opts.speed ?? 1;
     const start = this.startAt(role, opts.lead);
     const impact = this.impacts[role];
+    const lands = impact !== undefined && opts.lead !== undefined ? (impact - start) / speed : 0;
+    if (!this.active) {
+      // Fora de cena: golpe, apanhar e acenar não aparecem; a morte e o emote em loop ficam
+      // para quando voltar. O instante do impacto é o mesmo (o combate agenda por ele).
+      // Um emote que estava pausado sai: a ação nova toma o lugar dele, como em cena.
+      if (this.action && !this.holding) {
+        this.action.stop();
+        this.action = null;
+        this.actionWeight = 0;
+        this.actionDone = true;
+        this.resetOnWake = true;
+      }
+      this.deferred = opts.hold || opts.loop ? { role, opts } : null;
+      this.holding = !!opts.hold;
+      this.looping = !!opts.loop;
+      return lands;
+    }
     // A ação anterior sai aos poucos (sem estalo de pose). Se é o mesmo clipe, reinicia
     // com o peso que já tinha.
     let weight = 0;
@@ -169,18 +201,19 @@ export class AnimController {
         this.actionDone = true;
       }
     });
-    return impact !== undefined && opts.lead !== undefined ? (impact - start) / speed : 0;
+    return lands;
   }
 
   /** Um emote em loop (dançar, sentar) está tocando. */
   get emoting(): boolean {
-    return this.looping && this.action !== null;
+    return this.looping && (this.action !== null || this.deferred !== null);
   }
 
   /** Acaba o emote em loop: o corpo volta à locomoção aos poucos. */
   endEmote(): void {
     if (!this.looping) return;
     this.looping = false;
+    this.deferred = null;
     if (this.action) this.fadeOut(this.action, this.actionWeight);
     this.action = null;
     this.actionWeight = 0;
@@ -211,6 +244,7 @@ export class AnimController {
   /** Volta ao normal (ao reviver). */
   reset(): void {
     if (this.stopLeft > 0) this.resume();
+    this.deferred = null;
     this.holding = false;
     this.looping = false;
     this.frozen = false;
@@ -238,21 +272,71 @@ export class AnimController {
   }
 
   /**
-   * active = false (fora da tela ou longe): todos os pesos vão a 0 e o Babylon deixa de
-   * calcular as animações; o esqueleto fica congelado na última pose até voltar.
+   * Saiu de cena: a ação de um instante acaba ali (sem voltar à pose, que ainda pode estar
+   * na tela de longe) e os grupos que tocam são pausados. Morte e emote em loop só pausam.
+   */
+  private sleep(): void {
+    const a = this.action;
+    if (a && !this.holding && !this.looping) {
+      a.stop();
+      this.action = null;
+      this.actionWeight = 0;
+      this.actionDone = true;
+      this.resetOnWake = true;
+    }
+    for (const f of this.fading) f.g.stop();
+    if (this.fading.length) this.resetOnWake = true;
+    this.fading.length = 0;
+    for (const g of this.groups) {
+      if (!g.isPlaying) continue;
+      g.pause();
+      this.paused.push(g);
+    }
+  }
+
+  /** Voltou para a cena: retoma os grupos e toca o que ficou pendente. */
+  private wake(): void {
+    if (this.resetOnWake) {
+      this.resetOnWake = false;
+      this.queueReset();
+    }
+    for (const g of this.paused) g.restart(); // grupo parado nesse meio-tempo não volta
+    this.paused.length = 0;
+    const d = this.deferred;
+    if (!d) return;
+    this.deferred = null;
+    this.holding = false;
+    this.looping = false;
+    this.play(d.role, d.opts);
+    const g = this.action;
+    if (d.opts.hold && g) {
+      // Morreu fora de cena: aparece já caído (último quadro), sem a queda.
+      this.actionWeight = 1;
+      g.weight = 1;
+      g.goToFrame(g.to);
+      g.pause();
+      this.frozen = true;
+    }
+  }
+
+  /**
+   * active = false (fora da tela ou longe): os grupos pausam e o esqueleto fica congelado
+   * na última pose até voltar (ver sleep/wake).
    */
   update(dt: number, moving: boolean, runSpeedRatio: number, active = true): void {
     this.runRatio = runSpeedRatio;
+    if (active !== this.active) {
+      this.active = active;
+      if (active) this.wake();
+      else this.sleep();
+    }
     if (this.stopLeft > 0) {
       // Pausa de impacto: pose e pesos ficam como estão até ela acabar.
       this.stopLeft -= dt;
       if (this.stopLeft > 0) return;
       this.resume();
     }
-    if (!active) {
-      for (const g of this.anims.values()) g.weight = 0;
-      return;
-    }
+    if (!active) return;
     const k = 1 - Math.exp(-BLEND_RATE * dt);
     this.runWeight += ((moving && !this.holding ? 1 : 0) - this.runWeight) * k;
     // A ação chega ao fim no próximo quadro: para ali (velocidade 0, ainda na mistura). Em

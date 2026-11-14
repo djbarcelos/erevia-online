@@ -152,3 +152,9 @@ func (z *Zone) onClientStats(p *entity, m *pb.ClientStats) {
 	}
 	z.track(p, "fps", "", int64(m.FpsAvg+0.5), map[string]any{"fps_low": m.FpsLow, "device": dev, "seconds": m.Seconds})
 }
+
+// trackMastery: kind "mastery", ponto de Maestria ganho no nível 30 (ref "point", amount =
+// a Maestria nova, extra.gained = pontos de uma vez).
+func (z *Zone) trackMastery(p *entity, level, gained int) {
+	z.track(p, "mastery", "point", int64(level), map[string]any{"gained": gained})
+}
