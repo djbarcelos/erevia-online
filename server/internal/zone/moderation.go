@@ -217,7 +217,7 @@ func (z *Zone) command(p *entity, text string) {
 			"/ban Nome [motivo] · /unban Nome · /tp X Z · /goto Nome · /summon Nome · "+
 			"/give Nome item|moedas [qtd] · /anuncio texto · /online · "+
 			"/evento invasao [agora|parar] · /evento xp2 horas|off · /maestria xp N [Nome] · /maestria dia [Nome] · "+
-			"/contrato andar N [Nome] · /contrato dia [Nome] · /contrato rep bastion|guard N [Nome]")
+			"/contrato andar N [Nome] · /contrato dia [Nome] · /contrato rep bastion|guard N [Nome] · /vitalidade N [Nome]")
 	case "/kick":
 		z.gmKick(p, args)
 	case "/mute":
@@ -246,6 +246,8 @@ func (z *Zone) command(p *entity, text string) {
 		z.gmContract(p, args)
 	case "/maestria":
 		z.gmMastery(p, args)
+	case "/vitalidade":
+		z.gmVitality(p, args)
 	default:
 		z.system(p, "Comando desconhecido: "+fields[0]+" (/gm lista os comandos)")
 	}

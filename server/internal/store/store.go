@@ -97,6 +97,9 @@ type Character struct {
 	// Maestria (nível máximo): barra, bônus diário e pontos de cada nó.
 	Mastery  game.MasteryState `json:"-"`
 	Zone     string            `json:"-"` // mapa onde está (id; "starter" = o principal)
+	// Vitalidade: o estoque, a última saída e o maior nível da conta (só em
+	// CharacterForAccount; a zona enche o que passou fora do jogo).
+	Vitality game.VitalityState `json:"-"`
 	kitGiven bool
 	// Contratos do quadro e reputação com as facções (tunnel#157).
 	Contracts  game.ContractState   `json:"-"`
@@ -141,6 +144,7 @@ type CharacterState struct {
 	Title        string
 	Spec         string            // especialização ("" = nenhuma)
 	Mastery      game.MasteryState // Maestria (o nível vai também em mastery_level, para o ranking)
+	Vitality     int64             // XP bônus da vitalidade (characters.vitality)
 	Seq          int64             // salvamento mais velho que o gravado é ignorado
 	// Contratos aceitos hoje e nesta semana e a reputação com as facções (tunnel#157).
 	Contracts  game.ContractState
@@ -418,6 +422,9 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 			Scan(&c.GM, &c.MutedUntil); err != nil {
 			return err
 		}
+		if c.Vitality, err = loadVitality(ctx, tx, c.ID, accountID); err != nil {
+			return err
+		}
 		c.Storage, err = loadStorage(ctx, tx, accountID)
 		return err
 	})
@@ -455,6 +462,20 @@ func loadItems(ctx context.Context, tx pgx.Tx, characterID int64) ([]game.ItemRe
 		r.Equipped, r.Slot, r.Enchant = place == 1, int(slot), int(enchant)
 		return r, err
 	})
+}
+
+// loadVitality lê a vitalidade, a última saída (last_seen_at, gravado a cada salvamento) e
+// o maior nível da conta, uma vez no login (a recuperação não consulta nada por abate).
+func loadVitality(ctx context.Context, tx pgx.Tx, characterID, accountID int64) (game.VitalityState, error) {
+	var v game.VitalityState
+	var seen *time.Time
+	err := tx.QueryRow(ctx, `SELECT vitality, last_seen_at,
+			(SELECT coalesce(max(level), 0) FROM characters WHERE account_id = $2)
+		FROM characters WHERE id = $1`, characterID, accountID).Scan(&v.Stored, &seen, &v.AccountTop)
+	if seen != nil {
+		v.LastSeen = *seen
+	}
+	return v, err
 }
 
 // loadStorage lê o armazém da conta.
@@ -554,7 +575,7 @@ func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) 
 				achievements, c.Title, c.Spec, mastery, max(c.Mastery.Points, 0), contracts, reputation, bestiary, c.Zone)
 		}
 		br := tx.SendBatch(ctx, batch)
-		var ids []int64
+		var ids, vits []int64
 		var rows [][]any
 		for _, c := range order {
 			var id int64
@@ -567,6 +588,7 @@ func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) 
 				return err
 			}
 			ids = append(ids, id)
+			vits = append(vits, max(c.Vitality, 0))
 			for _, it := range c.Items {
 				rows = append(rows, []any{id, placeOf(it), int16(it.Slot), it.ItemID, int32(it.Count), int16(it.Enchant)})
 			}
@@ -575,6 +597,11 @@ func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) 
 			return err
 		}
 		if len(ids) > 0 {
+			// A vitalidade vai à parte, só para quem foi gravado acima (save_seq já conferido).
+			if _, err := tx.Exec(ctx, `UPDATE characters c SET vitality = v.vit
+				FROM unnest($1::bigint[], $2::bigint[]) AS v(id, vit) WHERE c.id = v.id`, ids, vits); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, `DELETE FROM character_items WHERE character_id = ANY($1)`, ids); err != nil {
 				return err
 			}

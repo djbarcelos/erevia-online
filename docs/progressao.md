@@ -160,6 +160,30 @@ fica em ~148 h.
   segunda classe (nível 20) com ~18 h de jogo, e o fim é a parte longa, como no Lineage 2.
 - Referência: o WoW Classic leva ~150–240 h até o 60.
 
+## Vitalidade (tunnel#150)
+
+Quem joga pouco ficaria para trás numa curva de ~148 h. A vitalidade (`game/vitality.go`,
+detalhes no README) dobra a XP de monstro com um estoque que enche fora do jogo (1,5% do
+teto por hora, teto = `XPToNext(nível)`), então quem joga 1 h por dia caça quase sempre em
+dobro. A meta: **1 h por dia leva no máximo ~60% do tempo de jogo de quem joga sem parar**.
+Como as missões não dobram, o piso seria 50%. Simulação na progressão teórica acima
+(`go run ./cmd/balance -vitalidade`; `TestVitalityOneHourPerDay` trava a meta):
+
+| Plano | Horas de jogo | Dias corridos | % do tempo de quem joga sem parar | XP da vitalidade |
+|---|---:|---:|---:|---:|
+| Sem parar (sem vitalidade) | 147,9 | 7 | 100,0% | 0,0% |
+| 1 h por dia, sem vitalidade | 147,9 | 148 | 100,0% | 0,0% |
+| 1 h por dia, com vitalidade | 76,6 | 77 | 51,8% | 34,9% |
+| 2 h por dia, com vitalidade | 81,0 | 41 | 54,8% | 34,3% |
+| 4 h por dia, com vitalidade | 93,3 | 24 | 63,1% | 30,3% |
+| 2º personagem, sem parar (recuperação) | 103,1 | 5 | 69,7% | 0,0% |
+| 2º personagem, 1 h por dia, com vitalidade e recuperação | 57,7 | 58 | 39,0% | 29,0% |
+
+Na conta, as missões não custam tempo (os abates delas já estão na caça), por isso dobrar a
+XP de monstro chega perto de cortar o tempo pela metade. Nos primeiros níveis o estoque é
+pequeno e acaba na sessão; do 20 em diante 1 h de caça não esgota os ~35% do teto que
+enchem num dia.
+
 ## Conversão da XP salva
 
 O nível sai da XP total salva no personagem (`characters.xp`, `game.LevelForXP`), então a
@@ -192,13 +216,14 @@ Tudo vai para `game_events` (migração 00011) e é lido por views da migração
 | `kill` | cada abate (`ref` = monstro, `amount` = nível do monstro, `level` = nível do jogador) |
 | `death` | cada morte (`ref` = quem matou) |
 | `gold` | ouro que entra (+) e sai (−), com a origem em `ref` |
-| `xp` (novo) | XP por fonte: `ref` = `monster`, `party`, `night_bonus`, `event_bonus`, `quest`, `invasion` ou `death_loss` (negativa); `level` = nível em que a XP veio |
+| `xp` (novo) | XP por fonte: `ref` = `monster`, `party`, `night_bonus`, `event_bonus`, `quest`, `invasion`, `death_loss` (negativa), `vitality` ou `catchup`; `level` = nível em que a XP veio |
 
 O `xp` não grava uma linha por abate: a zona só soma num mapa (personagem → fonte, no
 nível atual) e grava a cada ~60 s, ao subir de nível e ao sair (`zone/xptally.go`). A XP de
 um abate é dividida assim: primeiro sai o extra da XP em dobro (`event_bonus`), depois o da
-noite (`night_bonus`); o resto é `monster` (sozinho) ou `party` (em grupo). A soma das
-fontes é a XP que o jogador ganhou. No nível máximo a XP não entra, então não é somada.
+noite (`night_bonus`); o resto é `monster` (sozinho) ou `party` (em grupo). Por cima vêm
+o extra da recuperação do 2º personagem (`catchup`, também nas missões) e o da vitalidade
+(`vitality`). A soma das fontes é a XP que o jogador ganhou. No nível máximo a XP não entra, então não é somada.
 
 ## O que olhar quando houver dados
 

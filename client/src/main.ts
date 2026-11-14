@@ -1836,6 +1836,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           for (const fn of masteryListeners) fn();
           break;
         }
+        case "vitality":
+          hud.setVitality(msg.msg.value);
+          break;
         case "masteryTree":
           masteryTree = msg.msg.value;
           for (const fn of masteryListeners) fn();

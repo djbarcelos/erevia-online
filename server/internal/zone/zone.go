@@ -122,6 +122,8 @@ type JoinInfo struct {
 	Reputation game.ReputationState
 	// Bestiário: abates por monstro e famílias completas (bestiary.go).
 	Bestiary game.BestiaryState
+	// Vitalidade: o estoque, a última saída e o maior nível da conta (vitality.go).
+	Vitality game.VitalityState
 	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
 	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
 	LoadedAt time.Time
@@ -157,6 +159,7 @@ type SavedState struct {
 	Contracts  game.ContractState
 	Reputation game.ReputationState
 	Bestiary   game.BestiaryState
+	Vitality     int64 // XP bônus da vitalidade (vitality.go)
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Auction: operações da casa de leilões ainda sem confirmação do banco (vão na mesma
@@ -567,6 +570,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Contracts, info.Reputation = st.Contracts, st.Reputation
 		aucOps = st.Auction
 		info.Bestiary = st.Bestiary
+		info.Vitality.Stored, info.Vitality.LastSeen = st.Vitality, r.at
 		delete(z.recent, info.ID)
 	}
 
@@ -682,6 +686,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.achOnJoin(p)
 	z.masteryOnJoin(p)
 	z.contractsOnJoin(p)
+	z.vitalityOnJoin(p, info.Vitality, info.hop != nil)
 	z.eventsOnJoin(p)
 	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
@@ -884,6 +889,9 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysXP2, z.updateXP2)
 		z.runSystem(sysXPTally, z.flushXPTallies)
 		z.runSystem(sysAdminOps, z.updateAdminOps)
+		if z.tick%uint32(z.cfg.TickRate*vitalityTownEvery) == 0 {
+			z.runSystem(sysVitality, z.updateVitalityTown)
+		}
 		if len(z.pending) > 0 {
 			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}
@@ -1007,6 +1015,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Mastery: p.pl.mastery.save(), Bestiary: p.pl.bst.state(), Auction: z.auctionSave(p), Zone: z.mapID(),
 	}
 	s.Contracts, s.Reputation = p.pl.contracts.save()
+	s.Vitality = p.pl.vit.stored
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
 		if z.cfg.NoTown {

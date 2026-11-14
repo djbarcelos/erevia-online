@@ -460,7 +460,8 @@ func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64
 	for _, m := range takers {
 		if xp := int64(math.Round(total * float64(m.level) / float64(sum))); xp > 0 {
 			z.tallyMonsterXP(m, xp, z.night, z.xpEventMult(), len(takers) > 1) // telemetria (xptally.go)
-			z.grantXP(m, xp)
+			// Com a recuperação e a vitalidade (vitality.go).
+			z.grantXP(m, z.monsterXPBonus(m, xp))
 		}
 		z.burnKarma(m, dead.level)
 		z.track(m, "kill", dead.mon.def.ID, int64(dead.level), nil)

@@ -68,6 +68,8 @@ type Character struct {
 	// Bestiário: abates por monstro e famílias completas.
 	Bestiary game.BestiaryState
 	Zone         string            // mapa onde está ("" = starter)
+	// Vitalidade: estoque, última saída e maior nível da conta.
+	Vitality game.VitalityState
 }
 
 // ErrCharacterNotFound indica personagem inexistente ou de outra conta.
@@ -145,6 +147,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Contracts: char.Contracts, Reputation: char.Reputation,
 		Bestiary: char.Bestiary,
 		Zone: char.Zone,
+		Vitality: char.Vitality,
 	})
 
 	s.readPump(ctx, sess, char.ID)

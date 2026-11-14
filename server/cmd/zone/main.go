@@ -264,6 +264,7 @@ func saveBatch(st *store.Store, rep reporter, z *zone.Zone, log *slog.Logger, ba
 			Contracts: p.Contracts, Reputation: p.Reputation,
 			Auction:  auctionOps(p.Auction),
 			Bestiary: p.Bestiary,
+			Vitality: p.Vitality,
 		}
 		if s := p.Storage; s != nil {
 			states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
@@ -347,6 +348,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery, Zone: c.Zone,
 		Contracts: c.Contracts, Reputation: c.Reputation,
 		Bestiary: c.Bestiary,
+		Vitality: c.Vitality,
 	}, nil
 }
 

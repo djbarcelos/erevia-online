@@ -187,6 +187,8 @@ func (z *Zone) handOff(p *entity, st *SavedState) bool {
 		LoadedAt: time.Now(),
 	}
 	info.Contracts, info.Reputation = pl.contracts.save() // contratos e reputação são do personagem
+	// A vitalidade também: o estoque e o maior nível da conta (sem tempo fora: não enche).
+	info.Vitality = game.VitalityState{Stored: pl.vit.stored, AccountTop: pl.vit.top}
 	if s := z.storageOf(p); s != nil {
 		info.Storage = &StorageData{Gold: s.gold, Items: s.records()}
 	} else {

@@ -136,6 +136,8 @@ type playerState struct {
 	// Casa de leilões: operações a caminho do banco, anúncios vistos e anexos do correio.
 	auc auctionState
 	hop     hopState // portão e zonas (gate.go)
+	// Vitalidade e recuperação (vitality.go).
+	vit vitalityState
 }
 
 // rank da skill (0 = não aprendida).
