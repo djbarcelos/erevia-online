@@ -20,6 +20,9 @@ test("um erro de JavaScript ou um console.error na página reprova o teste", asy
   await page.evaluate(() => setTimeout(() => { throw new Error("erro de propósito"); }));
   await expect.poll(() => problems.list.join("\n")).toContain("pageerror: Error: erro de propósito");
   expect(() => problems.check(), "o guarda reprova um pageerror").toThrow();
+  // O relatório de erros do cliente (client/src/net/errors.ts) manda o mesmo erro ao servidor,
+  // em lote a cada 10 s, e o guarda também pega esse envio.
+  await expect.poll(() => problems.list.join("\n"), { timeout: 20_000 }).toMatch(/relatório de erro do cliente: .*erro de propósito/);
 
   problems.list.length = 0;
   await page.evaluate(() => console.error("console.error de propósito"));

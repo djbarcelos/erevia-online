@@ -1,6 +1,9 @@
 import { test as base, expect, type ConsoleMessage, type Page } from "@playwright/test";
 
 /**
+ * Guarda de erros, ligado em todo teste: junta os pageerror, console.error, avisos graves e
+ * relatórios de erro que o cliente manda ao servidor, e reprova o teste no fim se houver algum.
+ *
  * Erros que podem aparecer sem quebrar o teste. A lista é curta de propósito: qualquer
  * outro `pageerror` ou `console.error` deixa o teste vermelho.
  */
@@ -42,6 +45,10 @@ function watch(page: Page): Problems {
     }
   });
   page.on("crash", () => list.push("a aba do navegador travou (crash)"));
+  // O cliente manda ao servidor os erros que capturou (client/src/net/errors.ts): nenhum pode sair.
+  page.on("request", (r) => {
+    if (pathOf(r.url()) === "/api/client-errors") list.push(`relatório de erro do cliente: ${(r.postData() ?? "").slice(0, 600)}`);
+  });
   return {
     list,
     check: () => expect(list, "erros de JavaScript no navegador").toEqual([]),

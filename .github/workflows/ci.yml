@@ -68,7 +68,7 @@ jobs:
     # roteiro de e2e/tests no Chromium headless com WebGL por software (SwiftShader).
     name: Navegador (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:17
@@ -107,7 +107,7 @@ jobs:
         working-directory: client
         run: |
           npm ci --no-audit --no-fund
-          npx vite build
+          npm run build
       - name: Build do servidor
         working-directory: server
         run: go build -o "$RUNNER_TEMP/zone" ./cmd/zone
@@ -130,7 +130,7 @@ jobs:
         run: npx playwright test
       - name: Log do servidor
         if: failure()
-        run: cp "$RUNNER_TEMP/server.log" e2e/test-results/ 2>/dev/null || cp "$RUNNER_TEMP/server.log" e2e/ || true
+        run: cp "$RUNNER_TEMP/server.log" e2e/server.log || true
       - name: Screenshots, vídeo e trace
         if: failure()
         uses: actions/upload-artifact@v4

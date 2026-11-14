@@ -28,7 +28,8 @@ export default defineConfig({
     channel: process.env.E2E_CHANNEL || undefined,
     locale: "pt-BR",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    // Vídeo custa CPU (e o WebGL já é por software): no CI, só na segunda tentativa, a de quem falhou.
+    video: CI ? "on-first-retry" : "retain-on-failure",
     trace: "retain-on-failure",
     actionTimeout: 30_000,
     launchOptions: {

@@ -37,13 +37,21 @@ async function barPct(bar: Locator): Promise<number> {
   return bar.evaluate((e) => parseFloat((e as HTMLElement).style.getPropertyValue("--v")) || 0);
 }
 
-/** Onde a entidade aparece no canvas agora (pixels da página), ou null se está fora da tela. */
+/**
+ * Onde a entidade aparece no canvas agora (pixels da página), ou null se está fora da tela ou
+ * embaixo do HUD (chat, minimapa, barra): o clique precisa cair no canvas.
+ */
 async function onScreen(page: Page, id: number): Promise<{ x: number; y: number } | null> {
-  const box = (await page.locator("#game").boundingBox())!;
-  const p = await page.evaluate((id) => window.__ereviaE2E!.screenPos(id), id);
-  // Margem para não clicar embaixo do HUD (minimapa, barra de atalhos).
-  if (!p || p.x < 80 || p.x > box.width - 260 || p.y < 80 || p.y > box.height - 110) return null;
-  return { x: box.x + p.x, y: box.y + p.y };
+  return page.evaluate((id) => {
+    const canvas = document.getElementById("game")!;
+    const r = canvas.getBoundingClientRect();
+    const p = window.__ereviaE2E!.screenPos(id);
+    if (!p) return null;
+    const x = r.left + p.x;
+    const y = r.top + p.y;
+    if (x < 8 || y < 8 || x > innerWidth - 8 || y > innerHeight - 8) return null;
+    return document.elementFromPoint(x, y) === canvas ? { x, y } : null;
+  }, id);
 }
 
 /** Quantidade mostrada no atalho da tecla n (1–9) da barra. */
@@ -83,7 +91,7 @@ async function walkByMap(page: Page, x: number, z: number): Promise<void> {
 
 /** O canvas 3D tem imagem de verdade (não é uma tela de uma cor só). */
 async function expectSceneDrawn(page: Page): Promise<void> {
-  const png = await page.locator("#game").screenshot();
+  const png = await page.locator("#game").screenshot({ timeout: 60_000 });
   const colors = await page.evaluate(async (b64) => {
     const img = new Image();
     img.src = `data:image/png;base64,${b64}`;
@@ -108,18 +116,62 @@ async function step(name: string, fn: () => Promise<void>): Promise<void> {
   console.log(`  ✓ ${name} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 
-/** Espera o HUD do personagem no mundo. */
-async function expectInWorld(page: Page): Promise<void> {
-  await expect(page.locator(".hud.hud-screen")).toBeVisible({ timeout: 60_000 });
-  await expect(page.locator(".me-name")).toContainText(NAME);
-  await expect.poll(() => page.evaluate(() => window.__ereviaE2E?.me() ?? null), { timeout: 30_000 }).not.toBeNull();
+/** O que a página fez até agora (ouvintes ligados no começo do teste). */
+interface Watch {
+  navigations: number;
+  sceneryLoaded: boolean;
+}
+
+function watchPage(page: Page): Watch {
+  const w: Watch = { navigations: 0, sceneryLoaded: false };
+  page.on("framenavigated", (f) => {
+    if (f !== page.mainFrame()) return;
+    w.navigations++;
+    w.sceneryLoaded = false;
+  });
+  // O cliente avisa no console quando o cenário (árvores, cidade, montanhas) termina de carregar.
+  page.on("console", (m) => {
+    if (m.text().startsWith("cenário:")) w.sceneryLoaded = true;
+  });
+  return w;
+}
+
+/**
+ * Espera o mundo pronto: HUD com o nome do personagem, o gancho de teste e o cenário.
+ *
+ * Se a página recarregar no meio, é a reconexão automática do cliente: com WebGL por software
+ * a primeira carga pode travar a página por mais de 30 s, e o servidor derruba quem fica 30 s
+ * sem Ping. Espera de novo, uma vez só, e deixa um aviso no relatório e no log.
+ */
+async function waitWorldReady(page: Page, w: Watch): Promise<boolean> {
+  for (let attempt = 1; ; attempt++) {
+    const nav = w.navigations;
+    try {
+      await expect(page.locator(".hud.hud-screen")).toBeVisible({ timeout: 90_000 });
+      await expect(page.locator(".me-name")).toContainText(NAME);
+      await expect.poll(() => page.evaluate(() => window.__ereviaE2E?.me() ?? null), { timeout: 90_000 }).not.toBeNull();
+      await expect.poll(() => w.sceneryLoaded, { message: "cenário carregado", timeout: 120_000 }).toBe(true);
+      if (w.navigations === nav) return attempt > 1;
+    } catch (err) {
+      if (w.navigations === nav || attempt > 1) throw err;
+    }
+    expect(attempt, "a página recarregou mais de uma vez ao entrar no mundo").toBe(1);
+    const msg = "a página travou mais de 30 s ao carregar o mundo e o cliente reconectou sozinho";
+    test.info().annotations.push({ type: "aviso", description: msg });
+    console.log(`  ! ${msg}`);
+  }
 }
 
 test("jogador novo: entrar, andar, janelas, loja, combate, poção e voltar depois de recarregar", async ({ page, problems }) => {
-  // O cliente avisa no console quando o cenário (árvores, cidade, montanhas) termina de carregar.
-  let sceneryLoaded = false;
-  page.on("console", (m) => {
-    if (m.text().startsWith("cenário:")) sceneryLoaded = true;
+  const watch = watchPage(page);
+  // Qualidade gráfica salva como Baixa (como se o jogador tivesse escolhido em Configurações):
+  // na Alta (SSAO, FXAA), o WebGL por software trava a página por dezenas de segundos.
+  await page.addInitScript(() => {
+    try {
+      if (!localStorage.getItem("erevia.settings")) localStorage.setItem("erevia.settings", JSON.stringify({ quality: "baixa", qualityPicked: true }));
+    } catch {
+      // sem storage, fica o padrão do aparelho
+    }
   });
 
   await step("login de desenvolvimento pela tela inicial", async () => {
@@ -158,9 +210,17 @@ test("jogador novo: entrar, andar, janelas, loja, combate, poção e voltar depo
     await page.reload();
     await expect(page.locator(".roster-slot", { hasText: NAME })).toBeVisible({ timeout: 30_000 });
     await page.getByRole("button", { name: "Entrar no mundo" }).click();
-    await expectInWorld(page);
-    await expect.poll(() => sceneryLoaded, { message: "cenário carregado", timeout: 120_000 }).toBe(true);
+    const reconnected = await waitWorldReady(page, watch);
     await expectSceneDrawn(page);
+    // Primeira entrada: a janela "O que há de novo" abre sozinha (uma vez por versão; depois de
+    // uma reconexão ela pode já ter aberto antes da página recarregar).
+    const news = page.locator('[data-win="news"]');
+    if (reconnected) await news.waitFor({ state: "visible", timeout: 20_000 }).catch(() => undefined);
+    else await expect(news).toBeVisible({ timeout: 30_000 });
+    if (await news.isVisible()) {
+      await news.getByRole("button", { name: "Fechar", exact: true }).filter({ hasText: "Fechar" }).click();
+      await expect(news).toHaveCount(0);
+    }
     problems.check();
   });
 
@@ -177,6 +237,18 @@ test("jogador novo: entrar, andar, janelas, loja, combate, poção e voltar depo
     problems.check();
   });
 
+  await step("abrir e fechar configurações (Esc)", async () => {
+    const win = page.locator('[data-win="settings"]');
+    await page.keyboard.press("Escape");
+    await expect(win).toBeVisible();
+    await win.getByRole("tab", { name: "Gráficos" }).click();
+    // A qualidade salva antes de entrar (Baixa) é a que a janela mostra.
+    await expect(win.locator(".seg").getByRole("button", { name: "Baixa", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+    await expect(win).toHaveCount(0);
+    problems.check();
+  });
+
   await step("abrir e fechar inventário (I), personagem (C), skills (K) e mapa (M)", async () => {
     for (const [key, id] of [["i", "inventory"], ["c", "character"], ["k", "skills"], ["m", "map"]] as const) {
       const win = page.locator(`[data-win="${id}"]`);
@@ -186,15 +258,6 @@ test("jogador novo: entrar, andar, janelas, loja, combate, poção e voltar depo
       await page.keyboard.press(key);
       await expect(win, `janela ${id} fecha com ${key}`).toHaveCount(0);
     }
-  });
-
-  await step("abrir e fechar configurações (Esc)", async () => {
-    const win = page.locator('[data-win="settings"]');
-    await page.keyboard.press("Escape");
-    await expect(win).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(win).toHaveCount(0);
-    problems.check();
   });
 
   await step("comprar uma Poção de Mana Menor da Mercadora Lívia", async () => {
@@ -287,7 +350,7 @@ test("jogador novo: entrar, andar, janelas, loja, combate, poção e voltar depo
       await expect(page.locator(".roster-slot", { hasText: NAME })).toHaveAttribute("aria-pressed", "true");
       await play.click();
     }
-    await expectInWorld(page);
+    await waitWorldReady(page, watch);
     // Mesmo personagem, no mesmo lugar (fora da cidade), não um novo na praça.
     const now = await hudCoords(page);
     expect(Math.hypot(now.x - where.x, now.z - where.z), `posição depois de recarregar ${JSON.stringify(now)} vs ${JSON.stringify(where)}`).toBeLessThan(15);
