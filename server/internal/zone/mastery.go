@@ -10,8 +10,9 @@ import (
 	"erevia/server/internal/pb"
 )
 
-// Maestria (game/mastery.go): no nível 30 a XP enche a barra de Maestria e cada barra
-// cheia dá 1 ponto para a árvore. Nada roda por tick: o estado só muda quando o jogador
+// Maestria (game/mastery.go): no nível máximo (40) a XP enche a barra de Maestria e cada
+// barra cheia dá 1 ponto para a árvore. Quem ganhou pontos no 30 (o máximo de antes) ainda
+// usa a árvore do 30 ao 39, mas a XP volta a subir nível. Nada roda por tick: o estado só muda quando o jogador
 // ganha XP, morre, gasta ou redistribui. Os efeitos ficam somados em masteryState.bonus
 // (recalculado quando a árvore muda) e cada sistema lê só o seu valor.
 
@@ -68,6 +69,7 @@ func (z *Zone) masteryPB(p *entity) *pb.MasteryState {
 		RespecReady:      st.CanRespec(z.masteryDay()),
 		MaxLevel:         uint32(game.MasteryMaxPoints),
 		TeleportDiscount: float32(m.of(game.MStatTeleport)),
+		OpenLevel:        game.MasteryLevel,
 	}
 	for _, n := range game.MasteryNodes { // na ordem da árvore
 		if r := st.Ranks[n.ID]; r > 0 {
@@ -81,17 +83,22 @@ func (z *Zone) sendMastery(p *entity) {
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Mastery{Mastery: z.masteryPB(p)}})
 }
 
-// masteryOnJoin: no 30, credita os dias de bônus que passaram e manda o estado (o HUD
-// troca a barra de XP pela de Maestria).
+// masteryOnJoin: no nível máximo, credita os dias de bônus que passaram e manda o estado (o
+// HUD troca a barra de XP pela de Maestria). Abaixo dele, só manda para quem já tem pontos
+// (a aba da árvore continua valendo).
 func (z *Zone) masteryOnJoin(p *entity) {
-	if p.level < game.MasteryLevel {
+	st := &p.pl.mastery.st
+	if !st.Usable(p.level) {
 		return
 	}
-	p.pl.mastery.st.Refresh(z.masteryDay())
+	if p.level >= game.MasteryLevel {
+		st.Refresh(z.masteryDay())
+	}
 	z.sendMastery(p)
 }
 
-// masteryOpened: acabou de chegar ao 30. A XP que passou do nível já vai para a barra.
+// masteryOpened: acabou de chegar ao nível máximo. A XP que passou do nível já vai para a
+// barra.
 func (z *Zone) masteryOpened(p *entity) {
 	extra := p.pl.xp - game.XPLevelStart(game.MasteryLevel)
 	if extra > 0 {
@@ -106,7 +113,7 @@ func (z *Zone) masteryOpened(p *entity) {
 	z.sendMastery(p)
 }
 
-// grantMasteryXP: XP ganha no 30 (já com grupo, diferença de nível e XP em dobro).
+// grantMasteryXP: XP ganha no nível máximo (já com grupo, diferença de nível e XP em dobro).
 func (z *Zone) grantMasteryXP(p *entity, xp int64) {
 	st := &p.pl.mastery.st
 	if xp <= 0 || st.Points >= game.MasteryMaxPoints {
@@ -140,8 +147,8 @@ func (z *Zone) grantMasteryXP(p *entity, xp int64) {
 	})
 }
 
-// masteryDeath: morrer no 30 tira DeathXPLoss da barra (menos o desconto da Segunda
-// Chance), times vezes (karma: o dobro), sem tirar ponto. Devolve quanto saiu.
+// masteryDeath: morrer no nível máximo tira game.DeathLossShare da barra (menos o desconto
+// da Segunda Chance), times vezes (karma: o dobro), sem tirar ponto. Devolve quanto saiu.
 func (z *Zone) masteryDeath(p *entity, times int) int64 {
 	m := &p.pl.mastery
 	lost := m.st.Lose(m.st.DeathLoss(&m.bonus) * int64(times))
@@ -185,9 +192,10 @@ func (z *Zone) onMasteryCmd(p *entity, m *pb.MasteryCmd) {
 	}
 }
 
-// masteryOpen: gastar e redistribuir só no 30.
+// masteryOpen: gastar e redistribuir no nível máximo, ou com pontos de antes (ganhos quando
+// o máximo era 30).
 func (z *Zone) masteryOpen(p *entity) bool {
-	if p.level < game.MasteryLevel {
+	if !p.pl.mastery.st.Usable(p.level) {
 		z.system(p, fmt.Sprintf("A Maestria abre no nível %d.", game.MasteryLevel))
 		return false
 	}

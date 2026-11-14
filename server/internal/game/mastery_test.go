@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// Hoje a barra custa o mesmo que o último nível. Se a curva mudar (tunnel#149), este teste
-// cai de propósito: rever MasteryPointXP junto.
+// A barra custa o mesmo que o último nível (39 → 40). Se a curva mudar, este teste cai de
+// propósito: rever MasteryPointXP junto.
 func TestMasteryPointXP(t *testing.T) {
 	if MasteryPointXP != XPToNext(MaxLevel-1) {
 		t.Fatalf("MasteryPointXP = %d, XPToNext(%d) = %d: rever a constante com a curva nova (tunnel#149)",
@@ -16,6 +16,19 @@ func TestMasteryPointXP(t *testing.T) {
 	}
 	if MasteryLevel != MaxLevel || XPToNext(MaxLevel) != 0 {
 		t.Fatal("a Maestria abre no nível máximo, que não tem próximo nível")
+	}
+}
+
+// Quem ganhou pontos no 30 (o máximo de antes) continua usando a árvore do 30 ao 39; sem
+// pontos, a árvore só abre no 40.
+func TestMasteryUsableBelowMaxWithOldPoints(t *testing.T) {
+	old := MasteryState{Points: 4, Ranks: map[string]int{"wayfarer": 2}}
+	if !old.Usable(30) || !old.Usable(MaxLevel-1) || !old.Usable(MaxLevel) {
+		t.Fatal("pontos de antes valem do 30 em diante")
+	}
+	var none MasteryState
+	if none.Usable(MaxLevel-1) || !none.Usable(MaxLevel) || MasteryLevel != 40 {
+		t.Fatal("sem pontos, a Maestria abre no 40")
 	}
 }
 
@@ -129,7 +142,7 @@ func TestMasteryDailyBonus(t *testing.T) {
 		t.Fatal("no mesmo dia nada muda")
 	}
 	// Com o bônus, 1/4 da XP enche a barra inteira, e o bônus acaba junto.
-	if c, p := m.Gain(MasteryPointXP / 4); c != MasteryPointXP/4*4 || p != 0 {
+	if c, p := m.Gain(MasteryPointXP/4 - 1); c != (MasteryPointXP/4-1)*4 || p != 0 {
 		t.Fatalf("bônus 4×: credited %d, pontos %d", c, p)
 	}
 	if _, p := m.Gain(1); p != 1 || m.Rested != 0 {
@@ -165,21 +178,22 @@ func TestMasteryDailyBonus(t *testing.T) {
 }
 
 func TestMasteryDeathLoss(t *testing.T) {
-	m := MasteryState{Points: 3, XP: 50_000}
+	const into = MasteryPointXP / 2
+	m := MasteryState{Points: 3, XP: into}
 	var none MasteryBonus
 	loss := m.DeathLoss(&none)
-	if want := int64(math.Round(float64(MasteryPointXP) * DeathXPLoss)); loss != want {
-		t.Fatalf("morte tira %d, esperava 4%% da barra = %d", loss, want)
+	if want := int64(math.Round(float64(MasteryPointXP) * DeathXPLossLate)); loss != want {
+		t.Fatalf("morte tira %d, esperava 2%% da barra = %d", loss, want)
 	}
-	if lost := m.Lose(loss); lost != loss || m.XP != 50_000-loss || m.Points != 3 {
+	if lost := m.Lose(loss); lost != loss || m.XP != into-loss || m.Points != 3 {
 		t.Fatalf("perdeu %d: %+v", lost, m)
 	}
-	if lost := m.Lose(1_000_000); lost != 50_000-loss || m.XP != 0 || m.Points != 3 {
+	if lost := m.Lose(MasteryPointXP); lost != into-loss || m.XP != 0 || m.Points != 3 {
 		t.Fatalf("a barra não fica negativa e o ponto não sai: %d %+v", lost, m)
 	}
 	half := MasteryState{Points: 5, Ranks: map[string]int{"second_chance": 5}}
 	b := half.Bonus()
-	if got := half.DeathLoss(&b); got != int64(math.Round(float64(MasteryPointXP)*DeathXPLoss*0.5)) {
+	if got := half.DeathLoss(&b); got != int64(math.Round(float64(MasteryPointXP)*DeathXPLossLate*0.5)) {
 		t.Fatalf("Segunda Chance cheia: perde metade, %d", got)
 	}
 }

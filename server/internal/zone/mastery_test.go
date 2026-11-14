@@ -12,12 +12,13 @@ import (
 )
 
 // ---------------------------------------------------------------------------------------
-// Maestria (nível 30)
+// Maestria (nível máximo, 40)
 // ---------------------------------------------------------------------------------------
 
 const bar = game.MasteryPointXP
 
-// at30 entra um personagem no nível 30, sem bônus diário (as contas ficam simples).
+// at30 entra um personagem no nível máximo (o nome é de quando ele era 30), sem bônus
+// diário (as contas ficam simples).
 func at30(z *Zone, id uint32, class string, x, zz float64) (*entity, *fakePeer) {
 	p, peer := joinAt(z, id, class, x, zz, game.XPLevelStart(game.MasteryLevel))
 	p.pl.mastery.st.Rested = 0
@@ -59,7 +60,7 @@ func (f *fakePeer) lastMastery() *pb.MasteryState {
 func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
 
 func TestMasteryBarFillsFromMonsterXPWithGroupAndDoubleXP(t *testing.T) {
-	z := newCombatZone(fixed("stone_golem", 30, 30, 0))
+	z := newCombatZone(fixed("stone_golem", game.MasteryLevel, 30, 0))
 	z.SetEventSink(nopSink{})
 	m := z.onlyMonster()
 	p, peer := at30(z, 1, "knight", 26, 0)
@@ -70,7 +71,7 @@ func TestMasteryBarFillsFromMonsterXPWithGroupAndDoubleXP(t *testing.T) {
 		t.Fatalf("estado ao entrar: %+v", s)
 	}
 
-	solo := game.MonsterXP(m.mon.def, m.level, 30)
+	solo := game.MonsterXP(m.mon.def, m.level, game.MasteryLevel)
 	z.shareMonsterXP(m, []*entity{p})
 	if p.pl.mastery.st.XP != solo || p.pl.xp != start {
 		t.Fatalf("solo: barra %d (esperava %d), XP do nível %d → %d", p.pl.mastery.st.XP, solo, start, p.pl.xp)
@@ -110,7 +111,7 @@ func TestMasteryBarFillsFromMonsterXPWithGroupAndDoubleXP(t *testing.T) {
 		t.Fatalf("o HUD recebe a barra nova: %+v", s)
 	}
 	ev := findEvent(drainEvents(z), "mastery", "point")
-	if ev == nil || ev.Amount != 3 || ev.Extra["gained"] != 3 || ev.Level != 30 {
+	if ev == nil || ev.Amount != 3 || ev.Extra["gained"] != 3 || ev.Level != game.MasteryLevel {
 		t.Fatalf("telemetria: %+v", ev)
 	}
 	if p.pl.saveAt == 0 {
@@ -118,15 +119,16 @@ func TestMasteryBarFillsFromMonsterXPWithGroupAndDoubleXP(t *testing.T) {
 	}
 }
 
-func TestMasteryOpensAtLevel30AndKeepsTheOverflow(t *testing.T) {
+func TestMasteryOpensAtMaxLevelAndKeepsTheOverflow(t *testing.T) {
 	z := newCombatZone()
-	p, peer := joinAt(z, 1, "rogue", 0, 0, game.XPLevelStart(29))
+	top := game.MasteryLevel
+	p, peer := joinAt(z, 1, "rogue", 0, 0, game.XPLevelStart(top-1))
 	if peer.lastMastery() != nil {
-		t.Fatal("abaixo do 30 a barra de Maestria não vem")
+		t.Fatal("abaixo do 40 a barra de Maestria não vem")
 	}
-	z.grantXP(p, game.XPToNext(29)+1000)
+	z.grantXP(p, game.XPToNext(top-1)+1000)
 	z.tickFor(0.1)
-	if p.level != 30 || p.pl.xp != game.XPLevelStart(30) {
+	if p.level != top || p.pl.xp != game.XPLevelStart(top) {
 		t.Fatalf("nível %d, XP %d", p.level, p.pl.xp)
 	}
 	// Os 1.000 que passaram do nível entram na barra, já com o bônus do primeiro dia (4×).
@@ -139,8 +141,8 @@ func TestMasteryOpensAtLevel30AndKeepsTheOverflow(t *testing.T) {
 	}
 	// Missão e evento usam o mesmo caminho (grantXP); a recompensa da invasão no 30 é
 	// calculada em cima da barra (antes era zero).
-	if game.XPToNext(30) != 0 {
-		t.Fatal("no 30 não há próximo nível")
+	if game.XPToNext(top) != 0 {
+		t.Fatal("no 40 não há próximo nível")
 	}
 }
 
@@ -148,7 +150,7 @@ func TestMasteryDailyBonusAndDayChange(t *testing.T) {
 	brt := time.FixedZone("BRT", -3*3600)
 	now := time.Date(2026, 11, 13, 23, 50, 0, 0, brt)
 	z := newClockZone(&now)
-	p, peer := joinAt(z, 1, "knight", 0, 0, game.XPLevelStart(30))
+	p, peer := joinAt(z, 1, "knight", 0, 0, game.XPLevelStart(game.MasteryLevel))
 	st := &p.pl.mastery.st
 	if st.Rested != bar || st.Day != game.MasteryDay(now, brt) {
 		t.Fatalf("primeiro dia: %+v", st)
@@ -181,16 +183,17 @@ func TestMasteryDailyBonusAndDayChange(t *testing.T) {
 }
 
 func TestMasteryDeathTakesBarNotPoints(t *testing.T) {
-	z := newCombatZone(fixed("stone_golem", 30, 30, 0))
+	z := newCombatZone(fixed("stone_golem", game.MasteryLevel, 30, 0))
 	golem := z.onlyMonster()
 	p, peer := at30(z, 1, "knight", 26, 0)
 	st := &p.pl.mastery.st
-	st.Points, st.XP = 2, 100_000
-	loss := int64(math.Round(float64(bar) * game.DeathXPLoss))
+	const into = bar / 2
+	st.Points, st.XP = 2, into
+	loss := int64(math.Round(float64(bar) * game.DeathXPLossLate))
 
 	z.kill(p, golem)
-	if st.XP != 100_000-loss || st.Points != 2 || p.pl.xp != game.XPLevelStart(30) {
-		t.Fatalf("morte no 30: %+v (perda %d)", st, loss)
+	if st.XP != into-loss || st.Points != 2 || p.pl.xp != game.XPLevelStart(game.MasteryLevel) {
+		t.Fatalf("morte no 40: %+v (perda %d)", st, loss)
 	}
 	if !peer.systemContains("XP da barra de Maestria") {
 		t.Fatal("a mensagem de morte fala da barra")
@@ -198,10 +201,10 @@ func TestMasteryDeathTakesBarNotPoints(t *testing.T) {
 	z.respawnPlayer(p)
 
 	// Segunda Chance cheia: metade.
-	st.XP = 100_000
+	st.XP = into
 	setTree(z, p, map[string]int{"second_chance": 5})
 	z.kill(p, golem)
-	if want := 100_000 - int64(math.Round(float64(bar)*game.DeathXPLoss*0.5)); st.XP != want {
+	if want := into - int64(math.Round(float64(bar)*game.DeathXPLossLate*0.5)); st.XP != want {
 		t.Fatalf("com Segunda Chance: %d, esperava %d", st.XP, want)
 	}
 	z.respawnPlayer(p)
@@ -228,8 +231,8 @@ func TestMasterySpendCommand(t *testing.T) {
 	z := newCombatZone()
 	low, lowPeer := joinAt(z, 1, "mage", 0, 0, game.XPLevelStart(12))
 	masteryCmd(z, low, pb.MasteryCmdKind_MASTERY_CMD_SPEND, "field_alchemy")
-	if len(low.pl.mastery.st.Ranks) != 0 || !lowPeer.systemContains("abre no nível 30") {
-		t.Fatal("abaixo do 30 não gasta")
+	if len(low.pl.mastery.st.Ranks) != 0 || !lowPeer.systemContains("abre no nível 40") {
+		t.Fatal("abaixo do 40 não gasta")
 	}
 	masteryCmd(z, low, pb.MasteryCmdKind_MASTERY_CMD_RESPEC, "")
 	// Pedir o estado funciona para todos (a árvore aparece para consulta).
@@ -436,7 +439,7 @@ func TestMasterySaveAndLoad(t *testing.T) {
 	saves := make(chan []SavedState, 8)
 	z := newTestZone(saves)
 	peer := &fakePeer{}
-	z.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Mestre", Class: "knight", XP: game.XPLevelStart(30), Peer: peer}})
+	z.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Mestre", Class: "knight", XP: game.XPLevelStart(game.MasteryLevel), Peer: peer}})
 	p := z.players[1]
 	base := p.stats.MaxHP
 	st := &p.pl.mastery.st
@@ -458,7 +461,7 @@ func TestMasterySaveAndLoad(t *testing.T) {
 	// Carregar do banco: o estado volta, os efeitos valem e a árvore inválida é corrigida.
 	z2 := newTestZone(nil)
 	peer2 := &fakePeer{}
-	z2.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Mestre", Class: "knight", XP: game.XPLevelStart(30), Mastery: saved.Mastery, Peer: peer2}})
+	z2.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Mestre", Class: "knight", XP: game.XPLevelStart(game.MasteryLevel), Mastery: saved.Mastery, Peer: peer2}})
 	q := z2.players[1]
 	if q.pl.mastery.st.Points != 7 || q.pl.mastery.st.Spent() != 6 || !near(q.pl.mastery.of(game.MStatDeathLoss), 0.5) {
 		t.Fatalf("carregado: %+v", q.pl.mastery.st)
@@ -469,14 +472,14 @@ func TestMasterySaveAndLoad(t *testing.T) {
 	bad := saved.Mastery
 	bad.Points = 2 // gastou mais do que tem: os pontos voltam
 	z3 := newTestZone(nil)
-	z3.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Mestre", Class: "knight", XP: game.XPLevelStart(30), Mastery: bad, Peer: &fakePeer{}}})
+	z3.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Mestre", Class: "knight", XP: game.XPLevelStart(game.MasteryLevel), Mastery: bad, Peer: &fakePeer{}}})
 	if r := z3.players[1].pl.mastery; r.st.Spent() != 0 || r.of(game.MStatDeathLoss) != 0 || !near(z3.players[1].stats.MaxHP, base) {
 		t.Fatalf("árvore inválida no banco: %+v", r.st)
 	}
 
 	// Relogar rápido usa o estado da memória.
 	z.removePlayer(1)
-	z.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Mestre", Class: "knight", XP: game.XPLevelStart(30), Peer: &fakePeer{}}})
+	z.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Mestre", Class: "knight", XP: game.XPLevelStart(game.MasteryLevel), Peer: &fakePeer{}}})
 	if r := z.players[1].pl.mastery.st; r.Points != 7 || r.XP != 1234 || r.Ranks["second_chance"] != 5 {
 		t.Fatalf("relogin: %+v", r)
 	}
@@ -484,8 +487,8 @@ func TestMasterySaveAndLoad(t *testing.T) {
 
 func TestMasteryGMCommand(t *testing.T) {
 	z := newTownZone()
-	gm, gmPeer := defender(z, 1, "Guia", 0, 0, 30, true)
-	ana, anaPeer := defender(z, 2, "Ana", 1, 0, 30, false)
+	gm, gmPeer := defender(z, 1, "Guia", 0, 0, game.MasteryLevel, true)
+	ana, anaPeer := defender(z, 2, "Ana", 1, 0, game.MasteryLevel, false)
 	gm.pl.mastery.st.Rested = 0
 
 	say(z, 2, "/maestria xp 999999")
@@ -556,5 +559,44 @@ func TestMasteryTravelChargesLessAndIsFaster(t *testing.T) {
 		return c != nil && c.Group == game.CooldownReturn && c.TotalMs == uint32(game.ReturnCooldown/2*1000)
 	}) {
 		t.Fatal("o cliente recebe a recarga menor")
+	}
+}
+
+// Quem ganhou pontos quando o máximo era 30 fica com eles: do 30 ao 39 recebe o estado ao
+// entrar, gasta e redistribui, e os efeitos valem; mas a XP sobe nível, sem ponto novo.
+func TestMasteryOldPointsBelowMaxLevel(t *testing.T) {
+	z := newCombatZone()
+	peer := &fakePeer{}
+	old := game.MasteryState{Points: 6, XP: 1234, Ranks: map[string]int{"wayfarer": 2}}
+	z.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Veterana", Class: "knight", XP: game.XPLevelStart(30), Mastery: old, Peer: peer}})
+	p := z.players[1]
+	s := peer.lastMastery()
+	if p.level != 30 || s == nil || s.Active || s.Level != 6 || s.Free != 4 || s.OpenLevel != 40 {
+		t.Fatalf("estado ao entrar no 30 com pontos de antes: %+v", s)
+	}
+	if p.pl.mastery.of(game.MStatTeleport) <= 0 {
+		t.Fatal("os nós gastos continuam valendo")
+	}
+	masteryCmd(z, p, pb.MasteryCmdKind_MASTERY_CMD_SPEND, "light_step")
+	if p.pl.mastery.st.Ranks["light_step"] != 1 {
+		t.Fatalf("gasta os pontos que já tinha: %+v", p.pl.mastery.st)
+	}
+	masteryCmd(z, p, pb.MasteryCmdKind_MASTERY_CMD_RESPEC, "")
+	if p.pl.mastery.st.Spent() != 0 || p.pl.mastery.st.Points != 6 {
+		t.Fatalf("redistribui: %+v", p.pl.mastery.st)
+	}
+	// A XP sobe nível e não enche a barra (nem com uma barra inteira de XP).
+	z.grantXP(p, bar)
+	if st := p.pl.mastery.st; st.Points != 6 || st.XP != 1234 || p.level <= 30 {
+		t.Fatalf("entre o 30 e o 39 não há ponto novo: nível %d, %+v", p.level, st)
+	}
+	// Sem pontos de antes, abaixo do 40 a árvore não abre.
+	q, qPeer := joinAt(z, 2, "mage", 0, 0, game.XPLevelStart(35))
+	if qPeer.lastMastery() != nil {
+		t.Fatal("sem pontos, a Maestria não vem antes do 40")
+	}
+	masteryCmd(z, q, pb.MasteryCmdKind_MASTERY_CMD_SPEND, "light_step")
+	if len(q.pl.mastery.st.Ranks) != 0 {
+		t.Fatal("sem pontos não gasta")
 	}
 }

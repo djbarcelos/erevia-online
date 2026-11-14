@@ -59,3 +59,25 @@ func TestTheoreticalProgressionCoversCurve(t *testing.T) {
 		t.Fatalf("nível 20 caça %q", rows[19].Monsters)
 	}
 }
+
+// Os tempos-alvo do tunnel#149 (~150 h até o 40): cada faixa fica a até 15% do alvo, e
+// 25% a 35% da XP de cada faixa vem de missões.
+func TestProgressionBandsHitTargets(t *testing.T) {
+	bands := ProgressionBands(TheoreticalProgression(SecondsPerKill))
+	if len(bands) != 4 || bands[3].To != MaxLevel {
+		t.Fatalf("faixas: %+v", bands)
+	}
+	total := 0.0
+	for _, b := range bands {
+		total += b.Hours
+		if d := b.Hours/b.TargetHours - 1; d < -0.15 || d > 0.15 {
+			t.Errorf("%d → %d: %.1f h, alvo %.0f h (%+.0f%%)", b.From, b.To, b.Hours, b.TargetHours, d*100)
+		}
+		if q := float64(b.QuestXP) / float64(b.XP); q < 0.25 || q > 0.35 {
+			t.Errorf("%d → %d: %.0f%% da XP de missões", b.From, b.To, q*100)
+		}
+	}
+	if total < 130 || total > 170 {
+		t.Errorf("1 → %d: %.0f h", MaxLevel, total)
+	}
+}
