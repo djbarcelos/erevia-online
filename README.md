@@ -145,6 +145,25 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 
 | `make gm NAME=Fulano` | Torna GM a conta do personagem no banco local (relogue depois) |
 
+### Fuzz da entrada dos jogadores
+Um cliente pode mandar qualquer byte pelo WebSocket; nenhuma mensagem pode derrubar a zona, criar ouro ou item, nem tirar alguém do mapa. Três alvos de `go test -fuzz`:
+
+| Alvo | O que faz |
+|---|---|
+| `FuzzZoneBytes` (`internal/zone`) | Bytes → `proto.Unmarshal` em `ClientMessage` → zona (2 jogadores perto do NPC da mensagem, mapa real), mandada pelos dois, com ticks |
+| `FuzzZoneSemantic` (`internal/zone`) | Sequências de 30 mensagens de todos os tipos do oneof, montadas por reflexão com valores extremos (slots 0/255/2³²−1, quantidades 0 e máximas, ids que não existem ou de outra entidade, NaN/±Inf, textos enormes ou com controle, comandos de chat), com ticks entre elas |
+| `FuzzConnBytes` (`internal/net`) | Bytes pelo WebSocket de verdade (readJoin/readPump) até a zona rodando o próprio loop; cada entrada espera a resposta da zona |
+
+Depois de cada mensagem os alvos da zona conferem: `checkInvariants` (vida, mana, ouro, itens, posição, progressão, PvP, grupo, clã e troca; em teste dá panic); ouro + valor de venda dos itens (bolsa, equipamento, armazém e chão) nunca sobe, e nenhuma unidade de item aparece fora de compra, criação ou recompensa de missão; destino, caminho e itens no chão dentro do mapa; armazém válido; nenhuma mensagem que o cliente não consiga ler; nenhum erro no log (falha de serialização ou panic recuperado por `handleSafe`/`runSystem`; os alvos da zona chamam `handle` direto, sem o recover); nenhuma mensagem ou tick acima de 2 s.
+
+```bash
+cd server
+go test ./internal/zone -run '^$' -fuzz '^FuzzZoneSemantic$' -fuzztime 10m -parallel 4
+go test ./internal/zone -run '^$' -fuzz '^FuzzZoneBytes$' -fuzztime 10m -parallel 4
+go test ./internal/net -run '^$' -fuzz '^FuzzConnBytes$' -fuzztime 10m -parallel 4
+```
+Uma falha grava a entrada em `testdata/fuzz/<Alvo>/` e mostra a sequência de mensagens; `go test ./internal/zone -run '<Alvo>/<arquivo>'` repete. Commite o arquivo junto com a correção (o `go test` normal roda todo o corpus). O corpus inicial (uma mensagem válida de cada tipo) é gerado por `EREVIA_WRITE_FUZZ_CORPUS=1 go test ./internal/zone -run TestFuzzSeedCorpus`. Sem Go instalado: `docker run --rm -v "$PWD/server:/src" -w /src golang:1.26 go test ...`. O CI roda 10 s de cada alvo.
+
 ## Testes de navegador (e2e)
 Em `e2e/` (pacote próprio, fora do build do cliente), com **Playwright** no Chromium headless e WebGL por software (SwiftShader). Pegam o que só quebra no navegador: tela branca, erro de JavaScript, botão que não faz nada, cena 3D que não carrega. Um roteiro de jogador novo, todo pelo mouse e pelo teclado: login de desenvolvimento pela tela inicial, personagem criado pela API, **Entrar no mundo**, cena 3D desenhada, fechar a janela "O que há de novo", andar com um clique no chão, abrir e fechar Configurações (Esc), Inventário (I), Personagem (C), Skills (K) e Mapa (M), comprar uma Poção de Mana Menor da Mercadora Lívia, sair da cidade pelo mapa até os Arredores, selecionar um monstro (Tab), usar a skill da tecla 1, tomar a poção (tecla 4), atacar com um clique e recarregar a página para voltar ao mesmo personagem, no mesmo lugar e com as mesmas moedas.
 

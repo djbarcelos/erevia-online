@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\x82\x02\x0e\b\x01\x12\nfirst_kill")
