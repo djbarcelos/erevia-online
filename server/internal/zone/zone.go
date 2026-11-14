@@ -108,6 +108,9 @@ type JoinInfo struct {
 	Spec string
 	// Maestria (nível máximo): barra, bônus diário e pontos da árvore.
 	Mastery game.MasteryState
+	// Contratos do quadro e reputação com as facções (contracts.go).
+	Contracts  game.ContractState
+	Reputation game.ReputationState
 	// Bestiário: abates por monstro e famílias completas (bestiary.go).
 	Bestiary game.BestiaryState
 	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
@@ -138,6 +141,9 @@ type SavedState struct {
 	Title        string
 	Spec         string // especialização ("" = nenhuma)
 	Mastery      game.MasteryState
+	// Contratos aceitos hoje e nesta semana e a reputação com as facções.
+	Contracts  game.ContractState
+	Reputation game.ReputationState
 	Bestiary     game.BestiaryState
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
@@ -536,6 +542,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Achievements, info.Title = st.Achievements, st.Title
 		info.Spec = st.Spec
 		info.Mastery = st.Mastery
+		info.Contracts, info.Reputation = st.Contracts, st.Reputation
 		aucOps = st.Auction
 		info.Bestiary = st.Bestiary
 		delete(z.recent, info.ID)
@@ -573,6 +580,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 			bst:     loadBestiary(info.Bestiary),
 		},
 	}
+	p.pl.contracts = loadContracts(info.Contracts, info.Reputation)
 	p.pl.sentPvp = z.pvpState(p)
 	p.hp, p.mp = math.MaxFloat64, math.MaxFloat64
 	z.refreshStats(p) // classe + atributos + equipamento + passivas; limita a vida/mana ao máximo
@@ -648,6 +656,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.bestiaryOnJoin(p)
 	z.achOnJoin(p)
 	z.masteryOnJoin(p)
+	z.contractsOnJoin(p)
 	z.eventsOnJoin(p)
 	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
@@ -956,6 +965,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
 		Mastery: p.pl.mastery.save(), Bestiary: p.pl.bst.state(), Auction: z.auctionSave(p),
 	}
+	s.Contracts, s.Reputation = p.pl.contracts.save()
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
 	}

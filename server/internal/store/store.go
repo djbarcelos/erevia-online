@@ -36,7 +36,7 @@ const (
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
 		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
-		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, bestiary, xp_curve"
+		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, contracts, reputation, bestiary, xp_curve"
 )
 
 var (
@@ -97,6 +97,9 @@ type Character struct {
 	// Maestria (nível máximo): barra, bônus diário e pontos de cada nó.
 	Mastery  game.MasteryState `json:"-"`
 	kitGiven bool
+	// Contratos do quadro e reputação com as facções (tunnel#157).
+	Contracts  game.ContractState   `json:"-"`
+	Reputation game.ReputationState `json:"-"`
 	xpCurve  int16 // versão da curva em que a XP foi salva (game.XPCurve)
 }
 
@@ -138,6 +141,9 @@ type CharacterState struct {
 	Spec         string            // especialização ("" = nenhuma)
 	Mastery      game.MasteryState // Maestria (o nível vai também em mastery_level, para o ranking)
 	Seq          int64             // salvamento mais velho que o gravado é ignorado
+	// Contratos aceitos hoje e nesta semana e a reputação com as facções (tunnel#157).
+	Contracts  game.ContractState
+	Reputation game.ReputationState
 	// Bestiário (mesma linha, mesma transação).
 	Bestiary game.BestiaryState
 	// Storage (opcional): o armazém da conta mudou e vai junto, na mesma transação.
@@ -521,6 +527,10 @@ func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) 
 			if err != nil {
 				return err
 			}
+			contracts, reputation, err := contractsJSON(c.Contracts, c.Reputation)
+			if err != nil {
+				return err
+			}
 			bestiary, err := json.Marshal(c.Bestiary)
 			if err != nil {
 				return err
@@ -532,13 +542,13 @@ func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) 
 				skill_ranks = $16, hotbar = $17, karma = $18, pk_count = $19, pvp_kills = $20,
 				skin = $21, hair = $22, outfit = $23, head = $24, hide_hat = $25, quests = $26,
 				achievements = $27, title = $28, spec = $29, mastery = $30, mastery_level = $31,
-				bestiary = $32
+				contracts = $32, reputation = $33, bestiary = $34
 				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
 				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq,
 				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar,
 				max(c.Karma, 0), max(c.PKs, 0), max(c.PvPKills, 0),
 				c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit, c.Appearance.Head, c.Appearance.HideHat, quests,
-				achievements, c.Title, c.Spec, mastery, max(c.Mastery.Points, 0), bestiary)
+				achievements, c.Title, c.Spec, mastery, max(c.Mastery.Points, 0), contracts, reputation, bestiary)
 		}
 		br := tx.SendBatch(ctx, batch)
 		var ids []int64
@@ -631,13 +641,13 @@ func nullIfFull(v int) *int {
 func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var c Character
 	var x, z float32
-	var ranks, hotbar, quests, achievements, mastery, bestiary []byte
+	var ranks, hotbar, quests, achievements, mastery, contracts, reputation, bestiary []byte
 	var a [6]int16
 	var skin, hair, outfit int16
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
 		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
 		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat, &quests,
-		&achievements, &c.Title, &c.Spec, &mastery, &bestiary, &c.xpCurve)
+		&achievements, &c.Title, &c.Spec, &mastery, &contracts, &reputation, &bestiary, &c.xpCurve)
 	if err != nil {
 		return c, err
 	}
@@ -645,6 +655,9 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 		if err := json.Unmarshal(mastery, &c.Mastery); err != nil {
 			return c, fmt.Errorf("mastery: %w", err)
 		}
+	}
+	if err := parseContracts(contracts, reputation, &c.Contracts, &c.Reputation); err != nil {
+		return c, err
 	}
 	if len(bestiary) > 0 {
 		if err := json.Unmarshal(bestiary, &c.Bestiary); err != nil {

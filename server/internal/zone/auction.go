@@ -303,9 +303,13 @@ func (z *Zone) auctionTry(ctx context.Context, what string, fn func(ctx context.
 
 // ---------- Leiloeiro ----------
 
-// auctioneer: Severino, o Leiloeiro, ao sul do poço.
-var auctioneer = npcDef{name: "Severino", title: "Leiloeiro", model: "barbarian", x: 0, z: -9.5,
+// auctioneer: Severino, o Leiloeiro, ao sul do poço, a 3,5 m da Iselda (o Quadro de
+// Contratos, em -1,5; -9) para os dois não se sobreporem no clique.
+var auctioneer = npcDef{name: "Severino", title: "Leiloeiro", model: "barbarian", x: 2, z: -9,
 	role: pb.NpcRole_NPC_ROLE_AUCTION, look: &game.Appearance{Skin: 2, Hair: 3, Outfit: 5, Head: "rogue"}}
+
+// auctioneerID é o NPC leiloeiro, logo depois do Quadro de Contratos (boardID, contracts.go).
+var auctioneerID = boardID + 1
 
 func (z *Zone) spawnAuctioneer(id uint32) {
 	d := auctioneer

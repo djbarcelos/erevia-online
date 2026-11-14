@@ -136,6 +136,7 @@ type ItemDef struct {
 	HealMP      float64
 	Scroll      ScrollKind // pergaminhos: o que faz
 	Blessed     bool       // encantar: falhar não quebra (volta a +0)
+	RepOnly     bool       // só na loja de reputação (reputation.go): não cai de monstro
 	// Bridge: equipamento ponte do 30 ao 40 (bridge.go). Só cai de quem o tem na lista de
 	// saque, fora do sorteio por raridade.
 	Bridge bool
@@ -444,6 +445,7 @@ var Items = func() map[string]*ItemDef {
 		{ID: GoldID, Name: "Moedas de ouro", Kind: KindGold, Grade: GradeCommon, Stack: math.MaxInt32, Icon: "gold",
 			Description: "Dinheiro corrente em Erevia."},
 	}
+	list = append(list, RepItems...) // as capas das facções (reputation.go)
 	list = append(list, bridgeItems()...)
 	m := make(map[string]*ItemDef, len(list))
 	for _, d := range list {
@@ -534,7 +536,7 @@ var gearByGrade = func() map[Grade][]*ItemDef {
 	m := map[Grade][]*ItemDef{}
 	for _, id := range ItemIDs() {
 		d := Items[id]
-		if d.Equippable() && !d.Bridge {
+		if d.Equippable() && !d.RepOnly && !d.Bridge { // nem as da loja de reputação nem as ponte caem no sorteio
 			m[d.Grade] = append(m[d.Grade], d)
 		}
 	}

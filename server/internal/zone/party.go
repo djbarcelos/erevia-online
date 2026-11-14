@@ -437,6 +437,7 @@ func (z *Zone) shareMonsterXPScaled(dead *entity, takers []*entity, frac float64
 		z.track(m, "kill", dead.mon.def.ID, int64(dead.level), nil)
 		z.questEvent(m, game.GoalKill, dead.mon.def.ID)
 		z.achEvent(m, game.AchKill, dead.mon.def.ID)
+		z.contractKill(m, dead)
 		if dead.mon.raid == nil { // raid boss: conta para todos que causaram dano (raidKilled)
 			z.bestiaryKill(m, dead)
 		}

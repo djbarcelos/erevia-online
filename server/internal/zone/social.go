@@ -160,8 +160,10 @@ func (z *Zone) pvpDeath(dead, killer *entity) bool {
 		killer.pl.pvpKills++
 		z.system(killer, fmt.Sprintf("Você venceu %s em combate.", dead.name))
 		z.achValue(killer, game.AchPvPWin, "", killer.pl.pvpKills)
+		z.contractPvP(killer, dead)
 	default:
 		z.system(killer, fmt.Sprintf("Você derrotou %s, que tinha karma.", dead.name))
+		z.contractPvP(killer, dead)
 	}
 	killer.pl.statsDirty = true
 	z.pvpChanged(killer)

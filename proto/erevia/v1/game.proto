@@ -40,6 +40,8 @@ message ClientMessage {
     MailCmd mail_cmd = 30;
     RankingRequest ranking_request = 31;
     AchievementCmd achievement_cmd = 32;
+    ContractCmd contract_cmd = 42; // Contratos do quadro da praça: pedir, aceitar
+    ReputationCmd reputation_cmd = 43; // Reputação: pedir as facções e a loja, comprar
     BestiaryCmd bestiary_cmd = 40; // Bestiário: pedir o estado (a janela abriu)
     SpecCmd spec_cmd = 50;
     MasteryCmd mastery_cmd = 54; // Maestria: pedir o estado, gastar ponto, redistribuir
@@ -446,6 +448,8 @@ message ServerMessage {
     Emote emote = 30;
     Ranking ranking = 31;
     Achievements achievements = 32;
+    ContractState contracts = 42; // contratos do dia e da semana (ao entrar, ao pedir e quando mudam)
+    ReputationState reputation = 43; // facções, graus e a loja de reputação
     Bestiary bestiary = 40; // Bestiário: o catálogo (full) ou as entradas e famílias que mudaram
     BestiaryMark bestiary_mark = 41; // aviso: um marco do bestiário ou uma família completa
     SpecChoice spec_choice = 50;
@@ -1478,6 +1482,111 @@ message QuestDone {
   string id = 1;
   string title = 2;
   QuestCategory category = 3;
+}
+
+// ---------- Contratos e reputação (nível máximo, tunnel#157) ----------
+// O quadro de contratos da praça (um NPC: ContractState.board_id) oferece 3 diários (caça
+// numa área, um chefe de campo e coleta de materiais) e 1 semanal, sorteados por personagem
+// e por dia (Brasília). Concluir dá moedas, XP (ou Maestria) e reputação com uma facção; a
+// reputação abre a loja da facção (só itens horizontais: títulos, capas, pergaminhos e
+// consumíveis).
+
+enum ContractCmdKind {
+  CONTRACT_CMD_UNSPECIFIED = 0;
+  CONTRACT_CMD_GET = 1; // pedir o estado (a janela abriu ou o dia virou)
+  CONTRACT_CMD_ACCEPT = 2; // aceitar `contract` (perto do quadro `npc_id`)
+}
+
+message ContractCmd {
+  ContractCmdKind kind = 1;
+  string contract = 2; // ContractInfo.id
+  uint32 npc_id = 3; // o quadro
+}
+
+enum ReputationCmdKind {
+  REPUTATION_CMD_UNSPECIFIED = 0;
+  REPUTATION_CMD_GET = 1; // pedir as facções e a loja (a janela abriu)
+  REPUTATION_CMD_BUY = 2; // comprar `offer` (perto do quadro `npc_id`)
+}
+
+message ReputationCmd {
+  ReputationCmdKind kind = 1;
+  string offer = 2; // RepOffer.id
+  uint32 npc_id = 3;
+}
+
+enum ContractSlot {
+  CONTRACT_SLOT_UNSPECIFIED = 0;
+  CONTRACT_SLOT_HUNT = 1; // diário: matar monstros de uma área
+  CONTRACT_SLOT_BOSS = 2; // diário: chefe de campo
+  CONTRACT_SLOT_COLLECT = 3; // diário: coletar materiais do saque
+  CONTRACT_SLOT_WEEKLY = 4; // semanal
+}
+
+enum ContractStatus {
+  CONTRACT_STATUS_UNSPECIFIED = 0;
+  CONTRACT_STATUS_OPEN = 1; // dá para aceitar no quadro
+  CONTRACT_STATUS_ACTIVE = 2; // aceito: o progresso anda
+  CONTRACT_STATUS_DONE = 3; // concluído (a recompensa já foi entregue)
+}
+
+message ContractInfo {
+  string id = 1;
+  string title = 2;
+  string text = 3; // o que fazer
+  ContractSlot slot = 4;
+  ContractStatus status = 5;
+  uint32 count = 6;
+  uint32 need = 7;
+  string place = 8; // onde ("Vale das Pedras Vivas")
+  string faction = 9; // FactionInfo.id
+  string reward = 10; // resumo ("600 moedas · 26.387 XP de Maestria · 120 de reputação")
+  int64 gold = 11;
+  int64 xp = 12; // XP (ou de Maestria, no nível máximo) para o nível de agora
+  uint32 rep = 13;
+}
+
+// Estado dos contratos do jogador. Sai ao entrar (com o quadro, para o clique abrir a
+// janela), ao pedir, ao aceitar e quando um contrato anda ou termina.
+message ContractState {
+  uint32 board_id = 1; // o NPC do quadro
+  uint32 min_level = 2; // nível para aceitar
+  int64 daily_reset_ms = 3; // próxima meia-noite de Brasília (Unix, ms)
+  int64 weekly_reset_ms = 4; // próxima segunda-feira, 0 h de Brasília
+  repeated ContractInfo contracts = 5; // os 3 diários de hoje e o semanal da semana
+  string completed = 6; // contrato que acabou de terminar (aviso no HUD)
+}
+
+message FactionInfo {
+  string id = 1;
+  string name = 2;
+  string text = 3; // quem são e onde a reputação sobe
+  string color = 4; // #rrggbb
+  uint32 points = 5;
+  uint32 grade = 6; // índice em ReputationState.grade_names (0 = neutro)
+  uint32 grade_start = 7; // pontos onde o grau atual começa
+  uint32 grade_next = 8; // pontos do próximo grau (0 = já é o máximo)
+}
+
+// Oferta da loja de uma facção: um item (item_id) ou um título (title).
+message RepOffer {
+  string id = 1;
+  string faction = 2;
+  uint32 grade = 3; // grau mínimo
+  string item_id = 4; // "" = título
+  uint32 count = 5;
+  int64 price = 6; // moedas
+  string title = 7; // o título que a compra dá
+  bool owned = 8; // título já comprado
+  string text = 9;
+}
+
+message ReputationState {
+  repeated FactionInfo factions = 1;
+  repeated string grade_names = 2; // neutro, amigável, honrado, reverenciado, exaltado
+  repeated uint32 grade_points = 3; // pontos de cada grau
+  repeated RepOffer offers = 4; // a loja (vem na resposta ao REPUTATION_CMD_GET e depois de comprar)
+  string grade_up = 5; // "Honrado com a Guarda de Vel'Aran" (aviso no HUD)
 }
 
 // ---------- Casa de leilões ----------

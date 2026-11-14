@@ -30,6 +30,10 @@ type groundItem struct {
 	clan          int64 // raid: reservado também para este clã
 	reservedUntil float64
 	expires       float64
+	// Saque de monstro (dropLoot) e onde o monstro nasceu: a coleta dos contratos conta só
+	// isso (contracts.go).
+	loot     bool
+	lootFrom Vec2
 }
 
 // dropLoot sorteia o que o monstro deixa e espalha perto do corpo.
@@ -46,6 +50,7 @@ func (z *Zone) dropLoot(m *entity, owner uint32) {
 			pos = z.scatter(m.pos)
 		}
 		if g := z.placeItem(pos, d.Item, d.Count, 0, owner, reservedFor); g != nil {
+			g.loot, g.lootFrom = true, m.mon.home
 			added.Items = append(added.Items, z.groundPB(g))
 		}
 	}
@@ -178,6 +183,7 @@ func (z *Zone) runPickup(p *entity) {
 		}
 		inv.put(g.def, g.count, g.enchant)
 		z.trackItem(p, true, g.def.ID, g.count, "loot")
+		z.contractLoot(p, g)
 	}
 	delete(z.ground, g.id)
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundRemoved{GroundRemoved: &pb.GroundItemsRemoved{

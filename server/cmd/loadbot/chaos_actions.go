@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -50,6 +51,7 @@ var chaosActions = []chaosAction{
 	{"atalhos", 1, actHotbar},
 	{"especializacao", 1, actSpec},
 	{"maestria", 1, actMastery},
+	{"contratos", 2, actContracts},
 	{"bestiario", 1, actBestiary},
 	{"amigos", 1, actFriend},
 	{"correio", 2, actMail},
@@ -837,6 +839,51 @@ func actMastery(b *chaosBot, s *chaosSession, r [6]uint64) {
 		m.Kind, m.Node, label = pb.MasteryCmdKind(pickN(r[4], 6)), []string{"", "nao_existe", strings.Repeat("n", 200)}[pickN(r[5], 3)], "maestria!lixo"
 	}
 	b.emit(s, label, &pb.ClientMessage{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: m}})
+}
+
+// actContracts: o Quadro de Contratos e a loja de reputação (pedir, aceitar um contrato de
+// hoje, comprar uma oferta), às vezes com contrato, oferta ou quadro que não existem. Quem
+// está longe do quadro anda até ele antes (o servidor recusa de longe).
+func actContracts(b *chaosBot, s *chaosSession, r [6]uint64) {
+	s.mu.Lock()
+	board, today := s.board, slices.Clone(s.contracts)
+	var near bool
+	var to vec
+	if n := s.npcs[board]; n != nil {
+		to, near = n.pos, math.Hypot(n.pos.x-s.pos.x, n.pos.z-s.pos.z) < 5
+	}
+	s.mu.Unlock()
+	if !near && board != 0 && pct(r[1]) < 40 {
+		b.emit(s, "contratos:ir", &pb.ClientMessage{Msg: &pb.ClientMessage_MoveTo{MoveTo: &pb.MoveTo{X: float32(to.x + 1.5), Z: float32(to.z)}}})
+		return
+	}
+	var msg *pb.ClientMessage
+	label := ""
+	switch pickN(r[2], 4) {
+	case 0:
+		msg, label = &pb.ClientMessage{Msg: &pb.ClientMessage_ContractCmd{ContractCmd: &pb.ContractCmd{Kind: pb.ContractCmdKind_CONTRACT_CMD_GET}}}, "contratos:pedir"
+	case 1:
+		id := ""
+		if len(today) > 0 {
+			id = today[pickN(r[3], len(today))]
+		}
+		msg, label = &pb.ClientMessage{Msg: &pb.ClientMessage_ContractCmd{ContractCmd: &pb.ContractCmd{Kind: pb.ContractCmdKind_CONTRACT_CMD_ACCEPT, Contract: id, NpcId: board}}}, "contratos:aceitar"
+	case 2:
+		msg, label = &pb.ClientMessage{Msg: &pb.ClientMessage_ReputationCmd{ReputationCmd: &pb.ReputationCmd{Kind: pb.ReputationCmdKind_REPUTATION_CMD_GET}}}, "reputacao:pedir"
+	default:
+		o := game.RepOffers[pickN(r[3], len(game.RepOffers))]
+		msg, label = &pb.ClientMessage{Msg: &pb.ClientMessage_ReputationCmd{ReputationCmd: &pb.ReputationCmd{Kind: pb.ReputationCmdKind_REPUTATION_CMD_BUY, Offer: o.ID, NpcId: board}}}, "reputacao:comprar"
+	}
+	if bad(r[4], 15) {
+		lixo := []string{"", "nao_existe", strings.Repeat("c", 200)}[pickN(r[5], 3)]
+		if pickN(r[5]>>8, 2) == 0 {
+			msg = &pb.ClientMessage{Msg: &pb.ClientMessage_ContractCmd{ContractCmd: &pb.ContractCmd{Kind: pb.ContractCmdKind(pickN(r[3], 5)), Contract: lixo, NpcId: badU32(badIDs, r[5])}}}
+		} else {
+			msg = &pb.ClientMessage{Msg: &pb.ClientMessage_ReputationCmd{ReputationCmd: &pb.ReputationCmd{Kind: pb.ReputationCmdKind(pickN(r[3], 5)), Offer: lixo, NpcId: badU32(badIDs, r[5])}}}
+		}
+		label = "contratos!lixo"
+	}
+	b.emit(s, label, msg)
 }
 
 func actFriend(b *chaosBot, s *chaosSession, r [6]uint64) {

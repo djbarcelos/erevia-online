@@ -15,7 +15,6 @@ import (
 // queda no meio e o vendedor offline, com o banco falso (auction_fake_test.go) fazendo o
 // papel do store e da persistência. As consultas de verdade estão em store/auction_test.go.
 
-var auctioneerID = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+2)
 
 type aucRig struct {
 	t      *testing.T

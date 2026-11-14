@@ -58,6 +58,9 @@ type prep struct {
 	bag         []prepItem
 	storageGold int64
 	storage     []prepItem
+	// rep: exaltado com as facções (a loja do Quadro de Contratos abre inteira); só no nível
+	// dos contratos.
+	rep bool
 }
 
 // prepPool: o que vale a pena ter para o caos chegar longe (encantar, criar, trocar, vender).
@@ -75,7 +78,7 @@ var prepPool = []prepItem{
 // prepFor sorteia o preparo do bot idx (outra corrente da semente: não mexe nas escolhas).
 func prepFor(seed uint64, idx int) prep {
 	r := rand.New(rand.NewPCG(seed^0xc0ffee, uint64(idx)+7))
-	levels := []int{1, 2, 4, 6, 9, 10, 11, 12, 15, 18, 20, 22}
+	levels := []int{1, 2, 4, 6, 9, 10, 11, 12, 15, 18, 20, 22, game.ContractMinLevel, game.MaxLevel}
 	golds := []int64{0, 40, 300, 1500, 5200, 9000, 14000, 30000}
 	p := prep{level: levels[r.IntN(len(levels))], gold: golds[r.IntN(len(golds))]}
 	pick := func(n int) []prepItem {
@@ -99,6 +102,7 @@ func prepFor(seed uint64, idx int) prep {
 	p.bag = pick(6 + r.IntN(10))
 	p.storageGold = []int64{0, 0, 120, 4000}[r.IntN(4)]
 	p.storage = pick(r.IntN(5))
+	p.rep = p.level >= game.ContractMinLevel && r.IntN(2) == 0
 	return p
 }
 
@@ -107,8 +111,8 @@ func (d *chaosDB) prepare(ctx context.Context, id uint32, class string, p prep) 
 	return pgx.BeginFunc(ctx, d.pool, func(tx pgx.Tx) error {
 		var acc int64
 		if err := tx.QueryRow(ctx,
-			`UPDATE characters SET level = $2, xp = $3, gold = gold + $4 WHERE id = $1 RETURNING account_id`,
-			id, p.level, game.XPLevelStart(p.level), p.gold).Scan(&acc); err != nil {
+			`UPDATE characters SET level = $2, xp = $3, gold = gold + $4, reputation = $5 WHERE id = $1 RETURNING account_id`,
+			id, p.level, game.XPLevelStart(p.level), p.gold, prepReputation(p.rep)).Scan(&acc); err != nil {
 			return err
 		}
 		used := map[int]bool{}
@@ -344,4 +348,12 @@ func (d *chaosDB) problems(ctx context.Context, mark int64) ([]eventProblem, map
 		kinds[k] = n
 	}
 	return out, kinds, rows.Err()
+}
+
+// prepReputation: a reputação do preparo (JSON de game.ReputationState).
+func prepReputation(exalted bool) string {
+	if !exalted {
+		return "{}"
+	}
+	return fmt.Sprintf(`{"points": {%q: %d, %q: %d}}`, game.FactionBastion, game.RepMax, game.FactionGuard, game.RepMax)
 }
