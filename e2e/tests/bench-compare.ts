@@ -122,7 +122,9 @@ export interface Report {
 }
 
 function judge(section: keyof typeof TOLERANCE, base: number | null, now: number | null): Verdict {
-  if (base === null) return section === "entidades" ? "novo" : (now ?? 0) > TOLERANCE[section].abs ? "PIOR" : "novo";
+  // Sem base: uma região nova do mapa (ou um tipo novo de entidade) não é regressão; um
+  // grupo novo no censo do cenário é (ex.: malhas soltas que alguém esqueceu de juntar).
+  if (base === null) return section !== "censo" ? "novo" : (now ?? 0) > TOLERANCE[section].abs ? "PIOR" : "novo";
   if (now === null) return "sumiu";
   if (now === base) return "igual";
   if (now < base) return "melhor";

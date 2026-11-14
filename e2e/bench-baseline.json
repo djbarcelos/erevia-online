@@ -26,6 +26,21 @@
       "ativas": 64,
       "malhas": 111
     },
+    "Fundo do Vale · dia": {
+      "draws": 110,
+      "ativas": 60,
+      "malhas": 111
+    },
+    "Vigília Ossária · dia": {
+      "draws": 90,
+      "ativas": 40,
+      "malhas": 112
+    },
+    "Confins Partidos · dia": {
+      "draws": 111,
+      "ativas": 61,
+      "malhas": 112
+    },
     "Cripta Esquecida · dia": {
       "draws": 89,
       "ativas": 39,
@@ -55,6 +70,21 @@
       "draws": 123,
       "ativas": 67,
       "malhas": 111
+    },
+    "Fundo do Vale · noite": {
+      "draws": 119,
+      "ativas": 63,
+      "malhas": 111
+    },
+    "Vigília Ossária · noite": {
+      "draws": 99,
+      "ativas": 43,
+      "malhas": 112
+    },
+    "Confins Partidos · noite": {
+      "draws": 120,
+      "ativas": 64,
+      "malhas": 112
     },
     "Cripta Esquecida · noite": {
       "draws": 98,
