@@ -128,6 +128,7 @@ func ClassViolations() []Violation {
 // AllViolations: as três listas, em ordem de chave.
 func AllViolations() []Violation {
 	out := append(append(ItemViolations(), EnchantViolations()...), ClassViolations()...)
+	out = append(out, BestiaryViolations()...) // bestiary.go
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out
 }

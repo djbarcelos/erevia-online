@@ -10,6 +10,7 @@ import {
   type FriendCmdKind,
   type SpecCmdKind,
   type MasteryCmdKind,
+  BestiaryCmdKind,
   type MailCmdKind,
   type ServerMessage,
   type TradeCmdKind,
@@ -193,6 +194,11 @@ export class Connection {
   /** Maestria (nível máximo): pedir a árvore e o estado, gastar 1 ponto no nó ou redistribuir. */
   masteryCmd(kind: MasteryCmdKind, node = ""): void {
     this.send({ case: "masteryCmd", value: { kind, node } });
+  }
+
+  /** Bestiário: pede o estado inteiro (a janela abriu). */
+  bestiaryCmd(): void {
+    this.send({ case: "bestiaryCmd", value: { kind: BestiaryCmdKind.BESTIARY_CMD_GET } });
   }
 
   /** Escolhe o título (id da conquista; "" tira). */

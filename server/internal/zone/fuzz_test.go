@@ -112,6 +112,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.Social(ctx, id, m.AchievementCmd)
 	case *pb.ClientMessage_MasteryCmd:
 		z.ProgressAction(ctx, id, m.MasteryCmd)
+	case *pb.ClientMessage_BestiaryCmd:
+		z.ProgressAction(ctx, id, m.BestiaryCmd)
 	case *pb.ClientMessage_SpecCmd:
 		z.ProgressAction(ctx, id, m.SpecCmd)
 	case *pb.ClientMessage_TradeCmd:
@@ -838,6 +840,8 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: &pb.MasteryCmd{Kind: pb.MasteryCmdKind_MASTERY_CMD_GET}}},
 		{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: &pb.MasteryCmd{Kind: pb.MasteryCmdKind_MASTERY_CMD_SPEND, Node: game.MasteryNodes[0].ID}}},
 		{Msg: &pb.ClientMessage_MasteryCmd{MasteryCmd: &pb.MasteryCmd{Kind: pb.MasteryCmdKind_MASTERY_CMD_RESPEC}}},
+		// Bestiário: pedir o estado (a janela abriu).
+		{Msg: &pb.ClientMessage_BestiaryCmd{BestiaryCmd: &pb.BestiaryCmd{Kind: pb.BestiaryCmdKind_BESTIARY_CMD_GET}}},
 	}
 	return out
 }

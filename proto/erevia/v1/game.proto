@@ -40,6 +40,7 @@ message ClientMessage {
     MailCmd mail_cmd = 30;
     RankingRequest ranking_request = 31;
     AchievementCmd achievement_cmd = 32;
+    BestiaryCmd bestiary_cmd = 40; // Bestiário: pedir o estado (a janela abriu)
     SpecCmd spec_cmd = 50;
     MasteryCmd mastery_cmd = 54; // Maestria: pedir o estado, gastar ponto, redistribuir
   }
@@ -154,6 +155,17 @@ enum AchievementCmdKind {
 message AchievementCmd {
   AchievementCmdKind kind = 1;
   string id = 2;
+}
+
+// ---------- Bestiário ----------
+
+enum BestiaryCmdKind {
+  BESTIARY_CMD_UNSPECIFIED = 0;
+  BESTIARY_CMD_GET = 1; // pedir o bestiário inteiro (a janela abriu); a resposta é Bestiary full
+}
+
+message BestiaryCmd {
+  BestiaryCmdKind kind = 1;
 }
 
 // Amostra de desempenho do cliente (a cada ~60 s; o FPS é medido 1×/s, nunca por quadro).
@@ -433,6 +445,8 @@ message ServerMessage {
     Emote emote = 30;
     Ranking ranking = 31;
     Achievements achievements = 32;
+    Bestiary bestiary = 40; // Bestiário: o catálogo (full) ou as entradas e famílias que mudaram
+    BestiaryMark bestiary_mark = 41; // aviso: um marco do bestiário ou uma família completa
     SpecChoice spec_choice = 50;
     EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
     MasteryState mastery = 54; // Maestria (nível máximo): barra, pontos e árvore do jogador
@@ -482,6 +496,73 @@ message Achievements {
   repeated AchievementInfo list = 2; // full: todas; senão, só as que mudaram (id, count, unlocked)
   string title_id = 3; // conquista cujo título está em uso ("" = nenhum)
   string unlocked = 4; // nome da conquista que acabou de ser desbloqueada ("" = nenhuma)
+}
+
+// Bestiário (só para o dono). full: todas as entradas e famílias (ao entrar e na resposta
+// ao BESTIARY_CMD_GET); senão, só o que mudou (a entrada do monstro abatido e, se for o
+// caso, a família dele). Os campos de cada marco só vêm preenchidos depois do marco: antes
+// do primeiro abate a entrada é uma silhueta (id e modelo, sem nome).
+message Bestiary {
+  bool full = 1;
+  repeated BestiaryEntry entries = 2;
+  repeated BestiaryFamily families = 3;
+  float damage_bonus = 4; // bônus de dano do último marco (0,01 = +1%)
+}
+
+message BestiaryEntry {
+  string id = 1; // tipo de monstro
+  string family = 2; // id da família ("" = nenhuma)
+  string model = 3; // modelo (ícone e silhueta)
+  uint32 kills = 4;
+  repeated uint32 marks = 5; // abates de cada marco: 10, 100 e 500 (chefes e raros: 1, 1, 1)
+  uint32 mark = 6; // marcos atingidos (0–3)
+  bool boss = 7; // chefe, raid boss ou raro: 1 abate abre tudo e não dá bônus de dano
+  string name = 8; // "" = ainda não derrotado (silhueta)
+  // Marco 1: nível e vida (do menor ao maior nível derrotado).
+  uint32 level_min = 9;
+  uint32 level_max = 10;
+  uint32 hp_min = 11;
+  uint32 hp_max = 12;
+  // Marco 2: o que deixa cair.
+  repeated BestiaryDrop drops = 13;
+  float gold_chance = 14;
+  uint32 gold_min = 15; // moedas por abate, no menor e no maior nível derrotado
+  uint32 gold_max = 16;
+  bool gear = 17; // pode deixar equipamento
+  // Marco 3: bônus de dano contra este tipo (0 = nenhum).
+  float damage_bonus = 18;
+  uint32 family_need = 19; // abates que a entrada pede para completar a família
+}
+
+message BestiaryDrop {
+  string item_id = 1;
+  string name = 2;
+  float chance = 3;
+  uint32 min = 4;
+  uint32 max = 5;
+}
+
+message BestiaryFamily {
+  string id = 1;
+  string name = 2;
+  uint32 done = 3; // entradas completas para a família
+  uint32 total = 4;
+  bool complete = 5;
+  int64 completed_at_ms = 6;
+  string title_id = 7; // para AchievementCmd SET_TITLE
+  string title = 8;
+  uint32 outfit = 9; // cor de roupa exclusiva (BodyLook.outfit) liberada no barbeiro
+  string outfit_name = 10;
+}
+
+// Aviso de um marco (ou de uma família completa) para o cliente mostrar na tela.
+message BestiaryMark {
+  string id = 1; // monstro ("" = só a família)
+  string name = 2;
+  uint32 mark = 3; // marco atingido (1–3; 0 = só a família)
+  uint32 kills = 4;
+  string text = 5; // o que o marco abriu
+  string family = 6; // família completa agora ("" = nenhuma)
 }
 
 message AchievementInfo {

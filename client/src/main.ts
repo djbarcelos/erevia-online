@@ -72,6 +72,7 @@ import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
 import { buildGlory } from "./ui/windows/glory";
+import { BestiaryBook, buildBestiary } from "./ui/windows/bestiary";
 import { buildJournal } from "./ui/windows/journal";
 import { takeUnseenNews, whatsNewDef } from "./ui/windows/whatsnew";
 import { loadNews } from "./news";
@@ -319,6 +320,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const achievements: AchievementInfo[] = [];
   let titleId = "";
   const achListeners = new Set<() => void>();
+  const bestiary = new BestiaryBook(); // Bestiário: o servidor manda ao entrar e quando a janela pede
   const listen = (set: Set<() => void>) => (fn: () => void) => {
     set.add(fn);
     return () => set.delete(fn);
@@ -804,6 +806,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     store,
     {
       change: (npc, look) => conn.changeLook(npc, look),
+      bestiaryOutfits: () => bestiary.unlockedOutfits(),
       me: () => {
         const m = me();
         const w = store.equip[0]?.info;
@@ -1138,6 +1141,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         titleId: () => titleId,
         onAchievements: listen(achListeners),
         setTitle: (id) => conn.setTitle(id),
+        titleText: (id) => bestiary.titleOf(id),
+      }),
+  });
+  reg({
+    id: "bestiary",
+    title: "Bestiário",
+    hotkey: keys().bestiary,
+    width: 860,
+    height: 680,
+    build: () =>
+      buildBestiary({
+        book: bestiary,
+        refresh: () => conn.bestiaryCmd(),
+        titleId: () => titleId,
+        onTitle: listen(achListeners),
+        setTitle: (id) => conn.setTitle(id),
       }),
   });
   reg({
@@ -1241,6 +1260,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       [k.clan]: () => wm.toggle("clan"),
       [k.social]: () => wm.toggle("social"),
       [k.glory]: () => wm.toggle("glory"),
+      [k.bestiary]: () => wm.toggle("bestiary"),
       [k.character]: () => wm.toggle("character"),
       [k.map]: () => wm.toggle("map"),
       [k.auto]: () => hud.setAuto(!hud.autoOn, true),
@@ -1687,6 +1707,14 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           titleId = a.titleId;
           if (a.unlocked) toast(`Conquista desbloqueada: ${a.unlocked}!`);
           for (const fn of achListeners) fn();
+          break;
+        }
+        case "bestiary":
+          bestiary.apply(msg.msg.value);
+          break;
+        case "bestiaryMark": {
+          const b = msg.msg.value;
+          toast(b.family ? `Bestiário: família ${b.name} completa!` : `Bestiário: ${b.name} — ${b.text}`);
           break;
         }
         case "mastery": {
