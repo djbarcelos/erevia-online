@@ -33,6 +33,9 @@ func (q *activeQuest) complete() bool {
 type questLog struct {
 	active []*activeQuest
 	done   map[string]bool
+	// doneSent: a lista de concluídas já foi ao cliente nesta sessão (depois disso ela só vai
+	// de novo quando uma missão termina).
+	doneSent bool
 }
 
 // loadQuests monta as missões salvas. Personagem novo (sem histórico e abaixo do nível
@@ -242,16 +245,49 @@ func rewardText(r game.QuestReward) string {
 	return strings.Join(parts, " · ")
 }
 
+// sendQuests manda as missões ativas. As concluídas (só id, título e categoria) vão no
+// primeiro QuestLog da sessão e quando alguma termina; nos outros, o cliente guarda as
+// últimas (o QuestLog vai a cada monstro da missão e a lista só cresce).
 func (z *Zone) sendQuests(p *entity, completed string) {
 	log := &pb.QuestLog{Completed: completed}
 	for _, a := range p.pl.quests.active {
-		q := &pb.QuestInfo{Id: a.def.ID, Title: a.def.Title, Text: a.def.Text, Reward: rewardText(a.def.Reward)}
+		q := &pb.QuestInfo{Id: a.def.ID, Title: a.def.Title, Text: a.def.Text, Reward: rewardText(a.def.Reward), Category: questCategoryPB(a.def.Category)}
 		for i, s := range a.def.Steps {
 			q.Steps = append(q.Steps, z.stepInfo(p, s, a.progress[i]))
 		}
 		log.Quests = append(log.Quests, q)
 	}
+	if !p.pl.quests.doneSent || completed != "" {
+		p.pl.quests.doneSent = true
+		log.DoneFull = true
+		log.Done = p.pl.quests.donePB()
+	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_QuestLog{QuestLog: log}})
+}
+
+// donePB: as concluídas na ordem da lista de missões (as que deixaram de existir saem).
+func (q *questLog) donePB() []*pb.QuestDone {
+	var out []*pb.QuestDone
+	for _, def := range game.QuestsInOrder() {
+		if q.done[def.ID] {
+			out = append(out, &pb.QuestDone{Id: def.ID, Title: def.Title, Category: questCategoryPB(def.Category)})
+		}
+	}
+	return out
+}
+
+func questCategoryPB(c game.QuestCategory) pb.QuestCategory {
+	switch c {
+	case game.QuestStory:
+		return pb.QuestCategory_QUEST_CATEGORY_STORY
+	case game.QuestRegion:
+		return pb.QuestCategory_QUEST_CATEGORY_REGION
+	case game.QuestDaily:
+		return pb.QuestCategory_QUEST_CATEGORY_DAILY
+	case game.QuestTutorial:
+		return pb.QuestCategory_QUEST_CATEGORY_TUTORIAL
+	}
+	return pb.QuestCategory_QUEST_CATEGORY_UNSPECIFIED
 }
 
 // checkLeaveTown: 1×/s, só para quem tem o objetivo de sair da cidade pendente.

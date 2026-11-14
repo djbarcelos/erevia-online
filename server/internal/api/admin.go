@@ -94,6 +94,8 @@ func (a *API) registerAdmin(mux *http.ServeMux) {
 	a.registerAdminBugReports(m)
 	m.HandleFunc("GET /api/admin/progression", a.handleAdminProgression)
 	a.registerAdminPanels(m) // Relatos, Métricas e Economia (admin_panels.go)
+	a.registerAdminPlayers(m) // admin_players.go
+	a.registerAdminOps(m)     // admin_ops.go
 	mux.Handle("/api/admin/", a.AdminOnly(m))
 }
 

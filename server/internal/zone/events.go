@@ -323,20 +323,9 @@ func (z *Zone) gmInvasion(gm *entity, sub string) {
 }
 
 func (z *Zone) gmXP2(gm *entity, sub string) {
-	wall := z.cfg.Clock()
 	switch {
 	case sub == "off":
-		z.xp2.gmUntil = wall
-		z.xp2.offUntil = time.Time{}
-		if z.xp2Day(wall) {
-			z.xp2.offUntil = z.xp2ScheduleEnd(wall) // o horário de hoje também fica desligado
-			if z.xp2.offUntil.IsZero() {
-				z.xp2.offUntil = wall.AddDate(1, 0, 0)
-			}
-		}
-		z.saveEvent(EventData{ID: eventXP2, Until: z.xp2.gmUntil})
-		z.saveEvent(EventData{ID: eventXP2Off, Until: z.xp2.offUntil})
-		z.updateXP2()
+		z.xp2TurnOff()
 		z.system(gm, "XP em dobro desligada.")
 		z.gmLog(gm, "evento", "xp2", "off")
 	default:
@@ -345,14 +334,35 @@ func (z *Zone) gmXP2(gm *entity, sub string) {
 			z.system(gm, fmt.Sprintf("Uso: /evento xp2 horas (até %d) · /evento xp2 off", xp2MaxHours))
 			return
 		}
-		z.xp2.gmUntil = wall.Add(time.Duration(h * float64(time.Hour))).Truncate(time.Minute)
-		z.xp2.offUntil = time.Time{}
-		z.saveEvent(EventData{ID: eventXP2, Until: z.xp2.gmUntil})
-		z.saveEvent(EventData{ID: eventXP2Off, Until: z.xp2.offUntil})
-		z.updateXP2()
+		z.xp2TurnOn(h)
 		z.system(gm, "XP em dobro ligada "+z.untilText(z.xp2.until)+".")
 		z.gmLog(gm, "evento", "xp2", fmt.Sprintf("%g h", h))
 	}
+}
+
+// xp2TurnOff desliga a XP em dobro, inclusive a do horário de hoje (/evento xp2 off e o portal).
+func (z *Zone) xp2TurnOff() {
+	wall := z.cfg.Clock()
+	z.xp2.gmUntil = wall
+	z.xp2.offUntil = time.Time{}
+	if z.xp2Day(wall) {
+		z.xp2.offUntil = z.xp2ScheduleEnd(wall) // o horário de hoje também fica desligado
+		if z.xp2.offUntil.IsZero() {
+			z.xp2.offUntil = wall.AddDate(1, 0, 0)
+		}
+	}
+	z.saveEvent(EventData{ID: eventXP2, Until: z.xp2.gmUntil})
+	z.saveEvent(EventData{ID: eventXP2Off, Until: z.xp2.offUntil})
+	z.updateXP2()
+}
+
+// xp2TurnOn liga a XP em dobro por h horas (/evento xp2 horas e o portal).
+func (z *Zone) xp2TurnOn(h float64) {
+	z.xp2.gmUntil = z.cfg.Clock().Add(time.Duration(h * float64(time.Hour))).Truncate(time.Minute)
+	z.xp2.offUntil = time.Time{}
+	z.saveEvent(EventData{ID: eventXP2, Until: z.xp2.gmUntil})
+	z.saveEvent(EventData{ID: eventXP2Off, Until: z.xp2.offUntil})
+	z.updateXP2()
 }
 
 // eventsText: o estado dos eventos para o /evento.
