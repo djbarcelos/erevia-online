@@ -9,20 +9,32 @@ import (
 
 // mapZones resume os spawns para o mapa do cliente: um anel por faixa de raio (juntando
 // os monstros que dividem o mesmo anel), um ponto para cada spawn fixo (chefes) e um
-// disco para cada área própria (biomas).
+// disco para cada área própria (biomas; os monstros do mesmo disco também se juntam).
 func mapZones(spawns []game.Spawn) []*pb.MapZone {
 	var out []*pb.MapZone
 	rings := map[[2]float64]*pb.MapZone{}
+	areas := map[[3]float64]*pb.MapZone{}
 	for _, s := range spawns {
 		def := game.Monsters[s.Monster]
 		if def == nil {
 			continue
 		}
 		if s.Area {
-			out = append(out, &pb.MapZone{
+			key := [3]float64{s.X, s.Z, s.Radius}
+			if z, ok := areas[key]; ok {
+				if !strings.Contains(z.Name, def.Name) {
+					z.Name += ", " + def.Name
+				}
+				z.LevelMin = min(z.LevelMin, uint32(s.LevelMin))
+				z.LevelMax = max(z.LevelMax, uint32(s.LevelMax))
+				continue
+			}
+			z := &pb.MapZone{
 				Name: def.Name, Area: true, X: float32(s.X), Z: float32(s.Z), Radius: float32(s.Radius),
 				LevelMin: uint32(s.LevelMin), LevelMax: uint32(s.LevelMax), Region: s.Region,
-			})
+			}
+			areas[key] = z
+			out = append(out, z)
 			continue
 		}
 		if s.Fixed {
