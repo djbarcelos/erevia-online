@@ -143,13 +143,13 @@ func (z *Zone) runTelemetryWorker(ctx context.Context) {
 
 // onClientStats: amostra de FPS que o cliente manda a cada ~60 s.
 func (z *Zone) onClientStats(p *entity, m *pb.ClientStats) {
-	if m.FpsAvg <= 0 || m.FpsAvg > 500 {
+	// O extra vira JSONB num lote só: NaN/infinito (json.Marshal recusa) ou um NUL no
+	// aparelho (o Postgres recusa \u0000) derrubavam o lote inteiro, com o ouro e os itens
+	// de todo mundo (achado pelo teste de caos).
+	if !(m.FpsAvg > 0 && m.FpsAvg <= 500) || !finite(float64(m.FpsLow)) {
 		return
 	}
-	dev := m.Device
-	if len(dev) > 40 {
-		dev = dev[:40]
-	}
+	dev := cleanText(m.Device, 40)
 	z.track(p, "fps", "", int64(m.FpsAvg+0.5), map[string]any{"fps_low": m.FpsLow, "device": dev, "seconds": m.Seconds})
 }
 

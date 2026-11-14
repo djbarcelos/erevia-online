@@ -997,8 +997,12 @@ func (z *Zone) save(batch []SavedState, blocking bool) {
 	if len(z.pending) > 0 {
 		merged := make([]SavedState, 0, len(z.pending)+len(batch))
 		newer := map[uint32]bool{}
-		for _, s := range batch {
+		for i, s := range batch {
 			newer[s.ID] = true
+			// O armazém só vai no salvamento em que mudou: o mais novo herda o do pendente.
+			if old, ok := z.pending[s.ID]; ok && s.Storage == nil && old.Storage != nil {
+				batch[i].Storage = old.Storage
+			}
 		}
 		for id, s := range z.pending {
 			if !newer[id] {

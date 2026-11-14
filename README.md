@@ -155,6 +155,7 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 | `make build` | Binário do servidor e build do cliente |
 | `make docker` | Imagem de produção (a mesma que a Railway usa) |
 | `cd server && go run ./cmd/loadbot -bots 100 -duration 2m` | Teste de carga: bots que entram pelo login de dev (servidor local com `DEV_LOGIN=true`), andam, caçam e falam; imprime banda e ping a cada 10 s. O servidor registra o custo do tick no log a cada 30 s ("tick stats") |
+| `cd server && go run ./cmd/loadbot -chaos -bots 50 -duration 10m -seed 317 -db $DATABASE_URL` | Teste de caos (ver [Teste de caos](#teste-de-caos)): ações válidas e inválidas de todo o protocolo, quedas no meio de tudo e conferência da economia; sai com código ≠ 0 se algo quebrou |
 | `cd server && go run ./cmd/balance` | Simulador de balanceamento: por classe, caminho e nível, com o equipamento típico +0 e +3, o dano por segundo, o tempo para matar e para morrer, a XP por hora e o tempo até o 30, com as fórmulas do pacote `game` (`-csv` para planilha, `-noite`). O orçamento de poder roda no `go test` (`internal/balance`); a leitura de hoje está em [docs/balanceamento-2026-11.md](docs/balanceamento-2026-11.md) |
 
 | `make gm NAME=Fulano` | Torna GM a conta do personagem no banco local (relogue depois) |
@@ -433,6 +434,25 @@ O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem tr
 
 **Erros do servidor** (também em `game_events`, no máximo 1 linha por grupo a cada minuto, com a contagem acumulada em `amount`): `server_error` é um panic recuperado (a zona segue e só o jogador da mensagem cai; `ref` = hash da stack, `extra` com onde, jogador, mensagem, stack e versão), `slow_tick` é um tick acima de 50 ms (`extra.systems` = os sistemas mais lentos) e `db_error` é uma falha ao gravar no banco (`ref` = operação). Exemplo: `SELECT kind, ref, sum(amount) AS vezes, max(at) AS ultima, max(extra->>'where') AS onde, max(extra->>'version') AS versao FROM game_events WHERE kind IN ('server_error', 'slow_tick', 'db_error') AND at > now() - interval '1 day' GROUP BY 1, 2 ORDER BY 3 DESC;`
 
+## Teste de caos
+`cmd/loadbot -chaos` procura duplicação de itens, estados impossíveis e panics que nenhum teste unitário pensou. Cada bot sorteia, a cada passo (300 ms), uma ação de todo o `ClientMessage`: andar (também para NaN e infinito), atacar, skills, pegar do chão, mover, usar, destruir, comprar, vender e encantar itens, armazém (itens e moedas), troca entre jogadores, grupo, clã, convites, teleporte, criação, barbeiro, atributos, skills, atalhos, especialização, amigos, correio, ranking, título, chat (com comandos) e FPS. Uma parte é inválida de propósito: espaços fora da faixa, quantidades 0 ou enormes, ids que não existem, nomes e textos estranhos, bytes que não são protobuf, mensagem maior que o limite. Os **combos** mandam várias mensagens seguidas sem esperar resposta (vender e encantar o mesmo espaço, oferecer na troca e guardar no armazém, comprar e cair, confirmar a troca e fechar a aba, convidar para o clã e desfazê-lo), e os bots **caem e voltam** (fechando, abruptamente ou relogando por cima da sessão antiga).
+
+Antes de jogar, o caos cria personagens novos (prefixo `Cx…` a cada rodada) e, direto no banco (`-db`), dá a cada um nível, moedas, pergaminhos, materiais, equipamento e armazém, para clã, encantamento e criação passarem da primeira checagem. Aí tira o saldo inicial (moedas na bolsa e no armazém, itens na bolsa, no equipamento e no armazém) e, no fim, com todos fora e os salvamentos gravados (`-settle`), confere: **saldo final = inicial + entradas − saídas** da telemetria (`gold`, `item_in`, `item_out` em `game_events`).
+
+**Reprodutível:** com a mesma `-seed`, a sequência de escolhas é a mesma (6 sorteios por passo, sempre, e o tipo da ação só depende deles); os parâmetros se aplicam ao estado que o bot vê. A contagem de ações por tipo e a **assinatura das escolhas** no relatório são iguais entre rodadas com a mesma semente, mesmo com a rede em outro ritmo.
+
+O relatório traz as ações por tipo, os comandos enviados (com `!` nos inválidos), sessões, erros e kicks, as invariantes, `server_error` e `db_error` da rodada (consulta em `game_events`), linhas de panic/invariante do log do servidor (`-serverlog arquivo`) e a conferência da economia, item a item, com de onde veio cada entrada e saída. Sai com código ≠ 0 se houver panic, invariante, erro do banco, kick por erro no servidor, servidor fora do ar no fim ou economia que não fecha.
+
+Localmente (servidor com `DEV_LOGIN=true DEBUG_INVARIANTS=1`, para uma invariante quebrada derrubar o processo e aparecer no log):
+```bash
+cd server
+DEV_LOGIN=true DEBUG_INVARIANTS=1 go run ./cmd/zone > /tmp/server.log 2>&1 &
+go run ./cmd/loadbot -chaos -bots 50 -duration 10m -seed 317 \
+  -url http://127.0.0.1:8080 -db "$DATABASE_URL" -serverlog /tmp/server.log
+```
+O job **Caos noturno** (`.github/workflows/nightly.yml`) faz isso toda noite com Postgres 17 e a semente do dia do ano (`date +%j`), e também roda à mão (Actions → Caos noturno → Run workflow, com semente e duração opcionais). O relatório vai para o resumo do job, e o log do servidor e a saída do caos ficam nos artefatos. Para reproduzir uma noite que falhou, rode o comando acima com a semente dela.
+
+Saídas de item na telemetria (`item_out`, `extra.how`): `sell`, `destroy`, `craft`, `enchant_break` (o item quebrou), `enchant` (o pergaminho gasto), `use` (poção), `return` (pergaminho de retorno) e `pk_drop` (caiu de quem morreu com karma; quem pegar conta como `item_in` `loot`).
 ## Alertas no Discord
 O servidor avisa num canal do Discord o que precisa de atenção. Um worker próprio (`server/internal/alerts`), fora da zona, lê o banco a cada minuto e manda um embed em português, com cor por gravidade e o link para a seção do portal (`PUBLIC_URL` + `/admin#…`):
 
