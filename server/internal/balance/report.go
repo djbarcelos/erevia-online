@@ -127,11 +127,11 @@ func (r *Report) WriteMarkdown(w io.Writer) {
 		pf("- %s\n", a)
 	}
 
-	pf("\n## Tempo até o 30\n\n")
+	pf("\n## Tempo até o %d\n\n", game.MaxLevel)
 	pf("| Caminho | +0 | +%d | +0 sem limite de renascimento | +%d sem limite |\n|---|---:|---:|---:|---:|\n", game.EnchantSafe, game.EnchantSafe)
 	for _, p := range Paths() {
 		a, b := r.Rows[0][p], r.Rows[game.EnchantSafe][p]
-		pf("| %s | %s | %s | %s | %s |\n", p.Name(), dur(TimeTo30(a)), dur(TimeTo30(b)), dur(TimeTo30Free(a)), dur(TimeTo30Free(b)))
+		pf("| %s | %s | %s | %s | %s |\n", p.Name(), dur(TimeToMax(a)), dur(TimeToMax(b)), dur(TimeToMaxFree(a)), dur(TimeToMaxFree(b)))
 	}
 
 	pf("\n## Tempo para matar por faixa (regime, +0)\n\n")

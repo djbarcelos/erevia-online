@@ -6,7 +6,7 @@ export interface Bounds {
   maxZ: number;
 }
 
-/** Bioma do sul: borda ondulada com a floresta e a área dos golens. */
+/** Formato antigo do world.json (campo `biome`): o Vale, com a borda ondulada e a área dos golens. */
 export interface BiomeInfo {
   name: string;
   zFrom: number;
@@ -16,12 +16,26 @@ export interface BiomeInfo {
   vale: { x: number; z: number; r: number };
 }
 
+/**
+ * Um bioma do mapa (scripts/biomes/<id>.mjs): o id é o nome do arquivo, e os outros campos
+ * são o que o gerador do bioma grava (o `paint` do bioma sabe lê-los).
+ */
+export interface BiomeEntry {
+  id: string;
+  name: string;
+  bounds?: Bounds;
+  [field: string]: unknown;
+}
+
 /** Layout do mundo gerado por scripts/build-world.mjs (o servidor usa o mesmo arquivo). */
 export interface WorldData {
   version: number;
   /** Lado do quadrado original (compatibilidade); os limites reais estão em `bounds`. */
   size: number;
   bounds?: Bounds;
+  /** Biomas, na ordem do gerador (formato novo). */
+  biomes?: BiomeEntry[];
+  /** Formato antigo: só o Vale (o cliente aceita os dois durante a transição). */
   biome?: BiomeInfo;
   safeRadius: number;
   wall: { apothem: number; sides: number };
@@ -39,20 +53,10 @@ export function worldBounds(world: WorldData): Bounds {
   return { minX: -h, maxX: h, minZ: -h, maxZ: h };
 }
 
-/**
- * Quanto o ponto já é "vale de pedra" (0 = floresta, 1 = pedra). Mesma conta do gerador
- * (scripts/build-world.mjs), para o chão pintado bater com as pedras e árvores.
- */
-export function rockyAt(world: WorldData, x: number, z: number): number {
-  const b = world.biome;
-  if (!b) return 0;
-  const n =
-    (Math.sin(x * 0.045 + b.ph[0]) * Math.sin(z * 0.05 + b.ph[1]) +
-      0.5 * Math.sin(x * 0.11 + z * 0.07 + b.ph[2]) +
-      0.3 * Math.sin(x * 0.23 - z * 0.19 + b.ph[3])) /
-    1.8;
-  const t = Math.max(0, Math.min(1, (z + n * b.amp - b.zFrom) / (b.zTo - b.zFrom)));
-  return t * t * (3 - 2 * t);
+/** Biomas do mapa: `biomes[]` ou, no formato antigo, o Vale do campo `biome`. */
+export function worldBiomes(world: WorldData): BiomeEntry[] {
+  if (world.biomes) return world.biomes;
+  return world.biome ? [{ id: "vale", ...world.biome }] : [];
 }
 
 export async function loadWorldData(): Promise<WorldData> {

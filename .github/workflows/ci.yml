@@ -74,6 +74,12 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm run test:unit
+      # O world.json commitado (cliente e servidor) tem de ser o que os biomas geram.
+      - name: world.json igual ao gerado
+        run: |
+          node scripts/build-world.mjs
+          sha256sum public/world.json ../server/internal/world/world.json
+          git diff --exit-code --stat -- public/world.json ../server/internal/world/world.json
       - run: npm run build
 
   e2e:

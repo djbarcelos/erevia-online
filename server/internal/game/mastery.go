@@ -7,9 +7,13 @@ import (
 )
 
 // Maestria: a progressão depois do nível máximo, nos moldes do Champion System do ESO, do
-// AA do EverQuest e do Paragon do Diablo 3. No nível 30 a XP (de monstro, missão e evento,
-// com as regras de sempre) enche a barra de Maestria, e cada barra cheia dá 1 ponto para a
-// árvore de 3 ramos (Caça, Sobrevivência e Utilidade).
+// AA do EverQuest e do Paragon do Diablo 3. No nível máximo (40) a XP (de monstro, missão e
+// evento, com as regras de sempre) enche a barra de Maestria, e cada barra cheia dá 1 ponto
+// para a árvore de 3 ramos (Caça, Sobrevivência e Utilidade).
+//
+// Quem ganhou pontos quando o máximo era 30 fica com eles e continua usando a árvore (gastar
+// e redistribuir) do 30 ao 39; só não ganha pontos novos antes do 40, porque a XP volta a
+// subir nível (MasteryState.Usable).
 //
 // A árvore é mais horizontal que vertical: os nós dão opções (poção, ouro, viagem, controle,
 // regeneração) e quase nada de força. Tudo o que mexe no combate (dano, defesa, vida,
@@ -22,11 +26,10 @@ import (
 const (
 	// MasteryLevel: a Maestria abre no nível máximo.
 	MasteryLevel = MaxLevel
-	// MasteryPointXP: XP de uma barra (1 ponto). Hoje é igual a XPToNext(29) = 263.873, o
-	// custo do último nível: um ponto pede o mesmo esforço que o 29 → 30. É uma constante (e
-	// não XPToNext(29)) de propósito: quando a curva mudar (tunnel#149), este número deve
-	// ser revisto junto, e o TestMasteryPointXP avisa.
-	MasteryPointXP int64 = 263_873
+	// MasteryPointXP: XP de uma barra (1 ponto), igual a XPToNext(MaxLevel−1) = 45,2
+	// milhões: um ponto pede o mesmo esforço que o 39 → 40. É uma constante (e não a função)
+	// para poder ser usada em constantes; o TestMasteryPointXP confere que bate com a curva.
+	MasteryPointXP int64 = 45_200_000
 	// MasteryRestedMult: o bônus diário enche a barra 4× mais rápido.
 	MasteryRestedMult = 4
 	// MasteryRestedDays: dias de bônus que dá para guardar (1 barra por dia).
@@ -227,7 +230,7 @@ func (m *MasteryState) BranchPoints(branch int) int {
 func RestedCap() int64 { return MasteryPointXP * MasteryRestedDays }
 
 // Refresh credita o bônus diário dos dias que passaram até day (1 barra por dia, até
-// MasteryRestedDays). A primeira vez (quem acabou de chegar ao 30) já vem com o de hoje.
+// MasteryRestedDays). A primeira vez (quem acabou de chegar ao 40) já vem com o de hoje.
 // Devolve se mudou algo.
 func (m *MasteryState) Refresh(day int) bool {
 	switch {
@@ -269,11 +272,15 @@ func (m *MasteryState) Gain(xp int64) (credited int64, points int) {
 	return credited, points
 }
 
-// DeathLoss: quanto da barra sai numa morte (DeathXPLoss da barra, menos o desconto da
-// Segunda Chance), sem tirar ponto.
+// DeathLoss: quanto da barra sai numa morte (a mesma fração de um nível do 30 em diante,
+// DeathLossShare, menos o desconto da Segunda Chance), sem tirar ponto.
 func (m *MasteryState) DeathLoss(b *MasteryBonus) int64 {
-	return int64(math.Round(float64(MasteryPointXP) * DeathXPLoss * (1 - b.Of(MStatDeathLoss))))
+	return int64(math.Round(float64(MasteryPointXP) * DeathLossShare(MasteryLevel) * (1 - b.Of(MStatDeathLoss))))
 }
+
+// Usable: a árvore pode ser usada (gastar e redistribuir) no nível máximo ou por
+// quem já tem pontos (ganhos quando o máximo era 30).
+func (m *MasteryState) Usable(level int) bool { return level >= MasteryLevel || m.Points > 0 }
 
 // Lose tira XP da barra (nunca abaixo de 0). Devolve quanto saiu.
 func (m *MasteryState) Lose(xp int64) int64 {

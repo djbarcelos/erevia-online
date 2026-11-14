@@ -26,12 +26,12 @@ func TestTypicalBuildsFollowTheRules(t *testing.T) {
 			}
 		}
 	}
-	// No 30 todas as skills do caminho estão aprendidas.
+	// No máximo todas as skills do caminho estão aprendidas.
 	for _, p := range Paths() {
 		b := NewBuild(p, game.MaxLevel, 0)
 		for _, s := range game.SpecTree(p.Spec) {
 			if b.rank(s.ID) < 1 {
-				t.Errorf("%s: não aprendeu %s no 30", p.Name(), s.Name)
+				t.Errorf("%s: não aprendeu %s no %d", p.Name(), s.Name, game.MaxLevel)
 			}
 		}
 	}
@@ -39,15 +39,32 @@ func TestTypicalBuildsFollowTheRules(t *testing.T) {
 
 func TestTypicalGear(t *testing.T) {
 	for _, c := range Classes() {
-		for _, l := range []int{1, 5, 6, 30} {
+		for _, l := range []int{1, 5, 6, 29, 30, 34, 35, game.MaxLevel} {
 			gear := TypicalGear(c, l, 0)
 			want := game.GradeCommon
 			if l >= 6 {
 				want = game.GradeGood
 			}
+			// Do 30 em diante, a arma e a armadura são as ponte comuns do nível (30 ou 35).
+			bridge := 0
+			for _, lvl := range game.BridgeLevels {
+				if l >= lvl {
+					bridge = lvl
+				}
+			}
 			rings, shield := 0, false
 			for _, p := range gear {
-				if p.Item.Grade != want || p.Item.ReqLevel > l || !p.Item.UsableBy(c) {
+				w := want
+				isBridge := p.Item.Kind == game.KindWeapon || p.Item.Kind == game.KindArmor
+				if bridge > 0 && isBridge {
+					w = game.GradeCommon
+					if p.Item.ID != game.BridgeWeaponID(c, bridge, w) && p.Item.ID != game.BridgeArmorID(c, bridge, w) {
+						t.Errorf("%s nv %d: %s, want a peça ponte do %d", c, l, p.Item.ID, bridge)
+					}
+				} else if p.Item.Bridge {
+					t.Errorf("%s nv %d: peça ponte %s fora da arma e da armadura", c, l, p.Item.ID)
+				}
+				if p.Item.Grade != w || p.Item.ReqLevel > l || !p.Item.UsableBy(c) {
 					t.Errorf("%s nv %d: %s (raridade %d, nível %d)", c, l, p.Item.ID, p.Item.Grade, p.Item.ReqLevel)
 				}
 				if p.Item.Kind == game.KindRing {
@@ -75,7 +92,11 @@ func TestHuntRegions(t *testing.T) {
 	cases := map[int][]string{
 		1: {"skeleton_minion"}, 5: {"skeleton_minion"}, 6: {"skeleton_warrior", "skeleton_rogue"},
 		12: {"skeleton_warrior", "skeleton_rogue"}, 13: {"skeleton_mage", "skeleton_warrior"},
-		19: {"skeleton_mage", "skeleton_warrior"}, 20: {"stone_golem"}, 30: {"stone_golem"},
+		19: {"skeleton_mage", "skeleton_warrior"}, 20: {"stone_golem"}, 29: {"stone_golem"},
+		// Do 30 ao 40 (tunnel#149): Fundo do Vale, Vigília Ossária e Confins Partidos.
+		30: {"ancient_golem"}, 32: {"ancient_golem"}, 33: {"ossuary_knight", "ossuary_devotee"},
+		34: {"ossuary_knight", "ossuary_devotee"}, 35: {"broken_reaper", "broken_arcanist"},
+		game.MaxLevel - 1: {"broken_reaper", "broken_arcanist"}, game.MaxLevel: {"broken_reaper", "broken_arcanist"},
 	}
 	for l, want := range cases {
 		h := HuntFor(l)
@@ -125,8 +146,8 @@ func TestSimulationIsDeterministicAndSane(t *testing.T) {
 				t.Errorf("%s nv %d: noite sem efeito (%v/%v)", p.Name(), l, n.XPKill, n.TTDNoPot)
 			}
 		}
-		if t30 := TimeTo30(Progression(p, 0, false)); t30 <= 0 || math.IsInf(t30, 1) {
-			t.Errorf("%s: tempo até o 30 = %v", p.Name(), t30)
+		if tmax := TimeToMax(Progression(p, 0, false)); tmax <= 0 || math.IsInf(tmax, 1) {
+			t.Errorf("%s: tempo até o %d = %v", p.Name(), game.MaxLevel, tmax)
 		}
 	}
 }

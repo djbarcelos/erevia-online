@@ -72,23 +72,40 @@ var knownExceptions = map[string]float64{
 	"item:neck_epic":   0.26, // Coração do Abismo (épica, nível 18): poder 45,0, orçamento 35,8
 	"item:neck_legend": 0.29, // Colar do Rei Ossário (lendária, nível 20): poder 57,0, orçamento 44,3
 	// Tempo para matar a mais de 15% da média da faixa (ClassTolerance): + mata mais devagar.
-	"ttk:13–19:Cavaleiro":           0.70,  // Cavaleiro no 13–19: 2,0 s para matar, média da faixa 1,2 s
-	"ttk:13–19:Mago":                -0.54, // Mago no 13–19: 0,5 s para matar, média da faixa 1,2 s
-	"ttk:1–5:Cavaleiro":             0.96,  // Cavaleiro no 1–5: 3,1 s para matar, média da faixa 1,6 s
-	"ttk:1–5:Mago":                  -0.86, // Mago no 1–5: 0,2 s para matar, média da faixa 1,6 s
-	"ttk:20–24:Cavaleiro/Arauto":    0.65,  // Cavaleiro/Arauto no 20–24: 6,8 s para matar, média da faixa 4,1 s
-	"ttk:20–24:Cavaleiro/Bastião":   0.95,  // Cavaleiro/Bastião no 20–24: 8,1 s para matar, média da faixa 4,1 s
-	"ttk:20–24:Ladino/Caçador":      -0.20, // Ladino/Caçador no 20–24: 3,3 s para matar, média da faixa 4,1 s
-	"ttk:20–24:Ladino/Sicário":      -0.23, // Ladino/Sicário no 20–24: 3,2 s para matar, média da faixa 4,1 s
-	"ttk:20–24:Mago/Elementalista":  -0.52, // Mago/Elementalista no 20–24: 2,0 s para matar, média da faixa 4,1 s
-	"ttk:20–24:Mago/Ocultista":      -0.52, // Mago/Ocultista no 20–24: 2,0 s para matar, média da faixa 4,1 s
-	"ttk:25–30:Bárbaro/Sanguinário": -0.24, // Bárbaro/Sanguinário no 25–30: 2,9 s para matar, média da faixa 3,8 s
-	"ttk:25–30:Cavaleiro/Arauto":    0.62,  // Cavaleiro/Arauto no 25–30: 6,2 s para matar, média da faixa 3,8 s
-	"ttk:25–30:Cavaleiro/Bastião":   1.13,  // Cavaleiro/Bastião no 25–30: 8,1 s para matar, média da faixa 3,8 s
-	"ttk:25–30:Ladino/Caçador":      -0.18, // Ladino/Caçador no 25–30: 3,2 s para matar, média da faixa 3,8 s
-	"ttk:25–30:Ladino/Sicário":      -0.24, // Ladino/Sicário no 25–30: 2,9 s para matar, média da faixa 3,8 s
-	"ttk:25–30:Mago/Elementalista":  -0.58, // Mago/Elementalista no 25–30: 1,6 s para matar, média da faixa 3,8 s
-	"ttk:25–30:Mago/Ocultista":      -0.47, // Mago/Ocultista no 25–30: 2,0 s para matar, média da faixa 3,8 s
+	"ttk:13–19:Cavaleiro":          0.70,  // Cavaleiro no 13–19: 2,0 s para matar, média da faixa 1,2 s
+	"ttk:13–19:Mago":               -0.54, // Mago no 13–19: 0,5 s para matar, média da faixa 1,2 s
+	"ttk:1–5:Cavaleiro":            0.96,  // Cavaleiro no 1–5: 3,1 s para matar, média da faixa 1,6 s
+	"ttk:1–5:Mago":                 -0.86, // Mago no 1–5: 0,2 s para matar, média da faixa 1,6 s
+	"ttk:20–24:Cavaleiro/Arauto":   0.65,  // Cavaleiro/Arauto no 20–24: 6,8 s para matar, média da faixa 4,1 s
+	"ttk:20–24:Cavaleiro/Bastião":  0.95,  // Cavaleiro/Bastião no 20–24: 8,1 s para matar, média da faixa 4,1 s
+	"ttk:20–24:Ladino/Caçador":     -0.20, // Ladino/Caçador no 20–24: 3,3 s para matar, média da faixa 4,1 s
+	"ttk:20–24:Ladino/Sicário":     -0.23, // Ladino/Sicário no 20–24: 3,2 s para matar, média da faixa 4,1 s
+	"ttk:20–24:Mago/Elementalista": -0.52, // Mago/Elementalista no 20–24: 2,0 s para matar, média da faixa 4,1 s
+	"ttk:20–24:Mago/Ocultista":     -0.52, // Mago/Ocultista no 20–24: 2,0 s para matar, média da faixa 4,1 s
+	// Do 25 ao 40 (tunnel#149): a faixa 25–30 virou 25–29 (o 30 caça no Fundo do Vale) e
+	// entraram 30–34 e 35–40. Os números repetem o desequilíbrio que já existia no 25–30
+	// (Cavaleiro devagar, Mago rápido), com o equipamento ponte comum do 30 em diante.
+	"ttk:25–29:Bárbaro/Sanguinário": -0.23, // Bárbaro/Sanguinário no 25–29: 3,0 s para matar, média da faixa 3,8 s
+	"ttk:25–29:Cavaleiro/Arauto":    0.63,  // Cavaleiro/Arauto no 25–29: 6,2 s para matar, média da faixa 3,8 s
+	"ttk:25–29:Cavaleiro/Bastião":   1.12,  // Cavaleiro/Bastião no 25–29: 8,1 s para matar, média da faixa 3,8 s
+	"ttk:25–29:Ladino/Caçador":      -0.18, // Ladino/Caçador no 25–29: 3,1 s para matar, média da faixa 3,8 s
+	"ttk:25–29:Ladino/Sicário":      -0.24, // Ladino/Sicário no 25–29: 2,9 s para matar, média da faixa 3,8 s
+	"ttk:25–29:Mago/Elementalista":  -0.58, // Mago/Elementalista no 25–29: 1,6 s para matar, média da faixa 3,8 s
+	"ttk:25–29:Mago/Ocultista":      -0.48, // Mago/Ocultista no 25–29: 2,0 s para matar, média da faixa 3,8 s
+	"ttk:30–34:Bárbaro/Sanguinário": -0.31, // Bárbaro/Sanguinário no 30–34: 2,4 s para matar, média da faixa 3,5 s
+	"ttk:30–34:Cavaleiro/Arauto":    0.65,  // Cavaleiro/Arauto no 30–34: 5,7 s para matar, média da faixa 3,5 s
+	"ttk:30–34:Cavaleiro/Bastião":   1.14,  // Cavaleiro/Bastião no 30–34: 7,5 s para matar, média da faixa 3,5 s
+	"ttk:30–34:Ladino/Caçador":      -0.24, // Ladino/Caçador no 30–34: 2,6 s para matar, média da faixa 3,5 s
+	"ttk:30–34:Ladino/Sicário":      -0.27, // Ladino/Sicário no 30–34: 2,5 s para matar, média da faixa 3,5 s
+	"ttk:30–34:Mago/Elementalista":  -0.51, // Mago/Elementalista no 30–34: 1,7 s para matar, média da faixa 3,5 s
+	"ttk:30–34:Mago/Ocultista":      -0.44, // Mago/Ocultista no 30–34: 2,0 s para matar, média da faixa 3,5 s
+	"ttk:35–40:Bárbaro/Caudilho":    -0.18, // Bárbaro/Caudilho no 35–40: 2,0 s para matar, média da faixa 2,4 s
+	"ttk:35–40:Bárbaro/Sanguinário": -0.36, // Bárbaro/Sanguinário no 35–40: 1,6 s para matar, média da faixa 2,4 s
+	"ttk:35–40:Cavaleiro/Arauto":    0.63,  // Cavaleiro/Arauto no 35–40: 3,9 s para matar, média da faixa 2,4 s
+	"ttk:35–40:Cavaleiro/Bastião":   1.17,  // Cavaleiro/Bastião no 35–40: 5,2 s para matar, média da faixa 2,4 s
+	"ttk:35–40:Ladino/Sicário":      -0.22, // Ladino/Sicário no 35–40: 1,9 s para matar, média da faixa 2,4 s
+	"ttk:35–40:Mago/Elementalista":  -0.50, // Mago/Elementalista no 35–40: 1,2 s para matar, média da faixa 2,4 s
+	"ttk:35–40:Mago/Ocultista":      -0.41, // Mago/Ocultista no 35–40: 1,4 s para matar, média da faixa 2,4 s
 	"ttk:6–12:Bárbaro":              0.18,  // Bárbaro no 6–12: 2,1 s para matar, média da faixa 1,8 s
 	"ttk:6–12:Cavaleiro":            0.74,  // Cavaleiro no 6–12: 3,0 s para matar, média da faixa 1,8 s
 	"ttk:6–12:Mago":                 -0.81, // Mago no 6–12: 0,3 s para matar, média da faixa 1,8 s

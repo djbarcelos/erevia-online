@@ -190,7 +190,7 @@ export class Connection {
     this.send({ case: "specCmd", value: { kind, npcId, spec } });
   }
 
-  /** Maestria (nível 30): pedir a árvore e o estado, gastar 1 ponto no nó ou redistribuir. */
+  /** Maestria (nível máximo): pedir a árvore e o estado, gastar 1 ponto no nó ou redistribuir. */
   masteryCmd(kind: MasteryCmdKind, node = ""): void {
     this.send({ case: "masteryCmd", value: { kind, node } });
   }
