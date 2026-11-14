@@ -173,3 +173,41 @@ func TestQuestProgressSurvivesRelog(t *testing.T) {
 		t.Fatalf("restored log = %+v", log)
 	}
 }
+
+func TestQuestLogSendsCategoryAndDoneOnlyWhenItChanges(t *testing.T) {
+	z := newCombatZone()
+	peer := &fakePeer{}
+	st := game.QuestState{Active: map[string][]int{"tut_hunt": {0}}, Done: []string{"tut_gate", "sumiu_dos_dados"}}
+	z.handle(joinEvent{info: JoinInfo{ID: 1, Name: "Pknight", Class: "knight", Quests: st, Peer: peer}})
+	p := z.players[1]
+
+	log := peer.lastQuestLog()
+	if log == nil || !log.DoneFull || len(log.Done) != 1 || log.Done[0].Id != "tut_gate" || log.Done[0].Title != "Além das muralhas" {
+		t.Fatalf("join should send the done list (only quests that still exist), got %+v", log)
+	}
+	if log.Done[0].Category != pb.QuestCategory_QUEST_CATEGORY_TUTORIAL || log.Quests[0].Category != pb.QuestCategory_QUEST_CATEGORY_TUTORIAL {
+		t.Fatalf("categories = %v / %v", log.Done[0].Category, log.Quests[0].Category)
+	}
+
+	// Progresso sem concluir: a lista não vai de novo.
+	z.questEvent(p, game.GoalKill, "skeleton_minion")
+	if log := peer.lastQuestLog(); log.DoneFull || len(log.Done) != 0 || log.Quests[0].Steps[0].Count != 1 {
+		t.Fatalf("progress log should not repeat the done list, got %+v", log)
+	}
+
+	// Concluiu: a lista vai inteira, na ordem dos dados.
+	z.questEvent(p, game.GoalKill, "skeleton_minion")
+	z.questEvent(p, game.GoalKill, "skeleton_minion")
+	log = peer.lastQuestLog()
+	if !log.DoneFull || len(log.Done) != 2 || log.Done[0].Id != "tut_gate" || log.Done[1].Id != "tut_hunt" || log.Completed != "Ossos inquietos" {
+		t.Fatalf("completion should resend the done list, got %+v", log)
+	}
+}
+
+func TestEveryCategoryHasAProtocolValue(t *testing.T) {
+	for c := game.QuestStory; c <= game.QuestTutorial; c++ {
+		if questCategoryPB(c) == pb.QuestCategory_QUEST_CATEGORY_UNSPECIFIED || int32(questCategoryPB(c)) != int32(c) {
+			t.Errorf("category %d maps to %v", c, questCategoryPB(c))
+		}
+	}
+}
