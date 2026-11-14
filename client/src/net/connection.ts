@@ -9,6 +9,7 @@ import {
   ServerMessageSchema,
   type FriendCmdKind,
   type SpecCmdKind,
+  type MasteryCmdKind,
   type MailCmdKind,
   type ServerMessage,
   type TradeCmdKind,
@@ -187,6 +188,11 @@ export class Connection {
   /** Mestra dos Caminhos: falar (anda A Encruzilhada e abre a escolha) ou escolher o caminho. */
   specCmd(kind: SpecCmdKind, npcId: number, spec = ""): void {
     this.send({ case: "specCmd", value: { kind, npcId, spec } });
+  }
+
+  /** Maestria (nível 30): pedir a árvore e o estado, gastar 1 ponto no nó ou redistribuir. */
+  masteryCmd(kind: MasteryCmdKind, node = ""): void {
+    this.send({ case: "masteryCmd", value: { kind, node } });
   }
 
   /** Escolhe o título (id da conquista; "" tira). */
