@@ -31,8 +31,9 @@ type Band struct{ Lo, Hi int }
 func (b Band) String() string { return fmt.Sprintf("%d–%d", b.Lo, b.Hi) }
 
 // Bands: as faixas de caça (as regiões dos spawns; o vale dividido no 24/25, depois do 2º
-// degrau dos caminhos).
-var Bands = []Band{{1, 5}, {6, 12}, {13, 19}, {20, 24}, {25, 30}}
+// degrau dos caminhos). Do 30 ao 40 (tunnel#149): o Fundo do Vale e a Vigília Ossária
+// (30–34) e os Confins Partidos (35–40).
+var Bands = []Band{{1, 5}, {6, 12}, {13, 19}, {20, 24}, {25, 29}, {30, 34}, {35, game.MaxLevel}}
 
 // Violation é uma regra do orçamento furada.
 type Violation struct {
