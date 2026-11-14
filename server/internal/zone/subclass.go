@@ -11,6 +11,7 @@ import (
 
 	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
+	"erevia/server/internal/world"
 )
 
 // Subclasse (tunnel#156, game/subclass.go). Edrian, o Guardião das Sendas, ao sul do poço,
@@ -27,7 +28,14 @@ import (
 var guardian = npcDef{name: game.TalkGuardian, title: "Guardião das Sendas", model: "knight", x: 0, z: -9.5,
 	role: pb.NpcRole_NPC_ROLE_SUBCLASS, look: &game.Appearance{Skin: 4, Hair: 5, Outfit: 6, Head: "ranger"}}
 
+// guardianID: depois do Leiloeiro (o último NPC da cidade).
+var guardianID = auctioneerID + 1
+
+// spawnGuardian: o Guardião só existe no mapa principal (a troca de classe é na cidade).
 func (z *Zone) spawnGuardian(id uint32) {
+	if z.mapID() != world.StarterMap {
+		return
+	}
 	d := guardian
 	pos := z.freeSpot(Vec2{X: d.x, Z: d.z})
 	z.npcs[id] = &entity{
@@ -288,7 +296,8 @@ func (z *Zone) switchClass(p *entity, n *entity, class string) {
 	z.sendHotbar(p)
 	z.inventoryChanged(p, len(off) > 0)
 	z.sendMastery(p)
-	z.sendQuests(p, "") // o lugar dos objetivos depende do nível
+	z.vitalityLevelUp(p) // o teto da vitalidade é o do nível da classe ativa
+	z.sendQuests(p, "")  // o lugar dos objetivos depende do nível
 	z.questLevel(p)
 	z.broadcastStatus(p)
 	z.classChangedSocial(p)

@@ -1596,6 +1596,11 @@ export class EntityManager {
     for (const v of this.views.values()) cb(v);
   }
 
+  /** Nó raiz de cada entidade (medição de FPS, ?bench=1: separa o que é cenário do que é entidade). */
+  forEachRoot(cb: (e: { root: TransformNode; kind: EntityKind; name: string; local: boolean }) => void): void {
+    for (const v of this.views.values()) cb({ root: v.root, kind: v.kind, name: v.name, local: v.id === this.localId });
+  }
+
   /** Pontos que a câmera precisa enxergar (meio do corpo do jogador e do alvo). */
   focusPoints(): Vector3[] {
     const out: Vector3[] = [];

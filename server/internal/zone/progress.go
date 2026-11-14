@@ -44,6 +44,12 @@ func (z *Zone) onProgress(e progressEvent) {
 		z.onMasteryCmd(p, m)
 	case *pb.SubclassCmd:
 		z.onSubclassCmd(p, m)
+	case *pb.ContractCmd:
+		z.onContractCmd(p, m)
+	case *pb.ReputationCmd:
+		z.onReputationCmd(p, m)
+	case *pb.BestiaryCmd:
+		z.onBestiaryCmd(p, m)
 	}
 }
 

@@ -154,6 +154,10 @@ func (z *Zone) storageOnJoin(p *entity, d *StorageData) {
 	if p.pl.accountID == 0 {
 		return
 	}
+	if z.cfg.NoTown { // mapa sem armazém: só guarda como veio, para levar de volta à cidade
+		p.pl.hop.storage = d
+		return
+	}
 	st := z.storages[p.pl.accountID]
 	if st == nil {
 		st = newStorage(p.pl.accountID, d)
@@ -170,7 +174,8 @@ func (z *Zone) pruneStorages() {
 	}
 	now := z.cfg.Clock()
 	for acc, st := range z.storages {
-		if online[acc] {
+		// Online em qualquer zona: o armazém fica (só a cidade o muda; ver gate.go).
+		if online[acc] || z.mgr != nil && z.mgr.bus.accountOnline(acc) {
 			st.touched = now
 			continue
 		}

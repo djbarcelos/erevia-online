@@ -4,7 +4,7 @@
 package world
 
 import (
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -87,22 +87,44 @@ func (c *Collider) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Os outros mapas (maps/<id>.json, gerados por client/scripts/build-maps.mjs).
+//
+//go:embed maps/*.json
+var embeddedMaps embed.FS
+
+// StarterMap é o id do mapa principal (world.json): o Vale de Vel'Aran.
+const StarterMap = "starter"
+
 // Load lê o mapa embutido no binário.
 func Load() (*World, error) { return parse(embedded) }
 
-func parse(data []byte) (*World, error) {
+// LoadMap lê um mapa pelo id ("starter" ou "" = o principal; senão maps/<id>.json).
+func LoadMap(id string) (*World, error) {
+	if id == "" || id == StarterMap {
+		return Load()
+	}
+	data, err := embeddedMaps.ReadFile("maps/" + id + ".json")
+	if err != nil {
+		return nil, fmt.Errorf("mapa %q: %w", id, err)
+	}
+	return parseNamed(id+".json", data)
+}
+
+func parse(data []byte) (*World, error) { return parseNamed("world.json", data) }
+
+func parseNamed(name string, data []byte) (*World, error) {
 	var f fileFormat
 	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("world.json: %w", err)
+		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 	if f.Size <= 0 {
-		return nil, fmt.Errorf("world.json: size inválido")
+		return nil, fmt.Errorf("%s: size inválido", name)
 	}
 	b := Square(f.Size)
 	if f.Bounds != nil {
 		b = *f.Bounds
 		if b.MaxX <= b.MinX || b.MaxZ <= b.MinZ {
-			return nil, fmt.Errorf("world.json: bounds inválido")
+			return nil, fmt.Errorf("%s: bounds inválido", name)
 		}
 	}
 	w := NewBounds(b, f.Colliders)

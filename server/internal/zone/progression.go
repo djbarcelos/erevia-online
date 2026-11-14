@@ -150,6 +150,7 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	p.hp, p.mp = p.stats.MaxHP, p.stats.MaxMP
 	z.sendProgress(p) // pontos novos de atributo e de skill
 	z.clanLevelUp(p)
+	z.vitalityLevelUp(p) // teto novo da vitalidade e o fim da recuperação (vitality.go)
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
 	z.systemAfterFlush(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
 	if p.pl.class != p.pl.mainClass { // subclasse: ref "subclass", para separar da progressão da principal

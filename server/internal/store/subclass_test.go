@@ -58,13 +58,33 @@ func TestSubclassRoundTrip(t *testing.T) {
 		t.Fatalf("classes depois de um salvamento sem elas: %+v / %v", got.Classes, err)
 	}
 
-	// A lista de personagens e o ranking mostram a classe ativa com o nível dela.
+	// A lista de personagens mostra a classe ativa com o nível dela.
 	list, err := s.ListCharacters(ctx, acc)
 	if err != nil || len(list) != 1 || list[0].ActiveClass != "mage" || list[0].Class != "knight" || len(list[0].ClassLevels) != 2 {
 		t.Fatalf("lista: %+v / %v", list, err)
 	}
+	// O ranking usa o maior nível entre as classes (com a classe dele): trocar para a
+	// subclasse 21 não derruba o cavaleiro 32. Um outro personagem 25 fica abaixo.
+	acc2, _ := s.LoginIdentity(ctx, "dev", "sub2", "sub2")
+	o, err := s.CreateCharacter(ctx, acc2, "Outro", "rogue", game.DefaultLook("rogue"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveStates(ctx, []store.CharacterState{{CharacterID: o.ID, Level: 25, XP: game.XPLevelStart(25), HP: -1, MP: -1, Seq: 3}}); err != nil {
+		t.Fatal(err)
+	}
 	r, err := s.Rankings(ctx, 10)
-	if err != nil || len(r.Level) != 1 || r.Level[0].Class != "mage" || r.Level[0].Level != 21 {
+	if err != nil || len(r.Level) != 2 || r.Level[0].Name != "Sendas" || r.Level[0].Class != "knight" || r.Level[0].Level != 32 || r.LevelPos[c.ID] != 1 {
 		t.Fatalf("ranking: %+v / %v", r.Level, err)
+	}
+	// Com a ativa acima das outras, vale a ativa.
+	set.List[0].Level, set.List[0].XP = 20, game.XPLevelStart(20)
+	set.Active = "mage"
+	st3 := store.CharacterState{CharacterID: c.ID, Level: 26, XP: game.XPLevelStart(26), HP: -1, MP: -1, Classes: set, Seq: 4}
+	if err := s.SaveStates(ctx, []store.CharacterState{st3}); err != nil {
+		t.Fatal(err)
+	}
+	if r, err = s.Rankings(ctx, 10); err != nil || r.Level[0].Class != "mage" || r.Level[0].Level != 26 {
+		t.Fatalf("ranking com a ativa mais alta: %+v / %v", r.Level, err)
 	}
 }

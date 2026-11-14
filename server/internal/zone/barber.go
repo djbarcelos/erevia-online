@@ -42,6 +42,10 @@ func (z *Zone) changeLook(p *entity, npcID uint32, l *pb.BodyLook) {
 		z.system(p, "Visual inválido.")
 		return
 	}
+	if msg := z.bestiaryOutfitLocked(p, a.Outfit); msg != "" { // cor do Bestiário (família completa)
+		z.system(p, msg)
+		return
+	}
 	if a == p.pl.look {
 		z.system(p, "Esse já é o seu visual.")
 		return

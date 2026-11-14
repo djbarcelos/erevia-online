@@ -1,4 +1,4 @@
-// Comando zone: servidor de jogo do Erevia (API HTTP + WebSocket + uma zona).
+// Comando zone: servidor de jogo do Erevia (API HTTP + WebSocket + as zonas, uma por mapa).
 package main
 
 import (
@@ -20,7 +20,6 @@ import (
 	"erevia/server/internal/api"
 	gamenet "erevia/server/internal/net"
 	"erevia/server/internal/store"
-	"erevia/server/internal/world"
 	"erevia/server/internal/zone"
 )
 
@@ -69,19 +68,7 @@ func run(log *slog.Logger) error {
 	log.Info("auth providers", "google", cfg.Google != nil, "discord", cfg.Discord != nil, "dev", devLogin)
 	httpAPI := api.New(st, cfg, log)
 
-	// Persistência: a zona entrega estados por canal; uma goroutine (abaixo, depois de criar
-	// a zona, que registra os erros) grava em lote.
-	saves := make(chan []zone.SavedState, 1024)
-	persistDone := make(chan struct{})
-
-	wld, err := world.Load()
-	if err != nil {
-		return err
-	}
-	zcfg := zone.DefaultConfig()
-	zcfg.World = wld
-	zcfg.Size = wld.Size
-	zcfg.SafeRadius = wld.SafeRadius
+	zcfg := zone.DefaultConfig() // a base de todas as zonas (cada mapa troca o mundo, os monstros e os portões)
 	lctx, lcancel := context.WithTimeout(ctx, 30*time.Second)
 	clans, err := st.LoadClans(lctx)
 	lcancel()
@@ -124,15 +111,40 @@ func run(log *slog.Logger) error {
 	}
 	zcfg.DevCommands = devLogin                         // /raid no chat: só em desenvolvimento
 	zcfg.Version = env("RAILWAY_GIT_COMMIT_SHA", "dev") // a Railway define o commit do deploy
-	z := zone.New(zcfg, log.With("zone", "starter"), saves)
-	z.SetClanBackend(clanStore{st})
-	z.SetBossBackend(bossStore{st})
-	z.SetEventBackend(serverEventStore{st})
-	z.SetModBackend(modStore{st})
-	z.SetSocialBackend(socialStore{st})
-	z.SetEventSink(eventStore{st})
-	z.SetRankingBackend(rankingStore{st})
-	// Anúncios agendados pelo portal que ainda não saíram (sobrevivem ao reinício).
+	// Zonas: uma por mapa, cada uma com a sua goroutine e o seu canal de persistência
+	// (uma goroutine por zona grava em lote). O mapa de testes só liga com DEV_LOGIN=true
+	// ou EREVIA_ZONES=teste (zone/maps.go).
+	maps := zone.EnabledMaps(devLogin, os.Getenv("EREVIA_ZONES"))
+	m := zone.NewManager(log)
+	var persistDone []chan struct{}
+	for _, id := range maps {
+		cfg, err := zone.MapConfig(zcfg, id, maps)
+		if err != nil {
+			return err
+		}
+		saves := make(chan []zone.SavedState, 1024)
+		z := zone.New(cfg, log.With("zone", id), saves)
+		z.SetClanBackend(clanStore{st})
+		z.SetBossBackend(bossStore{st})
+		z.SetEventBackend(serverEventStore{st})
+		z.SetModBackend(modStore{st})
+		z.SetSocialBackend(socialStore{st})
+		z.SetEventSink(eventStore{st})
+		z.SetRankingBackend(rankingStore{st})
+		z.SetAuctionBackend(auctionStore{st})
+		m.Add(z)
+		done := make(chan struct{})
+		persistDone = append(persistDone, done)
+		go func() {
+			defer close(done)
+			for batch := range saves {
+				saveBatch(st, m, z, log, batch)
+			}
+		}()
+	}
+	log.Info("zones", "maps", strings.Join(maps, ","))
+	// Anúncios agendados pelo portal que ainda não saíram (sobrevivem ao reinício): cada
+	// zona avisa os seus jogadores na hora.
 	lctx, lcancel = context.WithTimeout(ctx, 30*time.Second)
 	scheduled, err := st.PendingAnnouncements(lctx)
 	lcancel()
@@ -143,13 +155,9 @@ func run(log *slog.Logger) error {
 	for i, s := range scheduled {
 		pending[i] = zone.ScheduledAnnouncement{ID: s.ID, At: s.At, Title: s.Title, Text: s.Text, By: s.ByName}
 	}
-	z.LoadScheduled(pending)
-	go func() {
-		defer close(persistDone)
-		for batch := range saves {
-			saveBatch(st, z, log, batch)
-		}
-	}()
+	m.LoadScheduled(pending)
+	// Portal: personagem offline vai para a zona gravada no banco (a do próximo login).
+	m.SetZoneLookup(func(ctx context.Context, id uint32) (string, error) { return st.CharacterZone(ctx, int64(id)) })
 
 	// Conta apagada: o banco já apagou tudo; a zona derruba quem estiver online e acerta os
 	// clãs em memória do jeito que o banco deixou.
@@ -159,21 +167,22 @@ func run(log *slog.Logger) error {
 			g.Clans = append(g.Clans, zone.ClanSuccession{ClanID: c.ClanID, LeaderID: c.LeaderID})
 		}
 		pctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		z.AccountDeleted(pctx, g)
+		m.AccountDeleted(pctx, g)
 		cancel()
 	})
 	zoneDone := make(chan struct{})
-	go func() { z.Run(ctx); close(zoneDone) }()
+	go func() { m.Run(ctx); close(zoneDone) }()
 	// Alertas no Discord (ALERT_WEBHOOK_URL; sem ela, só log): worker próprio que só lê o
 	// banco, fora da zona; um panic nele vira server_error e ele recomeça.
-	alertsDone := alerts.Start(ctx, alerts.FromEnv(publicURL, zcfg.Version, log), st, z, log.With("worker", "alerts"))
+	alertsDone := alerts.Start(ctx, alerts.FromEnv(publicURL, zcfg.Version, log), st, m, log.With("worker", "alerts"))
 
-	// Portal de administração (/admin e /api/admin/*): só GM; "online agora" vem da zona pelo canal.
-	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: z})
-	httpAPI.SetBugZone(z)
+	// Portal de administração (/admin e /api/admin/*): só GM; "online agora" vem das zonas
+	// pelo canal, e as ações sobre um personagem vão para a zona dona dele (zone.Manager).
+	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: m})
+	httpAPI.SetBugZone(m)
 	mux := http.NewServeMux()
 	httpAPI.Register(mux)
-	mux.Handle("/ws", gamenet.NewServer(z, &wsBackend{api: httpAPI, store: st}, log, origins))
+	mux.Handle("/ws", gamenet.NewServer(m, &wsBackend{api: httpAPI, store: st}, log, origins))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		pctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
@@ -190,7 +199,7 @@ func run(log *slog.Logger) error {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           recoverHTTP(z, mux),
+		Handler:           recoverHTTP(m, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		// Conexões WebSocket herdam ctx e são encerradas no SIGINT.
 		BaseContext: func(stdnet.Listener) context.Context { return ctx },
@@ -207,18 +216,24 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
-	// Espera a zona salvar todo mundo e a persistência terminar de gravar.
+	// Espera as zonas salvarem todo mundo e a persistência terminar de gravar.
 	<-zoneDone
-	select {
-	case <-persistDone:
-	case <-time.After(10 * time.Second):
-		log.Warn("persistence did not finish in time")
+	limit := time.After(10 * time.Second)
+	for _, done := range persistDone {
+		select {
+		case <-done:
+		case <-limit:
+			log.Warn("persistence did not finish in time")
+		}
 	}
 	// E a telemetria gravar o fim das sessões de quem estava online (tempo de jogo por nível).
-	select {
-	case <-z.TelemetryDone():
-	case <-time.After(10 * time.Second):
-		log.Warn("telemetry did not finish in time")
+	limit = time.After(10 * time.Second)
+	for _, z := range m.Zones() {
+		select {
+		case <-z.TelemetryDone():
+		case <-limit:
+			log.Warn("telemetry did not finish in time")
+		}
 	}
 	select { // os alertas anotam o desligamento normal (o próximo aviso de subida não fala em queda)
 	case <-alertsDone:
@@ -230,10 +245,13 @@ func run(log *slog.Logger) error {
 
 // saveBatch grava um lote de personagens (e armazéns). Falhas viram db_error; um panic
 // (dado estranho no lote) é registrado e perde só este lote, sem derrubar o processo.
-func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.SavedState) {
+// z é a zona que entregou o lote: as confirmações da casa de leilões voltam para ela (que
+// guarda as travas de compra e o recent); quem atravessou um portão no meio reenvia as
+// operações da outra zona, e o banco devolve Fresh=false.
+func saveBatch(st *store.Store, rep reporter, z *zone.Zone, log *slog.Logger, batch []zone.SavedState) {
 	defer func() {
 		if r := recover(); r != nil {
-			z.ReportPanic("persist", 0, "", r, debug.Stack())
+			rep.ReportPanic("persist", 0, "", r, debug.Stack())
 		}
 	}()
 	states := make([]store.CharacterState, len(batch))
@@ -242,7 +260,11 @@ func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.Sav
 			CharacterID: int64(p.ID), X: p.X, Z: p.Z, Level: p.Level, XP: p.XP, HP: p.HP, MP: p.MP,
 			Gold: p.Gold, Items: p.Items, Attrs: p.Attrs, Ranks: p.Ranks, Hotbar: p.Hotbar, Seq: p.Seq,
 			Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
-			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec, Mastery: p.Mastery, Classes: p.Classes,
+			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec, Mastery: p.Mastery, Zone: p.Zone, Classes: p.Classes,
+			Contracts: p.Contracts, Reputation: p.Reputation,
+			Auction:  auctionOps(p.Auction),
+			Bestiary: p.Bestiary,
+			Vitality: p.Vitality,
 		}
 		if s := p.Storage; s != nil {
 			states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
@@ -253,23 +275,26 @@ func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.Sav
 	var err error
 	for attempt := 1; attempt <= 3; attempt++ {
 		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err = st.SaveStates(sctx, states)
+		var results []store.AuctionResult
+		results, err = st.SaveStatesAuction(sctx, states)
 		cancel()
 		if err == nil {
+			// A zona tira da memória as operações confirmadas e avisa comprador e vendedor.
+			z.AuctionApplied(auctionResults(results))
 			return
 		}
 		log.Error("save states", "err", err, "count", len(states), "attempt", attempt)
-		z.ReportDBError("save_characters", err)
+		rep.ReportDBError("save_characters", err)
 		time.Sleep(time.Duration(attempt) * time.Second)
 	}
 	// As 3 tentativas falharam: este lote não foi gravado (o próximo salvamento do
 	// personagem, a cada 30 s, leva o estado mais novo).
-	z.ReportDBError("save_characters_lost", err)
+	rep.ReportDBError("save_characters_lost", err)
 }
 
 // recoverHTTP registra (server_error) um panic num handler HTTP e responde 500. O net/http
 // já não deixa o processo cair, mas sem isto o erro só ia para o log.
-func recoverHTTP(z *zone.Zone, h http.Handler) http.Handler {
+func recoverHTTP(z reporter, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			v := recover()
@@ -288,6 +313,12 @@ func recoverHTTP(z *zone.Zone, h http.Handler) http.Handler {
 		}()
 		h.ServeHTTP(w, r)
 	})
+}
+
+// reporter registra panics e erros do banco na telemetria (zone.Manager: a do mapa principal).
+type reporter interface {
+	ReportPanic(where string, playerID uint32, msg string, r any, stack []byte)
+	ReportDBError(op string, err error)
 }
 
 // wsBackend liga o WebSocket à sessão HTTP e ao banco.
@@ -314,7 +345,10 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		ClanLeftAt: derefTime(c.ClanLeftAt),
 		Storage:    &zone.StorageData{Gold: c.Storage.Gold, Items: c.Storage.Items, Seq: c.Storage.Seq},
 		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
-		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery, Classes: c.Classes,
+		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery, Zone: c.Zone, Classes: c.Classes,
+		Contracts: c.Contracts, Reputation: c.Reputation,
+		Bestiary: c.Bestiary,
+		Vitality: c.Vitality,
 	}, nil
 }
 

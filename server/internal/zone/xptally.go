@@ -26,11 +26,14 @@ const (
 	xpQuest                    // recompensa de missão
 	xpInvasion                 // recompensa da defesa da cidade
 	xpDeath                    // perdida ao morrer (negativa)
+	xpContract                 // recompensa de contrato do quadro (contracts.go)
+	xpVitality                 // o extra da vitalidade (vitality.go)
+	xpCatchup                  // o extra da recuperação do 2º personagem (vitality.go)
 	xpSubclass                 // o extra do bônus Duas Sendas (subclass.go)
 	numXPSources
 )
 
-var xpSourceNames = [numXPSources]string{"monster", "party", "night_bonus", "event_bonus", "quest", "invasion", "death_loss", "subclass_bonus"}
+var xpSourceNames = [numXPSources]string{"monster", "party", "night_bonus", "event_bonus", "quest", "invasion", "death_loss", "contract", "vitality", "catchup", "subclass_bonus"}
 
 const xpTallyEvery = 60.0 // segundos de jogo entre as gravações
 
@@ -65,10 +68,13 @@ func (z *Zone) tallyXP(p *entity, src xpSource, xp int64) {
 	t.xp[src] += xp
 }
 
-// grantXPFrom é o grantXP com a fonte anotada.
+// grantXPFrom é o grantXP com a fonte anotada. A missão leva a recuperação (vitality.go).
 func (z *Zone) grantXPFrom(p *entity, src xpSource, xp int64) {
 	if p.level < game.MaxLevel {
 		z.tallyXP(p, src, xp)
+	}
+	if src == xpQuest {
+		xp += z.questXPBonus(p, xp)
 	}
 	z.grantXP(p, xp)
 }

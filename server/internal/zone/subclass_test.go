@@ -1,6 +1,9 @@
 package zone
 
 import (
+	"fmt"
+	"io"
+	"log/slog"
 	"maps"
 	"slices"
 	"strconv"
@@ -499,4 +502,80 @@ func TestOldCharacterBecomesMainClass(t *testing.T) {
 	if st.Classes.Active != "knight" || st.Classes.List[0].Class != "knight" || st.Classes.List[0].Level != e.level {
 		t.Fatalf("salvo: %+v", st.Classes)
 	}
+}
+
+// Com a vitalidade (tunnel#150): o bônus da XP de monstro cai na classe ativa, e o teto do
+// estoque é o do nível dela.
+func TestSubclassVitalityUsesActiveClass(t *testing.T) {
+	now := noon
+	cfg := testConfig()
+	cfg.SafeRadius = 20
+	cfg.Clock = func() time.Time { return now }
+	cfg.Spawns = []game.Spawn{fixed("stone_golem", 20, 25, 0)}
+	z := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	z.SetEventSink(nopSink{})
+	p, _ := knightWithMage(z, 1, game.XPLevelStart(35), nil)
+	p.pl.vit.stored = game.VitalityCap(35)
+	subCmd(z, p, pb.SubclassCmdKind_SUBCLASS_CMD_SWITCH, "mage")
+	if p.pl.class != "mage" || p.pl.vit.stored != game.VitalityCap(20) {
+		t.Fatalf("vitalidade depois da troca: %d (teto do 20: %d)", p.pl.vit.stored, game.VitalityCap(20))
+	}
+	drainEvents(z)
+	m := z.onlyMonster()
+	base := game.MonsterXP(m.mon.def, m.level, p.level)
+	knightXP := p.pl.classes.Find("knight").XP
+	before, stored := p.pl.xp, p.pl.vit.stored
+	z.shareMonsterXP(m, []*entity{p})
+	if got := p.pl.xp - before; got != 2*base || p.pl.vit.stored != stored-base || p.pl.classes.Find("knight").XP != knightXP {
+		t.Fatalf("XP do mago com vitalidade: +%d (base %d), estoque %d→%d", got, base, stored, p.pl.vit.stored)
+	}
+	if game.VitalityPercent(p.pl.vit.stored, p.level) > 100 {
+		t.Fatal("o estoque passou do teto da classe ativa")
+	}
+}
+
+// Zonas (tunnel#136): as classes são do personagem e atravessam o portão (a ativa, a
+// progressão de cada uma e a recarga da troca); o corpo continua o da principal. O
+// Guardião só existe no mapa principal.
+func TestGateCarriesClasses(t *testing.T) {
+	m, a, b := twoZones(t, nil)
+	if guardianOf(a) == nil || guardianOf(b) != nil {
+		t.Fatal("o Guardião é só do mapa principal")
+	}
+	p := mjoin(m, 1, "Ana", "", 0, -14)
+	ana := a.players[1]
+	ana.pl.quests.done[game.SubclassQuestOath] = true
+	ana.pl.classes.List = append(ana.pl.classes.List, game.NewSubclass("mage"))
+	ana.lastCombat = a.now - 60
+	g := guardianOf(a)
+	pos := ana.pos
+	ana.pos = Vec2{X: g.pos.X - 1.5, Z: g.pos.Z}
+	subCmd(a, ana, pb.SubclassCmdKind_SUBCLASS_CMD_SWITCH, "mage")
+	ana.pos = pos
+	if ana.pl.class != "mage" {
+		t.Fatal("não trocou para o mago")
+	}
+	a.grantXP(ana, 777)
+	want := classSnapshot(ana)
+
+	ana.pl.moveTokens = a.cfg.MaxMovesPerSec
+	useGate(m, p, 1)
+	got := b.players[1]
+	if got == nil {
+		p.mu.Lock()
+		for _, msg := range p.msgs {
+			if c := msg.GetChat(); c != nil {
+				t.Log(c.Text)
+			}
+		}
+		p.mu.Unlock()
+		t.Fatal("não atravessou")
+	}
+	if got.pl.class != "mage" || got.pl.mainClass != "knight" || got.model != "knight" || got.level != 20 || got.pl.xp != ana.pl.xp {
+		t.Fatalf("do outro lado: classe %s principal %s modelo %s nível %d XP %d", got.pl.class, got.pl.mainClass, got.model, got.level, got.pl.xp)
+	}
+	if fmt.Sprint(classSnapshot(got)) != fmt.Sprint(want) || got.pl.classes.SwitchedAt == 0 {
+		t.Fatalf("classes: %+v, esperava %+v", got.pl.classes, want)
+	}
+	b.checkInvariants(got)
 }

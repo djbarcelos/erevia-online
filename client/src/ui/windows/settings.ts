@@ -62,6 +62,7 @@ const ACTIONS: { id: string; label: string }[] = [
   { id: "clan", label: "Clã" },
   { id: "social", label: "Social (amigos e correio)" },
   { id: "glory", label: "Glória (ranking e conquistas)" },
+  { id: "bestiary", label: "Bestiário" },
   { id: "character", label: "Personagem / atributos" },
   { id: "map", label: "Mapa do mundo" },
   { id: "settings", label: "Configurações / fechar janela" },

@@ -83,7 +83,7 @@ var fuzzEnv = sync.OnceValue(func() *fuzzConnEnv {
 		1: {{ID: 10, Name: "Alice", Class: "mage", X: 1, Z: 2, Gold: 5000, Items: game.StarterKit("mage"), AccountID: 1}},
 		2: {{ID: 20, Name: "Bob", Class: "knight", X: 3, Z: 2, Gold: 100, Items: game.StarterKit("knight"), AccountID: 2}},
 	}}
-	srv := httptest.NewServer(NewServer(z, backend, log, []string{"*"}))
+	srv := httptest.NewServer(NewServer(zone.NewManager(log, z), backend, log, []string{"*"}))
 	return &fuzzConnEnv{url: "ws" + strings.TrimPrefix(srv.URL, "http"), errs: errs}
 })
 

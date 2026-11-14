@@ -11,10 +11,15 @@ import {
   type SpecCmdKind,
   type SubclassCmdKind,
   type MasteryCmdKind,
+  type ContractCmdKind,
+  type ReputationCmdKind,
+  BestiaryCmdKind,
   type MailCmdKind,
   type ServerMessage,
   type TradeCmdKind,
+  type AuctionCmdKind,
 } from "../gen/erevia/v1/game_pb";
+import type { AuctionCmdOpts } from "../ui/windows/auction";
 import { reportClientError } from "./errors";
 
 const PING_INTERVAL_MS = 2000;
@@ -110,6 +115,11 @@ export class Connection {
     this.send({ case: "changeLook", value: { npcId, look } });
   }
 
+  /** Portão: atravessar para outro mapa (o servidor responde com ZoneChange e um Welcome novo). */
+  useGate(npcId: number): void {
+    this.send({ case: "useGate", value: { npcId } });
+  }
+
   /** Pedra de Teleporte: viajar para um destino. */
   teleport(npcId: number, destId: number): void {
     this.send({ case: "teleport", value: { npcId, destId } });
@@ -196,9 +206,42 @@ export class Connection {
     this.send({ case: "subclassCmd", value: { kind, npcId, class: cls } });
   }
 
+  /** Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, meus anúncios e retirar do correio. */
+  auctionCmd(kind: AuctionCmdKind, npcId: number, opts: AuctionCmdOpts = {}): void {
+    this.send({
+      case: "auctionCmd",
+      value: {
+        kind,
+        npcId,
+        query: opts.query,
+        slot: opts.slot ?? 0,
+        count: opts.count ?? 0,
+        price: BigInt(opts.price ?? 0),
+        hours: opts.hours ?? 0,
+        auctionId: opts.auctionId ?? 0n,
+        mailId: opts.mailId ?? 0n,
+      },
+    });
+  }
+
   /** Maestria (nível máximo): pedir a árvore e o estado, gastar 1 ponto no nó ou redistribuir. */
   masteryCmd(kind: MasteryCmdKind, node = ""): void {
     this.send({ case: "masteryCmd", value: { kind, node } });
+  }
+
+  /** Quadro de Contratos: pedir o estado ou aceitar um contrato (perto do quadro). */
+  contractCmd(kind: ContractCmdKind, contract = "", npcId = 0): void {
+    this.send({ case: "contractCmd", value: { kind, contract, npcId } });
+  }
+
+  /** Reputação: pedir as facções e a loja, ou comprar uma oferta (perto do quadro). */
+  reputationCmd(kind: ReputationCmdKind, offer = "", npcId = 0): void {
+    this.send({ case: "reputationCmd", value: { kind, offer, npcId } });
+  }
+
+  /** Bestiário: pede o estado inteiro (a janela abriu). */
+  bestiaryCmd(): void {
+    this.send({ case: "bestiaryCmd", value: { kind: BestiaryCmdKind.BESTIARY_CMD_GET } });
   }
 
   /** Escolhe o título (id da conquista; "" tira). */

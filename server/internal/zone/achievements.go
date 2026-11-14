@@ -33,7 +33,7 @@ func loadAchievements(st game.AchievementState, title string) achievements {
 			}
 		}
 	}
-	if _, ok := a.unlocked[title]; ok {
+	if _, ok := a.unlocked[title]; ok || game.BestiaryFamilyByTitle(title) != nil { // o de família: bestiaryOnJoin confere
 		a.title = title
 	}
 	return a
@@ -171,7 +171,7 @@ func (z *Zone) onAchievementCmd(p *entity, m *pb.AchievementCmd) {
 func (z *Zone) setTitle(p *entity, id string) {
 	a := &p.pl.ach
 	if id != "" {
-		if _, ok := a.unlocked[id]; !ok {
+		if _, ok := a.unlocked[id]; !ok && !z.bestiaryHasTitle(p, id) {
 			z.system(p, "Você ainda não tem esse título.")
 			return
 		}

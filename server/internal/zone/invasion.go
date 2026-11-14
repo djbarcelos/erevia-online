@@ -445,6 +445,7 @@ func (z *Zone) invRewards(v *invasion, won bool) string {
 		z.track(p, "invasion", v.reason, int64(math.Round(s.points)), map[string]any{"won": won, "rank": rank + 1, "kills": v.kills[p.id]})
 		if won {
 			z.achEvent(p, game.AchDefense, "")
+			z.contractDefense(p)
 		}
 	}
 	return list[0].p.name

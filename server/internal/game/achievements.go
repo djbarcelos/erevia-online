@@ -22,6 +22,7 @@ const (
 	AchPvPWin                      // vencer jogadores em combate (vitórias PvP)
 	AchRaid                        // participar (com dano) da morte do raid boss Target
 	AchDefense                     // defender a cidade numa invasão vencida (zone/invasion.go)
+	AchRepBuy                      // comprar o título Target na loja de reputação (reputation.go)
 	AchSubclass                    // levar uma subclasse ao nível Count (o maior nível entre elas)
 )
 
@@ -89,7 +90,7 @@ const skeletons = "skeleton_minion|skeleton_warrior|skeleton_rogue|skeleton_mage
 	"rare_ossudo|rare_captain|rare_vossk|captain_guard"
 
 // AchievementList: o catálogo, na ordem em que o cliente mostra.
-var AchievementList = []*AchievementDef{
+var AchievementList = append([]*AchievementDef{
 	{ID: "first_kill", Name: "Primeiro Sangue", Text: "Derrotar o primeiro monstro.", Title: "Caçador Novato", Goal: AchKill, Count: 1},
 	{ID: "tutorial", Name: "Primeiros Passos", Text: "Terminar o tutorial (Os Campos dos Ossos).", Title: "Recruta de Vel'Aran", Goal: AchQuest, Target: "tut_bones", Count: 1},
 	{ID: "bones_100", Name: "Quebra-Ossos", Text: "Derrotar 100 esqueletos.", Title: "Quebra-Ossos", Goal: AchKill, Target: skeletons, Count: 100},
@@ -108,7 +109,7 @@ var AchievementList = []*AchievementDef{
 	{ID: "pvp_win", Name: "Duelista", Text: "Vencer um jogador em combate (que estava lutando).", Title: "Duelista", Goal: AchPvPWin, Count: 1},
 	{ID: "rare_hunter", Name: "Caçador de Raros", Text: "Derrotar os 4 monstros raros: Ossudo, o Teimoso; Capitão Ossudo; Vossk, o Cinzento; e Ômrun, Golem Ancião.",
 		Title: "Caçador de Raros", Goal: AchKill, Target: "rare_ossudo|rare_captain|rare_vossk|rare_omrun", Count: 4, Each: true},
-}
+}, RepTitleAchievements...) // os títulos da loja de reputação no fim (reputation.go)
 
 // Achievements: as conquistas por id.
 var Achievements = func() map[string]*AchievementDef {
@@ -133,5 +134,5 @@ func TitleOf(id string) string {
 	if a := Achievements[id]; a != nil {
 		return a.Title
 	}
-	return ""
+	return BestiaryTitle(id) // títulos de família do bestiário ("bst:<família>")
 }
