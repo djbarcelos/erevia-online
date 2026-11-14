@@ -16,7 +16,8 @@
  *
  * Fica de fora por oscilar: draw calls e malhas ativas com as entidades (monstros perto do
  * ponto mudam de 3 a 9 por rodada nos Arredores e nos Campos dos Ossos), o total de malhas
- * da cena com as entidades (252–258) e a quantidade de entidades de cada tipo.
+ * da cena com as entidades (252–258) e a quantidade de entidades de cada tipo. O cenário,
+ * medido assim, deu os mesmos números em todas as rodadas (client/src/ui/bench.ts: sceneOnly).
  */
 
 export interface BenchSample {
