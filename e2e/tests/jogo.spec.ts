@@ -225,15 +225,28 @@ test("jogador novo: entrar, andar, janelas, loja, combate, poção e voltar depo
   });
 
   await step("andar com um clique no chão", async () => {
-    const before = await hudCoords(page);
     const box = (await page.locator("#game").boundingBox())!;
-    await page.mouse.click(box.x + box.width / 2 + 160, box.y + box.height / 2 + 90);
-    await expect
-      .poll(async () => {
-        const now = await hudCoords(page);
-        return Math.hypot(now.x - before.x, now.z - before.z);
-      }, { timeout: 20_000 })
-      .toBeGreaterThanOrEqual(2);
+    // A praça tem poço, barracas e NPCs: se o primeiro ponto estiver bloqueado (o personagem
+    // para no caminho), tenta outro lado.
+    const spots = [
+      [160, 90],
+      [-170, -60],
+      [120, -110],
+    ];
+    let walked = 0;
+    for (const [dx, dy] of spots) {
+      const before = await hudCoords(page);
+      await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
+      walked = await expect
+        .poll(async () => {
+          const now = await hudCoords(page);
+          return Math.hypot(now.x - before.x, now.z - before.z);
+        }, { timeout: 12_000 })
+        .toBeGreaterThanOrEqual(2)
+        .then(() => 2, () => 0);
+      if (walked) break;
+    }
+    expect(walked, "o personagem andou pelo menos 2 m depois de um clique no chão").toBeGreaterThanOrEqual(2);
     problems.check();
   });
 
