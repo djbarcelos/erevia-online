@@ -186,7 +186,7 @@ func (z *Zone) finishQuest(p *entity, def *game.QuestDef) {
 		z.inventoryChanged(p, false)
 	}
 	if r.XP > 0 {
-		z.grantXP(p, r.XP) // pode subir de nível (e andar objetivos de nível da próxima)
+		z.grantXPFrom(p, xpQuest, r.XP) // pode subir de nível (e andar objetivos de nível da próxima)
 	}
 	if next := game.Quests[def.Next]; next != nil && !p.pl.quests.done[next.ID] {
 		p.pl.quests.active = append(p.pl.quests.active, &activeQuest{def: next, progress: make([]int, len(next.Steps))})

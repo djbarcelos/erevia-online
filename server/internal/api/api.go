@@ -50,6 +50,8 @@ type API struct {
 	errLimit *rateLimiter
 	// admin: portal de administração (admin.go).
 	admin *adminState
+	// bug: /bug completo (bug_reports.go).
+	bug *bugState
 }
 
 // OnAccountDeleted registra quem é avisado depois que uma conta é apagada (antes de servir).
@@ -79,6 +81,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/characters", a.handleCreateCharacter)
 	mux.HandleFunc("GET /api/creation", a.handleCreation)
 	mux.HandleFunc("POST /api/client-errors", a.handleClientErrors)
+	a.registerBugReports(mux)
 	a.registerAdmin(mux)
 }
 

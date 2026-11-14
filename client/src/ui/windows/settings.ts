@@ -27,6 +27,8 @@ export interface SettingsOpts {
   info(): { account: string; character: string; level: number; ping: number; online: number };
   /** Abre a janela "O que há de novo". */
   news(): void;
+  /** Abre a caixinha "Relatar problema" (o mesmo que /bug no chat). */
+  reportBug(): void;
 }
 
 const pct = (v: number) => `${v}%`;
@@ -239,6 +241,11 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
             "A missão rastreada (clique no painel Missões) aparece no minimapa e no mapa, com a seta na borda da tela.",
           ),
           row(
+            "Continuar andando se atacado",
+            toggle(s.goKeepIfHit, set("goKeepIfHit"), "Continuar andando se atacado"),
+            "O botão Ir das missões para quando você leva dano. Ligado, ele segue até o lugar.",
+          ),
+          row(
             "Idioma",
             select(
               [
@@ -279,6 +286,14 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "div",
         "set-page about",
         el("div", "about-logo", el("span", "logo-word small-logo", "EREVIA"), el("span", "muted small", "Fase 3 · interface nova")),
+        group(
+          "Ajuda",
+          row(
+            "Relatar problema",
+            button("Relatar", "btn btn-sm btn-gold", opts.reportBug),
+            "Algo deu errado? Conte o que aconteceu: vai com um print da tela do jogo, o FPS e o ping (o mesmo que /bug no chat).",
+          ),
+        ),
         group("Novidades", row("O que há de novo", button("Abrir", "btn btn-sm", opts.news), "O que mudou nas últimas versões do jogo.")),
         group(
           "Conexão",

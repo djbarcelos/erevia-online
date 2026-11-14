@@ -19,6 +19,7 @@ import {
   PvpState,
   SkillTarget,
   type EventStatus,
+  type MasteryState,
   type ItemInfo,
   type PartyState,
   type QuestLog,
@@ -32,10 +33,11 @@ import { effectIcon, effectName, effectText, formatSeconds, isDebuff, skillIcon 
 import { buildItemTip, itemIcon, type ItemStore } from "./items";
 import { art, bar, button, closeSheet, el, isTouch, keyLabel, openSheet, settings, toast, tooltip } from "./kit";
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS, type MapSource } from "./minimap";
-import { drawQuestTarget, QuestArrow, QuestTracker, type Project } from "./quest-nav";
+import { drawQuestTarget, QuestArrow, questStepTarget, QuestTracker, type Project } from "./quest-nav";
 import { levelText, regionAt, type Region } from "./regions";
 import { createJoystick } from "./touch-controls";
 import { specInfo } from "./specs";
+import { masteryTip } from "./windows/mastery";
 
 /** Quanto tempo uma skill de alvo pode ficar "na fila" sem resposta do servidor. */
 const QUEUE_TIMEOUT_MS = 8000;
@@ -71,6 +73,8 @@ export interface HudCallbacks {
   onHotbarChange(entries: HotbarEntry[]): void;
   onAuto(on: boolean): void;
   openWindow(id: WindowId): void;
+  /** Barra de Maestria (nível 30): abre a aba Maestria da janela de skills. */
+  openMastery(): void;
   /** Botão de ataque do toque: ataca o alvo ou o inimigo mais próximo. */
   onAttack(): void;
   /** Botões do quadro do alvo quando ele é um jogador. */
@@ -80,6 +84,8 @@ export interface HudCallbacks {
   /** Botão de cancelar a canalização (teleporte, pergaminho). */
   onCancelChannel(): void;
   onCycleTarget(): void;
+  /** Botão "Ir" de uma missão do painel (o personagem anda até o lugar do passo). */
+  onQuestGo(questId: string): void;
   /** Joystick (direção relativa à câmera) ou null ao soltar. */
   onStick(v: { x: number; y: number } | null): void;
   me(): { myClass: string; myLevel: number };
@@ -168,6 +174,9 @@ export class Hud {
   private hpBar = bar("hp");
   private mpBar = bar("mp");
   private xpBar = bar("xp", "hud-xp");
+  private self: SelfStats | null = null;
+  private mastery: MasteryState | null = null;
+  private xpIsMastery = false;
   private meEl = el("div", "hud-me frame glass");
   private meLevel = el("span", "me-level", "1");
   private meName = el("div", "me-name");
@@ -299,6 +308,8 @@ export class Hud {
     this.eventsEl.append(this.xp2El, this.invEl);
     this.eventsEl.hidden = true;
     tooltip(this.xp2El, () => this.xp2Tip());
+    tooltip(this.xpBar.root, () => this.xpTip());
+    this.xpBar.root.onclick = () => this.mastery?.active && cb.openMastery();
     tooltip(this.invEl, () => "<h4>Invasão da cidade</h4>Esqueletos entram pelos 4 portões. Enquanto durar, as estradas e a praça deixam de ser zona segura (o PvP continua proibido). A recompensa sai no fim, pelo dano e pelos abates.");
     const mini = el("div", "hud-minimap", this.zoneName, frame, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl, this.eventsEl);
 
@@ -543,15 +554,54 @@ export class Hud {
     this.mpNow = s.mp;
     this.meLevel.textContent = String(s.level);
     this.meEl.classList.toggle("low", s.maxHp > 0 && s.hp / s.maxHp < 0.3);
+    this.self = s;
+    this.renderXp();
+    const wasDead = !this.death.hidden;
+    this.death.hidden = !s.dead;
+    if (s.dead) this.deathSub.textContent = s.killedBy ? `Morto por ${s.killedBy}.` : "Você perdeu um pouco de experiência.";
+    if (s.dead && !wasDead && this.auto) this.setAuto(false, false);
+  }
+
+  /** Maestria (nível 30): a barra de XP do HUD vira a barra de Maestria. */
+  setMastery(m: MasteryState): void {
+    this.mastery = m;
+    this.renderXp();
+  }
+
+  /** Barra da borda: XP do nível ou, no 30, a de Maestria (outra cor, com o bônus diário). */
+  private renderXp(): void {
+    const m = this.mastery;
+    const s = this.self;
+    const mastery = !!m?.active;
+    if (mastery !== this.xpIsMastery) {
+      this.xpIsMastery = mastery;
+      this.xpBar.root.classList.toggle("mastery", mastery);
+    }
+    if (m && mastery) {
+      const into = Number(m.xp);
+      const need = Number(m.need);
+      const rested = m.rested > 0n ? ` · bônus diário ${m.restedMult}×` : "";
+      if (m.level >= m.maxLevel) this.xpBar.set(1, 1, `Maestria ${m.level} · teto`);
+      else this.xpBar.set(into, need, `Maestria ${m.level} · ${((into / need) * 100).toFixed(1).replace(".", ",")}%${rested}`);
+      return;
+    }
+    if (!s) return;
     if (s.xpNextLevel > 0n) {
       const into = Number(s.xp - s.xpLevelStart);
       const need = Number(s.xpNextLevel - s.xpLevelStart);
       this.xpBar.set(into, need, `Nível ${s.level} · ${((into / need) * 100).toFixed(1).replace(".", ",")}%`);
     } else this.xpBar.set(1, 1, `Nível ${s.level} · máximo`);
-    const wasDead = !this.death.hidden;
-    this.death.hidden = !s.dead;
-    if (s.dead) this.deathSub.textContent = s.killedBy ? `Morto por ${s.killedBy}.` : "Você perdeu um pouco de experiência.";
-    if (s.dead && !wasDead && this.auto) this.setAuto(false, false);
+  }
+
+  private xpTip(): string {
+    const m = this.mastery;
+    if (m?.active) return masteryTip(m);
+    const s = this.self;
+    if (!s) return "";
+    if (s.xpNextLevel <= 0n) return `<h4>Nível ${s.level}</h4>Nível máximo.`;
+    const into = Number(s.xp - s.xpLevelStart);
+    const need = Number(s.xpNextLevel - s.xpLevelStart);
+    return `<h4>Nível ${s.level}</h4><div class="sub">${into.toLocaleString("pt-BR")} / ${need.toLocaleString("pt-BR")} XP</div>`;
   }
 
   /** Nome e cor do emblema no quadro do personagem. */
@@ -685,9 +735,28 @@ export class Hud {
     this.questBoxes.clear();
     this.questList.replaceChildren(
       ...log.quests.map((q) => {
-        const box = el("button", "quest", el("b", null, q.title));
-        box.type = "button";
+        // Caixa clicável (rastreia) com o botão "Ir" dentro: div com papel de botão, porque
+        // botão dentro de botão não vale.
+        const head = el("div", "q-head", el("b", null, q.title));
+        const box = el("div", "quest", head);
+        box.tabIndex = 0;
+        box.setAttribute("role", "button");
         box.onclick = () => this.quests.track(q.id);
+        box.onkeydown = (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            this.quests.track(q.id);
+          }
+        };
+        if (questStepTarget(q)) {
+          const go = button("Ir", "btn btn-sm btn-gold q-go", (ev) => {
+            ev.stopPropagation();
+            this.quests.track(q.id);
+            this.cb.onQuestGo(q.id);
+          });
+          go.title = "Andar até o objetivo (WASD, clique no chão ou ser atacado param)";
+          head.append(go);
+        }
         this.questBoxes.set(q.id, box);
         for (const s of q.steps) {
           const row = el("div", "q-step", el("span", null, s.text), el("span", "q-count", `${s.count}/${s.need}`));
@@ -833,13 +902,18 @@ export class Hud {
     this.root.append(...els);
   }
 
-  levelBanner(level: number): void {
+  levelBanner(level: number, title = `Nível ${level}!`, sub = "Você ficou mais forte."): void {
     this.bannerEl.hidden = false;
-    this.bannerEl.replaceChildren(el("div", "lb-title", `Nível ${level}!`), el("div", "lb-sub", "Você ficou mais forte."));
+    this.bannerEl.replaceChildren(el("div", "lb-title", title), el("div", "lb-sub", sub));
     this.bannerEl.classList.remove("show");
     void this.bannerEl.offsetWidth;
     this.bannerEl.classList.add("show");
     setTimeout(() => (this.bannerEl.hidden = true), 3600);
+  }
+
+  /** Ponto de Maestria ganho (o mesmo banner do nível). */
+  masteryBanner(level: number): void {
+    this.levelBanner(level, `Maestria ${level}!`, "Um ponto novo para a árvore (aba Maestria das skills).");
   }
 
   /** Liga/desliga o visual da auto-caça; notify = avisar o jogo (clique do jogador). */

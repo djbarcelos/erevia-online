@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"erevia/server/internal/game"
+	"erevia/server/internal/pb"
 )
 
 func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
@@ -62,5 +63,35 @@ func TestBossFlagOnEntity(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("nenhum chefe na zona padrão")
+	}
+}
+
+func TestMapZonesDrawSectors(t *testing.T) {
+	east := game.Spawn{Monster: "skeleton_minion", Count: 3, RMin: 46, RMax: 74, LevelMin: 2, LevelMax: 4,
+		AngleMin: 340, AngleMax: 20, Region: "Leste de Teste"}
+	spawns := append(game.DefaultSpawns(), periodSector("skeleton_rogue", game.WhenDay), periodSector("skeleton_mage", game.WhenNight), east)
+	var rings int
+	sectors := map[string]*pb.MapZone{}
+	for _, z := range mapZones(spawns) {
+		switch {
+		case z.AngleMax > z.AngleMin:
+			sectors[z.Region] = z
+		case !z.Fixed && !z.Area:
+			rings++
+		}
+	}
+	if rings != 3 {
+		t.Errorf("os setores não podem virar anéis nem se juntar a eles: %d anéis", rings)
+	}
+	b := sectors["Bosque de Teste"]
+	if b == nil || b.AngleMin != 100 || b.AngleMax != 170 || b.RMin != 80 || b.RMax != 150 || b.LevelMin != 7 || b.LevelMax != 15 {
+		t.Fatalf("setor do bosque: %+v", b)
+	}
+	if b.Name != "Esqueleto Ladino (de dia), Esqueleto Mago (à noite)" {
+		t.Errorf("monstros do setor (com o período): %q", b.Name)
+	}
+	e := sectors["Leste de Teste"]
+	if e == nil || e.AngleMin != 340 || e.AngleMax != 380 || e.Name != "Esqueleto Lacaio" {
+		t.Fatalf("o setor que cruza o 0° vai de 340 a 380: %+v", e)
 	}
 }
