@@ -322,7 +322,10 @@ func TestAdminAccountChangeAppliesOnlineAndRefusesStaleJoins(t *testing.T) {
 	if z.players[1] != nil || z.players[2] != nil || z.players[3] == nil {
 		t.Fatal("ban kicks every character of the account")
 	}
-	if !peerB.has(func(m *pb.ServerMessage) bool { k := m.GetKicked(); return k != nil && strings.Contains(k.Reason, "dup") }) {
+	if !peerB.has(func(m *pb.ServerMessage) bool {
+		k := m.GetKicked()
+		return k != nil && strings.Contains(k.Reason, "dup")
+	}) {
 		t.Fatal("the banned player sees the reason")
 	}
 	// Um Join da conta carregado antes da mudança é recusado (o banco já mudou).
@@ -361,7 +364,10 @@ func TestAdminKickAndLiveStateThroughTheZone(t *testing.T) {
 	if err != nil || name != "Kknight" {
 		t.Fatalf("kick = %q, %v", name, err)
 	}
-	if !peer.has(func(m *pb.ServerMessage) bool { k := m.GetKicked(); return k != nil && strings.Contains(k.Reason, "teste") }) {
+	if !peer.has(func(m *pb.ServerMessage) bool {
+		k := m.GetKicked()
+		return k != nil && strings.Contains(k.Reason, "teste")
+	}) {
 		t.Fatal("kicked with the reason")
 	}
 	if _, err := z.AdminKick(context.Background(), 1, ""); !errors.Is(err, ErrNotOnline) {

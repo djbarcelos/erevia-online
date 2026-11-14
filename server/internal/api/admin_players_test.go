@@ -427,11 +427,11 @@ func TestAdminSearchSheetAndModeration(t *testing.T) {
 		t.Fatalf("mute = %d %+v", code, r)
 	}
 	var sheet struct {
-		Name    string
-		Online  bool
-		Region  string
+		Name     string
+		Online   bool
+		Region   string
 		Equipped []struct{ ID, Where string }
-		Account struct {
+		Account  struct {
 			ID         int64
 			GM, Banned bool
 			BanReason  string
