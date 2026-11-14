@@ -519,6 +519,11 @@ message TradeItem {
 message QuestLog {
   repeated QuestInfo quests = 1;
   string completed = 2; // título da missão que acabou de ser concluída ("" = nenhuma)
+  // Concluídas (aba do Diário): só id, título e categoria, nada do texto. Vão inteiras no
+  // primeiro QuestLog da sessão e quando uma missão termina (done_full = true); nos outros
+  // QuestLog ficam vazias e o cliente guarda as últimas.
+  repeated QuestDone done = 3;
+  bool done_full = 4;
 }
 
 message QuestInfo {
@@ -527,6 +532,7 @@ message QuestInfo {
   string text = 3;
   repeated QuestStepInfo steps = 4;
   string reward = 5; // resumo da recompensa ("120 XP · 30 moedas")
+  QuestCategory category = 6; // grupo no Diário (QuestCategory, no fim do arquivo)
 }
 
 // Onde fica um objetivo: o minimapa, o mapa e a seta da borda da tela apontam para lá.
@@ -1362,4 +1368,22 @@ enum EmoteKind {
 message Emote {
   uint32 id = 1;
   EmoteKind kind = 2;
+}
+
+// ---------- Diário de missões (J) ----------
+
+// Grupo da missão no Diário (J).
+enum QuestCategory {
+  QUEST_CATEGORY_UNSPECIFIED = 0; // o cliente mostra como história
+  QUEST_CATEGORY_STORY = 1; // história
+  QUEST_CATEGORY_REGION = 2; // missões de uma região
+  QUEST_CATEGORY_DAILY = 3; // diárias
+  QUEST_CATEGORY_TUTORIAL = 4; // os primeiros passos
+}
+
+// Missão concluída: o título vem dos dados do servidor (não fica no save).
+message QuestDone {
+  string id = 1;
+  string title = 2;
+  QuestCategory category = 3;
 }
