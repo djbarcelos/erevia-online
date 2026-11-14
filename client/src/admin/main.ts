@@ -2,6 +2,7 @@
 
 import "./admin.css";
 import { AdminError, adminApi, type GMLogEntry, type Overview } from "./api";
+import { mountPanelsNav, PANELS } from "./panels";
 
 type Child = Node | string | null | undefined | false;
 
@@ -104,6 +105,7 @@ function current(): Section {
 
 let refreshTimer = 0;
 let tickTimer = 0;
+let panelCleanup: (() => void) | undefined;
 
 function route(): void {
   const s = current();
@@ -115,8 +117,11 @@ function route(): void {
   document.title = `${s.label} · Administração · Erevia`;
   clearInterval(refreshTimer);
   clearInterval(tickTimer);
+  panelCleanup?.();
+  panelCleanup = undefined;
   main.replaceChildren();
   if (s.id === "inicio") home();
+  else if (PANELS[s.id]) panelCleanup = PANELS[s.id](main);
   else soon(s);
 }
 
@@ -253,6 +258,7 @@ function home(): void {
 // ---------- Início do app ----------
 
 shell();
+mountPanelsNav(nav);
 window.addEventListener("hashchange", route);
 route();
 adminApi
