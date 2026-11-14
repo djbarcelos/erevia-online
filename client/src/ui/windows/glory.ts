@@ -25,6 +25,8 @@ export interface GloryDeps {
   titleId(): string;
   onAchievements(fn: () => void): () => void;
   setTitle(id: string): void;
+  /** Texto de um título que não é de conquista (o de família do Bestiário). */
+  titleText?(id: string): string | undefined;
 }
 
 type Board = "level" | "pvp" | "clans";
@@ -120,7 +122,7 @@ export function buildGlory(d: GloryDeps): HTMLElement {
     const list = d.achievements();
     const current = d.titleId();
     const done = list.filter((a) => a.unlocked).length;
-    const currentTitle = list.find((a) => a.id === current)?.title;
+    const currentTitle = list.find((a) => a.id === current)?.title ?? (current ? d.titleText?.(current) : undefined);
     const head = el(
       "div",
       "ach-head",

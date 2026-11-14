@@ -311,6 +311,7 @@ const UI: Record<string, string> = {
   scroll: `<path d="M6 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M9 9h7M9 13h7"/>`,
   shop: `<path d="M4 9l2-5h12l2 5"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/>`,
   mail: `<rect x="3" y="6" width="18" height="13" rx="1"/><path d="M3 7l9 7 9-7"/>`,
+  skull: `<path d="M12 3c-4.4 0-8 3.2-8 7.4 0 2.5 1.2 4.3 2.8 5.3V19a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1v-3.3c1.6-1 2.8-2.8 2.8-5.3C20 6.2 16.4 3 12 3Z"/><circle cx="9" cy="11" r="1.6"/><circle cx="15" cy="11" r="1.6"/><path d="M10 20v-2.5M14 20v-2.5"/>`,
   trophy: `<path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H4a3 3 0 0 0 4 4M16 6h4a3 3 0 0 1-4 4M12 13v4M8 20h8"/>`,
   logout: `<path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4M6 12h10"/>`,
   rotate: `<path d="M4 12a8 8 0 0 1 14-5l2 2"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5l-2-2"/><path d="M4 20v-5h5"/>`,
