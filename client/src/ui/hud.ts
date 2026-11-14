@@ -48,7 +48,7 @@ export const HOTBAR_KEYS = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "D
 /** Um atalho: "skill:<id>" ou "item:<id do item>". */
 export type HotbarEntry = string | null;
 
-export type WindowId = "character" | "inventory" | "skills" | "quests" | "party" | "clan" | "social" | "glory" | "map" | "settings";
+export type WindowId = "character" | "inventory" | "skills" | "quests" | "party" | "clan" | "social" | "glory" | "bestiary" | "map" | "settings";
 
 /** Ações sobre um jogador selecionado (quadro do alvo). */
 export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade" | "friend";
@@ -124,6 +124,7 @@ const MENU: { id: WindowId; icon: string; label: string; key: string }[] = [
   { id: "clan", icon: "clan", label: "Clã", key: "clan" },
   { id: "social", icon: "mail", label: "Social", key: "social" },
   { id: "glory", icon: "trophy", label: "Glória", key: "glory" },
+  { id: "bestiary", icon: "skull", label: "Bestiário", key: "bestiary" },
   { id: "map", icon: "map", label: "Mapa", key: "map" },
   { id: "settings", icon: "gear", label: "Configurações", key: "settings" },
 ];

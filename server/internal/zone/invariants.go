@@ -107,6 +107,7 @@ func (z *Zone) checkPlayer(p *entity, deep bool) {
 	z.checkParty(p)
 	z.checkClan(p)
 	z.checkTrade(p)
+	z.checkAuction(p)
 }
 
 // invariantBroken trata uma quebra: panic no modo estrito; senão anota e aplica fix

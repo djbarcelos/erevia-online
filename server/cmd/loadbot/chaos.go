@@ -238,6 +238,7 @@ wait:
 		rep.after, rep.flow, rep.econErr = db.settledEconomy(context.Background(), ids, accounts, eventMark, cfg.settle)
 		rep.before = before
 		rep.problems, rep.eventKinds, rep.dbErr = db.problems(context.Background(), eventMark)
+		rep.pool, rep.poolErr = db.auctionPool(context.Background(), ids, eventMark)
 	}
 	if cfg.serverLog != "" {
 		rep.logHits, rep.logErr = scanServerLog(cfg.serverLog)
@@ -384,6 +385,9 @@ type chaosReport struct {
 	eventKinds map[string]int64
 	dbErr      error
 	logHits    []string
+	// pool: a custódia da casa de leilões (anúncios ativos e anexos) contra a telemetria.
+	pool    auctionPool
+	poolErr error
 	logErr     error
 }
 
@@ -581,6 +585,7 @@ func (r *chaosReport) printEconomy() int {
 			k, b.items[k], f.in[k], f.out[k], want, a.items[k], a.items[k]-want, f.howText(k))
 	}
 	fmt.Printf("itens: %d tipos conferidos, %d fecham, %d não fecham\n", len(keys), ok, bad-boolInt(a.gold != wantGold))
+	bad += r.printAuctionPool()
 	if r.after.unsettled {
 		fmt.Println("  (o banco ainda mudava no fim da espera: aumente -settle se a diferença for de salvamento atrasado)")
 	}

@@ -46,6 +46,8 @@ func (z *Zone) onProgress(e progressEvent) {
 		z.onContractCmd(p, m)
 	case *pb.ReputationCmd:
 		z.onReputationCmd(p, m)
+	case *pb.BestiaryCmd:
+		z.onBestiaryCmd(p, m)
 	}
 }
 

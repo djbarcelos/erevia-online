@@ -36,7 +36,7 @@ const (
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
 		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
-		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, contracts, reputation, xp_curve"
+		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, contracts, reputation, bestiary, xp_curve"
 )
 
 var (
@@ -92,6 +92,8 @@ type Character struct {
 	Title        string                `json:"-"`
 	// Especialização (segunda classe, nível 20; "" = nenhuma).
 	Spec string `json:"spec"`
+	// Bestiário: abates por monstro e famílias completas (migração 00031).
+	Bestiary game.BestiaryState `json:"-"`
 	// Maestria (nível máximo): barra, bônus diário e pontos de cada nó.
 	Mastery  game.MasteryState `json:"-"`
 	kitGiven bool
@@ -142,8 +144,12 @@ type CharacterState struct {
 	// Contratos aceitos hoje e nesta semana e a reputação com as facções (tunnel#157).
 	Contracts  game.ContractState
 	Reputation game.ReputationState
+	// Bestiário (mesma linha, mesma transação).
+	Bestiary game.BestiaryState
 	// Storage (opcional): o armazém da conta mudou e vai junto, na mesma transação.
 	Storage *StorageState
+	// Auction: operações da casa de leilões que vão na mesma transação (ver auction.go).
+	Auction []AuctionOp
 }
 
 type Store struct {
@@ -482,6 +488,13 @@ func placeOf(r game.ItemRecord) int16 {
 // única transação. Um estado mais velho (Seq menor) que o já gravado é ignorado, e os
 // itens de um personagem só são trocados junto com a linha dele: nunca fica meio salvo.
 func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
+	_, err := s.SaveStatesAuction(ctx, states)
+	return err
+}
+
+// SaveStatesAuction é o SaveStates que também aplica as operações da casa de leilões que
+// vieram com os estados (na mesma transação) e devolve o que aconteceu com cada uma.
+func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) ([]AuctionResult, error) {
 	// Se o mesmo personagem vier duas vezes, vale o mais novo.
 	latest := map[int64]CharacterState{}
 	for _, c := range states {
@@ -490,9 +503,10 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 		}
 	}
 	if len(latest) == 0 {
-		return nil
+		return nil, nil
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	var results []AuctionResult
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		batch := &pgx.Batch{}
 		order := make([]CharacterState, 0, len(latest))
 		for _, c := range latest {
@@ -517,6 +531,10 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 			if err != nil {
 				return err
 			}
+			bestiary, err := json.Marshal(c.Bestiary)
+			if err != nil {
+				return err
+			}
 			a := c.Attrs
 			batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, gold = $8,
 				save_seq = GREATEST(save_seq, $9::bigint), last_seen_at = now(),
@@ -524,13 +542,13 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 				skill_ranks = $16, hotbar = $17, karma = $18, pk_count = $19, pvp_kills = $20,
 				skin = $21, hair = $22, outfit = $23, head = $24, hide_hat = $25, quests = $26,
 				achievements = $27, title = $28, spec = $29, mastery = $30, mastery_level = $31,
-				contracts = $32, reputation = $33
+				contracts = $32, reputation = $33, bestiary = $34
 				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
 				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq,
 				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar,
 				max(c.Karma, 0), max(c.PKs, 0), max(c.PvPKills, 0),
 				c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit, c.Appearance.Head, c.Appearance.HideHat, quests,
-				achievements, c.Title, c.Spec, mastery, max(c.Mastery.Points, 0), contracts, reputation)
+				achievements, c.Title, c.Spec, mastery, max(c.Mastery.Points, 0), contracts, reputation, bestiary)
 		}
 		br := tx.SendBatch(ctx, batch)
 		var ids []int64
@@ -562,8 +580,17 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 				return err
 			}
 		}
-		return saveStorages(ctx, tx, states)
+		if err := saveStorages(ctx, tx, states); err != nil {
+			return err
+		}
+		var err error
+		results, err = applyAuctionOps(ctx, tx, states)
+		return err
 	})
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // saveStorages grava os armazéns que vieram junto (o mais novo de cada conta), na mesma
@@ -614,13 +641,13 @@ func nullIfFull(v int) *int {
 func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var c Character
 	var x, z float32
-	var ranks, hotbar, quests, achievements, mastery, contracts, reputation []byte
+	var ranks, hotbar, quests, achievements, mastery, contracts, reputation, bestiary []byte
 	var a [6]int16
 	var skin, hair, outfit int16
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
 		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
 		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat, &quests,
-		&achievements, &c.Title, &c.Spec, &mastery, &contracts, &reputation, &c.xpCurve)
+		&achievements, &c.Title, &c.Spec, &mastery, &contracts, &reputation, &bestiary, &c.xpCurve)
 	if err != nil {
 		return c, err
 	}
@@ -631,6 +658,11 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	}
 	if err := parseContracts(contracts, reputation, &c.Contracts, &c.Reputation); err != nil {
 		return c, err
+	}
+	if len(bestiary) > 0 {
+		if err := json.Unmarshal(bestiary, &c.Bestiary); err != nil {
+			return c, fmt.Errorf("bestiary: %w", err)
+		}
 	}
 	if len(achievements) > 0 {
 		if err := json.Unmarshal(achievements, &c.Achievements); err != nil {

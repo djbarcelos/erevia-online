@@ -127,11 +127,14 @@ type playerState struct {
 	social socialState // amigos, emote e leitura do correio
 	// Conquistas, título escolhido e quando pode pedir o ranking de novo.
 	ach         achievements
+	bst         bestiary // abates por monstro e famílias (bestiary.go)
 	rankingNext float64
 	// Maestria (nível máximo): barra, pontos da árvore e a soma dos efeitos (ver mastery.go).
 	mastery masteryState
 	// Contratos do quadro e reputação com as facções (contracts.go).
 	contracts contractsState
+	// Casa de leilões: operações a caminho do banco, anúncios vistos e anexos do correio.
+	auc auctionState
 }
 
 // rank da skill (0 = não aprendida).

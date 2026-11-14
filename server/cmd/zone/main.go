@@ -132,6 +132,7 @@ func run(log *slog.Logger) error {
 	z.SetSocialBackend(socialStore{st})
 	z.SetEventSink(eventStore{st})
 	z.SetRankingBackend(rankingStore{st})
+	z.SetAuctionBackend(auctionStore{st})
 	// Anúncios agendados pelo portal que ainda não saíram (sobrevivem ao reinício).
 	lctx, lcancel = context.WithTimeout(ctx, 30*time.Second)
 	scheduled, err := st.PendingAnnouncements(lctx)
@@ -244,6 +245,8 @@ func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.Sav
 			Karma: p.Karma, PKs: p.PKs, PvPKills: p.PvPKills, Appearance: p.Look, Quests: p.Quests,
 			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec, Mastery: p.Mastery,
 			Contracts: p.Contracts, Reputation: p.Reputation,
+			Auction: auctionOps(p.Auction),
+			Bestiary: p.Bestiary,
 		}
 		if s := p.Storage; s != nil {
 			states[i].Storage = &store.StorageState{AccountID: s.AccountID, Gold: s.Gold, Items: s.Items, Seq: s.Seq}
@@ -254,9 +257,12 @@ func saveBatch(st *store.Store, z *zone.Zone, log *slog.Logger, batch []zone.Sav
 	var err error
 	for attempt := 1; attempt <= 3; attempt++ {
 		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		err = st.SaveStates(sctx, states)
+		var results []store.AuctionResult
+		results, err = st.SaveStatesAuction(sctx, states)
 		cancel()
 		if err == nil {
+			// A zona tira da memória as operações confirmadas e avisa comprador e vendedor.
+			z.AuctionApplied(auctionResults(results))
 			return
 		}
 		log.Error("save states", "err", err, "count", len(states), "attempt", attempt)
@@ -317,6 +323,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
 		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery,
 		Contracts: c.Contracts, Reputation: c.Reputation,
+		Bestiary: c.Bestiary,
 	}, nil
 }
 

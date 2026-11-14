@@ -42,8 +42,10 @@ message ClientMessage {
     AchievementCmd achievement_cmd = 32;
     ContractCmd contract_cmd = 42; // Contratos do quadro da praça: pedir, aceitar
     ReputationCmd reputation_cmd = 43; // Reputação: pedir as facções e a loja, comprar
+    BestiaryCmd bestiary_cmd = 40; // Bestiário: pedir o estado (a janela abriu)
     SpecCmd spec_cmd = 50;
     MasteryCmd mastery_cmd = 54; // Maestria: pedir o estado, gastar ponto, redistribuir
+    AuctionCmd auction_cmd = 44; // Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, retirar do correio
   }
 }
 
@@ -156,6 +158,17 @@ enum AchievementCmdKind {
 message AchievementCmd {
   AchievementCmdKind kind = 1;
   string id = 2;
+}
+
+// ---------- Bestiário ----------
+
+enum BestiaryCmdKind {
+  BESTIARY_CMD_UNSPECIFIED = 0;
+  BESTIARY_CMD_GET = 1; // pedir o bestiário inteiro (a janela abriu); a resposta é Bestiary full
+}
+
+message BestiaryCmd {
+  BestiaryCmdKind kind = 1;
 }
 
 // Amostra de desempenho do cliente (a cada ~60 s; o FPS é medido 1×/s, nunca por quadro).
@@ -437,10 +450,13 @@ message ServerMessage {
     Achievements achievements = 32;
     ContractState contracts = 42; // contratos do dia e da semana (ao entrar, ao pedir e quando mudam)
     ReputationState reputation = 43; // facções, graus e a loja de reputação
+    Bestiary bestiary = 40; // Bestiário: o catálogo (full) ou as entradas e famílias que mudaram
+    BestiaryMark bestiary_mark = 41; // aviso: um marco do bestiário ou uma família completa
     SpecChoice spec_choice = 50;
     EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
     MasteryState mastery = 54; // Maestria (nível máximo): barra, pontos e árvore do jogador
     MasteryTree mastery_tree = 55; // a árvore da Maestria (resposta ao MASTERY_CMD_GET)
+    AuctionUpdate auction = 44; // Casa de leilões: janela, busca, meus anúncios e avisos
   }
 }
 
@@ -486,6 +502,73 @@ message Achievements {
   repeated AchievementInfo list = 2; // full: todas; senão, só as que mudaram (id, count, unlocked)
   string title_id = 3; // conquista cujo título está em uso ("" = nenhum)
   string unlocked = 4; // nome da conquista que acabou de ser desbloqueada ("" = nenhuma)
+}
+
+// Bestiário (só para o dono). full: todas as entradas e famílias (ao entrar e na resposta
+// ao BESTIARY_CMD_GET); senão, só o que mudou (a entrada do monstro abatido e, se for o
+// caso, a família dele). Os campos de cada marco só vêm preenchidos depois do marco: antes
+// do primeiro abate a entrada é uma silhueta (id e modelo, sem nome).
+message Bestiary {
+  bool full = 1;
+  repeated BestiaryEntry entries = 2;
+  repeated BestiaryFamily families = 3;
+  float damage_bonus = 4; // bônus de dano do último marco (0,01 = +1%)
+}
+
+message BestiaryEntry {
+  string id = 1; // tipo de monstro
+  string family = 2; // id da família ("" = nenhuma)
+  string model = 3; // modelo (ícone e silhueta)
+  uint32 kills = 4;
+  repeated uint32 marks = 5; // abates de cada marco: 10, 100 e 500 (chefes e raros: 1, 1, 1)
+  uint32 mark = 6; // marcos atingidos (0–3)
+  bool boss = 7; // chefe, raid boss ou raro: 1 abate abre tudo e não dá bônus de dano
+  string name = 8; // "" = ainda não derrotado (silhueta)
+  // Marco 1: nível e vida (do menor ao maior nível derrotado).
+  uint32 level_min = 9;
+  uint32 level_max = 10;
+  uint32 hp_min = 11;
+  uint32 hp_max = 12;
+  // Marco 2: o que deixa cair.
+  repeated BestiaryDrop drops = 13;
+  float gold_chance = 14;
+  uint32 gold_min = 15; // moedas por abate, no menor e no maior nível derrotado
+  uint32 gold_max = 16;
+  bool gear = 17; // pode deixar equipamento
+  // Marco 3: bônus de dano contra este tipo (0 = nenhum).
+  float damage_bonus = 18;
+  uint32 family_need = 19; // abates que a entrada pede para completar a família
+}
+
+message BestiaryDrop {
+  string item_id = 1;
+  string name = 2;
+  float chance = 3;
+  uint32 min = 4;
+  uint32 max = 5;
+}
+
+message BestiaryFamily {
+  string id = 1;
+  string name = 2;
+  uint32 done = 3; // entradas completas para a família
+  uint32 total = 4;
+  bool complete = 5;
+  int64 completed_at_ms = 6;
+  string title_id = 7; // para AchievementCmd SET_TITLE
+  string title = 8;
+  uint32 outfit = 9; // cor de roupa exclusiva (BodyLook.outfit) liberada no barbeiro
+  string outfit_name = 10;
+}
+
+// Aviso de um marco (ou de uma família completa) para o cliente mostrar na tela.
+message BestiaryMark {
+  string id = 1; // monstro ("" = só a família)
+  string name = 2;
+  uint32 mark = 3; // marco atingido (1–3; 0 = só a família)
+  uint32 kills = 4;
+  string text = 5; // o que o marco abriu
+  string family = 6; // família completa agora ("" = nenhuma)
 }
 
 message AchievementInfo {
@@ -792,6 +875,7 @@ enum NpcRole {
   NPC_ROLE_STORAGE = 2;
   NPC_ROLE_BARBER = 3;
   NPC_ROLE_MASTER = 4; // Mestra dos Caminhos (especialização)
+  NPC_ROLE_AUCTION = 5; // Leiloeiro (casa de leilões)
 }
 
 // Atributos e skills aprendidas do jogador.
@@ -1349,6 +1433,7 @@ message Mail {
   string body = 4;
   int64 sent_at_ms = 5;
   bool read = 6;
+  MailAttachment attachment = 7; // anexo (casa de leilões); vazio = só texto
 }
 
 // Caixa de entrada. listed = false: só os contadores (aviso de carta nova ou ao entrar).
@@ -1502,4 +1587,111 @@ message ReputationState {
   repeated uint32 grade_points = 3; // pontos de cada grau
   repeated RepOffer offers = 4; // a loja (vem na resposta ao REPUTATION_CMD_GET e depois de comprar)
   string grade_up = 5; // "Honrado com a Guarda de Vel'Aran" (aviso no HUD)
+}
+
+// ---------- Casa de leilões ----------
+
+// Anexo de uma carta do sistema (casa de leilões): moedas e/ou um item. Retirar põe na
+// bolsa (AUCTION_CMD_CLAIM); a carta não pode ser apagada antes.
+message MailAttachment {
+  string item_id = 1; // vazio = só moedas
+  uint32 count = 2;
+  uint32 enchant = 3;
+  int64 gold = 4;
+  bool claimed = 5; // já retirado
+}
+
+enum AuctionCmdKind {
+  AUCTION_CMD_UNSPECIFIED = 0;
+  AUCTION_CMD_OPEN = 1; // falou com o leiloeiro (npc_id): regras e meus anúncios
+  AUCTION_CMD_SEARCH = 2; // query
+  AUCTION_CMD_LIST = 3; // anunciar: slot (bolsa), count (0 = a pilha toda), price (total), hours
+  AUCTION_CMD_BUY = 4; // auction_id, price (o que o cliente viu)
+  AUCTION_CMD_CANCEL = 5; // auction_id
+  AUCTION_CMD_MINE = 6; // meus anúncios
+  AUCTION_CMD_CLAIM = 7; // mail_id: retirar o anexo da carta (0 = todos os que couberem)
+}
+
+enum AuctionSort {
+  AUCTION_SORT_PRICE_ASC = 0;
+  AUCTION_SORT_PRICE_DESC = 1;
+  AUCTION_SORT_NEWEST = 2;
+  AUCTION_SORT_ENDING = 3; // vence antes
+}
+
+// Filtros da busca (0/vazio = qualquer).
+message AuctionQuery {
+  string name = 1; // parte do nome do item (sem diferenciar acento e maiúsculas)
+  ItemKind kind = 2;
+  uint32 grade = 3; // raridade
+  uint32 min_level = 4; // nível exigido pelo item
+  uint32 max_level = 5;
+  int64 min_price = 6;
+  int64 max_price = 7;
+  bool my_class = 8; // só o que a minha classe usa
+  AuctionSort sort = 9;
+  uint32 page = 10; // a partir de 0
+}
+
+message AuctionCmd {
+  AuctionCmdKind kind = 1;
+  uint32 npc_id = 2; // o leiloeiro (abrir, buscar, anunciar, comprar e cancelar exigem estar perto)
+  AuctionQuery query = 3;
+  uint32 slot = 4;
+  uint32 count = 5;
+  int64 price = 6;
+  uint32 hours = 7;
+  uint64 auction_id = 8;
+  uint64 mail_id = 9;
+}
+
+enum AuctionStatus {
+  AUCTION_STATUS_ACTIVE = 0;
+  AUCTION_STATUS_SOLD = 1;
+  AUCTION_STATUS_CANCELLED = 2;
+  AUCTION_STATUS_EXPIRED = 3;
+}
+
+message AuctionListing {
+  uint64 id = 1;
+  string item_id = 2;
+  uint32 count = 3;
+  uint32 enchant = 4;
+  int64 price = 5; // total
+  string seller_name = 6;
+  int64 created_at_ms = 7;
+  int64 expires_at_ms = 8;
+  AuctionStatus status = 9;
+  string buyer_name = 10; // vendido: para quem
+  bool mine = 11;
+}
+
+// Regras (vêm ao abrir a janela).
+message AuctionRules {
+  uint32 max_listings = 1; // por conta
+  int64 min_price = 2;
+  int64 max_price = 3;
+  uint32 fee_percent = 4; // taxa do anúncio (não volta)
+  int64 fee_min = 5;
+  uint32 commission_percent = 6; // sai do que o vendedor recebe
+  repeated uint32 hours = 7; // prazos aceitos
+  uint32 page_size = 8;
+}
+
+// Só o que mudou vem preenchido.
+message AuctionUpdate {
+  bool open = 1; // abrir a janela (resposta ao OPEN)
+  uint32 npc_id = 2;
+  AuctionRules rules = 3;
+  bool searched = 4; // results/total/page são de uma busca
+  repeated AuctionListing results = 5;
+  uint32 total = 6;
+  uint32 page = 7;
+  bool mine_listed = 8; // mine/active são a lista dos meus anúncios
+  repeated AuctionListing mine = 9; // ativos e os últimos encerrados
+  uint32 active = 10; // anúncios ativos da conta
+  string notice = 11; // aviso (anunciado, vendido, comprado…); também sai no chat
+  uint64 gone_id = 12; // anúncio que saiu (comprado ou cancelado): o cliente tira da lista
+  uint32 pending = 13; // operações da casa de leilões ainda sem confirmação do banco
+  uint32 claimable = 14; // anexos no correio esperando para retirar (os que o servidor conhece)
 }

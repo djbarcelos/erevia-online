@@ -107,6 +107,9 @@ type chaosSession struct {
 	// O Quadro de Contratos (ContractState.board_id) e os contratos dele hoje.
 	board     uint32
 	contracts []string
+	// Casa de leilões: anúncios vistos na busca e os meus; cartas com anexo não retirado.
+	aucFound, aucMine []aucSeen
+	attach            []uint64
 }
 
 // ---------- Passos ----------
@@ -393,6 +396,7 @@ func (b *chaosBot) read(s *chaosSession) {
 				for _, ml := range m.Mails {
 					s.mails = append(s.mails, ml.Id)
 				}
+				s.onMailAttachments(m)
 			}
 		case *pb.ServerMessage_Contracts:
 			s.board = v.Contracts.BoardId
@@ -400,6 +404,8 @@ func (b *chaosBot) read(s *chaosSession) {
 			for _, c := range v.Contracts.Contracts {
 				s.contracts = append(s.contracts, c.Id)
 			}
+		case *pb.ServerMessage_Auction:
+			s.onAuction(v.Auction)
 		case *pb.ServerMessage_Achievements:
 			if v.Achievements.Full {
 				s.titles = s.titles[:0]

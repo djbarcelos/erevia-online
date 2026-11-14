@@ -21,6 +21,7 @@ import {
   SelfPvpSchema,
   SkillTarget,
   SpecCmdKind,
+  AuctionCmdKind,
   MasteryCmdKind,
   type AchievementInfo,
   type MasteryState,
@@ -50,7 +51,7 @@ import { EntityManager } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
 import { runBench, wantBench } from "./ui/bench";
-import { GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
+import { enchantedName, GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { contractNotice, ContractsStore, ContractsWindow } from "./ui/contracts";
 import { ContractCmdKind, ReputationCmdKind } from "./gen/erevia/v1/game_pb";
@@ -73,7 +74,9 @@ import { buildMastery, skillsWithMastery, type SkillsTab } from "./ui/windows/ma
 import { buildParty } from "./ui/windows/party";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
+import { AuctionState, buildAuction, type AuctionTab } from "./ui/windows/auction";
 import { buildGlory } from "./ui/windows/glory";
+import { BestiaryBook, buildBestiary } from "./ui/windows/bestiary";
 import { buildJournal } from "./ui/windows/journal";
 import { takeUnseenNews, whatsNewDef } from "./ui/windows/whatsnew";
 import { loadNews } from "./news";
@@ -298,6 +301,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   let mailBox: MailBox | null = null;
   let mails: Mail[] | null = null;
   let socialTab: SocialTab = "friends";
+  // Casa de leilões: o que o servidor mandou por último e a aba escolhida.
+  const auctionState = new AuctionState();
+  let auctionTab: AuctionTab = "buy";
   const socialListeners = new Set<() => void>();
   const onSocial = (fn: () => void) => {
     socialListeners.add(fn);
@@ -321,6 +327,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const achievements: AchievementInfo[] = [];
   let titleId = "";
   const achListeners = new Set<() => void>();
+  const bestiary = new BestiaryBook(); // Bestiário: o servidor manda ao entrar e quando a janela pede
   const listen = (set: Set<() => void>) => (fn: () => void) => {
     set.add(fn);
     return () => set.delete(fn);
@@ -823,6 +830,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     store,
     {
       change: (npc, look) => conn.changeLook(npc, look),
+      bestiaryOutfits: () => bestiary.unlockedOutfits(),
       me: () => {
         const m = me();
         const w = store.equip[0]?.info;
@@ -879,6 +887,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
       // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
       else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
+      // O Leiloeiro responde com AuctionUpdate.open (abre a janela da casa de leilões).
+      else if (npc?.role === NpcRole.AUCTION) conn.auctionCmd(AuctionCmdKind.AUCTION_CMD_OPEN, id);
       else if (npc?.role === NpcRole.TELEPORT) {
         // Indo pela pedra com o "Ir": o destino da missão vem destacado (quem escolhe é o jogador).
         const o = questGo.phase === "toStone" && questGo.offer?.npcId === id ? questGo.offer : null;
@@ -1143,6 +1153,29 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         readMail: (id) => conn.mailCmd(MailCmdKind.MAIL_CMD_READ, { mailId: id }),
         deleteMail: (id) => conn.mailCmd(MailCmdKind.MAIL_CMD_DELETE, { mailId: id }),
         sendMail: (to, subject, body) => conn.mailCmd(MailCmdKind.MAIL_CMD_SEND, { to, subject, body }),
+        claimMail: (id) => {
+          conn.auctionCmd(AuctionCmdKind.AUCTION_CMD_CLAIM, 0, { mailId: id });
+          window.setTimeout(() => conn.mailCmd(MailCmdKind.MAIL_CMD_LIST), 600); // a caixa com o anexo retirado
+        },
+        itemLabel: (id, count, enchant) => {
+          const info = store.get(id);
+          return !info ? id : enchant > 0 ? enchantedName(info, enchant) : itemLabel(info, count);
+        },
+      }),
+  });
+  reg({
+    id: "auction",
+    title: "Casa de Leilões",
+    width: 720,
+    height: 660,
+    build: () =>
+      buildAuction({
+        state: auctionState,
+        store,
+        me,
+        send: (kind, opts) => conn.auctionCmd(kind, auctionState.npcId, opts),
+        tab: auctionTab,
+        onTab: (t) => (auctionTab = t),
       }),
   });
   reg({
@@ -1160,6 +1193,22 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         achievements: () => achievements,
         titleId: () => titleId,
         onAchievements: listen(achListeners),
+        setTitle: (id) => conn.setTitle(id),
+        titleText: (id) => bestiary.titleOf(id),
+      }),
+  });
+  reg({
+    id: "bestiary",
+    title: "Bestiário",
+    hotkey: keys().bestiary,
+    width: 860,
+    height: 680,
+    build: () =>
+      buildBestiary({
+        book: bestiary,
+        refresh: () => conn.bestiaryCmd(),
+        titleId: () => titleId,
+        onTitle: listen(achListeners),
         setTitle: (id) => conn.setTitle(id),
       }),
   });
@@ -1265,6 +1314,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       [k.clan]: () => wm.toggle("clan"),
       [k.social]: () => wm.toggle("social"),
       [k.glory]: () => wm.toggle("glory"),
+      [k.bestiary]: () => wm.toggle("bestiary"),
       [k.character]: () => wm.toggle("character"),
       [k.map]: () => wm.toggle("map"),
       [k.auto]: () => hud.setAuto(!hud.autoOn, true),
@@ -1362,6 +1412,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (storageWin.isOpen) {
       const d = entities.distanceTo(storageWin.npcId);
       if (d === null || d > SHOP_KEEP_DIST) storageWin.close();
+    }
+    if (wm.isOpen("auction")) {
+      const d = entities.distanceTo(auctionState.npcId);
+      if (d === null || d > SHOP_KEEP_DIST) wm.close("auction");
     }
     if (barberWin.isOpen) {
       const d = entities.distanceTo(barberWin.npcId);
@@ -1643,6 +1697,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "storage":
           storageWin.set(msg.msg.value);
           break;
+        case "auction": {
+          const u = msg.msg.value;
+          auctionState.apply(u);
+          if (u.open) void wm.show("auction");
+          break;
+        }
         case "trade":
           tradeWin.set(msg.msg.value);
           break;
@@ -1711,6 +1771,14 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           titleId = a.titleId;
           if (a.unlocked) toast(`Conquista desbloqueada: ${a.unlocked}!`);
           for (const fn of achListeners) fn();
+          break;
+        }
+        case "bestiary":
+          bestiary.apply(msg.msg.value);
+          break;
+        case "bestiaryMark": {
+          const b = msg.msg.value;
+          toast(b.family ? `Bestiário: família ${b.name} completa!` : `Bestiário: ${b.name} — ${b.text}`);
           break;
         }
         case "mastery": {
