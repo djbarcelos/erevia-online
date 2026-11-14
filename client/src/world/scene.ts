@@ -185,6 +185,9 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
     disposeScene() {
       window.removeEventListener("resize", onResize);
       engine.stopRenderLoop(render);
+      // O canvas fica (é o mesmo engine): solta os ouvintes de entrada antes de descartar.
+      camera.detachControl();
+      scene.detachControl();
       scene.dispose();
       // Os shaders compilados ficam no engine (cache por nome e defines); sem soltar, cada
       // ida e volta somava programas WebGL da cena velha. O mapa novo compila na tela de

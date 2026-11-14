@@ -99,7 +99,14 @@ class PaletteLightPlugin extends MaterialPluginBase {
     // A cópia de um material (clone) ganha um plugin novo pela fábrica; o tipo vem em copyTo.
     this.doNotSerialize = true;
     this._enable(true);
-    plugins.add(this);
+    // Troca de mapa: o Set não pode segurar a cena velha. Material de container que nunca
+    // entrou na cena não é descartado com ela (sai pelo aviso da cena), e o de um
+    // carregamento que terminou depois do descarte nem entra.
+    const scene = material.getScene();
+    if (!scene.isDisposed) {
+      plugins.add(this);
+      scene.onDisposeObservable.addOnce(() => plugins.delete(this));
+    }
   }
 
   get kind(): PaletteKind {
