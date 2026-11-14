@@ -244,7 +244,7 @@ Um bioma exporta:
 | `seed` | Semente do sorteio, só dele (repetir a de outro bioma é erro): nada dos outros biomas muda de lugar |
 | `order` | Ordem entre os biomas (floresta 10, vale 20, cripta 30). Quem vem depois enxerga o que os de antes puseram |
 | `bounds` | `{ minX, maxX, minZ, maxZ }`. O mapa é a união dos `bounds` dos biomas: um bioma a leste de x = 150 cresce o mapa (e a colisão do servidor) para leste |
-| `build(ctx)` | Fase 1: o cenário. Pode devolver dados para o `world.json` (o Vale devolve a borda ondulada) |
+| `build(ctx)` | Fase 1: o cenário. O que devolver entra na entrada do bioma em `biomes[]` do `world.json`, ao lado de `id`, `name` e `bounds` (o Vale devolve a borda ondulada) |
 | `lights(ctx)` | Fase 2: tochas, que evitam o que todos os biomas já puseram no chão |
 | `overlay(ctx)` | Fase 3: lugares que limpam a área (`ctx.clear(x, z, r)`) e se constroem por cima, como a Cripta |
 | `paint(g, bioma, h)` | Opcional: a camada do chão do bioma no cliente (`client/src/world/map-painter.ts` a acha pelo nome do arquivo). Fica no mesmo arquivo para a regra de transição (o `transition` do Vale) ser uma só no gerador e no chão |
@@ -266,7 +266,7 @@ export function build(ctx) {
 }
 ```
 
-Depois de mexer num bioma, rode `node scripts/build-world.mjs` e commite os dois `world.json` (o do cliente e o do servidor). O CI roda o gerador e falha se o `world.json` commitado for diferente; o `npm run test:unit` confere que os biomas de hoje geram, byte a byte, o mesmo mapa de antes da divisão em biomas e que um bioma novo não muda nada do resto.
+Depois de mexer num bioma, rode `node scripts/build-world.mjs` e commite os dois `world.json` (o do cliente e o do servidor). O CI roda o gerador e falha se o `world.json` commitado for diferente. O `npm run test:unit` confere que os biomas de hoje geram, no formato antigo (`biome`, só o Vale), byte a byte o mapa de antes da divisão em biomas; que o formato novo (`biomes[]`) tem os mesmos colisores, instâncias e pintura do chão; e que um bioma novo não muda nada do resto. Durante a transição, o cliente (`worldBiomes` em `world-data.ts`) e o servidor aceitam os dois formatos.
 
 ## Variáveis do servidor
 | Variável | Padrão | |

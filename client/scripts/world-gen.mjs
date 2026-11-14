@@ -5,7 +5,7 @@
 // `place`, `collide`, `scatter`…) e o cliente entrega o necessário para pintar o chão.
 //
 // As fases rodam nesta ordem, cada uma passando pelos biomas na ordem de `order`:
-//   1. build(ctx)   → o cenário do bioma; pode devolver dados para o world.json (`biomes[]`)
+//   1. build(ctx)   → o cenário do bioma; pode devolver dados para a entrada dele em `biomes[]`
 //   2. lights(ctx)  → tochas, que evitam o que todos os biomas já puseram no chão
 //   3. overlay(ctx) → lugares que limpam a área (`ctx.clear`) e se constroem por cima
 // Um bioma usa só as fases de que precisa. A ordem de tudo (sorteios, listas) é parte do
@@ -71,8 +71,12 @@ export async function loadBiomes(...dirs) {
   return list.sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : 1));
 }
 
-/** Gera o mundo. */
-export async function buildWorld({ biomes } = {}) {
+/**
+ * Gera o mundo. `legacy: true` grava o formato de antes (`biome` único, o do bioma que
+ * devolve dados no build), byte a byte igual ao gerador de antes dos biomas: serve ao teste
+ * de que o formato novo descreve o mesmo mapa, enquanto o cliente aceitar os dois.
+ */
+export async function buildWorld({ biomes, legacy = false } = {}) {
   biomes ??= await loadBiomes();
   const SIZES = { ...JSON.parse(readFileSync(resolve(here, '../src/world/kit-sizes.json'), 'utf8')), ...CLIENT_ITEMS };
 
@@ -168,11 +172,15 @@ export async function buildWorld({ biomes } = {}) {
   }
   if (meta.safeRadius === undefined || !meta.wall) throw new Error('nenhum bioma definiu a cidade (meta.safeRadius, meta.wall)');
 
-  // Formato de hoje: um só bioma com dados (o do sul), no campo `biome`.
-  const withInfo = biomes.filter((b) => info.has(b.id));
-  if (withInfo.length > 1) throw new Error('o world.json só tem lugar para um bioma com dados');
-  const b = withInfo[0];
-  const biomeField = b ? { biome: { name: b.name, ...info.get(b.id) } } : {};
+  let biomeField;
+  if (legacy) {
+    const withInfo = biomes.filter((b) => info.has(b.id));
+    if (withInfo.length > 1) throw new Error('o formato antigo só tem lugar para um bioma com dados');
+    const b = withInfo[0];
+    biomeField = b ? { biome: { name: b.name, ...info.get(b.id) } } : {};
+  } else {
+    biomeField = { biomes: biomes.map((b) => ({ id: b.id, name: b.name, bounds: b.bounds, ...info.get(b.id) })) };
+  }
   const world = {
     version: 1,
     size: SIZE,

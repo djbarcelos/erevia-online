@@ -6,7 +6,7 @@ export interface Bounds {
   maxZ: number;
 }
 
-/** Bioma do sul (campo `biome` do world.json): borda ondulada com a floresta e a área dos golens. */
+/** Formato antigo do world.json (campo `biome`): o Vale, com a borda ondulada e a área dos golens. */
 export interface BiomeInfo {
   name: string;
   zFrom: number;
@@ -23,6 +23,7 @@ export interface BiomeInfo {
 export interface BiomeEntry {
   id: string;
   name: string;
+  bounds?: Bounds;
   [field: string]: unknown;
 }
 
@@ -32,6 +33,9 @@ export interface WorldData {
   /** Lado do quadrado original (compatibilidade); os limites reais estão em `bounds`. */
   size: number;
   bounds?: Bounds;
+  /** Biomas, na ordem do gerador (formato novo). */
+  biomes?: BiomeEntry[];
+  /** Formato antigo: só o Vale (o cliente aceita os dois durante a transição). */
   biome?: BiomeInfo;
   safeRadius: number;
   wall: { apothem: number; sides: number };
@@ -49,8 +53,9 @@ export function worldBounds(world: WorldData): Bounds {
   return { minX: -h, maxX: h, minZ: -h, maxZ: h };
 }
 
-/** Biomas do mapa. O world.json de hoje traz um só, o Vale, no campo `biome`. */
+/** Biomas do mapa: `biomes[]` ou, no formato antigo, o Vale do campo `biome`. */
 export function worldBiomes(world: WorldData): BiomeEntry[] {
+  if (world.biomes) return world.biomes;
   return world.biome ? [{ id: "vale", ...world.biome }] : [];
 }
 
