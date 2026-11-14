@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"erevia/server/internal/alerts"
 	"erevia/server/internal/api"
 	gamenet "erevia/server/internal/net"
 	"erevia/server/internal/store"
@@ -151,6 +152,9 @@ func run(log *slog.Logger) error {
 	})
 	zoneDone := make(chan struct{})
 	go func() { z.Run(ctx); close(zoneDone) }()
+	// Alertas no Discord (ALERT_WEBHOOK_URL; sem ela, só log): worker próprio que só lê o
+	// banco, fora da zona; um panic nele vira server_error e ele recomeça.
+	alertsDone := alerts.Start(ctx, alerts.FromEnv(publicURL, zcfg.Version, log), st, z, log.With("worker", "alerts"))
 
 	// Portal de administração (/admin e /api/admin/*): só GM; "online agora" vem da zona pelo canal.
 	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: z})
@@ -202,6 +206,10 @@ func run(log *slog.Logger) error {
 	case <-z.TelemetryDone():
 	case <-time.After(10 * time.Second):
 		log.Warn("telemetry did not finish in time")
+	}
+	select { // os alertas anotam o desligamento normal (o próximo aviso de subida não fala em queda)
+	case <-alertsDone:
+	case <-time.After(3 * time.Second):
 	}
 	log.Info("bye")
 	return nil
