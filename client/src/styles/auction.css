@@ -1,0 +1,262 @@
+/* ---------- Casa de leilões (Severino, o Leiloeiro) ---------- */
+
+.auc-win {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  align-content: start;
+}
+
+.auc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.auc-gold,
+.auc-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--gold-hi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.auc-coin {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+}
+
+.auc-coin svg {
+  width: 100%;
+  height: 100%;
+}
+
+.auc-pending {
+  color: var(--warn);
+}
+
+.auc-notice {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: rgba(232, 207, 138, 0.08);
+  border: 1px solid rgba(232, 207, 138, 0.2);
+  color: var(--text);
+}
+
+.auc-pane {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.auc-filters {
+  display: grid;
+  gap: 6px;
+}
+
+.auc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.auc-row > .input {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.auc-row-main > .input {
+  flex: 1 1 200px;
+}
+
+.auc-row-end {
+  justify-content: flex-end;
+}
+
+.auc-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-right: auto;
+  cursor: pointer;
+}
+
+.auc-list {
+  display: grid;
+  gap: 4px;
+  max-height: 340px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.auc-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.auc-item.closed {
+  opacity: 0.65;
+}
+
+.auc-item .btn.armed {
+  border-color: var(--warn);
+}
+
+.auc-icon.slot {
+  --s: 42px;
+}
+
+.auc-body {
+  display: grid;
+  min-width: 0;
+}
+
+.auc-name,
+.auc-body small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auc-pager,
+.auc-claim {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.auc-claim {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: rgba(232, 207, 138, 0.06);
+  border: 1px solid rgba(232, 207, 138, 0.18);
+}
+
+.auc-bag {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 4px;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.auc-bag-slot.slot {
+  --s: 44px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.auc-bag-slot.sel {
+  border-color: var(--gold-hi);
+  box-shadow: 0 0 0 2px rgba(243, 217, 149, 0.45);
+}
+
+.auc-sell {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line);
+}
+
+.auc-chosen {
+  grid-template-columns: auto 1fr;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.auc-field {
+  display: grid;
+  gap: 3px;
+  flex: 1 1 140px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.auc-fee {
+  margin: 0;
+  color: var(--muted);
+}
+
+.auc-fee.bad {
+  color: var(--bad);
+}
+
+.auc-hint {
+  margin: 0;
+}
+
+.auc-hours {
+  flex: 1 1 auto;
+}
+
+/* Correio (janela Social): anexo da carta */
+.sw-attach {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 8px 30px;
+  padding: 6px 8px;
+  border-radius: var(--radius);
+  background: rgba(232, 207, 138, 0.07);
+  border: 1px solid rgba(232, 207, 138, 0.2);
+  font-size: 0.85rem;
+}
+
+.sw-attach .btn {
+  margin-left: auto;
+}
+
+.sw-attach.claimed {
+  opacity: 0.6;
+}
+
+.sw-clip {
+  color: var(--gold-hi);
+}
+
+@media (max-width: 767px), (max-height: 520px) {
+  .auc-win {
+    padding: 10px;
+  }
+
+  .auc-list {
+    max-height: none;
+  }
+
+  .auc-item {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .auc-item > .btn,
+  .auc-item > span:last-child {
+    grid-column: 2 / -1;
+    justify-self: end;
+  }
+
+  .auc-row > .input,
+  .auc-row > select.input {
+    flex: 1 1 calc(50% - 6px);
+  }
+
+  .auc-bag {
+    max-height: 140px;
+  }
+}

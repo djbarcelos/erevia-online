@@ -13,7 +13,9 @@ import {
   type MailCmdKind,
   type ServerMessage,
   type TradeCmdKind,
+  type AuctionCmdKind,
 } from "../gen/erevia/v1/game_pb";
+import type { AuctionCmdOpts } from "../ui/windows/auction";
 import { reportClientError } from "./errors";
 
 const PING_INTERVAL_MS = 2000;
@@ -188,6 +190,24 @@ export class Connection {
   /** Mestra dos Caminhos: falar (anda A Encruzilhada e abre a escolha) ou escolher o caminho. */
   specCmd(kind: SpecCmdKind, npcId: number, spec = ""): void {
     this.send({ case: "specCmd", value: { kind, npcId, spec } });
+  }
+
+  /** Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, meus anúncios e retirar do correio. */
+  auctionCmd(kind: AuctionCmdKind, npcId: number, opts: AuctionCmdOpts = {}): void {
+    this.send({
+      case: "auctionCmd",
+      value: {
+        kind,
+        npcId,
+        query: opts.query,
+        slot: opts.slot ?? 0,
+        count: opts.count ?? 0,
+        price: BigInt(opts.price ?? 0),
+        hours: opts.hours ?? 0,
+        auctionId: opts.auctionId ?? 0n,
+        mailId: opts.mailId ?? 0n,
+      },
+    });
   }
 
   /** Maestria (nível 30): pedir a árvore e o estado, gastar 1 ponto no nó ou redistribuir. */
