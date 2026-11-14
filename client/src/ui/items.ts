@@ -188,6 +188,12 @@ const GLYPHS: Record<string, string> = {
     <path d="M33 27 V20 M42 36 H49 M33 45 V52 M24 36 H17" stroke="#ffb050" stroke-width="2.2" ${STROKE}/>`,
   crown: `<path d="M12 44 L16 20 L26 32 L32 14 L38 32 L48 20 L52 44 Z" fill="#d6b46e"/><path d="M12 44 H52 V50 H12 Z" fill="#a8843a"/>
     <path d="M30 14 L36 50" stroke="#2a2420" stroke-width="2.5"/><circle cx="22" cy="44" r="2.5" fill="#e0453a"/><circle cx="42" cy="44" r="2.5" fill="#3a7ae0"/>`,
+  // Insígnia do Capitão (raro): distintivo de ferro com um crânio e a fita dourada.
+  insignia: `<path d="M24 6 H40 L36 20 H28 Z" fill="#b8333a"/><path d="M30 6 H34 L33 20 H31 Z" fill="#d6b46e"/>
+    <path d="M32 18 L48 24 V36 C48 46 40 52 32 56 C24 52 16 46 16 36 V24 Z" fill="#7d776e"/>
+    <path d="M32 22 L44 27 V36 C44 43 38 48 32 51 C26 48 20 43 20 36 V27 Z" fill="#9a948a"/>
+    <path d="M32 28 C27 28 25 31 25 35 C25 38 27 39 28 40 V43 H36 V40 C37 39 39 38 39 35 C39 31 37 28 32 28 Z" fill="#efe6d2"/>
+    <circle cx="29.5" cy="35" r="1.8" fill="#2a2420"/><circle cx="34.5" cy="35" r="1.8" fill="#2a2420"/>`,
   gold: `<ellipse cx="26" cy="42" rx="12" ry="5" fill="#a8843a"/><ellipse cx="26" cy="39" rx="12" ry="5" fill="#e8c260"/>
     <ellipse cx="38" cy="34" rx="12" ry="5" fill="#a8843a"/><ellipse cx="38" cy="31" rx="12" ry="5" fill="#e8c260"/>
     <ellipse cx="30" cy="24" rx="12" ry="5" fill="#a8843a"/><ellipse cx="30" cy="21" rx="12" ry="5" fill="#f3d488"/>`,
