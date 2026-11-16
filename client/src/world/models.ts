@@ -432,8 +432,8 @@ export class CharacterModels {
     let hatHidden = false;
     const lodNodes = assets.remaster
       ? bodyMeshes.map((m) => {
-          const base = m.name.split("#")[0].replace(/.d+$/, "");
-          return { m, lod: Number(/_LOD(d)$/.exec(base)?.[1] ?? 0), hat: /^Hat(_LODd)?$/.test(base) };
+          const base = m.name.split("#")[0].replace(/\.\d+$/, "");
+          return { m, lod: Number(/_LOD(\d)$/.exec(base)?.[1] ?? 0), hat: /^Hat(_LOD\d)?$/.test(base) };
         })
       : [];
     const refreshVis = () => {
