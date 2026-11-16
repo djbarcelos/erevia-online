@@ -4,67 +4,52 @@
 //
 // Uso (dentro de client/):
 //   node scripts/import-asset.mjs <arquivo.glb> <categoria> [nome] [--check] [--force]
+//        [--no-lod] [--no-ktx2] [--etc1s] [--variantes=<regex>]
 //   categorias: personagem, arma, monstro, chefe, cenario
 //   ex.: node scripts/import-asset.mjs ~/arte/CH_Knight/exports/CH_Knight.glb personagem knight_b
 //
 // Faz: tira duplicatas e nós sem uso, reamostra animações e junta primitivas de malhas sem
-// esqueleto (menos draw calls). Os LODs vêm do Blender (nós com sufixo _LOD1/_LOD2).
+// esqueleto (menos draw calls); gera LOD1 e LOD2 (simplify do meshoptimizer, nas proporções do
+// guia) se o Blender não trouxe os nós _LOD1/_LOD2; comprime as texturas para KTX2/Basis
+// (UASTC; --etc1s troca por ETC1S, menor e pior). --no-lod e --no-ktx2 desligam cada um.
+// Ao copiar, registra o arquivo em scripts/assets-manifest.json (o check:assets do CI exige).
 import { NodeIO } from '@gltf-transform/core';
+import { EXTMeshoptCompression, KHRTextureBasisu } from '@gltf-transform/extensions';
 import { dedup, join as joinMeshes, prune, resample } from '@gltf-transform/functions';
-import { mkdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-
-// Orçamento do guia de arte (LOD0). Ajustar junto com o guia.
-const BUDGET = {
-  personagem: { tris: 8000, texture: 1024, materials: 2 },
-  arma: { tris: 800, texture: 1024, materials: 1 },
-  monstro: { tris: 4000, texture: 1024, materials: 1 },
-  chefe: { tris: 15000, texture: 2048, materials: 3 },
-  cenario: { tris: 3000, texture: 2048, materials: 1 },
-};
+import { BUDGET, evaluate, measure } from './lib/asset-budget.mjs';
+import { compressTextures, generateLods } from './lib/asset-optimize.mjs';
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const flags = new Set(process.argv.slice(2).filter((a) => a.startsWith('--')));
+// --variantes=<regex>: nós que o jogo esconde (cabeças e chapéus alternativos); contam só a maior.
+const variants = process.argv.slice(2).filter((a) => a.startsWith('--variantes=')).map((a) => a.slice(12));
 const [input, category, name = basename(args[0] ?? '', '.glb')] = args;
 if (!input || !BUDGET[category]) {
-  console.error('Uso: node scripts/import-asset.mjs <arquivo.glb> <personagem|arma|monstro|chefe|cenario> [nome] [--check] [--force]');
+  console.error('Uso: node scripts/import-asset.mjs <arquivo.glb> <personagem|arma|monstro|chefe|cenario> [nome] [--check] [--force] [--no-lod] [--no-ktx2] [--etc1s] [--variantes=regex]');
   process.exit(2);
 }
-const budget = BUDGET[category];
-const out = resolve(import.meta.dirname, '../public/models');
+// Destino e manifesto podem ser trocados por variável de ambiente (os testes usam uma pasta temporária).
+const out = resolve(process.env.EREVIA_MODELS_DIR ?? resolve(import.meta.dirname, '../public/models'));
+const manifestPath = resolve(process.env.EREVIA_ASSETS_MANIFEST ?? resolve(import.meta.dirname, 'assets-manifest.json'));
 
-const io = new NodeIO();
+const io = new NodeIO().registerExtensions([EXTMeshoptCompression, KHRTextureBasisu]);
 const doc = await io.read(resolve(input));
 await doc.transform(dedup(), prune(), resample(), joinMeshes());
 
-// Conta triângulos por LOD (o LOD vem do sufixo do nó; sem sufixo = LOD0).
-const tris = { 0: 0, 1: 0, 2: 0 };
-for (const node of doc.getRoot().listNodes()) {
-  const mesh = node.getMesh();
-  if (!mesh) continue;
-  const lod = Number(/_LOD(\d)$/i.exec(node.getName())?.[1] ?? 0);
-  for (const prim of mesh.listPrimitives()) {
-    const idx = prim.getIndices();
-    const count = idx ? idx.getCount() : (prim.getAttribute('POSITION')?.getCount() ?? 0);
-    tris[lod] = (tris[lod] ?? 0) + Math.floor(count / 3);
-  }
+if (!flags.has('--no-lod')) {
+  const lod = await generateLods(doc, category);
+  console.log(lod.generated ? `  LOD gerado: ${lod.generated} nó(s) _LOD1/_LOD2` : `  LOD: ${lod.skipped}`);
 }
-const materials = doc.getRoot().listMaterials().length;
-const textures = doc.getRoot().listTextures().map((t) => ({ name: t.getName() || t.getURI(), size: t.getSize() }));
-const biggest = Math.max(0, ...textures.map((t) => Math.max(...(t.size ?? [0, 0]))));
-const anims = doc.getRoot().listAnimations().map((a) => a.getName());
-const skins = doc.getRoot().listSkins();
-const bones = Math.max(0, ...skins.map((s) => s.listJoints().length));
 
-const problems = [];
-if (tris[0] > budget.tris) problems.push(`LOD0 com ${tris[0]} triângulos (máximo ${budget.tris})`);
-if (biggest > budget.texture) problems.push(`textura de ${biggest} px (máximo ${budget.texture})`);
-if (materials > budget.materials) problems.push(`${materials} materiais (máximo ${budget.materials})`);
-if (category === 'personagem' && bones > 60) problems.push(`${bones} ossos no esqueleto (o guia pede ~45 que deformam)`);
+const stats = measure(doc, { variants });
+const anims = doc.getRoot().listAnimations().map((a) => a.getName());
+const { problems, over } = evaluate(stats, category);
 
 console.log(`${name} (${category})`);
-console.log(`  triângulos: LOD0 ${tris[0]} · LOD1 ${tris[1]} · LOD2 ${tris[2]}`);
-console.log(`  materiais: ${materials} · maior textura: ${biggest || '—'} px · ossos: ${bones || '—'}`);
+console.log(`  triângulos: LOD0 ${stats.tris[0]} · LOD1 ${stats.tris[1]} · LOD2 ${stats.tris[2]}`);
+console.log(`  materiais: ${stats.materials} · maior textura: ${stats.texture || '—'} px · ossos: ${stats.bones || '—'}`);
 console.log(`  animações: ${anims.length ? anims.join(', ') : '—'}`);
 if (problems.length) {
   console.log(`  FORA DO ORÇAMENTO: ${problems.join('; ')}`);
@@ -72,7 +57,23 @@ if (problems.length) {
 }
 if (flags.has('--check')) process.exit(0);
 
+if (!flags.has('--no-ktx2') && doc.getRoot().listTextures().length) {
+  const n = await compressTextures(doc, { etc1s: flags.has('--etc1s') });
+  console.log(`  KTX2: ${n} textura(s) comprimida(s) (${flags.has('--etc1s') ? 'ETC1S' : 'UASTC'})`);
+}
+
 mkdirSync(out, { recursive: true });
 const dest = join(out, `${name}.glb`);
 await io.write(dest, doc);
 console.log(`  → ${dest} (${(statSync(dest).size / 1024).toFixed(1)} KB)`);
+
+// O manifesto é o que o check:assets confere no CI. Um import forçado para fora do orçamento
+// entra com a exceção e um motivo a preencher (o CI falha enquanto o motivo estiver vazio).
+const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : { modelos: {} };
+const entry = { categoria: category };
+if (variants.length) entry.variantes = variants;
+if (problems.length) entry.excecoes = Object.fromEntries(Object.entries(over).map(([k, v]) => [k, { max: v, motivo: '' }]));
+manifest.modelos[`${name}.glb`] = entry;
+manifest.modelos = Object.fromEntries(Object.entries(manifest.modelos).sort(([a], [b]) => a.localeCompare(b)));
+writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+console.log(`  manifesto: ${name}.glb registrado em scripts/assets-manifest.json${entry.excecoes ? ' (preencha o motivo das exceções)' : ''}`);

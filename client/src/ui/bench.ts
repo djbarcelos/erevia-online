@@ -50,6 +50,8 @@ export interface BenchDeps {
   /** Malhas guardadas para reaproveitar (desligadas): quantas são depende do FPS, então ficam fora. */
   pooled(): AbstractMesh[];
   hud: HTMLElement;
+  /** Interface 3D (nomes e barras sobre as entidades); só os prints a escondem. */
+  gui?: { rootContainer: { isVisible: boolean } };
 }
 
 interface Sample {
@@ -410,3 +412,68 @@ function renderTable(device: Record<string, string | number>, samples: Sample[])
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const round = (v: number, k: number) => Math.round(v * 10 ** k) / 10 ** k;
+
+/**
+ * Prints de regressão visual (?shots=1 na URL; e2e/tests/shots.spec.ts): cenas fixas do cenário,
+ * sempre iguais — praça de dia e de noite, Arredores e Vale —, com a câmera parada, o relógio do
+ * dia fixado e as entidades escondidas (monstros e jogadores andam, e o personagem estragaria
+ * o quadro). O teste chama `window.__ereviaShots.show(nome)`, que só devolve quando o cenário
+ * assentou (shaders compilados, árvores sem transição), e então tira o print do canvas.
+ */
+export interface ShotScene {
+  name: string;
+  /** Região do mapa de onde sai o ponto (começo do nome) e fase do ciclo. */
+  region: string;
+  time: "dia" | "noite";
+}
+
+export const SHOT_SCENES: ShotScene[] = [
+  { name: "praca-dia", region: "Cidade", time: "dia" },
+  { name: "praca-noite", region: "Cidade", time: "noite" },
+  { name: "arredores-dia", region: "Arredores", time: "dia" },
+  { name: "vale-dia", region: "Vale", time: "dia" },
+];
+
+declare global {
+  interface Window {
+    __ereviaShots?: { ready: boolean; names: string[]; show(name: string): Promise<{ x: number; z: number; phase: number }> };
+  }
+}
+
+export function wantShots(): boolean {
+  return new URLSearchParams(location.search).has("shots");
+}
+
+export function setupShots(d: BenchDeps): void {
+  if (d.gui) d.gui.rootContainer.isVisible = false;
+  const points = benchPoints(d.regions, d.bounds);
+  const phases = Object.fromEntries(PHASES.map((p) => [p.label, p.phase]));
+  // Entidades fora do quadro, o tempo todo (elas entram e saem da área de interesse).
+  d.scene.onBeforeRenderObservable.add(() => d.forEachRoot(({ root }) => root.isEnabled(false) && root.setEnabled(false)));
+  d.camera.alpha = -Math.PI / 2;
+  d.camera.beta = 1.0;
+  d.camera.radius = 18;
+  window.__ereviaShots = {
+    ready: true,
+    names: SHOT_SCENES.map((s) => s.name),
+    async show(name) {
+      const s = SHOT_SCENES.find((x) => x.name === name);
+      const p = s && points.find((q) => q.region.startsWith(s.region));
+      if (!s || !p) throw new Error(`cena de print desconhecida: ${name}`);
+      d.camera.alpha = -Math.PI / 2;
+      d.camera.beta = 1.0;
+      d.camera.radius = 18;
+      d.setTime(phases[s.time]!);
+      d.setFocus(p);
+      // Dois ciclos: o primeiro leva a câmera e o cenário (árvores, sombras) ao ponto, o segundo
+      // pega o que só aparece depois (shaders do dia/noite, transições).
+      for (let i = 0; i < 2; i++) {
+        await wait(600);
+        d.settle();
+        await Promise.race([d.scene.whenReadyAsync(), wait(20_000)]);
+        for (let f = 0; f < 3; f++) await new Promise<void>((ok) => requestAnimationFrame(() => ok()));
+      }
+      return { x: p.x, z: p.z, phase: phases[s.time]! };
+    },
+  };
+}
