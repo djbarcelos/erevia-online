@@ -36,7 +36,8 @@ const manifestPath = resolve(process.env.EREVIA_ASSETS_MANIFEST ?? resolve(impor
 
 const io = new NodeIO().registerExtensions([EXTMeshoptCompression, KHRTextureBasisu]);
 const doc = await io.read(resolve(input));
-await doc.transform(dedup(), prune(), resample(), joinMeshes());
+// keepNamed: os nós _LOD1/_LOD2 de peças estáticas não podem ser juntos ao LOD0.
+await doc.transform(dedup(), prune(), resample(), joinMeshes({ keepNamed: true }));
 
 if (!flags.has('--no-lod')) {
   const lod = await generateLods(doc, category);

@@ -9,6 +9,7 @@ import {
   Material,
   Mesh,
   Node,
+  Observer,
   PBRMaterial,
   RawTexture,
   StandardMaterial,
@@ -21,6 +22,7 @@ import {
 import { reportClientError } from "../net/errors";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
+import { lodFor, REMASTER, REMASTER_FILES } from "./remaster";
 import { bodyPalettes, colorKey, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook } from "./body-look";
 
 /**
@@ -90,6 +92,18 @@ const CLIP_IMPACT: Record<string, number> = {
   Ranged_Magic_Raise: 0.45,
 };
 
+/** Animações dos modelos do remaster (clipes do próprio arquivo; KB_ cavaleiro, SW_ esqueleto). */
+const REMASTER_SETS: Record<string, AnimSet> = {
+  knight: {
+    idle: "KB_Idle", run: "KB_Run", attack: "KB_Attack", skill: "KB_Attack", buff: "KB_Raise", hit: "KB_Hit", death: "KB_Death",
+    wave: "KB_Raise", dance: "KB_Raise", sit: "KB_Idle",
+  },
+  skeleton_warrior: { idle: "SW_Idle", run: "SW_Walk", attack: "SW_Attack", skill: "SW_Attack", buff: "SW_Raise", hit: "SW_Hit", death: "SW_Death" },
+};
+/** O golpe encosta no quadro 14 de 30 (tools/art/fatia-vertical/biped_anim.py). */
+CLIP_IMPACT.KB_Attack = 14 / 30;
+CLIP_IMPACT.SW_Attack = 14 / 30;
+
 export type Slot = "handslot.r" | "handslot.l";
 /** Armas padrão de cada modelo. Os heróis usam o que o servidor manda (equipamento). */
 const WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
@@ -154,6 +168,8 @@ interface ModelAssets {
   scale: number;
   /** Cabeças que o arquivo traz ("Head_<id>"), por id: só a escolhida é copiada para a cena. */
   heads: Map<string, AbstractMesh>;
+  /** Modelo do estilo B (?remaster=1): clipes e LODs no próprio arquivo. */
+  remaster: boolean;
 }
 
 export class CharacterModels {
@@ -168,6 +184,31 @@ export class CharacterModels {
   private glowMats = new Map<string, Material>();
   /** Materiais com a textura repintada, por classe + cores; descartados quando ninguém usa. */
   private paintMats = new Map<string, { mat: Promise<Material | null>; refs: number }>();
+  /** Cópias do remaster com LOD, reavaliadas a cada 250 ms pela distância da câmera. */
+  private lodInstances = new Set<{ root: TransformNode; level: number; set: (l: number) => void }>();
+  private lodTick: Observer<Scene> | null = null;
+
+  private watchLod(e: { root: TransformNode; level: number; set: (l: number) => void }): () => void {
+    this.lodInstances.add(e);
+    this.lodTick ??= (() => {
+      let acc = 0;
+      return this.scene.onBeforeRenderObservable.add(() => {
+        acc += this.scene.getEngine().getDeltaTime();
+        if (acc < 250) return;
+        acc = 0;
+        const cam = this.scene.activeCamera;
+        if (!cam) return;
+        for (const i of this.lodInstances) {
+          const lv = lodFor(Vector3.DistanceSquared(cam.globalPosition, i.root.getAbsolutePosition()));
+          if (lv !== i.level) {
+            i.level = lv;
+            i.set(lv);
+          }
+        }
+      });
+    })();
+    return () => this.lodInstances.delete(e);
+  }
 
   /** Pega (criando se preciso) o material repintado; devolva com releasePaint. */
   private acquirePaint(model: string, base: Material, look: BodyLook): Promise<Material | null> {
@@ -234,7 +275,13 @@ export class CharacterModels {
     const [animContainers, weaponList, bodies] = await Promise.all([
       Promise.all(ANIM_FILES.map(load)),
       Promise.all(weaponFiles.map((w) => tryLoad(`weapons/${w}.glb`).then((c) => [w, c] as const))),
-      Promise.all(modelIds.map((id) => tryLoad(`${id}.glb`).then((c) => [id, c] as const))),
+      Promise.all(
+        modelIds.map(async (id) => {
+          // ?remaster=1: o arquivo do estilo B, se existir; senão, o KayKit de sempre.
+          const rm = REMASTER && REMASTER_FILES[id] ? await tryLoad(`${REMASTER_FILES[id]}.glb`) : null;
+          return [id, rm ?? (await tryLoad(`${id}.glb`)), !!rm] as const;
+        }),
+      ),
     ]);
     const weaponByFile = new Map(weaponList);
     // Material de paleta: personagens, monstros e armas com a borda e o degradê mais fortes
@@ -244,21 +291,22 @@ export class CharacterModels {
     }
 
     const models = new Map<string, ModelAssets>();
-    for (const [id, body] of bodies) {
+    for (const [id, body, remaster] of bodies) {
       if (!body) continue;
       const weapons: ModelAssets["weapons"] = {};
-      for (const [slot, file] of Object.entries(allWeapons[id] ?? {}) as [Slot, string][]) {
+      // O esqueleto do remaster já traz a espada e o escudo no corpo.
+      for (const [slot, file] of remaster && id === "skeleton_warrior" ? [] : (Object.entries(allWeapons[id] ?? {}) as [Slot, string][])) {
         const w = weaponByFile.get(file);
         if (w) weapons[slot] = w;
       }
       const heads = new Map<string, AbstractMesh>();
       for (const m of body.meshes) if (m.name.startsWith("Head_")) heads.set(m.name.slice(5), m);
-      models.set(id, { body, weapons, scale: measureScale(body, id), heads });
+      models.set(id, { body, weapons, scale: measureScale(body, id), heads, remaster });
     }
 
     // Os grupos de animação servem de molde; não tocam sozinhos.
     const templates = new Map<string, AnimationGroup>();
-    for (const c of animContainers) {
+    for (const c of [...animContainers, ...bodies.filter(([, b, rm]) => b && rm).map(([, b]) => b!)]) {
       for (const g of c.animationGroups) {
         g.stop();
         templates.set(g.name, g);
@@ -310,7 +358,7 @@ export class CharacterModels {
     // Golem: modelado e animado em código (sem arquivo glTF).
     if (model === GOLEM_MODEL) return createGolem(this.scene, id);
     const assets = this.models.get(model);
-    const set = ANIM_SETS[model];
+    const set = assets?.remaster ? REMASTER_SETS[model] : ANIM_SETS[model];
     if (!assets || !set) return null;
     let handItems = assets.weapons;
     if (weapons) {
@@ -336,6 +384,8 @@ export class CharacterModels {
       doNotInstantiate: true,
       predicate: (e: unknown) => !(e instanceof TransformNode && e.name.startsWith("Head_") && e !== srcHead),
     });
+    // Os clipes do remaster vêm no próprio arquivo; os da cópia não servem (tocamos clones dos moldes).
+    if (assets.remaster) for (const g of entries.animationGroups) g.dispose();
     const gltfRoot = asNode(entries.rootNodes[0] as TransformNode);
 
     const root = new TransformNode(`model#${id}`, gltfRoot.getScene());
@@ -376,6 +426,22 @@ export class CharacterModels {
     const hat = byName.get("Hat");
     // Só as malhas com esqueleto (as armas presas nas mãos não entram).
     const bodyMeshes = gltfRoot.getChildMeshes(false).filter((m) => !!m.skeleton && !!m.material);
+    // LOD (remaster): nós com sufixo _LOD1/_LOD2; o elmo ("Hat", "Hat_LOD1"...) some com hideHat.
+    let lodLevel = 0;
+    let hatHidden = false;
+    const lodNodes = assets.remaster
+      ? bodyMeshes.map((m) => {
+          const base = m.name.split("#")[0].replace(/.d+$/, "");
+          return { m, lod: Number(/_LOD(d)$/.exec(base)?.[1] ?? 0), hat: /^Hat(_LODd)?$/.test(base) };
+        })
+      : [];
+    const refreshVis = () => {
+      for (const n of lodNodes) n.m.setEnabled(n.lod === lodLevel && !(n.hat && hatHidden));
+    };
+    refreshVis();
+    const unwatchLod = assets.remaster
+      ? this.watchLod({ root, level: 0, set: (l) => ((lodLevel = l), refreshVis()) })
+      : () => {};
     let head = { id: firstHead, mesh: bodyMeshes.find((m) => m.name.split("#")[0] === `Head_${firstHead}`) };
     const baseMat = bodyMeshes.find((m) => m !== head.mesh)?.material ?? bodyMeshes[0]?.material ?? null;
     let painted: BodyLook | null = null; // cores em uso (material repintado)
@@ -401,7 +467,10 @@ export class CharacterModels {
         head.mesh!.setEnabled(true);
       }
       l = normalLook(model, l);
-      if (hat instanceof TransformNode) hat.setEnabled(!l.hideHat);
+      if (assets.remaster) {
+        hatHidden = l.hideHat;
+        refreshVis();
+      } else if (hat instanceof TransformNode) hat.setEnabled(!l.hideHat);
       if (!baseMat || (painted && colorKey(model, painted) === colorKey(model, l))) return;
       if (painted) this.releasePaint(model, painted);
       painted = null;
@@ -469,6 +538,7 @@ export class CharacterModels {
       meshes: () => root.getChildMeshes(false),
       dispose: () => {
         disposed = true;
+        unwatchLod();
         if (painted) this.releasePaint(model, painted);
         painted = null;
         for (const a of cloned.values()) a.dispose();

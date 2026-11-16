@@ -11,6 +11,8 @@ import {
   Vector3,
   VertexData,
 } from "@babylonjs/core";
+import { addRemasterPlaza } from "./plaza-remaster";
+import { REMASTER } from "./remaster";
 import { monolithProtos } from "./teleport-stone";
 import { heightAt, terrain } from "./terrain";
 import { setWindKind, type WindKind } from "./wind";
@@ -70,6 +72,7 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
   const field = terrain();
   const lake = field.lake;
   for (const o of world.objects) {
+    if (REMASTER && o.k === "well") continue; // a fonte do remaster ocupa o lugar do poço
     if (lake && field.lakeU(o.x, o.z) < 1.5 && heightAt(o.x, o.z) < lake.level + 0.45) continue;
     let list = byKind.get(o.k);
     if (!list) byKind.set(o.k, (list = []));
@@ -119,6 +122,7 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
   }
   // Protótipos não usados no layout ficam invisíveis.
   for (const [kind, mesh] of protos) if (!byKind.has(kind)) mesh.setEnabled(false);
+  if (REMASTER) await addRemasterPlaza(scene, shadows);
   return { drawn, fader };
 }
 
