@@ -107,7 +107,7 @@ func Assumptions(night bool) []string {
 		fmt.Sprintf("Caça sozinho, %s, sem XP em dobro. A luta anda no passo do tick da zona (%s s).", period, num(tickDT, 2)),
 		"Pontos de atributo: 2 no atributo de dano e 1 no de apoio a cada nível (cavaleiro Força/Constituição, bárbaro Força/Constituição, mago Inteligência/Sabedoria, ladino Destreza/Força). O caminho escolhido no 20 soma o bônus dele.",
 		"Árvore: dano primeiro (ordem em `build.go`), o 5º degrau e as 3 skills do caminho do 20 em diante, o resto em defesa. Nenhuma pontuação fora das regras (`ValidateRanks`).",
-		fmt.Sprintf("Equipamento típico: em cada encaixe a melhor peça comum ou boa que a classe usa no nível (pelo poder do item), tudo +0 ou tudo +%d (o encantamento seguro). Raras, épicas e lendárias ficam fora (são drop ou criação).", game.EnchantSafe),
+		fmt.Sprintf("Equipamento típico: em cada encaixe a melhor peça comum ou boa que a classe usa no nível (pelo poder do item), tudo +0 ou tudo +%d (o encantamento seguro): as da loja, as comuns dos graus (caem dos monstros da faixa e, no D, saem do Ferreiro) e, do 30 em diante, a ponte comum. Das peças de conjunto, só as do peso da classe (cavaleiro e bárbaro pesada, ladino leve, mago manto), com o bônus do conjunto. Raras, épicas e lendárias ficam fora (são drop de chefe ou criação).", game.EnchantSafe),
 		fmt.Sprintf("Rotação como a auto-caça do cliente: uma skill a cada %s s, buffs que faltam primeiro, depois enfraquecer/marcar o alvo, depois a skill de mais dano pronta e com mana; o ataque básico corre junto. Poção de vida abaixo de %s e de mana abaixo de %s (as menores até o nível %d, as maiores depois), sem limite de estoque. Fuga e utilidade (Piscar, Passo Sombrio, Sumir, Escudo Arcano, Imortal, Provocar) ficam de fora.", num(skillGap, 0), pct(potionHPBelow)[1:], pct(potionMPBelow)[1:], largePotionFrom-1),
 		"Monstro: o do nível do jogador, na região onde o nível caça (o grupo de `DefaultSpawns` que cobre o nível; empate, a região mais nova: do 20 em diante, o Vale das Pedras Vivas). Monstros que dividem a região entram na proporção da quantidade. A luta abre no alcance do ataque básico; o monstro anda até o dele (quem bate de longe ganha esse tempo).",
 		fmt.Sprintf("**Matar**: tempo médio em regime (as recargas seguem de uma luta para a outra); **abertura** é a primeira luta, com tudo pronto. **DPS**: dano por segundo da rotação numa luta longa contra o mesmo monstro. **Morrer**: lutando sem parar contra o monstro (que não cai), com regeneração de combate, com e sem poções; ∞ = aguenta mais de %d min (ou volta à vida cheia no meio da luta).", fightCap/60),
@@ -163,6 +163,8 @@ func (r *Report) WriteMarkdown(w io.Writer) {
 				pct(ItemPower(d, 0)/ItemBudget(d)-1), next)
 		}
 	}
+
+	writeTiers(w) // graus de equipamento (tiers.go)
 
 	pf("\n## Fora do orçamento hoje (exceções conhecidas do teste)\n\n")
 	for _, v := range AllViolations() {
@@ -231,11 +233,18 @@ func gradeList() string {
 	return strings.Join(parts, ", ")
 }
 
+// famName: "arma (cavaleiro)", "arma (cavaleiro) nv30", "peito grau D". Um sufixo depois da
+// classe ou do encaixe (o nível da ponte, o grau) vai junto.
 func famName(f string) string {
-	if c, ok := strings.CutPrefix(f, "weapon:"); ok {
-		return "arma (" + strings.ToLower(game.Classes[c].Name) + ")"
+	if rest, ok := strings.CutPrefix(f, "weapon:"); ok {
+		c, extra, _ := strings.Cut(rest, ":")
+		name := c
+		if def := game.Classes[c]; def != nil {
+			name = strings.ToLower(def.Name)
+		}
+		return strings.TrimSpace("arma (" + name + ") " + extra)
 	}
-	return strings.TrimPrefix(f, "kind:")
+	return strings.ReplaceAll(strings.TrimPrefix(f, "kind:"), ":", " ")
 }
 
 // WriteCSV escreve uma linha por caminho, nível e encantamento (ponto decimal).

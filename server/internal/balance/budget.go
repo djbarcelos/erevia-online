@@ -125,9 +125,42 @@ func ClassViolations() []Violation {
 	return out
 }
 
-// AllViolations: as três listas, em ordem de chave.
+// SetPower: o conjunto inteiro +0 na raridade (as cinco peças) com os bônus de todas as
+// peças, e a soma dos orçamentos delas.
+func SetPower(set *game.ItemSet, g game.Grade) (power, budget float64) {
+	var worn []game.Worn
+	for _, d := range Gear() {
+		if d.Set == set.ID && d.Grade == g {
+			worn = append(worn, game.Worn{Def: d})
+			budget += ItemBudget(d)
+		}
+	}
+	return StatPower(game.EquipBonus(game.MaxLevel, worn)), budget
+}
+
+// SetViolations: conjuntos que, inteiros e com o bônus, passam a soma dos orçamentos das
+// peças além de ItemTolerance (a mesma folga de uma peça). O bônus de conjunto não é poder
+// de graça: as peças ficam abaixo do orçamento para ele caber.
+func SetViolations() []Violation {
+	var out []Violation
+	for _, set := range game.ItemSetList {
+		for _, g := range []game.Grade{game.GradeCommon, game.GradeEpic} {
+			p, b := SetPower(set, g)
+			if b <= 0 {
+				continue
+			}
+			if ex := p/b - 1; ex > ItemTolerance {
+				out = append(out, Violation{fmt.Sprintf("set:%s:%s", set.ID, gradeName(g)), ex,
+					fmt.Sprintf("%s (%s) inteiro: poder %s, orçamento das peças %s", set.Name, gradeName(g), num(p, 1), num(b, 1))})
+			}
+		}
+	}
+	return out
+}
+
+// AllViolations: as listas, em ordem de chave.
 func AllViolations() []Violation {
-	out := append(append(ItemViolations(), EnchantViolations()...), ClassViolations()...)
+	out := append(append(append(ItemViolations(), SetViolations()...), EnchantViolations()...), ClassViolations()...)
 	out = append(out, BestiaryViolations()...) // bestiary.go
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out

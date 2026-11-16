@@ -27,6 +27,7 @@ func TestRaidLootIsGuaranteed(t *testing.T) {
 		epics, frag := 0, false
 		for _, d := range RollLoot(def, 25, rng) {
 			switch {
+			case d.Item.Graded: // as épicas e lendárias dos graus vêm da lista de saque, à parte (TestTierBossLoot)
 			case d.Item.Grade == GradeEpic && d.Item.Equippable():
 				epics++
 			case d.Item.Grade == GradeLegendary:

@@ -12,15 +12,27 @@ import (
 // simulador de balanceamento usar os mesmos números. Este teste guarda a versão antiga, tal
 // como estava na zona, e confere que a nova dá exatamente o mesmo número.
 
-func oldItemsBonus(inv *inventory) game.Stats {
+// oldItemsBonus: a soma de antes, mais o que os graus (tunnel#153) somam depois dela, na
+// mesma ordem de game.EquipBonus: os conjuntos e a penalidade de nível.
+func oldItemsBonus(inv *inventory, level int) game.Stats {
 	var b game.Stats
+	sets := map[string]int{}
+	under := false
 	for _, s := range inv.equip {
 		if !s.empty() {
 			b = b.AddBonus(s.def.Bonus)
 			if s.enchant > 0 {
 				b = b.AddBonus(game.EnchantBonus(s.def, s.enchant))
 			}
+			if s.def.Set != "" {
+				sets[s.def.Set]++
+			}
+			under = under || level < s.def.ReqLevel
 		}
+	}
+	b = b.AddBonus(game.SetsBonus(sets))
+	if under {
+		b = b.AddBonus(game.UnderLevelPenalty)
 	}
 	return b
 }
@@ -30,7 +42,7 @@ func oldComputeStats(p *entity, spent game.Attrs) game.Stats {
 	total := game.ClassBaseAttrs[cls].Add(spent).Add(game.SpecBonus(cls, p.pl.spec))
 	s := game.ClassStats(cls, p.level)
 	s = game.ApplyAttrs(s, cls, p.level, total)
-	s = s.AddBonus(oldItemsBonus(&p.pl.inv))
+	s = s.AddBonus(oldItemsBonus(&p.pl.inv, p.level))
 	s = oldApplyPassives(s, p)
 	s = game.FinishRegen(s, cls, total)
 	if r := p.pl.rank(game.SkillClearMind); r > 0 {
@@ -122,7 +134,7 @@ func TestExtractedStatsMatchZone(t *testing.T) {
 						p.pl.inv.equip[slot] = stack{def: d, count: 1, enchant: enchant}
 					}
 					spent := game.Attrs{Str: level, Dex: level / 2, Con: 2, Int: level, Wis: 3, Spi: 1}
-					if got, want := p.pl.inv.bonus(), oldItemsBonus(&p.pl.inv); got != want {
+					if got, want := p.pl.inv.bonus(p.level), oldItemsBonus(&p.pl.inv, p.level); got != want {
 						t.Fatalf("%s +%d: bônus do equipamento %+v, antes %+v", class, enchant, got, want)
 					}
 					if got, want := z.computeStats(p, spent), oldComputeStats(p, spent); got != want {

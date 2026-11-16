@@ -1292,6 +1292,30 @@ message ItemInfo {
   string weapon_type = 21; // armas: sword, axe, staff, daggers
   ScrollKind scroll = 22;
   bool blessed = 23; // pergaminho abençoado: falhar não quebra (volta a +0)
+  // Graus de equipamento (tunnel#153). O grau sai do nível exigido; abaixo de tier_level a
+  // peça não se equipa, e de tier_level até req_level ela vale com a penalidade under_level.
+  uint32 tier = 24; // 0 sem grau, 1 D, 2 C, 3 B
+  uint32 tier_level = 25; // nível mínimo do grau
+  uint32 armor_weight = 26; // peças de conjunto: 1 pesada, 2 leve, 3 manto (0 = sem peso)
+  // O conjunto da peça (vazio = nenhum). Inteiro (tema, peças e bônus) só na primeira peça do
+  // conjunto; nas outras, só id e nome: o cliente junta pelo id.
+  ItemSetInfo set = 27;
+  ItemBonus under_level = 28; // o que vestir antes de req_level tira (uma vez, com uma ou mais peças); vazio = não se aplica
+}
+
+// Conjunto de armadura (tunnel#153): as peças comuns, na ordem do corpo (a versão épica de
+// cada uma conta como ela), e os bônus por peças vestidas.
+message ItemSetInfo {
+  string id = 1;
+  string name = 2;
+  string theme = 3; // a escolha de jogo do conjunto, em uma frase
+  repeated string pieces = 4;
+  repeated ItemSetBonus bonuses = 5;
+}
+
+message ItemSetBonus {
+  uint32 pieces = 1; // a partir de quantas peças vale
+  ItemBonus bonus = 2;
 }
 
 enum EntityKind {

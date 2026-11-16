@@ -140,6 +140,14 @@ type ItemDef struct {
 	// Bridge: equipamento ponte do 30 ao 40 (bridge.go). Só cai de quem o tem na lista de
 	// saque, fora do sorteio por raridade.
 	Bridge bool
+	// Graus (tiers.go). Tier: o grau do equipamento, pelo nível exigido (todas as peças).
+	// Graded: peça feita para o grau (as armas, conjuntos e joias de tiers.go); como a ponte,
+	// fica fora do sorteio por raridade e cai pela regra do grau (RollLoot) ou do saque do
+	// chefe. Weight e Set: peso da armadura e conjunto (só as peças de conjunto).
+	Tier   Tier
+	Graded bool
+	Weight ArmorWeight
+	Set    string
 }
 
 // SellPrice é quanto a loja paga por uma unidade.
@@ -447,8 +455,12 @@ var Items = func() map[string]*ItemDef {
 	}
 	list = append(list, RepItems...) // as capas das facções (reputation.go)
 	list = append(list, bridgeItems()...)
+	list = append(list, tierGear.items...) // os graus D, C e B (tiers.go)
 	m := make(map[string]*ItemDef, len(list))
 	for _, d := range list {
+		if d.Equippable() {
+			d.Tier = TierFor(d.ReqLevel)
+		}
 		m[d.ID] = d
 	}
 	return m
@@ -536,7 +548,8 @@ var gearByGrade = func() map[Grade][]*ItemDef {
 	m := map[Grade][]*ItemDef{}
 	for _, id := range ItemIDs() {
 		d := Items[id]
-		if d.Equippable() && !d.RepOnly && !d.Bridge { // nem as da loja de reputação nem as ponte caem no sorteio
+		// Nem as da loja de reputação, nem as ponte, nem as dos graus caem no sorteio.
+		if d.Equippable() && !d.RepOnly && !d.Bridge && !d.Graded {
 			m[d.Grade] = append(m[d.Grade], d)
 		}
 	}
@@ -607,6 +620,13 @@ func RollLoot(m *MonsterDef, level int, rng *rand.Rand) []Drop {
 		}
 		pool := gearByGrade[g]
 		out = append(out, Drop{Item: pool[rng.IntN(len(pool))], Count: 1})
+	}
+	// Graus (tiers.go): do 10 em diante, uma peça comum do grau do monstro. Os chefes deixam
+	// as épicas e lendárias pela lista de saque.
+	if !m.Boss {
+		if pool := tierCommonPool(level); len(pool) > 0 && rng.Float64() < TierDropChance {
+			out = append(out, Drop{Item: pool[rng.IntN(len(pool))], Count: 1})
+		}
 	}
 	return out
 }

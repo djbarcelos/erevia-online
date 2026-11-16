@@ -1,6 +1,8 @@
 package zone
 
 import (
+	"fmt"
+
 	"erevia/server/internal/game"
 )
 
@@ -230,8 +232,10 @@ func canEquip(def *game.ItemDef, slot int, class string, level int) string {
 		return "Este item não vai nesse lugar."
 	case !def.UsableBy(class):
 		return "Sua classe não pode usar este item."
-	case level < def.ReqLevel:
-		return "Você precisa de mais nível para usar este item."
+	case level < def.Tier.MinLevel():
+		// Do mínimo do grau até o nível da peça, ela entra com a penalidade de nível
+		// (game.UnderLevelPenalty); abaixo do grau, não entra.
+		return fmt.Sprintf("Este item é do %s: precisa do nível %d.", def.Tier.Label(), def.Tier.MinLevel())
 	}
 	return ""
 }
@@ -309,15 +313,21 @@ func (inv *inventory) unequip(slot, bagSlot int, class string, level int) string
 	return ""
 }
 
-// bonus soma os atributos de todo o equipamento.
-func (inv *inventory) bonus() game.Stats {
-	var b game.Stats
+// bonus soma os atributos de todo o equipamento (peças, encantamento, conjuntos e a
+// penalidade de nível: game.EquipBonus).
+func (inv *inventory) bonus(level int) game.Stats {
+	return game.EquipBonus(level, inv.worn())
+}
+
+// worn: as peças vestidas, na ordem dos encaixes.
+func (inv *inventory) worn() []game.Worn {
+	var out []game.Worn
 	for _, s := range inv.equip {
 		if !s.empty() {
-			b = game.AddItemBonus(b, s.def, s.enchant)
+			out = append(out, game.Worn{Def: s.def, Enchant: s.enchant})
 		}
 	}
-	return b
+	return out
 }
 
 // weaponType: tipo da arma equipada ("" = sem arma). Esgrima vale com espadas.
