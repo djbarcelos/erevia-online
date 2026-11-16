@@ -2,7 +2,7 @@
 import { Document, NodeIO } from '@gltf-transform/core';
 import { deflateSync } from 'node:zlib';
 
-/** PNG RGBA sólido `size`×`size`, sem dependência (para testar textura e KTX2). */
+/** PNG RGBA `size`×`size` com um degradê (um PNG de cor só seria podado como textura sólida), sem dependência. */
 export function png(size, rgba = [200, 80, 40, 255]) {
   const crcTable = Array.from({ length: 256 }, (_, n) => {
     let c = n;
@@ -28,7 +28,7 @@ export function png(size, rgba = [200, 80, 40, 255]) {
   ihdr[8] = 8;
   ihdr[9] = 6;
   const raw = Buffer.alloc((size * 4 + 1) * size);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) for (let c = 0; c < 4; c++) raw[y * (size * 4 + 1) + 1 + x * 4 + c] = rgba[c];
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) for (let c = 0; c < 4; c++) raw[y * (size * 4 + 1) + 1 + x * 4 + c] = c < 3 ? (rgba[c] + x * 3 + y * 5) & 255 : rgba[c];
   return new Uint8Array(
     Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]),
   );

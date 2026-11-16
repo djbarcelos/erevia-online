@@ -30,7 +30,7 @@ const lodOf = (name) => Number(/_LOD(\d)$/i.exec(name ?? '')?.[1] ?? 0);
  */
 export function measure(doc, { variants = [], perPiece = false } = {}) {
   const root = doc.getRoot();
-  const groups = variants.map((v) => ({ re: new RegExp(v), max: 0 }));
+  const groups = variants.map((v) => ({ re: new RegExp(v), max: [0, 0, 0] }));
   const sum = { 0: 0, 1: 0, 2: 0 };
   const piece = { 0: 0, 1: 0, 2: 0 };
   for (const node of root.listNodes()) {
@@ -43,14 +43,15 @@ export function measure(doc, { variants = [], perPiece = false } = {}) {
     }
     const lod = lodOf(node.getName());
     const group = groups.find((g) => g.re.test(node.getName().replace(/_LOD\d$/i, '')));
-    if (group && lod === 0) group.max = Math.max(group.max, n);
+    if (group) group.max[lod] = Math.max(group.max[lod], n);
     else {
       sum[lod] += n;
       piece[lod] = Math.max(piece[lod], n);
     }
   }
-  const variantMax = groups.reduce((s, g) => s + g.max, 0);
-  const tris = perPiece ? { ...piece, 0: Math.max(piece[0], ...groups.map((g) => g.max)) } : { ...sum, 0: sum[0] + variantMax };
+  const variantMax = (lod) => groups.reduce((s, g) => s + g.max[lod], 0);
+  const tris = {};
+  for (const lod of [0, 1, 2]) tris[lod] = perPiece ? Math.max(piece[lod], ...groups.map((g) => g.max[lod])) : sum[lod] + variantMax(lod);
   const sizes = root.listTextures().map((t) => Math.max(...(t.getSize() ?? [0, 0])));
   const joints = root.listSkins().map((s) => s.listJoints().length);
   return {
@@ -65,7 +66,7 @@ export function measure(doc, { variants = [], perPiece = false } = {}) {
  * Confere as medições contra o orçamento da categoria. `exceptions` é o mapa
  * { metrica: { max, motivo } } do manifesto: a métrica passa até esse teto (que trava o
  * número de hoje: crescer de novo falha). Métricas: tris, lod1, lod2, texture, materials, bones.
- * Retorna { problems, waived, stale } (listas de texto).
+ * Retorna { problems, waived, stale } (listas de texto) e over (métrica → valor, o que passou do limite).
  */
 export function evaluate(stats, category, exceptions = {}) {
   const b = BUDGET[category];
@@ -78,6 +79,7 @@ export function evaluate(stats, category, exceptions = {}) {
     ['bones', stats.bones, b.bones, 'ossos'],
   ];
   const problems = [];
+  const over = {};
   const waived = [];
   const used = new Set();
   for (const [key, value, limit, label] of checks) {
@@ -86,6 +88,7 @@ export function evaluate(stats, category, exceptions = {}) {
       continue;
     }
     if (value <= limit) continue;
+    over[key] = value;
     const ex = exceptions[key];
     if (ex && value <= ex.max) {
       used.add(key);
@@ -98,5 +101,5 @@ export function evaluate(stats, category, exceptions = {}) {
   const stale = Object.keys(exceptions)
     .filter((k) => !used.has(k) && !problems.some((p) => p.startsWith(checks.find((c) => c[0] === k)?.[3] ?? '\0')))
     .map((k) => `exceção de ${k} sem uso: remova do manifesto`);
-  return { problems, waived, stale };
+  return { problems, waived, stale, over };
 }
