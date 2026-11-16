@@ -164,6 +164,8 @@ type fight struct {
 	out                Fight
 	immortal           bool
 	bodyRadius, mRange float64
+	// Em grupo (group.go): a vida do monstro é de todos; nil = só deste caçador (mhp).
+	shared *float64
 }
 
 // newFight prepara o caçador (vida e mana cheias, nada em recarga). O mesmo caçador luta
@@ -275,7 +277,15 @@ func (f *fight) mStunned() bool {
 	return ok
 }
 
-func (f *fight) mDead() bool { return !f.immortal && f.mhp <= 0 }
+func (f *fight) mDead() bool { return !f.immortal && f.monHP() <= 0 }
+
+// monHP: a vida que falta ao monstro (a do grupo, se a luta é em grupo).
+func (f *fight) monHP() float64 {
+	if f.shared != nil {
+		return *f.shared
+	}
+	return f.mhp
+}
 
 // hit: o golpe do jogador no monstro (dano médio), com a Marca, o roubo de vida e o veneno
 // da Lâmina Envenenada.
@@ -306,7 +316,11 @@ func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) {
 
 func (f *fight) damageMonster(dmg float64) {
 	f.out.DamageDone += dmg
-	if !f.immortal {
+	switch {
+	case f.immortal:
+	case f.shared != nil:
+		*f.shared -= dmg
+	default:
 		f.mhp -= dmg
 	}
 }
@@ -327,7 +341,7 @@ func (f *fight) cast(rs rotSkill) {
 	}
 	landed := s.Mult.At(r) <= 0
 	if mult := s.Mult.At(r); mult > 0 {
-		if s.ExecuteBelow > 0 && !f.immortal && f.mhp < f.m.MaxHP*s.ExecuteBelow {
+		if s.ExecuteBelow > 0 && !f.immortal && f.monHP() < f.m.MaxHP*s.ExecuteBelow {
 			mult *= s.ExecuteMult
 		}
 		for i := 0; i < max(1, s.Hits) && !f.mDead(); i++ {
@@ -488,37 +502,49 @@ func (f *fight) run() Fight {
 		if f.mDead() {
 			break
 		}
-		// Jogador: uma skill por segundo e o ataque básico quando a recarga dele permite.
-		for _, rs := range f.rot {
-			if f.now+timeEps < f.nextSkill {
-				break
-			}
-			if f.wants(rs) {
-				f.cast(rs)
-				f.nextSkill = f.now + skillGap
-				break
-			}
-		}
-		if !f.mDead() && f.now+timeEps >= f.pNext && f.inRange(f.p.Range) {
-			f.hit(f.p.Magic, 1, 0, false)
-			f.pNext = f.now + f.pInterval()
-		}
+		f.playerActs()
 		if f.mDead() {
 			break
 		}
-		// Monstro.
-		f.moveMonster()
-		if !f.mStunned() && f.dist <= f.mRange && f.now+timeEps >= f.mNext {
-			f.monsterHit()
-			f.mNext = f.now + f.m.AtkInterval
-		}
-		if f.hp <= 0 {
+		if f.monsterActs(); f.hp <= 0 {
 			f.out.Died = true
 			break
 		}
 		f.regen()
 		f.potions()
 	}
+	return f.finish(start)
+}
+
+// playerActs: uma skill por segundo e o ataque básico quando a recarga dele permite.
+func (f *fight) playerActs() {
+	for _, rs := range f.rot {
+		if f.now+timeEps < f.nextSkill {
+			break
+		}
+		if f.wants(rs) {
+			f.cast(rs)
+			f.nextSkill = f.now + skillGap
+			break
+		}
+	}
+	if !f.mDead() && f.now+timeEps >= f.pNext && f.inRange(f.p.Range) {
+		f.hit(f.p.Magic, 1, 0, false)
+		f.pNext = f.now + f.pInterval()
+	}
+}
+
+// monsterActs: o monstro anda até o próprio alcance e bate neste caçador.
+func (f *fight) monsterActs() {
+	f.moveMonster()
+	if !f.mStunned() && f.dist <= f.mRange && f.now+timeEps >= f.mNext {
+		f.monsterHit()
+		f.mNext = f.now + f.m.AtkInterval
+	}
+}
+
+// finish fecha a luta que começou em start.
+func (f *fight) finish(start float64) Fight {
 	f.out.Time = f.now - start
 	f.hp = math.Max(0, f.hp)
 	f.out.HP, f.out.MP = f.hp, f.mp

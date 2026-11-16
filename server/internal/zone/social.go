@@ -62,7 +62,7 @@ func (z *Zone) canHit(a, b *entity, force bool) (ok bool, why string, waitSafe b
 	case b == nil || b.dead || a == b:
 		return false, "", false
 	case b.mon != nil:
-		return !b.mon.hidden, "", false
+		return !b.mon.unseen(), "", false
 	case b.pl == nil || a.pl == nil:
 		return false, "", false
 	case z.allies(a, b):

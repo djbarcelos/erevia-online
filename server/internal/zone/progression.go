@@ -33,19 +33,21 @@ func (z *Zone) kill(dead, killer *entity) {
 	}
 	if dead.mon != nil {
 		ms := dead.mon
-		// O drop fica reservado para quem causou mais dano (lido antes de zerar o ódio), e a
-		// XP vai para o grupo (ou jogador) que causou mais dano no total. Invasores não deixam
-		// saque no chão da cidade: a recompensa da invasão sai no fim.
+		// O abate é de quem causou mais dano (o grupo soma o dele), não de quem deu o último
+		// golpe: esse lado leva a XP, o saque reservado (para quem dele mais bateu) e o
+		// crédito de missão, contrato e bestiário (party.go, creditKill). Invasores não
+		// deixam saque no chão da cidade: a recompensa da invasão sai no fim.
+		takers, owner := z.creditKill(ms, dead.pos)
+		if len(takers) == 0 && killer != nil && killer.pl != nil && !killer.dead {
+			takers, owner = []*entity{killer}, killer.id // sem dano registrado (ex.: veneno de quem saiu)
+		}
 		if ms.invader {
 			z.invasionKilled(dead, killer)
 		} else {
-			z.dropLoot(dead, topHate(ms.hate))
+			z.dropLoot(dead, owner)
 		}
-		takers := z.creditGroup(ms.hate, dead.pos)
-		if len(takers) == 0 && killer != nil && killer.pl != nil && !killer.dead {
-			takers = []*entity{killer} // sem ódio registrado (ex.: veneno de quem saiu)
-		}
-		ms.hate = map[uint32]float64{}
+		z.archDeath(dead) // dividir, explodir e os lacaios do invocador (com o ódio ainda aqui)
+		ms.forget()
 		ms.corpseEnd = z.now + corpseSeconds
 		ms.respawnAt = z.now + ms.spawn.Respawn*(1+z.rng.Float64())
 		if ms.def.Boss && !ms.summon {

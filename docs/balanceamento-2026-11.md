@@ -201,6 +201,74 @@ Poder = ataque + defesas + vida/10 + mana/10 + 1 por 1% de crítico e de velocid
 - `ttk:6–12:Cavaleiro` +74%: Cavaleiro no 6–12: 3,0 s para matar, média da faixa 1,8 s
 - `ttk:6–12:Mago` −81%: Mago no 6–12: 0,3 s para matar, média da faixa 1,8 s
 
+## XP em grupo (tunnel#151)
+
+O modo grupo do simulador (`go run ./cmd/balance -grupo`, em `server/internal/balance/group.go`) compara a XP por hora de cada membro de um grupo com a de quem caça sozinho, com as regras novas da zona (`game/party.go`): +10% na XP total do abate por membro que conta além do primeiro, dividida pelo nível; corte do grupo inteiro com mais de 8 níveis de diferença (9 = 50%, 10 = 40%, 11 = 30%, 12 = 20%, 13+ = 10%). `TestGroupOfThreeBeatsSolo` e `TestCarryDoesNotPay` (`internal/balance`) travam as duas metas abaixo.
+
+**Como o grupo luta no modelo.** Os três batem no mesmo monstro: a vida é uma só e cada um segue a própria rotação, então o tempo para matar sai do dano somado. O monstro só bate no primeiro (o cavaleiro, que segura o ódio). Os efeitos no alvo de cada um (marca, enfraquecer, atordoar) valem só para os golpes dele, o que subestima o grupo. Entre um abate e outro, o grupo anda na velocidade do mais lento e espera o mais cansado descansar. Para o renascimento, o grupo é um caçador só. O grupo escolhe os monstros de 0 a 5 níveis acima que mais rendem sem ninguém morrer.
+
+**Leitura curta.**
+- **A meta é cumprida: o grupo de 3 rende de 1,25× a 1,85× por membro**, do 5 ao 39, com a mesma gente na região nos dois casos (sozinhos, os 3 dividem os renascimentos). Esse é o caso que importa: do 13 em diante quem manda é o renascimento, não a força (ver "Leitura curta" lá em cima). Caçando os **mesmos monstros** de quem está sozinho, do 15 em diante o grupo fica em **1,20×**, que é o bônus de +20%: os dois lados matam no ritmo do renascimento, e o grupo ganha 1,2 abate dividido por 3 enquanto cada um sozinho ganharia 1/3. O que leva acima disso é caçar monstros mais altos (até +5), que sozinho mata devagar ou não aguenta. Contra a classe que mais rende sozinha (o mago), o grupo só perde no 5 (0,83×), onde o mago mata num golpe e nada limita o ritmo dele.
+- **Com monstros à vontade** (sem o limite do renascimento) **o grupo focado no mesmo monstro quase sempre rende menos** (0,64× a 0,83× do 20 ao 39 e 0,93× no 10; no 5 e no 15, onde os monstros de +5 valem bem mais, 1,27× e 1,41×). O abate do grupo leva ~1 s, mas a caminhada até o próximo é a mesma de quem está sozinho, então matar 3× mais rápido não vira 3× mais abates. Nesse caso o grupo rende mais **espalhado**: cada um no seu monstro, a até 40 m dos outros, todos contam (todos deram dano nos últimos 30 s) e cada abate vale 1,2/3 para cada um, ou seja **1,2× exato** de quem caça sozinho. A coluna "Região só sua" é o pior caso: a região inteira para um só, seja o grupo ou quem está sozinho; aí o grupo divide entre 3 o que um sozinho teria.
+- **Carregar não compensa.** Um nível 30 caçando os monstros dele com um nível 20 que ajuda: o baixo faz 0,39× do que faria sozinho e o alto, 0,28×. Com 13 níveis ou mais, 0,11× e 0,07×. Até 8 níveis de diferença não há corte, e ainda assim o baixo fica abaixo do que faria sozinho (0,74× a 0,88×), porque a parte dele é pelo nível. Quem não ajuda (não bate, não buffa) não conta: não leva XP nem derruba a do grupo.
+- **O mínimo de 10% do monstro fraco fica.** Caçar monstros 11 ou mais níveis abaixo, onde o mínimo de 10% vale, rende de 0,02× a 0,05× da XP por hora no próprio nível, mesmo matando num golpe e no ritmo do renascimento: a XP do monstro cai com o nível dele (nível^1,6) antes do corte. Um bot no monstro fraco não ganha nada que valha a pena, e baixar o mínimo não mudaria isso. O corte que pesa é o de 6 a 10 níveis (−15% por nível), e ele já leva a 0,29× a 0,36× com 8 níveis. (A linha do 20 contra monstros 19 abaixo mostra 8% porque a XP do nível 1 arredonda para 1.)
+
+### Grupo de 3 contra sozinho
+
+Grupo de 3 do mesmo nível (Cavaleiro/Bastião + Mago/Elementalista + Ladino/Sicário), +0, de dia. Bônus: +10% por membro além do primeiro; a XP é dividida pelo nível (aqui, 1/3 para cada). O grupo caça os monstros de até 5 níveis acima que mais rendem.
+
+Região dividida: os mesmos 3 na região nos dois casos (sozinhos, cada um fica com 1/3 dos renascimentos).
+
+| Nível | Caça (acima) | Matar (grupo) | s/abate | XP/abate (membro) | XP/h (membro) | XP/h sozinho (média) | Grupo ÷ sozinho | ÷ melhor sozinho | Mesmos monstros do solo | Monstros à vontade | Região só sua |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 5 | Esqueleto Guerreiro + Esqueleto Ladino (+5) | 0,6 s | 5,8 | 255 | 157.495 | 121.177 | 1,30× | 0,83× | 0,42× | 1,27× | 1,27× |
+| 10 | Esqueleto Mago + Esqueleto Guerreiro (+5) | 0,0 s | 4,8 R | 518 | 388.500 | 290.847 | 1,34× | 1,33× | 0,84× | 0,93× | 0,86× |
+| 15 | Esqueleto Mago + Esqueleto Guerreiro (+4) | 0,1 s | 4,8 R | 756 | 565.546 | 323.750 | 1,75× | 1,75× | 1,20× | 1,41× | 0,72× |
+| 20 | Vale das Pedras Vivas (+5) | 1,1 s | 12,4 R | 2.760 | 802.793 | 468.073 | 1,72× | 1,72× | 1,20× | 0,67× | 0,58× |
+| 25 | Fundo do Vale (+5) | 1,1 s | 12,4 R | 4.248 | 1.235.898 | 668.994 | 1,85× | 1,85× | 1,20× | 0,72× | 0,63× |
+| 30 | Confins Partidos (+5) | 0,9 s | 12,9 R | 5.909 | 1.654.576 | 1.029.915 | 1,61× | 1,61× | 1,20× | 0,83× | 0,55× |
+| 35 | Confins Partidos (+5) | 0,9 s | 12,9 R | 7.317 | 2.048.704 | 1.378.813 | 1,49× | 1,49× | 1,20× | 0,68× | 0,50× |
+| 39 | Confins Partidos (+1) | 0,6 s | 12,9 R | 7.317 | 2.048.704 | 1.639.493 | 1,25× | 1,25× | 1,20× | 0,64× | 0,42× |
+
+### Carregar um nível baixo
+
+Carregar: cavaleiro no nível alto caçando os monstros dele, com um mago de nível baixo que ajuda (conta no grupo).
+
+| Alto | Baixo | Diferença | XP que sobra | XP/h do baixo | Baixo sozinho | Baixo ÷ sozinho | XP/h do alto | Alto ÷ sozinho |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 30 | 22 | 8 | 100% | 1.437.920 | 1.635.782 | 0,88× | 1.960.800 | 0,68× |
+| 30 | 21 | 9 | 50% | 699.736 | 1.518.255 | 0,46× | 999.624 | 0,35× |
+| 30 | 20 | 10 | 40% | 543.795 | 1.404.218 | 0,39× | 815.693 | 0,28× |
+| 30 | 17 | 13 | 10% | 122.932 | 1.117.551 | 0,11× | 216.940 | 0,07× |
+| 39 | 31 | 8 | 100% | 2.396.002 | 3.256.145 | 0,74× | 3.014.326 | 0,61× |
+| 39 | 30 | 9 | 50% | 1.176.158 | 3.089.745 | 0,38× | 1.529.006 | 0,31× |
+| 39 | 25 | 14 | 10% | 211.341 | 2.006.982 | 0,11× | 329.692 | 0,07× |
+
+### Monstro muito abaixo do jogador
+
+Monstro fraco: um caçador sozinho (Mago/Elementalista, +0) caçando a região de monstros abaixo do nível dele. A regra: XP cheia até 5 níveis abaixo; depois −15% por nível, mínimo de 10%.
+
+| Nível | Monstros abaixo | Corte de XP | XP/h | ÷ no próprio nível |
+|---:|---:|---:|---:|---:|
+| 20 | 0 | 100% | 1.404.218 | 1,00× |
+| 20 | 5 | 100% | 971.250 | 0,69× |
+| 20 | 8 | 55% | 448.493 | 0,32× |
+| 20 | 11 | 10% | 51.639 | 0,04× |
+| 20 | 14 | 10% | 26.776 | 0,02× |
+| 20 | 19 | 8% | 1.331 | 0,00× |
+| 30 | 0 | 100% | 3.089.745 | 1,00× |
+| 30 | 5 | 100% | 2.006.982 | 0,65× |
+| 30 | 8 | 55% | 899.491 | 0,29× |
+| 30 | 11 | 10% | 140.178 | 0,05× |
+| 30 | 14 | 10% | 106.431 | 0,03× |
+| 30 | 19 | 10% | 69.990 | 0,02× |
+| 39 | 0 | 100% | 4.918.480 | 1,00× |
+| 39 | 5 | 100% | 3.791.200 | 0,77× |
+| 39 | 8 | 55% | 1.790.836 | 0,36× |
+| 39 | 11 | 10% | 240.582 | 0,05× |
+| 39 | 14 | 10% | 200.727 | 0,04× |
+| 39 | 19 | 10% | 140.509 | 0,03× |
+
 ## Por nível
 
 Pares **a / b** = equipamento +0 / +3; o resto é +0. **R** = o renascimento limita o ritmo.

@@ -104,6 +104,8 @@ export interface Settings {
   autoPotion: number;
   autoReturn: boolean;
   autoLoot: boolean;
+  /** Auto-caça: atacar também os monstros neutros (os que só atacam quem bate neles). */
+  autoNeutral: boolean;
   keys: Record<string, string>;
 }
 
@@ -172,6 +174,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoPotion: 45,
   autoReturn: true,
   autoLoot: true,
+  autoNeutral: false,
   keys: { ...DEFAULT_KEYS },
 };
 

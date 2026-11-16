@@ -17,7 +17,7 @@ func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
 			areas++
 			switch z.Region {
 			case "Vale das Pedras Vivas":
-				if z.Radius <= 0 || z.Z > -150 || z.Name != "Golem de Pedra" || z.LevelMin != 20 || z.LevelMax != 30 {
+				if z.Radius <= 0 || z.Z > -150 || z.Name != "Golem de Pedra, Golem de Musgo, Golem de Cascalho" || z.LevelMin != 20 || z.LevelMax != 30 {
 					t.Errorf("área inesperada: %+v", z)
 				}
 			case "Vigília Ossária":
@@ -27,6 +27,11 @@ func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
 				}
 			case "Fundo do Vale", "Confins Partidos":
 				if z.LevelMin < 30 || z.LevelMax > game.MaxLevel {
+					t.Errorf("área inesperada: %+v", z)
+				}
+			case "":
+				// O acampamento dos Saqueadores (matilha, tunnel#129): um disco pequeno nos Campos.
+				if z.Name != "Saqueador Ossudo" || z.Radius > 8 || z.LevelMin != 8 || z.LevelMax != 10 {
 					t.Errorf("área inesperada: %+v", z)
 				}
 			default:
@@ -54,11 +59,11 @@ func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
 		}
 	}
 	// 5 spawns em anel, mas só 3 faixas de raio diferentes. Áreas: o Vale, o Fundo do Vale,
-	// os 2 discos da Vigília e os 3 cantos dos Confins.
-	if rings != 3 || bosses != 1 || raids != 1 || areas != 7 {
-		t.Fatalf("esperava 3 anéis, 1 chefe, 1 raid e 7 áreas, veio %d, %d, %d e %d", rings, bosses, raids, areas)
+	// os 2 discos da Vigília, os 3 cantos dos Confins e o acampamento dos Saqueadores.
+	if rings != 3 || bosses != 1 || raids != 1 || areas != 8 {
+		t.Fatalf("esperava 3 anéis, 1 chefe, 1 raid e 8 áreas, veio %d, %d, %d e %d", rings, bosses, raids, areas)
 	}
-	if zones[1].Name != "Esqueleto Guerreiro, Esqueleto Ladino" {
+	if zones[1].Name != "Esqueleto Guerreiro, Esqueleto Ladino, Esqueleto Lançador, Esqueleto Espreitador, Ossada Instável" {
 		t.Errorf("monstros do anel do meio não foram juntados: %q", zones[1].Name)
 	}
 }

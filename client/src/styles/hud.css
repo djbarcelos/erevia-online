@@ -298,6 +298,42 @@
   box-shadow: 0 0 20px rgba(255, 207, 74, 0.2);
 }
 
+/* Papel do monstro na luta (tunnel#129): ícone pequeno depois do nome, a dica no mouse. */
+.t-name em.t-role {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: -3px;
+  margin-left: 6px;
+  padding: 1px 3px;
+  background: rgba(20, 16, 24, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #e8dcc8;
+  cursor: help;
+}
+
+.t-name em.t-role-healer {
+  color: #7fe0c0;
+}
+
+.t-name em.t-role-archer,
+.t-name em.t-role-exploder {
+  color: #ffb070;
+}
+
+.t-name em.t-role-shield {
+  color: #a8c4e8;
+}
+
+.t-name em.t-role-ambusher,
+.t-name em.t-role-summoner {
+  color: #c8a8ff;
+}
+
+.t-name em.t-role-neutral {
+  color: #e8e0a0;
+}
+
 .hud-target.dead {
   opacity: 0.6;
 }

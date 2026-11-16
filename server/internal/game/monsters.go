@@ -41,6 +41,17 @@ type MonsterDef struct {
 	RespawnMin, RespawnMax float64
 	NoGear                 bool     // nunca deixa cair equipamento (invocações)
 	Rare                   *RareDef // monstro raro (rares.go): nome dourado e saque garantido
+	// Papel na luta (archetypes.go e zone/archetypes.go). O zero é o bruto, o de sempre: os
+	// parâmetros em zero ganham os padrões do papel na carga dos dados.
+	Archetype Archetype
+	Arch      ArchParams
+	// Neutral: só ataca quem bateu nele, e a auto-caça do cliente pula (a não ser que o
+	// jogador marque a opção). NeutralByDay: neutro de dia e agressivo à noite.
+	Neutral, NeutralByDay bool
+	// BestiaryExtra: no bestiário, fica na família como extra (não trava a conclusão), como
+	// os raros e as invocações. Os monstros de papel são poucos por área: 500 abates de cada
+	// pediriam horas só deles.
+	BestiaryExtra bool
 	// Drops: moedas (por nível do monstro) e itens.
 	GoldChance       float64
 	GoldMin, GoldMax float64
@@ -187,6 +198,53 @@ var Monsters = map[string]*MonsterDef{
 		// Gelo caindo em 2 jogadores da luta: deixa lento.
 		Abilities: []AbilityDef{{ID: "arcanist_frost", Shape: ShapeCircle, Target: AimRandom, Count: 2, Radius: 3.5,
 			Delay: 1.8, Cooldown: 13, First: 6, Mult: 1.3, Effect: &EffectDef{Kind: EffectSlow, Duration: 2.5, Value: 0.3}}}},
+	// ---- Arquétipos (tunnel#129): poucos de cada papel, com os modelos de hoje ----
+	// Variantes dos monstros da área, um pouco mais frágeis que o bruto do lado (o papel é a
+	// parte difícil). São extras no bestiário (BestiaryExtra) e ficam fora da conta do
+	// simulador de equilíbrio (balance/hunt.go), que só sabe lutar com brutos.
+
+	// Campos dos Ossos (6–12): lança lâminas de longe e recua quando você encosta.
+	"skeleton_thrower": {ID: "skeleton_thrower", Name: "Esqueleto Lançador", Model: "skeleton_rogue", Tint: "#c9b27a",
+		HP: 50, HPLvl: 16, Atk: 8, AtkLv: 2.0, Def: 7, DefLv: 1.8, Range: 10, Interval: 1.8, Speed: 3.8, Aggressive: true, XPBase: 16, Scale: 1,
+		Archetype: ArchArcher, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 2, GoldMax: 4, Loot: lootFighter},
+	// Campos dos Ossos: escondido até você chegar a 4,5 m; o primeiro golpe dói 50% a mais.
+	"skeleton_lurker": {ID: "skeleton_lurker", Name: "Esqueleto Espreitador", Model: "skeleton_rogue", Tint: "#5d6274",
+		HP: 55, HPLvl: 17, Atk: 9, AtkLv: 2.2, Def: 8, DefLv: 2, Range: 2, Interval: 1.2, Speed: 4.6, Aggressive: true, XPBase: 17, Scale: 1,
+		Archetype: ArchAmbusher, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 2, GoldMax: 4, Loot: lootFighter},
+	// Campos dos Ossos: um bando acampado. Neutro de dia e agressivo à noite; bater em um puxa todos.
+	"skeleton_raider": {ID: "skeleton_raider", Name: "Saqueador Ossudo", Model: "skeleton_minion", Tint: "#a8794f",
+		HP: 60, HPLvl: 18, Atk: 7, AtkLv: 1.8, Def: 10, DefLv: 2.4, Range: 2, Interval: 1.5, Speed: 4.2, XPBase: 15, Scale: 1.05,
+		Archetype: ArchPack, NeutralByDay: true, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 2, GoldMax: 4, Loot: lootMinion},
+	// Campos dos Ossos: corre até você e explode (círculo de 2,5 m, 1 s de aviso), ou explode ao morrer.
+	"skeleton_volatile": {ID: "skeleton_volatile", Name: "Ossada Instável", Model: "skeleton_minion", Tint: "#e0703a",
+		HP: 40, HPLvl: 12, Atk: 9, AtkLv: 2.2, Def: 6, DefLv: 1.5, Range: 1.8, Interval: 1.6, Speed: 4.8, Aggressive: true, XPBase: 14, Scale: 0.95,
+		Archetype: ArchExploder, BestiaryExtra: true, GoldChance: 0.6, GoldMin: 2, GoldMax: 4, Loot: lootMinion},
+	// Ermos Partidos (13–20): escudo grande à frente (60% a menos de dano físico de frente).
+	"skeleton_sentinel": {ID: "skeleton_sentinel", Name: "Sentinela Ossuda", Model: "skeleton_warrior", Tint: "#8fa3b8",
+		HP: 75, HPLvl: 22, Atk: 8, AtkLv: 2.0, Def: 14, DefLv: 3.2, Range: 2.2, Interval: 1.7, Speed: 3.6, Aggressive: true, XPBase: 20, Scale: 1.1,
+		Archetype: ArchShield, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 2.5, GoldMax: 4.5, Loot: lootFighter},
+	// Ermos Partidos: chama 2 Lacaios Erguidos a cada 20 s (no máximo 4), que morrem com ele.
+	"skeleton_necromancer": {ID: "skeleton_necromancer", Name: "Esqueleto Necromante", Model: "skeleton_mage", Tint: "#7fae6a",
+		HP: 50, HPLvl: 15, Atk: 9, AtkLv: 2.2, Def: 7, DefLv: 1.7, Range: 10, Interval: 2.2, Speed: 3.4, Magic: true, Aggressive: true, XPBase: 24, Scale: 1.05,
+		Archetype: ArchSummoner, Arch: ArchParams{Summon: "risen_minion"}, BestiaryExtra: true,
+		GoldChance: 0.7, GoldMin: 2.5, GoldMax: 4.5, Loot: lootMage},
+	// Invocação do Necromante: não renasce e não deixa saque.
+	"risen_minion": {ID: "risen_minion", Name: "Lacaio Erguido", Model: "skeleton_minion", Tint: "#9fbf8e",
+		HP: 30, HPLvl: 10, Atk: 5, AtkLv: 1.3, Def: 6, DefLv: 1.6, Range: 2, Interval: 1.6, Speed: 3.8, Aggressive: true, XPBase: 3, Scale: 0.9,
+		NoGear: true},
+	// Vale das Pedras Vivas (20–30): neutro; cura 15% da vida de um aliado abaixo de 50% a cada 8 s.
+	"moss_golem": {ID: "moss_golem", Name: "Golem de Musgo", Model: "stone_golem", Tint: "#8fbf7a",
+		HP: 140, HPLvl: 32, Atk: 10, AtkLv: 2.0, Def: 22, DefLv: 3.4, Range: 2.6, Interval: 2.6, Speed: 2.6, XPBase: 36, Scale: 1.1, BodyRadius: 0.9,
+		Archetype: ArchHealer, Neutral: true, BestiaryExtra: true, GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem},
+	// Vale das Pedras Vivas: ao morrer, vira 2 Cascalhos Vivos.
+	"rubble_golem": {ID: "rubble_golem", Name: "Golem de Cascalho", Model: "stone_golem", Tint: "#b39b7d",
+		HP: 150, HPLvl: 34, Atk: 13, AtkLv: 2.4, Def: 24, DefLv: 3.6, Range: 2.6, Interval: 2.4, Speed: 2.8, Aggressive: true, XPBase: 30, Scale: 1.3, BodyRadius: 1.0,
+		Archetype: ArchSplitter, Arch: ArchParams{SplitInto: "rubble_shard"}, BestiaryExtra: true,
+		GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem},
+	// Pedaço do Golem de Cascalho (~30% da vida dele): não renasce e não deixa saque.
+	"rubble_shard": {ID: "rubble_shard", Name: "Cascalho Vivo", Model: "stone_golem", Tint: "#b39b7d",
+		HP: 45, HPLvl: 10, Atk: 7, AtkLv: 1.4, Def: 14, DefLv: 2.4, Range: 2.2, Interval: 2.0, Speed: 3.4, Aggressive: true, XPBase: 6, Scale: 0.7, BodyRadius: 0.5,
+		NoGear: true},
 }
 
 // ImmuneTo informa se o efeito não pega no monstro.
@@ -337,6 +395,7 @@ type SpawnPoint struct {
 	Respawn float64
 	When    When   // período do spawn de origem
 	Region  string // região do spawn de origem (a troca dia/noite é por região)
+	Group   int    // índice do spawn de origem na lista (a matilha é o grupo de spawn)
 }
 
 // Áreas provisórias do 30 ao 40 (até as do docs/roadmap-areas.md): o fundo do Vale, a
@@ -404,6 +463,21 @@ func DefaultSpawns() []Spawn {
 			Region: "Confins Partidos"},
 		{Monster: "broken_arcanist", Count: 3, Area: true, X: cornerC, Z: -cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
 			Region: "Confins Partidos"},
+		// Arquétipos (tunnel#129): poucos de cada papel, no fim para não mudar os ids. Campos dos
+		// Ossos (6–12): o Lançador, o Espreitador e a Ossada Instável no meio dos brutos do anel.
+		{Monster: "skeleton_thrower", Count: 3, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
+		{Monster: "skeleton_lurker", Count: 2, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
+		{Monster: "skeleton_volatile", Count: 2, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
+		// O acampamento dos Saqueadores, a sudoeste nos Campos: a matilha é este spawn (os 4 vêm juntos).
+		{Monster: "skeleton_raider", Count: 4, Area: true, X: -66, Z: -66, Radius: 5, LevelMin: 8, LevelMax: 10, Respawn: 40},
+		// Ermos Partidos (13–20): com os 20 do anel e os 21 dos Confins, 45 (o teto do roadmap).
+		{Monster: "skeleton_sentinel", Count: 2, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
+		{Monster: "skeleton_necromancer", Count: 2, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
+		// Vale das Pedras Vivas (20–30): o curandeiro e o que divide, no meio dos golens.
+		{Monster: "moss_golem", Count: 2, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 30, Respawn: 45,
+			Region: "Vale das Pedras Vivas"},
+		{Monster: "rubble_golem", Count: 2, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 30, Respawn: 45,
+			Region: "Vale das Pedras Vivas"},
 	}
 }
 
@@ -428,7 +502,7 @@ func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 		}
 		return false
 	}
-	for _, s := range spawns {
+	for si, s := range spawns {
 		def := Monsters[s.Monster]
 		if def == nil {
 			continue
@@ -437,7 +511,7 @@ func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 		for i := 0; i < s.Count; i++ {
 			if s.Fixed {
 				out = append(out, SpawnPoint{Monster: def, Level: s.LevelMin, X: s.X, Z: s.Z, Respawn: s.Respawn,
-					When: s.When, Region: s.Region})
+					When: s.When, Region: s.Region, Group: si})
 				continue
 			}
 			if s.Area {
@@ -448,7 +522,7 @@ func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 				depth := (s.Z + s.Radius - z) / math.Max(1e-9, 2*s.Radius) // 0 na borda norte, 1 na sul
 				level := s.LevelMin + int(math.Round(depth*float64(s.LevelMax-s.LevelMin)))
 				out = append(out, SpawnPoint{Monster: def, Level: level, X: x, Z: z, Respawn: s.Respawn,
-					When: s.When, Region: s.Region})
+					When: s.When, Region: s.Region, Group: si})
 				continue
 			}
 			// Raio uniforme em área (sqrt) para não amontoar perto do centro do anel; o ângulo
@@ -470,7 +544,7 @@ func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 			t := (r - s.RMin) / math.Max(1e-9, s.RMax-s.RMin)
 			level := s.LevelMin + int(math.Round(t*float64(s.LevelMax-s.LevelMin)))
 			out = append(out, SpawnPoint{Monster: def, Level: level, X: r * math.Cos(a), Z: r * math.Sin(a), Respawn: s.Respawn,
-				When: s.When, Region: s.Region})
+				When: s.When, Region: s.Region, Group: si})
 		}
 	}
 	return out

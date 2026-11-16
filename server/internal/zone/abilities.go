@@ -42,6 +42,10 @@ type telegraph struct {
 	mult    float64
 	hitID   uint32
 	effect  *game.EffectDef
+	// posthumous: o golpe cai mesmo com o monstro morto (a explosão de quem explode ao
+	// morrer). after: roda depois do golpe (o explosivo que explodiu morre).
+	posthumous bool
+	after      func()
 }
 
 // aim aponta o cone ou a linha de t.pos para o ponto.
@@ -263,9 +267,10 @@ func (z *Zone) updateTelegraphs() {
 		return
 	}
 	keep := z.telegraphs[:0]
+	var afters []func()
 	for _, t := range z.telegraphs {
 		src := z.monsters[t.src]
-		if src == nil || src.dead || src.mon.abilGen != t.gen {
+		if src == nil || (src.dead && !t.posthumous) || src.mon.abilGen != t.gen {
 			ev := z.telegraphPB(t, 0)
 			ev.Cancelled = true
 			z.frame.telegraphs = append(z.frame.telegraphs, ev)
@@ -281,9 +286,16 @@ func (z *Zone) updateTelegraphs() {
 			continue
 		}
 		z.resolveTelegraph(src, t)
+		if t.after != nil {
+			afters = append(afters, t.after)
+		}
 	}
 	clear(z.telegraphs[len(keep):])
 	z.telegraphs = keep
+	// Depois da lista arrumada: o que roda aqui (a morte do explosivo) pode criar avisos.
+	for _, fn := range afters {
+		fn()
+	}
 }
 
 // resolveTelegraph: o golpe cai em todos os jogadores dentro da forma e fora da zona segura
@@ -324,7 +336,7 @@ func (z *Zone) devWarnings(p *entity) {
 	var src *entity
 	best := aoiRadius - 10
 	for _, m := range z.monsters {
-		if d := dist(m.pos, p.pos); !m.dead && !m.mon.hidden && d < best {
+		if d := dist(m.pos, p.pos); !m.dead && !m.mon.unseen() && d < best {
 			src, best = m, d
 		}
 	}
