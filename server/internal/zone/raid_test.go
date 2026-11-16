@@ -280,7 +280,7 @@ func TestRaidRewardsSplitByDamage(t *testing.T) {
 	z.kill(m, a1)
 	z.tickFor(0.1)
 
-	full := float64(game.MonsterXP(m.mon.def, m.level, 18)) * partyBonus[1]
+	full := float64(game.MonsterXP(m.mon.def, m.level, 18)) * game.PartyXPBonus(2)
 	for _, c := range []struct {
 		p     *entity
 		share float64

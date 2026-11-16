@@ -8961,9 +8961,16 @@ func (x *PartyMember) GetMap() string {
 
 // Seu grupo (members vazio = sem grupo).
 type PartyState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	LeaderId      uint32                 `protobuf:"varint,1,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"`
-	Members       []*PartyMember         `protobuf:"bytes,2,rep,name=members,proto3" json:"members,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	LeaderId uint32                 `protobuf:"varint,1,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"`
+	Members  []*PartyMember         `protobuf:"bytes,2,rep,name=members,proto3" json:"members,omitempty"`
+	// XP do grupo vista por você (tunnel#151), atualizada 1×/s. No abate contam os membros
+	// vivos, neste mapa, a até 40 m do monstro e que ajudaram (dano, cura ou buff) nos
+	// últimos 30 s; a janela mostra só pela proximidade de você.
+	XpNear        uint32 `protobuf:"varint,3,opt,name=xp_near,json=xpNear,proto3" json:"xp_near,omitempty"`                    // membros vivos neste mapa a até 40 m de você (você incluído; 0 = você morto)
+	XpBonusPct    uint32 `protobuf:"varint,4,opt,name=xp_bonus_pct,json=xpBonusPct,proto3" json:"xp_bonus_pct,omitempty"`      // bônus na XP total do abate com eles (+10% por membro além do primeiro)
+	XpLevelGap    uint32 `protobuf:"varint,5,opt,name=xp_level_gap,json=xpLevelGap,proto3" json:"xp_level_gap,omitempty"`      // diferença entre o maior e o menor nível deles
+	XpGapCutPct   uint32 `protobuf:"varint,6,opt,name=xp_gap_cut_pct,json=xpGapCutPct,proto3" json:"xp_gap_cut_pct,omitempty"` // quanto essa diferença corta da XP do grupo (0 = nada; 50 = metade)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9010,6 +9017,34 @@ func (x *PartyState) GetMembers() []*PartyMember {
 		return x.Members
 	}
 	return nil
+}
+
+func (x *PartyState) GetXpNear() uint32 {
+	if x != nil {
+		return x.XpNear
+	}
+	return 0
+}
+
+func (x *PartyState) GetXpBonusPct() uint32 {
+	if x != nil {
+		return x.XpBonusPct
+	}
+	return 0
+}
+
+func (x *PartyState) GetXpLevelGap() uint32 {
+	if x != nil {
+		return x.XpLevelGap
+	}
+	return 0
+}
+
+func (x *PartyState) GetXpGapCutPct() uint32 {
+	if x != nil {
+		return x.XpGapCutPct
+	}
+	return 0
 }
 
 type ClanMember struct {
@@ -15798,11 +15833,17 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x01z\x18\n" +
 	" \x01(\x02R\x01z\x12\x12\n" +
 	"\x04dead\x18\v \x01(\bR\x04dead\x12\x10\n" +
-	"\x03map\x18\f \x01(\tR\x03map\"[\n" +
+	"\x03map\x18\f \x01(\tR\x03map\"\xdd\x01\n" +
 	"\n" +
 	"PartyState\x12\x1b\n" +
 	"\tleader_id\x18\x01 \x01(\rR\bleaderId\x120\n" +
-	"\amembers\x18\x02 \x03(\v2\x16.erevia.v1.PartyMemberR\amembers\"\xb0\x01\n" +
+	"\amembers\x18\x02 \x03(\v2\x16.erevia.v1.PartyMemberR\amembers\x12\x17\n" +
+	"\axp_near\x18\x03 \x01(\rR\x06xpNear\x12 \n" +
+	"\fxp_bonus_pct\x18\x04 \x01(\rR\n" +
+	"xpBonusPct\x12 \n" +
+	"\fxp_level_gap\x18\x05 \x01(\rR\n" +
+	"xpLevelGap\x12#\n" +
+	"\x0exp_gap_cut_pct\x18\x06 \x01(\rR\vxpGapCutPct\"\xb0\x01\n" +
 	"\n" +
 	"ClanMember\x12!\n" +
 	"\fcharacter_id\x18\x01 \x01(\rR\vcharacterId\x12\x12\n" +

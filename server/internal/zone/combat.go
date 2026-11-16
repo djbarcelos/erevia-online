@@ -245,6 +245,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			for _, p := range z.players {
 				if p != src && !p.dead && z.allies(src, p) && dist(p.pos, src.pos) <= s.AllyRadius {
 					z.applyEffect(src, p, def)
+					z.markHelp(src) // buff em alguém do grupo
 				}
 			}
 		}
@@ -302,6 +303,9 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 		return
 	}
 	z.onPvPHit(src, dst)
+	if dst.mon != nil && src.pl != nil {
+		z.markHelp(src) // provocar ou enfraquecer também é ajudar o grupo
+	}
 	landed := s.Mult.At(rank) <= 0 // sem dano: o efeito sempre pega
 	if mult := s.Mult.At(rank); mult > 0 {
 		if s.ExecuteBelow > 0 && dst.hp < dst.stats.MaxHP*s.ExecuteBelow {
@@ -387,6 +391,7 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 	src.lastCombat, dst.lastCombat = z.now, z.now
 
 	if dst.mon != nil && src.pl != nil {
+		z.markHelp(src) // conta para a XP do grupo (party.go)
 		dst.mon.hate[src.id] += math.Max(1, hit.Damage)
 		dst.mon.returning = false
 	}
@@ -472,6 +477,10 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 	}
 	if dst.mon != nil && dst.mon.invader {
 		z.invasionCredit(src, math.Min(dmg, dst.hp))
+	}
+	if dst.mon != nil && src.pl != nil {
+		dst.mon.addDamage(src.id, math.Min(dmg, dst.hp)) // crédito do abate (party.go)
+		z.markHelp(src)
 	}
 	dst.hp -= dmg
 	if dst.hp <= 0 {

@@ -74,6 +74,7 @@ import { buildCharacter } from "./ui/windows/character";
 import { buildSkills } from "./ui/windows/skills";
 import { buildMastery, skillsWithMastery, type SkillsTab } from "./ui/windows/mastery";
 import { buildParty } from "./ui/windows/party";
+import { PARTY_XP_RANGE } from "./ui/party-xp";
 import { buildClan } from "./ui/windows/clan";
 import { buildSocial, type SocialTab } from "./ui/windows/social";
 import { AuctionState, buildAuction, type AuctionTab } from "./ui/windows/auction";
@@ -312,7 +313,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const canInviteParty = (id: number) =>
     !inParty(id) && (party.members.length === 0 || party.leaderId === welcome.yourId) && party.members.length < 6;
   const inviteParty = (name: string) => conn.partyCmd(PartyCmdKind.PARTY_CMD_INVITE, name);
-  const PARTY_NEAR = 30;
+  const PARTY_NEAR = PARTY_XP_RANGE; // quem conta para a XP do grupo
 
   // ---------- Clã ----------
   let clan: ClanState = welcome.clan ?? create(ClanStateSchema, {});

@@ -11,9 +11,8 @@ import (
 // Bestiário (game/bestiary.go): a contagem de abates por tipo de monstro, os marcos, as
 // famílias e o bônus de dano do último marco.
 //
-// Quem conta o abate: os mesmos que levam a XP do monstro (creditGroup + eligible: o grupo,
-// ou o jogador sozinho, que causou mais dano, vivos a até partyRange e no máximo
-// partyLevelGap níveis abaixo do mais alto), exatamente como as missões e as conquistas de
+// Quem conta o abate: os mesmos que levam a XP do monstro (creditKill em party.go: do grupo,
+// ou do jogador sozinho, que causou mais dano, os vivos a até partyRange que ajudaram), exatamente como as missões e as conquistas de
 // abate. Cada um conta 1 abate inteiro (não uma fração): o bestiário mede o que o jogador
 // enfrentou, e dividir faria a caça em grupo valer menos que a sozinho. No raid boss, conta
 // para todo mundo que causou dano e ainda está na zona (como a conquista do raid), não só

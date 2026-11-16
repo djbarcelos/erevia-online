@@ -411,7 +411,7 @@ func (z *Zone) raidKilled(m *entity) {
 			}
 			continue
 		}
-		takers := z.eligible(members, m.pos)
+		takers := z.raidTakers(members, m.pos)
 		for _, p := range takers {
 			z.systemAfterFlush(p, fmt.Sprintf("Seu lado causou %.0f%% do dano em %s.", share*100, m.name))
 		}
@@ -440,7 +440,7 @@ func (z *Zone) raidKilled(m *entity) {
 	r.spawnAt = wall.Add(time.Duration(delay * float64(time.Second)))
 	r.warned = false
 	z.setWindow(m, wall, r.spawnAt)
-	ms.hate = map[uint32]float64{}
+	ms.forget()
 	ms.corpseEnd = z.now + corpseSeconds*2
 	z.saveBoss(BossData{ID: def.ID, RespawnAt: r.spawnAt, KilledAt: wall, TopName: topName})
 	z.log.Info("raid boss killed", "boss", def.ID, "top", topName, "respawn_at", r.spawnAt)

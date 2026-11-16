@@ -179,6 +179,16 @@ type regime struct {
 }
 
 func huntRegime(b *Build, h Hunt, def *game.MonsterDef, level int, night, respawnCap bool) regime {
+	minCycle := 0.0
+	if respawnCap {
+		minCycle = h.MinCycle()
+	}
+	return huntRegimeCap(b, h, def, level, night, minCycle)
+}
+
+// huntRegimeCap: huntRegime com o menor intervalo entre abates dado (0 = sem limite; o
+// modo grupo divide a região entre mais caçadores).
+func huntRegimeCap(b *Build, h Hunt, def *game.MonsterDef, level int, night bool, minCycle float64) regime {
 	f := newFight(b, night, true)
 	travel := h.TravelSeconds(b.Stats.Speed)
 	var r regime
@@ -192,8 +202,8 @@ func huntRegime(b *Build, h Hunt, def *game.MonsterDef, level int, night, respaw
 			return r
 		}
 		down := math.Max(travel, f.restNeeded())
-		if respawnCap && out.Time+down < h.MinCycle() {
-			down = h.MinCycle() - out.Time
+		if out.Time+down < minCycle {
+			down = minCycle - out.Time
 			r.respawnLimited = true
 		}
 		if k >= warmupKills {

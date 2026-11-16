@@ -238,7 +238,7 @@ func (z *Zone) dieQuietly(g *entity) {
 	g.effects = nil
 	g.clearAction()
 	g.stopMoving()
-	g.mon.hate = map[uint32]float64{}
+	g.mon.forget()
 	g.mon.corpseEnd = z.now + corpseSeconds
 	z.frame.deaths = append(z.frame.deaths, g.id)
 	z.forgetTarget(g.id)

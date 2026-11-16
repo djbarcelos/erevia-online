@@ -22,7 +22,8 @@ Tudo em `server/internal/game/formulas.go`:
   karma, o dobro. No 40, a morte tira os mesmos 2% da barra de Maestria.
 - **Extras:** noite (+25%, um quarto do ciclo de 40 min), XP em dobro (sábado e domingo
   no fuso de Brasília, ou por GM com `/evento xp2`), grupo (a XP do monstro sobe 10% por
-  membro além do primeiro e é dividida pelo nível de cada um) e a invasão da cidade. O XP
+  membro além do primeiro e é dividida pelo nível de cada um; ver "XP em grupo" abaixo) e
+  a invasão da cidade. O XP
   em dobro continua igual: ele é proporcional, então com a curva 40× mais longa o fim de
   semana encurta o mesmo tanto (quem joga todo dia o mesmo tanto ganha ~30% a mais na
   semana), e é o que traz gente nos sábados.
@@ -183,6 +184,37 @@ Na conta, as missões não custam tempo (os abates delas já estão na caça), p
 XP de monstro chega perto de cortar o tempo pela metade. Nos primeiros níveis o estoque é
 pequeno e acaba na sessão; do 20 em diante 1 h de caça não esgota os ~35% do teto que
 enchem num dia.
+
+## XP em grupo (tunnel#151)
+
+"Sozinho até o meio, junto no topo": caçar em grupo rende mais por hora a cada membro, sem
+virar um jeito de um nível alto carregar um baixo. As regras (`game/party.go` e o fim de
+`zone/party.go`):
+
+- **Quem leva o abate:** o lado que causou mais dano. O grupo soma o dano dos membros; quem
+  está sem grupo conta sozinho. O último golpe não importa. Esse lado leva a XP, o saque
+  reservado (para quem dele mais bateu; o grupo inteiro pode pegar) e o crédito de missão,
+  contrato, conquista e bestiário. Se ninguém do lado conta (todos longe ou mortos), o lado
+  seguinte leva.
+- **Quem conta:** vivo, no mesmo mapa (online), a até **40 m** do monstro e que **ajudou**:
+  deu dano neste monstro, ou nos últimos **30 s** atacou qualquer monstro (golpe, veneno ou
+  skill; provocar e enfraquecer contam) ou buffou alguém (skill com alcance de aliados,
+  estandarte). As auras passivas (Coragem) não contam.
+- **Bônus:** a XP total sobe **+10% por membro que conta além do primeiro** (+50% com 6) e
+  é dividida pelo nível de cada um. O `MonsterXP` usa o maior nível dos que contam.
+- **Diferença de nível:** com mais de **8** níveis entre o maior e o menor dos que contam,
+  a XP do grupo inteiro cai: 9 níveis = 50%, 10 = 40%, 11 = 30%, 12 = 20%, 13 ou mais =
+  10%. Quem não ajudou não conta, então também não derruba a XP de quem caçou.
+- **Extras por membro:** cada um aplica na própria parte a vitalidade, a recuperação, o
+  Duas Sendas e, no nível máximo, a Maestria; a noite e a XP em dobro entram no total. Na
+  telemetria a parte vai como `party` (`xptally.go`).
+- **Raid boss:** regra própria (`raid.go`): XP pela fatia de dano de cada lado (mínimo 5%),
+  e de cada lado ficam sem XP os que estão mais de 9 níveis abaixo do mais alto. O corte do
+  grupo inteiro não vale lá, porque o lado pode ser um clã inteiro.
+
+Os números (grupo de 3 contra sozinho, carregar e o mínimo de 10% do monstro fraco) estão
+em `docs/balanceamento-2026-11.md`, seção "XP em grupo". A tabela teórica acima continua
+sendo a de quem caça sozinho.
 
 ## Conversão da XP salva
 
