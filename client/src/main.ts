@@ -103,6 +103,7 @@ import { DayNight, isNight, WorldClock } from "./world/daynight";
 import { configureKtx2 } from "./world/assets";
 import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
+import { clearRadius, heightAt } from "./world/terrain";
 import { Collision, loadWorldData, worldBounds } from "./world/world-data";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -671,7 +672,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     const w = world.engine.getRenderWidth();
     const h = world.engine.getRenderHeight();
     if (!w || !h) return null;
-    projIn.set(x, (entities.rootOf(welcome.yourId)?.position.y ?? 0) + 1, z);
+    projIn.set(x, heightAt(x, z) + 1, z);
     Vector3.TransformCoordinatesToRef(projIn, world.camera.getViewMatrix(), projView);
     Vector3.ProjectToRef(projIn, Matrix.IdentityReadOnly, world.scene.getTransformMatrix(), world.camera.viewport.toGlobal(w, h), projOut);
     return { x: rect.left + (projOut.x * rect.width) / w, y: rect.top + (projOut.y * rect.height) / h, front: projView.z > 0 };
@@ -1399,7 +1400,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   window.addEventListener("keydown", onKey);
   window.addEventListener("keyup", onKeyUp);
 
-  setupInput(world.scene, world.ground, {
+  setupInput(world.scene, {
     onGround: (x, z) => {
       questGo.onPlayerControl(); // clicar no chão: o jogador assumiu
       hud.setQueued(0); // andar cancela a skill na fila
@@ -1444,6 +1445,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // A câmera segue o jogador local (ou o ponto da medição de FPS, ?bench=1).
   let benchFocus: Vector3 | null = null;
+  // Zoom que o jogador pediu: a câmera encosta no chão (colina) e encurta, mas volta a este raio.
+  let wantRadius = world.camera.radius;
+  let appliedRadius = wantRadius;
   world.scene.onBeforeRenderObservable.add(() => {
     const dt = Math.min(world.engine.getDeltaTime() / 1000, 0.1);
     entities.setLatency(conn.ping, welcome.tickRate);
@@ -1453,9 +1457,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     const focus = benchFocus ?? pos;
     if (focus) {
       world.camera.target.x = focus.x;
-      world.camera.target.y = 1.4;
+      world.camera.target.y = focus.y + 1.4;
       world.camera.target.z = focus.z;
       world.followShadows(focus.x, focus.z);
+      if (world.field.hilly) {
+        // A câmera nunca atravessa uma colina: encurta o raio até ficar acima do chão.
+        const cam = world.camera;
+        if (Math.abs(cam.radius - appliedRadius) > 1e-4) wantRadius = cam.radius; // o jogador mexeu no zoom
+        cam.radius = clearRadius(world.field, focus.x, cam.target.y, focus.z, cam.alpha, cam.beta, wantRadius, cam.lowerRadiusLimit ?? 5);
+        appliedRadius = cam.radius;
+      }
     }
     dayNight.update(clock.phase(), focus);
     // Árvores que tapam o jogador ou o alvo ficam translúcidas. Na medição de FPS, as que tapam
@@ -1514,7 +1525,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         regions,
         bounds: worldBounds(worldData),
         setTime: (p) => clock.setFixed(p),
-        setFocus: (p) => (benchFocus = p ? new Vector3(p.x, 0, p.z) : null),
+        setFocus: (p) => (benchFocus = p ? new Vector3(p.x, heightAt(p.x, p.z), p.z) : null),
         forEachMarker: entities.forEachMarker.bind(entities),
         forEachRoot: entities.forEachRoot.bind(entities),
         settle: () => env?.fader.settle(),

@@ -15,6 +15,7 @@ import { ItemKind, type GroundItem } from "../gen/erevia/v1/game_pb";
 import { GRADE_COLOR, itemLabel, type ItemStore } from "../ui/items";
 import { resourceFailed } from "../net/invariants";
 import type { PickAreas } from "./pick";
+import { heightAt } from "./terrain";
 
 /** Até que distância o nome do item no chão aparece (m). */
 const LABEL_DISTANCE = 22;
@@ -122,7 +123,7 @@ export class GroundLoot {
       if (!info) continue;
       const gold = info.kind === ItemKind.GOLD;
       const root = new TransformNode(`loot${it.id}`, this.scene);
-      root.position.set(it.x, 0, it.z);
+      root.position.set(it.x, heightAt(it.x, it.z), it.z);
       const sack = (gold ? this.goldSack : this.sack).createInstance(`loot-sack${it.id}`);
       sack.parent = root;
       sack.rotation.y = Math.random() * Math.PI * 2;

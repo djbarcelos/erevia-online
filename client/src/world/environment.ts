@@ -12,6 +12,8 @@ import {
   VertexData,
 } from "@babylonjs/core";
 import { monolithProtos } from "./teleport-stone";
+import { heightAt, terrain } from "./terrain";
+import { setWindKind, type WindKind } from "./wind";
 import type { WorldData } from "./world-data";
 
 /** Tipos que projetam sombra (grama, arbustos e adereços pequenos não, para economizar). */
@@ -20,6 +22,14 @@ const CASTS_SHADOW = /^(tree_|rock_3|rock_1_[hk]|rock_2_f|monolith|tavern|church
 const RECEIVES_SHADOW = /^(tavern|church|blacksmith|market|home_|windmill|tower_|wall_|well|monolith)/;
 /** Árvores ficam translúcidas quando tapam o jogador ou o alvo. */
 const FADES = /^tree_/;
+
+/** Itens que balançam ao vento (vertex shader, wind.ts): grama, arbustos e árvores. */
+function windKindOf(kind: string): WindKind {
+  if (kind.startsWith("grass_")) return "grass";
+  if (kind.startsWith("bush_")) return "bush";
+  if (kind.startsWith("tree_")) return "tree";
+  return "off";
+}
 
 export interface Environment {
   drawn: number;
@@ -56,7 +66,11 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
 
   // Agrupa as posições por tipo e cria um buffer de matrizes para cada um.
   const byKind = new Map<string, WorldData["objects"]>();
+  // O lago fica na beira leste do mapa: o que a geração pôs em cima dele (montanhas da borda) some.
+  const field = terrain();
+  const lake = field.lake;
   for (const o of world.objects) {
+    if (lake && field.lakeU(o.x, o.z) < 1.5 && heightAt(o.x, o.z) < lake.level + 0.45) continue;
     let list = byKind.get(o.k);
     if (!list) byKind.set(o.k, (list = []));
     list.push(o);
@@ -76,6 +90,13 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
     }
     // Antes das thin instances (que guardam buffers na geometria): molde limpo para as
     // cópias translúcidas e o tamanho do item, para estimar a copa.
+    // Vento: o material é copiado por tipo (o glTF reparte um material entre vários itens).
+    const wind = windKindOf(kind);
+    if (wind !== "off" && mesh.material) {
+      mesh.refreshBoundingInfo();
+      mesh.material = mesh.material.clone(`${mesh.material.name}:${kind}`);
+      setWindKind(mesh.material, wind, Math.max(mesh.getBoundingInfo().boundingBox.maximum.y, 0.05));
+    }
     const fades = FADES.test(kind);
     if (fades) fader.addKind(kind, mesh);
 
@@ -83,7 +104,7 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
     list.forEach((o, i) => {
       scale.set(o.s[0], o.s[1], o.s[2]);
       Quaternion.RotationYawPitchRollToRef(o.r, 0, 0, rot);
-      pos.set(o.x, 0, o.z);
+      pos.set(o.x, heightAt(o.x, o.z), o.z);
       Matrix.ComposeToRef(scale, rot, pos, m);
       m.copyToArray(buf, i * 16);
       if (fades) fader.addTree(kind, i, o, m);
@@ -186,7 +207,7 @@ export class TreeFader {
     const h = info.height * o.s[1];
     const w = info.width * Math.max(o.s[0], o.s[2]);
     // Copa: esfera um pouco acima do meio da árvore, sem passar da metade da largura.
-    const tree: Tree = { kind: info, index, matrix: matrix.clone(), cx: o.x, cy: h * 0.62, cz: o.z, r: Math.min(w / 2, h * 0.4) };
+    const tree: Tree = { kind: info, index, matrix: matrix.clone(), cx: o.x, cy: heightAt(o.x, o.z) + h * 0.62, cz: o.z, r: Math.min(w / 2, h * 0.4) };
     const key = cellKey(Math.floor(o.x / CELL), Math.floor(o.z / CELL));
     let list = this.grid.get(key);
     if (!list) this.grid.set(key, (list = []));

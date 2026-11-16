@@ -14,6 +14,9 @@ import type { Region } from "../ui/regions";
 import { mulberry32 } from "./map-painter";
 import { RenderQuality } from "./render";
 import type { WorldScene } from "./scene";
+import { setCloudSky, setCloudTime } from "./sky-clouds";
+import { setWaterSky, setWaterTime } from "./water";
+import { setWindTime } from "./wind";
 import { Torches } from "./torches";
 import type { WorldData } from "./world-data";
 
@@ -351,10 +354,17 @@ export class DayNight {
     this._night = k.night;
 
     // Céu (redesenhado só quando a fase muda o bastante).
+    let skyChanged = false;
     if (Math.abs(phase - this.lastSky) > 0.0015) {
       this.lastSky = phase;
       this.paintSky(k);
+      skyChanged = true;
     }
+    // Tempo do vento, da água e das nuvens (no vertex/fragment shader; nada anima em CPU).
+    const seconds = performance.now() / 1000;
+    setWindTime(seconds);
+    setWaterTime(seconds);
+    setCloudTime(seconds);
     scene.ambientColor = hex(k.ambient);
     hemi.intensity = k.hemi;
     // Névoa e luz do céu: a hora, misturada com a cor da região (render.ts).
@@ -371,6 +381,7 @@ export class DayNight {
 
     // Sol de dia, lua à noite. Perto do horizonte a luz some, então a troca não aparece.
     const { elevation, moon } = bodyDir(phase, this.dir);
+    if (skyChanged) this.paintSkyFx(k);
     const up = smooth(elevation / 0.22);
     const lightDir = new Vector3(-this.dir.x, -Math.max(this.dir.y, 0.3), -this.dir.z).normalize();
     sun.direction.copyFrom(lightDir);
@@ -409,6 +420,22 @@ export class DayNight {
         if (typeof lit.maxSimultaneousLights === "number" && lit.maxSimultaneousLights < 6) lit.maxSimultaneousLights = 6;
       }
     }
+  }
+
+  /**
+   * Cores do céu da hora para a água (reflexo falso) e para as nuvens (topo na cor da luz,
+   * parte de baixo na cor do céu). Só quando a fase muda o bastante, como o degradê.
+   */
+  private paintSkyFx(k: Key): void {
+    const hor = hex(k.horizon);
+    const mid = hex(k.mid);
+    const zen = hex(k.zenith);
+    const light = hex(k.lightColor);
+    setWaterSky(Color3.Lerp(hor, mid, 0.25), Color3.Lerp(mid, zen, 0.6), k.night);
+    const lit = Color3.Lerp(Color3.White(), light, 0.4).scale(1.05 - 0.55 * k.night);
+    const shade = Color3.Lerp(mid, hor, 0.3).scale(0.6);
+    const len = Math.hypot(this.dir.x, this.dir.z) || 1;
+    setCloudSky(lit, shade, k.night, this.dir.x / len, this.dir.z / len);
   }
 
   private paintSky(k: Key): void {

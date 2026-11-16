@@ -33,6 +33,7 @@ import { HitFlash } from "./hit-flash";
 import { DamageNumbers, type NumberKind } from "./numbers";
 import { createFxTextures, type FxTextures } from "./textures";
 import { WeaponTrails } from "./trail";
+import { groundClearance, heightAt, terrain } from "../terrain";
 
 export type { NumberKind } from "./numbers";
 
@@ -393,7 +394,9 @@ export class Fx {
     const m = this.quad("ground");
     m.material = this.mat(color, tex, o.additive ?? true, o.alpha ?? 1);
     if (o.parent) m.parent = o.parent;
-    m.position.set(at.x, o.y ?? 0.06, at.z);
+    // Sem pai, a marca fica na altura do chão e sobe o que as colinas em volta pedirem.
+    if (o.parent) m.position.set(at.x, o.y ?? 0.06, at.z);
+    else m.position.set(at.x, heightAt(at.x, at.z) + (o.y ?? 0.06) + groundClearance(terrain(), at.x, at.z, Math.min(o.size[0] / 2, 6)), at.z);
     m.rotation.y = Math.random() * Math.PI * 2;
     m.scaling.set(o.size[0], 1, o.size[0]);
     m.visibility = 0;
@@ -771,7 +774,7 @@ export class Fx {
     if (!this.mine && (!this.budget.preset.marksOthers || !this.budget.relaxed)) return;
     const colors = skillFxColors(fx);
     const color = colors ? Color3.FromHexString(colors.mark) : new Color3(1, 0.85, 0.5);
-    const ground = new Vector3(at.x, 0, at.z);
+    const ground = new Vector3(at.x, heightAt(at.x, at.z), at.z);
     const d = radius * 2;
     // Borda no raio real (o anel da textura fica a ~93% do quadrado).
     this.decal(ground, this.tex.ring, color, { size: [d * 0.9, d * 1.07], dur: 0.9, fadeIn: 0.05, y: 0.055 });
@@ -969,7 +972,7 @@ export class Fx {
 
   /** Nova de Gelo: anel de gelo no raio real, cristais brotando do chão e neve. */
   iceNova(at: Vector3, radius: number): void {
-    const ground = new Vector3(at.x, 0, at.z);
+    const ground = new Vector3(at.x, heightAt(at.x, at.z), at.z);
     this.flash(ground.add(new Vector3(0, 1, 0)), 2.4, new Color3(0.4, 0.65, 0.9), 0.25);
     this.lightFlash(ground.add(new Vector3(0, 1.5, 0)), new Color3(0.55, 0.8, 1), 2.2, 0.5);
     // Anel principal que corre até o raio, mais um anel de onda.
@@ -1008,7 +1011,10 @@ export class Fx {
       const shard = MeshBuilder.CreateCylinder("fx-shard", { height: h, diameterTop: 0, diameterBottom: rnd(0.25, 0.45), tessellation: 5 }, this.scene);
       shard.material = iceMat;
       shard.isPickable = false;
-      shard.position.set(ground.x + Math.cos(a) * r, 0, ground.z + Math.sin(a) * r);
+      const sx = ground.x + Math.cos(a) * r;
+      const sz = ground.z + Math.sin(a) * r;
+      const sy = heightAt(sx, sz);
+      shard.position.set(sx, sy, sz);
       shard.rotation.set(rnd(-0.35, 0.35), rnd(0, Math.PI), rnd(-0.35, 0.35));
       this.addGlow(shard);
       const delay = (r / radius) * 0.18;
@@ -1018,7 +1024,7 @@ export class Fx {
           const grow = Math.min(1, k / 0.12);
           const fade = k > 0.7 ? 1 - (k - 0.7) / 0.35 : 1;
           shard.scaling.set(1, Math.max(0.001, grow), 1);
-          shard.position.y = (h / 2) * grow - 0.05;
+          shard.position.y = sy + (h / 2) * grow - 0.05;
           shard.visibility = Math.max(0, fade);
           return k < 1.05;
         },
@@ -1057,7 +1063,7 @@ export class Fx {
       gravity: -8,
       stretched: true,
     });
-    const ground = new Vector3(at.x, 0, at.z);
+    const ground = new Vector3(at.x, heightAt(at.x, at.z), at.z);
     this.decal(ground, this.tex.ring, new Color3(0.75, 0.88, 1), { size: [0.3, 3.4], dur: 0.35 });
     this.burst(ground.add(new Vector3(0, 0.15, 0)), 14, {
       tex: this.tex.smoke,
@@ -1087,7 +1093,7 @@ export class Fx {
       gravity: -10,
       stretched: true,
     });
-    const ground = new Vector3(at.x, 0, at.z);
+    const ground = new Vector3(at.x, heightAt(at.x, at.z), at.z);
     this.decal(ground, this.tex.crack, new Color3(0.09, 0.06, 0.04), { size: [1.6, 2.3], dur: 2.4, additive: false });
     this.burst(ground.add(new Vector3(0, 0.2, 0)), 10, {
       tex: this.tex.smoke,
@@ -1300,7 +1306,7 @@ export class Fx {
 
   /** Pancada no chão (Corte Giratório, Rachar o Chão, Pisotear, Execução). */
   slam(at: Vector3, radius: number, color: Color3, mine: boolean, crack = true): void {
-    const ground = new Vector3(at.x, 0, at.z);
+    const ground = new Vector3(at.x, heightAt(at.x, at.z), at.z);
     if (crack) this.decal(ground, this.tex.crack, new Color3(0.25, 0.2, 0.18), { size: [radius * 1.2, radius * 1.6], dur: 1.6, additive: false });
     this.decal(ground, this.tex.ring, color, { size: [0.5, radius * 2.1], dur: 0.45 });
     this.burst(ground.add(new Vector3(0, 0.2, 0)), 26, {
@@ -1351,7 +1357,7 @@ export class Fx {
       onArrive: (p) => {
         this.fireExplosion(p);
         this.slam(p, radius + 1, new Color3(1, 0.45, 0.1), mine);
-        this.decal(new Vector3(p.x, 0, p.z), this.tex.scorch, new Color3(0.15, 0.1, 0.08), { size: [radius * 2, radius * 2.4], dur: 4, additive: false });
+        this.decal(new Vector3(p.x, heightAt(p.x, p.z), p.z), this.tex.scorch, new Color3(0.15, 0.1, 0.08), { size: [radius * 2, radius * 2.4], dur: 4, additive: false });
         this.lightFlash(p.add(new Vector3(0, 2, 0)), new Color3(1, 0.5, 0.2), 4, 0.6);
         if (mine) this.shake(0.16, 0.45);
       },
@@ -1414,7 +1420,7 @@ export class Fx {
 
   /** Frasco que estoura em veneno (Frasco Tóxico, Praga). */
   poisonSplash(at: Vector3, radius: number, color: Color3): void {
-    this.decal(new Vector3(at.x, 0, at.z), this.tex.scorch, color.scale(0.6), { size: [radius, radius * 1.6], dur: 2.5, additive: false });
+    this.decal(new Vector3(at.x, heightAt(at.x, at.z), at.z), this.tex.scorch, color.scale(0.6), { size: [radius, radius * 1.6], dur: 2.5, additive: false });
     this.burst(at, 30, {
       tex: this.tex.smoke,
       life: [0.6, 1.2],
@@ -1486,7 +1492,7 @@ export class Fx {
 
   /** O golpe do aviso caiu: ossos explodindo do chão (Onda/Chuva) ou a marca estourando. */
   telegraphImpact(at: Vector3, radius: number, color: Color3, kind: "wave" | "rain" | "mark", mine: boolean): void {
-    const ground = new Vector3(at.x, 0, at.z);
+    const ground = new Vector3(at.x, heightAt(at.x, at.z), at.z);
     if (kind === "rain") {
       // Uma lança de osso caindo do céu.
       this.orb(ground.add(new Vector3(-2, 16, -1.5)), ground, 0.45, {
@@ -1524,7 +1530,7 @@ export class Fx {
 
   /** Guardas Ossários saindo do chão. */
   summonRise(at: Vector3): void {
-    const ground = new Vector3(at.x, 0, at.z);
+    const ground = new Vector3(at.x, heightAt(at.x, at.z), at.z);
     this.decal(ground, this.tex.runes, new Color3(0.55, 0.25, 0.85), { size: [0.5, 2.6], dur: 1.6, spin: 2 });
     this.decal(ground, this.tex.crack, new Color3(0.2, 0.16, 0.14), { size: [1.4, 2], dur: 2.5, additive: false });
     this.burst(ground.add(new Vector3(0, 0.2, 0)), 30, {
@@ -1770,7 +1776,7 @@ export class Fx {
     m.material = this.mat(color, tex, true, 0.85);
     m.isPickable = false;
     m.parent = body.root;
-    m.position.y = 0.05;
+    m.position.y = 0.1;
     const s = size * body.scale;
     let fadeAt = -1;
     let stopRequested = false;
