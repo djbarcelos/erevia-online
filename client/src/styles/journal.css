@@ -252,3 +252,13 @@
 .is-touch .jr-body {
   padding-left: 12px;
 }
+
+/* Região da linha de história (tunnel#71) e o aviso das diárias. */
+.jr-tag.jr-region {
+  color: var(--muted);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.jr-group-note {
+  margin: 2px 0 4px;
+}

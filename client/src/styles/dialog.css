@@ -1,0 +1,66 @@
+/* ---------- Conversa com NPCs (ui/dialog.ts) ---------- */
+
+.shop-panel.dlg-panel {
+  width: 400px;
+  max-height: calc(100dvh - 150px);
+}
+
+.dlg-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.dlg-text {
+  margin: 2px 0 0;
+  padding: 9px 11px;
+  border-radius: 6px;
+  border-left: 3px solid var(--gold);
+  background: rgba(0, 0, 0, 0.3);
+  line-height: 1.45;
+  font-style: italic;
+  white-space: pre-line;
+}
+
+.dlg-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dlg-btn {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+}
+
+.dlg-quest {
+  display: grid;
+  gap: 4px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dlg-detail,
+.dlg-reward {
+  margin: 0 2px;
+  line-height: 1.35;
+}
+
+.dlg-detail {
+  color: var(--muted);
+}
+
+.dlg-reward {
+  color: var(--gold-hi);
+}
+
+@media (max-width: 767px), (max-height: 520px) {
+  .shop-panel.dlg-panel {
+    width: auto;
+  }
+}

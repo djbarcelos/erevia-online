@@ -25,6 +25,8 @@ export interface GoTarget {
   hunt: boolean;
   /** Nomes dos monstros que contam (vazio = qualquer). */
   monsters: string[];
+  /** Lugar para visitar (o passo conta quando o jogador entra no raio). */
+  spot?: boolean;
 }
 
 /** Uma Pedra de Teleporte e os destinos dela (preço = o de chegar lá, como no servidor). */
@@ -100,8 +102,10 @@ const TICK_MS = 250;
 
 const dist = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 
-/** Raio de chegada: a área de caça inteira; NPC, loja, pedra e portão com uma folga. */
+/** Raio de chegada: a área de caça inteira; um lugar para visitar, bem dentro do raio (o servidor
+ * confere 1×/s se o jogador está dentro); NPC, loja, pedra e portão com uma folga. */
 export function arriveRadius(t: GoTarget): number {
+  if (t.spot) return Math.max(1, t.radius * 0.6);
   return t.hunt ? Math.max(1, t.radius) : Math.max(t.radius, 3.5);
 }
 

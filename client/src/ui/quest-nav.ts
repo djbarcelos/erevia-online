@@ -319,6 +319,17 @@ export function drawQuestIcon(ctx: CanvasRenderingContext2D, kind: QuestPlaceKin
       ctx.lineTo(x + u * 0.75, y + u * 0.8);
       ctx.stroke();
       break;
+    case QuestPlaceKind.SPOT: // lugar para visitar: uma bandeira
+      ctx.lineWidth = Math.max(1.2, u * 0.26);
+      ctx.moveTo(x - u * 0.5, y + u * 0.9);
+      ctx.lineTo(x - u * 0.5, y - u * 0.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - u * 0.5, y - u * 0.9);
+      ctx.lineTo(x + u * 0.75, y - u * 0.45);
+      ctx.lineTo(x - u * 0.5, y);
+      ctx.fill();
+      break;
     default: // área de caça: espadas cruzadas viram um "x" simples
       ctx.lineWidth = Math.max(1.2, u * 0.3);
       ctx.moveTo(x - u * 0.7, y - u * 0.7);
