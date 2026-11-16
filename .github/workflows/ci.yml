@@ -92,8 +92,8 @@ jobs:
     # roteiro de e2e/tests no Chromium headless com WebGL por software (SwiftShader).
     name: Navegador (Playwright)
     runs-on: ubuntu-latest
-    # 15 min do roteiro + ~2 min da medição de FPS (e a segunda chance de cada um, no pior caso).
-    timeout-minutes: 20
+    # 15 min do roteiro + ~2 min da medição de FPS + ~1 min dos prints (e a segunda chance de cada um, no pior caso).
+    timeout-minutes: 24
     services:
       postgres:
         image: postgres:17
@@ -163,6 +163,17 @@ jobs:
         with:
           name: bench
           path: e2e/test-results/**/bench-*
+          if-no-files-found: ignore
+          retention-days: 14
+      # Prints das cenas fixas (praça de dia e de noite, Arredores, Vale): e2e/tests/shots.spec.ts.
+      # Sem comparação com base (o SwiftShader não é estável o bastante): são para olhar a olho
+      # no PR, quando uma mudança de arte ou de luz aparecer neles.
+      - name: Prints do cenário
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prints
+          path: e2e/test-results/**/shot-*
           if-no-files-found: ignore
           retention-days: 14
       - name: Log do servidor
