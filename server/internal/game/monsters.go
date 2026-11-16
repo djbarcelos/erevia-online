@@ -76,6 +76,13 @@ var (
 		{"scroll_ench_armor", 0.02, 1, 1}, {"scroll_ench_weapon", 0.01, 1, 1},
 		{"scroll_ench_armor_b", 0.004, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
 
+	// Graus (tiers.go): os épicos de cada grau saem dos chefes. O Senhor dos Ossos (22) deixa os
+	// do C (e, menos, os do D); o Ozrhal, os do C e do B e as joias lendárias do B. A chance é
+	// por peça: ~24 peças × 1,5% ≈ uma épica a cada 3 abates.
+	lootBossLord = append(append(slices.Clone(lootBoss), tierLoot(TierC, GradeEpic, 0.015)...), tierLoot(TierD, GradeEpic, 0.005)...)
+	lootOzrhal   = append(append(append(append(slices.Clone(lootRaid), bridgeLootGrade(35, GradeRare, 0.15)...),
+		tierLoot(TierC, GradeEpic, 0.01)...), tierLoot(TierB, GradeEpic, 0.02)...), tierLoot(TierB, GradeLegendary, 0.1)...)
+
 	// Elites do 30 ao 40 (conteúdo provisório, tunnel#149): materiais melhores e o
 	// equipamento ponte (bridge.go). A chance é por peça: com 8 peças (4 classes × arma e
 	// armadura), cai ~1 peça a cada 30 a 40 abates.
@@ -130,7 +137,7 @@ var Monsters = map[string]*MonsterDef{
 			Delay: 1.2, Cooldown: 10, First: 4, Mult: 1.5, Effect: &EffectDef{Kind: EffectSlow, Duration: 2, Value: 0.3}}}},
 	"bone_lord": {ID: "bone_lord", Name: "Senhor dos Ossos", Model: "skeleton_warrior",
 		HP: 400, HPLvl: 60, Atk: 14, AtkLv: 3, Def: 20, DefLv: 4, Range: 2.8, Interval: 1.8, Speed: 4, Aggressive: true, XPBase: 120, Scale: 1.6, Boss: true,
-		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootBoss,
+		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootBossLord,
 		// Anel de ossos: quem está colado nele escapa; quem bate de longe precisa entrar ou
 		// sair. ~25% do dano da luta (6,7 golpes de 1,8 s + 2,2 a cada 12 s).
 		Abilities: []AbilityDef{{ID: "bone_ring", Shape: ShapeDonut, Target: AimSelf, Inner: 3.5, Radius: 9,
@@ -142,7 +149,7 @@ var Monsters = map[string]*MonsterDef{
 		Aggressive: true, XPBase: 260, Scale: 2.6, BodyRadius: 1.2, Boss: true, Raid: true,
 		Immune:      []EffectKind{EffectStun, EffectRoot, EffectSlow, EffectBlind},
 		LeashRadius: 30, RespawnMin: 3 * 3600, RespawnMax: 4 * 3600,
-		GoldChance: 1, GoldMin: 120, GoldMax: 160, Loot: append(slices.Clone(lootRaid), bridgeLootGrade(35, GradeRare, 0.15)...),
+		GoldChance: 1, GoldMin: 120, GoldMax: 160, Loot: lootOzrhal,
 		Abilities: raidAbilities},
 	// Invocação do Ozrhal: não renasce e não deixa equipamento.
 	"bone_guard": {ID: "bone_guard", Name: "Guarda Ossário", Model: "skeleton_warrior",

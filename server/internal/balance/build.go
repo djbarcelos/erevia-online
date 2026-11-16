@@ -182,14 +182,26 @@ func Ranks(class, spec string, level int) map[uint32]int {
 
 // Suposição do equipamento típico: em cada encaixe, a melhor peça comum ou boa (as que a
 // loja vende) que a classe pode usar no nível, pelo poder do item. Raras, épicas e
-// lendárias são drop ou criação e ficam fora da conta. Do 30 em diante entra também a arma
-// e a armadura ponte comum (game/bridge.go): caem das elites do 30 ao 40 a cada ~35 abates,
-// e é com elas que se caça ali; a ponte rara fica fora, como as outras raras.
+// lendárias são drop de chefe ou criação e ficam fora da conta. Entram também as peças
+// comuns dos graus (game/tiers.go, tunnel#153: caem dos monstros da faixa, ~1 a cada 50
+// abates, e as do D saem do Ferreiro) e, do 30 em diante, a arma e a armadura ponte comum
+// (game/bridge.go: caem das elites do 30 ao 40 a cada ~35 abates); a ponte rara fica fora,
+// como as outras raras. Das peças de conjunto, só as do peso da classe (typicalWeight): o
+// conjunto vem inteiro, com o bônus.
 var typicalGrades = []game.Grade{game.GradeCommon, game.GradeGood}
+
+// typicalWeight: o peso de armadura do jogador típico de cada classe (o conjunto que combina
+// com ela: a pesada aguenta, a leve crita, o manto conjura).
+var typicalWeight = map[string]game.ArmorWeight{
+	"knight":    game.WeightHeavy,
+	"barbarian": game.WeightHeavy,
+	"mage":      game.WeightRobe,
+	"rogue":     game.WeightLight,
+}
 
 // typical: a peça entra no equipamento típico.
 func typical(d *game.ItemDef) bool {
-	if d.Bridge {
+	if d.Bridge || d.Graded {
 		return d.Grade == game.GradeCommon
 	}
 	return slices.Contains(typicalGrades, d.Grade)
@@ -206,6 +218,9 @@ func TypicalGear(class string, level, enchant int) []Piece {
 	best := map[game.ItemKind]*game.ItemDef{}
 	for _, d := range Gear() {
 		if !typical(d) || d.ReqLevel > level || !d.UsableBy(class) {
+			continue
+		}
+		if d.Weight != game.WeightNone && d.Weight != typicalWeight[class] {
 			continue
 		}
 		if b := best[d.Kind]; b == nil || better(d, b) {
@@ -227,13 +242,14 @@ func TypicalGear(class string, level, enchant int) []Piece {
 	return out
 }
 
-// GearBonus soma os bônus das peças (a mesma conta da zona).
-func GearBonus(gear []Piece) game.Stats {
-	var b game.Stats
-	for _, p := range gear {
-		b = game.AddItemBonus(b, p.Item, p.Enchant)
+// GearBonus soma o equipamento como a zona (game.EquipBonus): peças, encantamento,
+// conjuntos e a penalidade de nível.
+func GearBonus(level int, gear []Piece) game.Stats {
+	worn := make([]game.Worn, len(gear))
+	for i, p := range gear {
+		worn[i] = game.Worn{Def: p.Item, Enchant: p.Enchant}
 	}
-	return b
+	return game.EquipBonus(level, worn)
 }
 
 func weaponType(gear []Piece) string {
@@ -270,7 +286,7 @@ func NewBuild(p Path, level, enchant int) *Build {
 	if err := game.ValidateRanks(p.Class, spec, level, b.Ranks); err != nil {
 		panic(fmt.Sprintf("árvore típica inválida (%s nv %d): %v", p.Name(), level, err))
 	}
-	b.Stats = game.CharacterStats(p.Class, spec, level, b.Attrs, GearBonus(b.Gear), b.Ranks, weaponType(b.Gear))
+	b.Stats = game.CharacterStats(p.Class, spec, level, b.Attrs, GearBonus(level, b.Gear), b.Ranks, weaponType(b.Gear))
 	return b
 }
 

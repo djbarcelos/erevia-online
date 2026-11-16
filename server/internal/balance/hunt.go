@@ -225,7 +225,11 @@ func huntRegimeCap(b *Build, h Hunt, def *game.MonsterDef, level int, night bool
 // RegimeTTK: tempo médio para matar em regime contra a região do nível (o número que o
 // teste de equilíbrio entre classes compara).
 func RegimeTTK(p Path, level, enchant int) float64 {
-	b := NewBuild(p, level, enchant)
+	return buildRegimeTTK(NewBuild(p, level, enchant), level)
+}
+
+// buildRegimeTTK: o RegimeTTK de um personagem já montado.
+func buildRegimeTTK(b *Build, level int) float64 {
 	h := HuntFor(level)
 	var wsum, ttk float64
 	for _, hm := range h.Monsters {

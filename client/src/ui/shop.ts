@@ -1,4 +1,4 @@
-import { el, formatGold, goldIcon, GRADE_COLOR, itemIcon, ItemStore, ItemTip } from "./items";
+import { el, formatGold, goldIcon, GRADE_COLOR, itemIcon, ItemStore, ItemTip, tierBadge } from "./items";
 import { ItemKind, type ItemInfo, type RecipeInfo } from "../gen/erevia/v1/game_pb";
 
 /** Categorias do filtro da aba Comprar (só aparecem as que a loja tem). */
@@ -208,6 +208,8 @@ export class ShopWindow {
     const name = el("div", "shop-name");
     const n = el("strong", "", info.name);
     n.style.color = GRADE_COLOR[info.grade] ?? GRADE_COLOR[1];
+    const badge = tierBadge(info); // o grau ao lado do nome (tunnel#153)
+    if (badge) n.append(badge);
     const cost = el("span", "shop-price", `${formatGold(price)} moedas`);
     name.append(n, cost);
     row.append(icon, name);
@@ -250,6 +252,8 @@ export class ShopWindow {
     const name = el("div", "shop-name");
     const n = el("strong", "", info.name);
     n.style.color = GRADE_COLOR[info.grade] ?? GRADE_COLOR[1];
+    const badge = tierBadge(info); // o grau ao lado do nome (tunnel#153)
+    if (badge) n.append(badge);
     const mats = el("span", "craft-mats");
     let ok = this.store.gold >= Number(r.gold);
     for (const m of r.materials) {

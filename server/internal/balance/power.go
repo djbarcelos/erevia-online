@@ -130,7 +130,18 @@ func Gear() []*game.ItemDef {
 // (game/bridge.go) tem uma escada própria em cada nível (comum → rara no 30 e no 35, e o
 // mesmo encaixe da classe: a armadura ponte é de classe). Assim a regra "a raridade de cima
 // vale mais" compara peças do mesmo nível, e não a épica do 18 com a comum do 35.
+//
+// As peças feitas para os graus (game/tiers.go, tunnel#153) têm uma escada por grau: em cada
+// encaixe (armas por classe), a comum do grau e a épica (ou a lendária, nas joias do B) que
+// cai dos chefes. As de peso (conjuntos) disputam o encaixe juntas, a melhor de cada raridade.
 func family(d *game.ItemDef) string {
+	if d.Graded {
+		f := "kind:" + kindName(d.Kind)
+		if d.Kind == game.KindWeapon && len(d.Classes) == 1 {
+			f = "weapon:" + d.Classes[0]
+		}
+		return f + ":grau " + d.Tier.Letter()
+	}
 	f := "kind:" + kindName(d.Kind)
 	if (d.Kind == game.KindWeapon || d.Bridge) && len(d.Classes) == 1 {
 		f = kindName(d.Kind) + ":" + d.Classes[0]

@@ -496,3 +496,136 @@ Pares **a / b** = equipamento +0 / +3; o resto é +0. **R** = o renascimento lim
 | 28 | Vale das Pedras Vivas **R** | 309 / 325 | 3,1 / 3,1 | 3,1 | ∞ | 1 min 07 s | 8% | 8.270 | 291 | 2.405.818 / 2.405.818 | 0 | 5 min 47 s / 5 min 47 s | 1 h 10 min / 1 h 08 min |
 | 29 | Vale das Pedras Vivas **R** | 317 / 333 | 3,2 / 3,1 | 3,1 | ∞ | 1 min 07 s | 8% | 8.748 | 291 | 2.544.873 / 2.544.873 | 0 | 6 min 13 s / 6 min 13 s | 1 h 16 min / 1 h 14 min |
 | 30 | Vale das Pedras Vivas **R** | 325 / 340 | 3,3 / 3,1 | 3,1 | ∞ | 1 min 07 s | 8% | 9.235 | 291 | 2.686.545 / 2.686.545 | 0 | 0 s / 0 s | 1 h 16 min / 1 h 14 min |
+
+## Graus de equipamento (tunnel#153): antes e depois
+
+O equipamento parava no 20: depois das épicas do 18 e das lendárias do Ozrhal (nível 20), só a ponte do 30 e do 35. Agora a progressão anda em **graus**, como no Lineage 2, e a raridade (comum → lendária) continua como a cor e a qualidade dentro do grau. O código chama o conceito de `Tier` (em `server/internal/game/tiers.go`); a raridade continua `Grade`.
+
+| Grau | Níveis | O que tem | Onde cai |
+|---|---|---|---|
+| sem grau | 1–9 | a loja e o kit inicial | loja |
+| D | 10–19 | armas comuns no 10, 13 e 16; os conjuntos no 13; escudo, capa e joias no 16; as épicas no 18 | esqueletos de 10–19 e o Ferreiro (32 receitas novas); as épicas do Capitão Ossudo (raro, à noite) e, menos, do Senhor dos Ossos |
+| C | 20–29 | armas comuns no 20, 23 e 26; os conjuntos no 23; escudo, capa e joias no 26; as épicas no 28 | golens e o Vale; as épicas do Senhor dos Ossos, de Vossk (raro) e do Ozrhal; as lendárias do Ozrhal (as do Rei Ossário, nível 20) |
+| B | 30–40 | a ponte do 30 e do 35; armas comuns e os conjuntos no 33; escudo, capa e joias no 36; as épicas no 38; joias lendárias no 40 | as elites do 30 ao 40; as épicas de Ômrun (raro) e do Ozrhal; as joias lendárias só do Ozrhal |
+
+- **Todo equipamento tem grau**, pelo nível exigido: o que já existia também (a rara do 13 é D, a lendária do 20 é C, a ponte é B).
+- **Nível mínimo e penalidade.** Abaixo do nível mínimo do grau a peça não se veste (uma peça do D pede o 10). Do mínimo do grau até o nível da peça, ela se veste com a **penalidade de nível**: −100 de precisão (~20 pontos percentuais de acerto a menos) e −40% de velocidade de ataque e de conjuração (golpes e recargas ~1,7× mais lentos). Vale uma vez, com uma ou com várias peças, e some no nível da peça. Antes, uma peça acima do nível simplesmente não se vestia. A dica do item mostra o grau, o nível mínimo e a penalidade; ao vestir, o jogo avisa.
+- **Pesos e conjuntos.** Cada grau tem um conjunto em cada peso (pesada, leve e manto), com cinco peças: peito, cabeça, pernas, mãos e pés. Qualquer classe veste qualquer peso. Cada peça existe comum (cai dos monstros) e **Exaltada** (épica, dos chefes); a Exaltada conta como a comum para o conjunto. O bônus vale com 2 e com 4 peças e é uma escolha, não só um número maior: a **pesada** aguenta (defesa, vida e regeneração de vida, com um pouco de ataque), a **leve** acerta e escapa (precisão e esquiva) e crita, o **manto** vive de mana (mana e regeneração de mana) e recarrega os feitiços antes. O ataque fica quase todo na arma, de propósito: o conjunto muda o jeito de caçar sem mexer no equilíbrio entre as classes.
+- **A conta é pura.** `game.EquipBonus(nível, peças vestidas)` soma as peças, o encantamento, os conjuntos e a penalidade. A zona (`computeStats`) e o simulador chamam a mesma função.
+- **Saque.** As peças dos graus ficam fora do sorteio por raridade (como a ponte). Um monstro comum do 10 em diante deixa cair, em 2% dos abates, uma peça comum do grau dele, entre as que pedem até o nível dele + 2. As épicas e as lendárias saem só da lista de saque dos chefes e do raid, com chance por peça.
+- **Números.** Cada peça é um perfil fixo de atributos escalado pela reta do orçamento (`6 + 1,4 × (nível − 1)`) e pela raridade: as armas comuns a 95% do orçamento (as do B a 112%: ficam entre a ponte do 30 e a do 35), as peças de conjunto, escudo, capa e joias a ~90% (o bônus de conjunto completa) e as épicas e lendárias a ~100%.
+- Modelos 3D: os de hoje (sem arte nova). O brilho e a cor por raridade continuam os mesmos.
+
+### O orçamento
+
+- **Todas as 160 peças novas passam no `TestPowerBudget`** sem exceção: nenhuma acima do orçamento (+20%) e nenhum +10 passando a peça seguinte da escada (+25%). Para isso, a escada das peças dos graus é por grau e encaixe e tem só dois degraus, a comum e a épica (ou a lendária, nas joias do B): uma rara no meio furaria a regra do encantamento, que soma um valor fixo por raridade (o problema já descrito em "Quais itens furam").
+- **Regra nova, mais apertada:** o conjunto inteiro, com os dois bônus, não pode passar a soma dos orçamentos das peças (a mesma folga de +20%). Os nove conjuntos ficam entre −2% e +2%, nas duas raridades.
+- **O equilíbrio entre as classes** (tempo para matar a ±15% da média da faixa) mudou porque o equipamento típico mudou. Dos 33 casos conhecidos, 23 melhoraram, 3 voltaram para a tolerância (Ladino/Caçador no 25–29 e no 30–34, Bárbaro/Caudilho no 35–40) e 5 pioraram 1 ou 2 pontos, dentro da folga do teste (Ladino/Caçador no 20–24, −20% → −21%; Mago/Elementalista no 25–29, −58% → −60%, e no 35–40, −50% → −51%; Mago/Ocultista no 35–40, −41% → −42%; Bárbaro no 6–12, +18% → +20%). Esses 5 ficam na lista com o número de antes, para a folga não crescer. Nenhum caso novo; o Bárbaro/Caudilho no 30–34 fica bem no limite (−15%).
+- O simulador também ganhou uma seção "Graus de equipamento" (`go run ./cmd/balance`), com as tabelas abaixo.
+
+### Antes e depois no simulador
+
+O equipamento típico passou a ter as peças comuns do grau: a arma, o conjunto do peso da classe (cavaleiro e bárbaro pesada, ladino leve, mago manto), o escudo, a capa e as joias. Antes, era só o que a loja vende (comum e boa, até o nível 6) e a ponte do 30 e do 35.
+
+**O que cada troca de equipamento rende.** No nível em que o equipamento típico muda, o tempo para matar com o equipamento novo contra o do nível de antes (o mesmo personagem e o mesmo monstro): é o salto de poder de cada troca, sem a mudança de caça no meio. **Antes**, o equipamento só mudava no 6, no 30 e no 35, e a ponte do 30 cortava de 16% a 36% de uma vez, depois de 24 níveis sem nada (Cavaleiro/Bastião −18%, Cavaleiro/Arauto −22%, Bárbaro/Sanguinário −18%, Bárbaro/Caudilho −16%, Mago/Elementalista −20%, Mago/Ocultista −26%, Ladino/Sicário −22%, Ladino/Caçador −36%). **Depois**, são dez trocas do 10 ao 36, quase todas cortando até ~20%:
+
+| Caminho | 10 | 13 | 16 | 20 | 23 | 26 | 30 | 33 | 35 | 36 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Cavaleiro/Bastião | −14% | −20% | −18% | −6% | −8% | −6% | −5% | −9% | −2% | +1% |
+| Cavaleiro/Arauto | −14% | −20% | −18% | −10% | −8% | −10% | −6% | −4% | −2% | +5% |
+| Bárbaro/Sanguinário | +0% | −16% | −21% | −4% | +1% | −7% | −3% | +9% | +0% | +5% |
+| Bárbaro/Caudilho | +0% | −16% | −21% | +2% | +2% | −8% | −25% | +5% | +0% | +22% |
+| Mago/Elementalista | +0% | +0% | −90% | −19% | +0% | −34% | −17% | +4% | +0% | +0% |
+| Mago/Ocultista | +0% | +0% | −90% | +0% | +0% | +0% | −2% | −1% | +0% | −2% |
+| Ladino/Sicário | +0% | −16% | −15% | −1% | −9% | +1% | −9% | +1% | −6% | −2% |
+| Ladino/Caçador | +0% | −16% | −15% | +0% | −3% | −7% | −7% | +4% | −1% | +4% |
+
+O que a tabela mostra: as trocas do D são as maiores (o equipamento vinha da loja do nível 6); do C em diante cada troca corta pouco. O mago aparece com −90% no 16 e −34% no 26 porque o tempo dele anda em degraus (mata em 1 ou 2 feitiços: um pouco mais de ataque e o segundo feitiço some). Os poucos números positivos (até +22%, Bárbaro/Caudilho no 36) são do tempo em regime, que também anda em degraus: um golpe um pouco mais forte muda quando as recargas voltam para a luta seguinte.
+
+**Tempo para matar por nível (regime, +0, "Matar" do simulador), antes → depois.** No 20 e no 30 a caça também muda (os golens do Vale; as elites do Fundo do Vale), e ali o tempo sobe por causa do monstro, não do equipamento. No 30 isso agora aparece: antes, a ponte do 30 chegava junto com as elites e escondia o salto delas (o equipamento típico vinha do nível 6); agora o jogador já chega no 30 com o equipamento do C, e o Fundo do Vale fica de 0% a 33% mais lento que o fim do Vale, conforme o caminho (Cavaleiro/Bastião 5,1 → 6,8 s; Ladino/Caçador 2,4 → 3,0 s; ver "O que ficou em aberto").
+
+| Caminho | 9 | 10 | 13 | 16 | 19 | 20 | 23 | 26 | 29 | 30 | 33 | 35 | 36 | 40 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Cavaleiro/Bastião | 3,2 → 3,2 | 3,4 → 2,9 | 2,0 → 1,6 | 1,9 → 1,5 | 2,1 → 1,5 | 7,8 → 5,1 | 7,8 → 5,6 | 8,6 → 5,6 | 7,9 → 5,1 | 7,7 → 6,8 | 4,9 → 4,2 | 4,1 → 3,9 | 4,1 → 3,9 | 4,6 → 4,1 |
+| Cavaleiro/Arauto | 3,2 → 3,2 | 3,4 → 2,9 | 2,0 → 1,6 | 1,9 → 1,5 | 2,1 → 1,5 | 5,6 → 4,0 | 5,6 → 3,8 | 5,5 → 4,0 | 5,5 → 3,9 | 5,4 → 4,7 | 3,3 → 3,1 | 3,2 → 2,9 | 3,2 → 2,9 | 3,4 → 3,0 |
+| Bárbaro/Sanguinário | 2,3 → 2,3 | 1,9 → 1,9 | 1,2 → 1,0 | 1,1 → 0,8 | 1,0 → 0,8 | 5,0 → 4,2 | 3,0 → 2,7 | 2,7 → 2,3 | 2,6 → 2,2 | 2,6 → 2,4 | 1,7 → 1,6 | 1,6 → 1,6 | 1,6 → 1,6 | 1,6 → 1,6 |
+| Bárbaro/Caudilho | 2,3 → 2,3 | 1,9 → 1,9 | 1,2 → 1,0 | 1,1 → 0,8 | 1,0 → 0,8 | 5,5 → 4,3 | 4,3 → 3,3 | 3,4 → 2,9 | 3,4 → 2,7 | 3,6 → 2,9 | 2,2 → 2,1 | 2,1 → 2,1 | 2,1 → 2,1 | 2,1 → 2,1 |
+| Mago/Elementalista | 0,6 → 0,6 | 0,6 → 0,6 | 0,6 → 0,6 | 0,5 → 0,1 | 0,6 → 0,6 | 1,8 → 1,5 | 1,8 → 1,5 | 1,5 → 1,1 | 1,7 → 1,4 | 1,7 → 1,7 | 1,3 → 1,3 | 1,2 → 1,3 | 1,3 → 1,4 | 1,4 → 1,3 |
+| Mago/Ocultista | 0,6 → 0,6 | 0,6 → 0,6 | 0,6 → 0,6 | 0,5 → 0,1 | 0,6 → 0,6 | 1,8 → 1,8 | 1,8 → 1,8 | 1,8 → 1,8 | 2,1 → 2,1 | 2,1 → 2,1 | 1,7 → 1,6 | 1,5 → 1,5 | 1,5 → 1,6 | 1,6 → 1,7 |
+| Ladino/Sicário | 1,7 → 1,7 | 1,2 → 1,2 | 0,9 → 0,7 | 1,1 → 0,9 | 1,1 → 0,9 | 3,2 → 3,0 | 3,1 → 2,3 | 2,8 → 2,0 | 2,7 → 2,0 | 2,6 → 2,2 | 1,9 → 1,7 | 1,9 → 1,6 | 1,9 → 1,6 | 2,0 → 1,8 |
+| Ladino/Caçador | 1,7 → 1,7 | 1,2 → 1,2 | 0,9 → 0,7 | 1,1 → 0,9 | 1,1 → 0,9 | 3,4 → 2,8 | 3,3 → 2,7 | 3,3 → 2,7 | 3,2 → 2,4 | 3,1 → 3,0 | 2,4 → 2,2 | 2,2 → 2,1 | 2,2 → 2,1 | 2,2 → 2,1 |
+
+**Tempo para matar por faixa (regime, +0), antes → depois**, com a distância da média da faixa (o que o teste cobra, ±15%):
+
+| Faixa | Média | Detalhe (antes → depois, distância da média) |
+|---|---:|---|
+| 1–5 | 1,6 → 1,6 s | Cavaleiro 3,1 → 3,1 s (+96% → +96%) · Bárbaro 1,5 → 1,5 s (−3% → −3%) · Mago 0,2 → 0,2 s (−86% → −86%) · Ladino 1,5 → 1,5 s (−7% → −7%) |
+| 6–12 | 1,8 → 1,7 s | Cavaleiro 3,0 → 2,9 s (+74% → +69%) · Bárbaro 2,1 → 2,1 s (+18% → +20%) · Mago 0,3 → 0,3 s (−81% → −80%) · Ladino 1,6 → 1,6 s (−11% → −9%) |
+| 13–19 | 1,2 → 1,0 s | Cavaleiro 2,0 → 1,6 s (+70% → +62%) · Bárbaro 1,1 → 1,0 s (−5% → +1%) · Mago 0,5 → 0,5 s (−54% → −51%) · Ladino 1,1 → 0,9 s (−10% → −12%) |
+| 20–24 | 4,1 → 3,3 s | Cavaleiro/Bastião 8,1 → 6,1 s (+95% → +86%) · Cavaleiro/Arauto 6,8 → 4,8 s (+65% → +44%) · Bárbaro/Sanguinário 3,5 → 3,1 s (−14% → −7%) · Bárbaro/Caudilho 4,2 → 3,6 s (+2% → +9%) · Mago/Elementalista 2,0 → 1,6 s (−52% → −52%) · Mago/Ocultista 2,0 → 2,0 s (−52% → −41%) · Ladino/Sicário 3,2 → 2,7 s (−23% → −18%) · Ladino/Caçador 3,3 → 2,6 s (−20% → −21%) |
+| 25–29 | 3,8 → 3,0 s | Cavaleiro/Bastião 8,1 → 5,9 s (+112% → +100%) · Cavaleiro/Arauto 6,2 → 4,5 s (+63% → +53%) · Bárbaro/Sanguinário 3,0 → 2,4 s (−23% → −18%) · Bárbaro/Caudilho 3,7 → 2,8 s (−5% → −6%) · Mago/Elementalista 1,6 → 1,2 s (−58% → −60%) · Mago/Ocultista 2,0 → 2,0 s (−48% → −33%) · Ladino/Sicário 2,9 → 2,3 s (−24% → −23%) · Ladino/Caçador 3,1 → 2,6 s (−18% → −14%) |
+| 30–34 | 3,5 → 3,1 s | Cavaleiro/Bastião 7,5 → 6,2 s (+114% → +98%) · Cavaleiro/Arauto 5,7 → 5,2 s (+65% → +64%) · Bárbaro/Sanguinário 2,4 → 2,2 s (−31% → −29%) · Bárbaro/Caudilho 3,4 → 2,7 s (−2% → −15%) · Mago/Elementalista 1,7 → 1,6 s (−51% → −48%) · Mago/Ocultista 2,0 → 1,9 s (−44% → −39%) · Ladino/Sicário 2,5 → 2,5 s (−27% → −19%) · Ladino/Caçador 2,6 → 2,7 s (−24% → −13%) |
+| 35–40 | 2,4 → 2,5 s | Cavaleiro/Bastião 5,2 → 4,7 s (+117% → +89%) · Cavaleiro/Arauto 3,9 → 3,9 s (+63% → +59%) · Bárbaro/Sanguinário 1,6 → 2,0 s (−36% → −19%) · Bárbaro/Caudilho 2,0 → 2,3 s (−18% → −8%) · Mago/Elementalista 1,2 → 1,2 s (−50% → −51%) · Mago/Ocultista 1,4 → 1,4 s (−41% → −42%) · Ladino/Sicário 1,9 → 2,0 s (−22% → −19%) · Ladino/Caçador 2,1 → 2,2 s (−14% → −10%) |
+
+A média cai em todas as faixas do 6 ao 34 (−17% a −21% do 13 ao 29) e fica praticamente igual no 35–40 (2,4 → 2,5 s). A distância entre as classes diminui na maior parte: o cavaleiro, o mais lento, ganha mais (Bastião +117% → +89% no 35–40), e o bárbaro e o ladino, que sobravam do 30 em diante, voltam para perto da média. No 35–40 o bárbaro mata um pouco mais devagar que antes (Sanguinário 1,6 → 2,0 s): o típico escolhe, pelo poder total, o Machado Ilvarin (nível 33, mais vida) no lugar do Machado da Partição (35, mais ataque e crítico). É a troca que os dois oferecem.
+
+**Tempo até o 40.** Com o renascimento limitando o ritmo, quase não muda (a caça já é mais rápida que os monstros renascem); sem esse limite, o equipamento novo tira de 5 a 22 horas do 1 ao 40:
+
+| Caminho | +0 antes | +0 depois | sem limite de renascimento, antes | sem limite, depois |
+|---|---:|---:|---:|---:|
+| Cavaleiro/Bastião | 104 h 55 min | 100 h 58 min | 87 h 21 min | 81 h 16 min |
+| Cavaleiro/Arauto | 101 h 18 min | 100 h 39 min | 73 h 47 min | 66 h 21 min |
+| Bárbaro/Sanguinário | 100 h 18 min | 99 h 55 min | 70 h 10 min | 61 h 29 min |
+| Bárbaro/Caudilho | 100 h 41 min | 99 h 55 min | 69 h 11 min | 63 h 37 min |
+| Mago/Elementalista | 98 h 43 min | 98 h 42 min | 36 h 58 min | 31 h 27 min |
+| Mago/Ocultista | 98 h 43 min | 98 h 42 min | 44 h 07 min | 35 h 24 min |
+| Ladino/Sicário | 99 h 31 min | 99 h 08 min | 67 h 03 min | 44 h 38 min |
+| Ladino/Caçador | 99 h 31 min | 99 h 08 min | 71 h 34 min | 50 h 29 min |
+
+### As peças
+
+Saída de `go run ./cmd/balance` (seção "Graus de equipamento"). Do 10 ao 40, o intervalo maior sem peça nova é de 3 níveis (o teste `TestNewGearEveryThreeLevels` cobra).
+
+#### Equipamento novo por nível
+
+| Nível | Grau | Peças novas |
+|---:|---|---|
+| 10 | D | armas comuns (4) |
+| 13 | D | peito (rara) (1) · armas comuns (4) · armas raras (4) · pés (rara) (1) · capa (rara) (1) · brinco (rara) (1) · mãos (rara) (1) · Conjunto de Ferro Negro (comum) (5) · cabeça (rara) (1) · pernas (rara) (1) · Conjunto do Batedor (comum) (5) · colar (rara) (1) · anel (rara) (1) · Conjunto do Acólito (comum) (5) · escudo (rara) (1) |
+| 16 | D | armas comuns (4) · escudo, capa e joias comuns (5) |
+| 18 | D | peito (épica) (1) · armas épicas (8) · pés (épica) (1) · escudo, capa e joias épicas (5) · capa (épica) (1) · brinco (épica) (1) · mãos (épica) (1) · Conjunto de Ferro Negro (épica) (5) · cabeça (épica) (1) · pernas (épica) (1) · Conjunto do Batedor (épica) (5) · colar (épica) (1) · anel (épica) (1) · Conjunto do Acólito (épica) (5) · escudo (épica) (1) |
+| 20 | C | armas comuns (4) · armas lendárias (4) · colar (lendária) (1) · anel (lendária) (1) |
+| 23 | C | armas comuns (4) · Conjunto de Granito (comum) (5) · Conjunto do Andarilho (comum) (5) · Conjunto do Geomante (comum) (5) |
+| 26 | C | armas comuns (4) · escudo, capa e joias comuns (5) |
+| 28 | C | armas épicas (4) · escudo, capa e joias épicas (5) · Conjunto de Granito (épica) (5) · Conjunto do Andarilho (épica) (5) · Conjunto do Geomante (épica) (5) |
+| 30 | B | ponte comum (8) · ponte rara (8) |
+| 33 | B | armas comuns (4) · Conjunto da Vigília (comum) (5) · Conjunto do Ceifador (comum) (5) · Conjunto do Tecelão (comum) (5) |
+| 35 | B | ponte comum (8) · ponte rara (8) |
+| 36 | B | escudo, capa e joias comuns (5) |
+| 38 | B | armas épicas (4) · escudo, capa e joias épicas (2) · Conjunto da Vigília (épica) (5) · Conjunto do Ceifador (épica) (5) · Conjunto do Tecelão (épica) (5) |
+| 40 | B | escudo, capa e joias lendárias (3) |
+
+#### Conjuntos
+
+Cinco peças (peito, cabeça, pernas, mãos e pés), comum e Exaltada (épica); a Exaltada conta como a comum. **Poder**: o conjunto inteiro +0 com os dois bônus, contra a soma dos orçamentos das peças (tolerância +20%).
+
+| Conjunto | Grau | Peso | Nível | 2 peças | 4 peças | Poder (comum) | Poder (Exaltada) |
+|---|---|---|---:|---|---|---:|---:|
+| Conjunto de Ferro Negro | D | Pesada | 13 | +4 def. física, +30 vida | +2 atq. físico, +2 def. mágica, +2 vida/s | 117,5 / 115,1 (+2%) | 228,6 / 225,7 (+1%) |
+| Conjunto do Batedor | D | Leve | 13 | +10 precisão, +6 esquiva | +30 vida, +2% crítico, +6 esquiva | 115,0 / 115,1 (−0%) | 224,4 / 225,7 (−1%) |
+| Conjunto do Acólito | D | Manto | 13 | +40 mana, +1 mana/s | +4 def. mágica, +2% conjuração, +1 mana/s | 116,5 / 115,1 (+1%) | 225,8 / 225,7 (+0%) |
+| Conjunto de Granito | C | Pesada | 23 | +6 def. física, +48 vida | +3 atq. físico, +3 def. mágica, +3,2 vida/s | 186,5 / 185,8 (+0%) | 336,2 / 331,8 (+1%) |
+| Conjunto do Andarilho | C | Leve | 23 | +16 precisão, +10 esquiva | +48 vida, +3% crítico, +10 esquiva | 184,8 / 185,8 (−1%) | 331,1 / 331,8 (−0%) |
+| Conjunto do Geomante | C | Manto | 23 | +65 mana, +1,6 mana/s | +6 def. mágica, +3% conjuração, +1,6 mana/s | 185,3 / 185,8 (−0%) | 332,9 / 331,8 (+0%) |
+| Conjunto da Vigília | B | Pesada | 33 | +9 def. física, +67 vida | +4 atq. físico, +4 def. mágica, +4,5 vida/s | 257,8 / 256,5 (+0%) | 445,1 / 437,8 (+2%) |
+| Conjunto do Ceifador | B | Leve | 33 | +22 precisão, +13 esquiva | +67 vida, +4% crítico, +13 esquiva | 252,2 / 256,5 (−2%) | 436,9 / 437,8 (−0%) |
+| Conjunto do Tecelão | B | Manto | 33 | +89 mana, +2,2 mana/s | +9 def. mágica, +4% conjuração, +2,2 mana/s | 256,1 / 256,5 (−0%) | 440,1 / 437,8 (+1%) |
+
+
+### O que ficou em aberto
+
+- **O muro do 30.** As elites do Fundo do Vale (30–35) levam até 33% mais tempo para matar que os golens do 29 (Cavaleiro/Bastião), mesmo com a ponte do 30. Antes, a ponte do 30 escondia isso. O ajuste natural é na área (vida das elites do 30 ou a curva dos Golens Ancestrais), não no equipamento.
+- **O encantamento** continua furando a regra do +10 nas escadas de antes (44 casos). As peças dos graus passam porque a escada delas tem dois degraus; uma rara no meio de um grau só cabe depois de o bônus do encantamento passar a depender da peça.
+- **O mago** continua o mais rápido de todos, e o tempo dele anda em degraus (1 ou 2 feitiços por abate): pequenas mudanças de ataque movem muito o número dele.
+- **Raras dos graus**: não existem (os graus têm comum, Exaltada e, no B, lendária). Os chefes ainda deixam cair as raras e épicas de antes pelo sorteio por raridade.
+- **Receitas do C e do B**: só o D sai do Ferreiro. As do C (com Núcleos Rúnicos) ficam para quando a economia do Vale for revista.

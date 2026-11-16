@@ -125,8 +125,8 @@ type RepOffer struct {
 	Price   int64 // moedas (nunca abaixo do que a loja paga pelos itens: TestRepShopPrices)
 	Text    string
 	// Lugar previsto, ainda sem sistema (não inventar aqui):
-	//   - Recipe: receitas de grau C do Ferreiro (tunnel#153). Quando existirem, a oferta
-	//     ensina a receita em vez de dar um item (ex.: Bastião, Reverenciado).
+	//   - Recipe: receitas de grau C do Ferreiro (o tunnel#153 fez só as do D). Quando
+	//     existirem, a oferta ensina a receita em vez de dar um item (ex.: Bastião, Reverenciado).
 	//   - Cristais (tunnel#154): entram como Item comum quando o item existir (ex.: Guarda,
 	//     Honrado, um pacote pequeno por semana).
 }
