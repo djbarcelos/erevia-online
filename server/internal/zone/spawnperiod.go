@@ -104,7 +104,7 @@ func (z *Zone) putToSleep(m *entity) {
 	m.dead = true
 	ms.corpseEnd = z.now + 1.5/float64(z.cfg.TickRate)
 	ms.returning = false
-	ms.hate = map[uint32]float64{}
+	ms.forget()
 	for _, ef := range m.effects {
 		z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: m.id, Effect: pb.Effect(ef.kind)})
 	}

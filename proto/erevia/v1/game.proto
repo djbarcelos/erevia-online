@@ -885,6 +885,13 @@ message PartyMember {
 message PartyState {
   uint32 leader_id = 1;
   repeated PartyMember members = 2;
+  // XP do grupo vista por você (tunnel#151), atualizada 1×/s. No abate contam os membros
+  // vivos, neste mapa, a até 40 m do monstro e que ajudaram (dano, cura ou buff) nos
+  // últimos 30 s; a janela mostra só pela proximidade de você.
+  uint32 xp_near = 3;        // membros vivos neste mapa a até 40 m de você (você incluído; 0 = você morto)
+  uint32 xp_bonus_pct = 4;   // bônus na XP total do abate com eles (+10% por membro além do primeiro)
+  uint32 xp_level_gap = 5;   // diferença entre o maior e o menor nível deles
+  uint32 xp_gap_cut_pct = 6; // quanto essa diferença corta da XP do grupo (0 = nada; 50 = metade)
 }
 
 message ClanMember {

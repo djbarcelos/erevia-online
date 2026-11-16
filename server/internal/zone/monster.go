@@ -23,6 +23,7 @@ type monsterState struct {
 	home       Vec2
 	returning  bool
 	hate       map[uint32]float64
+	dmg        map[uint32]float64 // vida que cada jogador tirou (crédito do abate; o ódio tem provocação)
 	nextWander float64
 	respawnAt  float64
 	corpseEnd  float64
@@ -177,7 +178,7 @@ func (z *Zone) resetMonster(m *entity) {
 	if m.mon.raid != nil {
 		z.raidReset(m)
 	}
-	m.mon.hate = map[uint32]float64{}
+	m.mon.forget()
 	m.mon.stopAbilities()
 	m.mon.returning = true
 	m.clearAction()
@@ -216,7 +217,7 @@ func (z *Zone) reviveMonster(m *entity) {
 	m.dead = false
 	ms.hidden = false
 	ms.returning = false
-	ms.hate = map[uint32]float64{}
+	ms.forget()
 	ms.stopAbilities()
 	ms.windowStart, ms.windowEnd = time.Time{}, time.Time{}
 	m.pos, m.dest, m.path = ms.home, ms.home, nil
@@ -240,6 +241,24 @@ func (z *Zone) nearestPlayer(from Vec2, maxDist float64) *entity {
 		best, bestD = p, d
 	}
 	return best
+}
+
+// forget: o monstro esquece a luta (ódio e dano). Na morte, ao desistir e ao renascer: o
+// registro não passa de uma luta para a outra (nem cresce sem fim).
+func (ms *monsterState) forget() {
+	ms.hate = map[uint32]float64{}
+	ms.dmg = nil
+}
+
+// addDamage soma a vida que o jogador tirou do monstro.
+func (ms *monsterState) addDamage(id uint32, v float64) {
+	if v <= 0 {
+		return
+	}
+	if ms.dmg == nil {
+		ms.dmg = map[uint32]float64{}
+	}
+	ms.dmg[id] += v
 }
 
 func topHate(h map[uint32]float64) uint32 {

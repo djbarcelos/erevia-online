@@ -142,6 +142,9 @@ func (z *Zone) updateAuras() {
 		for _, p := range z.players {
 			if owner != nil && !p.dead && z.allies(owner, p) && dist(p.pos, o.pos) <= b.Radius {
 				z.applyAura(o, p, b.Effect, b.Value)
+				if p != owner {
+					z.markHelp(owner) // o estandarte erguido ajuda o grupo
+				}
 			}
 		}
 	}
@@ -180,6 +183,7 @@ func (z *Zone) tickDoTs(e *entity) {
 		z.frame.combat = append(z.frame.combat, ev)
 		e.lastCombat = z.now
 		if e.mon != nil && src.pl != nil {
+			z.markHelp(src)
 			e.mon.hate[src.id] += dmg
 			e.mon.returning = false
 		}

@@ -7,6 +7,7 @@
 //	go run ./cmd/balance -csv     # uma linha por caminho, nível e encantamento
 //	go run ./cmd/balance -noite   # monstros e XP da noite
 //	go run ./cmd/balance -vitalidade # tempo até o máximo jogando 1 h por dia, com a vitalidade
+//	go run ./cmd/balance -grupo      # XP/h de cada membro de um grupo de 3 contra caçar sozinho
 package main
 
 import (
@@ -22,8 +23,13 @@ func main() {
 	asCSV := flag.Bool("csv", false, "saída em CSV (uma linha por caminho, nível e encantamento)")
 	night := flag.Bool("noite", false, "de noite: monstros batem mais e dão mais XP")
 	vitality := flag.Bool("vitalidade", false, "tempo até o máximo jogando poucas horas por dia, com a vitalidade (tunnel#150)")
+	group := flag.Bool("grupo", false, "XP por hora em grupo contra sozinho, carregar e monstro fraco (tunnel#151)")
 	flag.Parse()
 
+	if *group {
+		balance.WriteGroupMarkdown(os.Stdout)
+		return
+	}
 	if *vitality {
 		balance.WriteVitalityMarkdown(os.Stdout)
 		return
