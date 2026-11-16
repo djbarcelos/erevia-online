@@ -15,6 +15,11 @@ export const REMASTER_FILES: Record<string, string> = {
   skeleton_warrior: "skeleton_warrior_b",
 };
 
+/** Modelo do jogo → máscara de repintura (PNG ao lado do GLB; ver scripts/make-remaster-mask.mjs). */
+export const REMASTER_MASKS: Record<string, string> = {
+  knight: "knight_b.mask.png",
+};
+
 /** Distâncias (m) a partir das quais cada LOD entra (guia de arte, seção 5). */
 export const LOD_DISTANCES = [20, 35];
 

@@ -21,7 +21,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { mulberry32 } from "./map-painter";
-import type { AnimRole, CharacterInstance, EmoteRole } from "./models";
+import type { AnimRole, CharacterInstance, OptionalRole } from "./models";
 import { setPaletteKind } from "./palette-material";
 import { heightToNormal } from "./teleport-stone";
 
@@ -445,7 +445,7 @@ const BASE: Pose = {
 };
 const at = (p: Pose): Pose => ({ ...BASE, ...p });
 
-const CLIPS: Record<Exclude<AnimRole, EmoteRole>, Clip> = {
+const CLIPS: Record<Exclude<AnimRole, OptionalRole>, Clip> = {
   idle: {
     frames: 72,
     keys: [

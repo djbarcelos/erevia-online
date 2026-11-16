@@ -5,12 +5,14 @@ import {
   AnimationGroup,
   AssetContainer,
   Color3,
+  Effect,
   LoadAssetContainerAsync,
   Material,
   Mesh,
   Node,
   Observer,
   PBRMaterial,
+  ProceduralTexture,
   RawTexture,
   StandardMaterial,
   Texture,
@@ -22,8 +24,8 @@ import {
 import { reportClientError } from "../net/errors";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, REMASTER, REMASTER_FILES } from "./remaster";
-import { bodyPalettes, colorKey, needsRepaint, normalLook, ORIGINAL_LOOK, paintRemasterTexture, paintTexture, type BodyLook } from "./body-look";
+import { lodFor, REMASTER, REMASTER_FILES, REMASTER_MASKS } from "./remaster";
+import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
 
 /**
  * Personagens e monstros KayKit (CC0). Todos usam o mesmo esqueleto ("Rig_Medium"),
@@ -31,6 +33,28 @@ import { bodyPalettes, colorKey, needsRepaint, normalLook, ORIGINAL_LOOK, paintR
  */
 
 const BASE = "/models/";
+
+/** Shader da repintura do remaster (ver tintMaterial). Cores em gama; `outfit` e `skin` já em 0-1. */
+const TINT_SHADER = "remasterTint";
+const TINT_FRAGMENT = `
+precision highp float;
+varying vec2 vUV;
+uniform sampler2D baseSampler;
+uniform sampler2D maskSampler;
+uniform vec3 outfit;
+uniform vec3 skin;
+uniform float hasOutfit;
+uniform float hasSkin;
+uniform float baseIsLinear;
+void main(void) {
+  vec3 c = texture2D(baseSampler, vUV).rgb;
+  if (baseIsLinear > 0.5) c = pow(c, vec3(1.0 / 2.2));
+  vec4 m = texture2D(maskSampler, vUV);
+  float luma = dot(c, vec3(0.299, 0.587, 0.114));
+  c = mix(c, outfit * min(1.6, luma * 3.0), m.r * hasOutfit);
+  c = mix(c, skin * clamp(luma / max(m.a, 0.05), 0.6, 1.25), m.g * hasSkin);
+  gl_FragColor = vec4(c, 1.0);
+}`;
 /** Altura desejada do personagem em metros (o modelo é escalado para isso). */
 const TARGET_HEIGHT = 1.8;
 
@@ -44,8 +68,10 @@ const ANIM_FILES = [
 
 /** Emotes (/acenar, /sentar, /dancar): só os heróis têm. */
 export type EmoteRole = "wave" | "sit" | "dance";
-export type AnimRole = "idle" | "run" | "attack" | "skill" | "buff" | "hit" | "death" | EmoteRole;
-type AnimSet = Record<Exclude<AnimRole, EmoteRole>, string> & Partial<Record<EmoteRole, string>>;
+/** Papéis que só alguns modelos têm: os emotes e o andar (o remaster; os outros só correm). */
+export type OptionalRole = EmoteRole | "walk";
+export type AnimRole = "idle" | "run" | "attack" | "skill" | "buff" | "hit" | "death" | OptionalRole;
+type AnimSet = Record<Exclude<AnimRole, OptionalRole>, string> & Partial<Record<OptionalRole, string>>;
 
 const HERO_BASE = { idle: "Idle_A", run: "Running_A", buff: "Ranged_Magic_Raise", hit: "Hit_A", death: "Death_A" };
 const SKELETON_BASE = {
@@ -92,17 +118,21 @@ const CLIP_IMPACT: Record<string, number> = {
   Ranged_Magic_Raise: 0.45,
 };
 
-/** Animações dos modelos do remaster (clipes do próprio arquivo; KB_ cavaleiro, SW_ esqueleto). */
+/**
+ * Animações dos modelos do remaster v3 (clipes do próprio arquivo; KB_ cavaleiro, SW_ esqueleto). São ações
+ * da biblioteca do Meshy (ver docs/arte/remaster-v3.md): parado, andar, correr, golpe de espada, dano
+ * (Hit Reaction 1), morte (Dead) e o grito de espada (Sword Shout) para buff/acenar/dançar.
+ */
 const REMASTER_SETS: Record<string, AnimSet> = {
   knight: {
-    idle: "KB_Idle", run: "KB_Run", attack: "KB_Attack", skill: "KB_Attack", buff: "KB_Raise", hit: "KB_Hit", death: "KB_Death",
+    idle: "KB_Idle", walk: "KB_Walk", run: "KB_Run", attack: "KB_Attack", skill: "KB_Attack", buff: "KB_Raise", hit: "KB_Hit", death: "KB_Death",
     wave: "KB_Raise", dance: "KB_Raise", sit: "KB_Idle",
   },
-  skeleton_warrior: { idle: "SW_Idle", run: "SW_Walk", attack: "SW_Attack", skill: "SW_Attack", buff: "SW_Raise", hit: "SW_Hit", death: "SW_Death" },
+  skeleton_warrior: { idle: "SW_Idle", walk: "SW_Walk", run: "SW_Run", attack: "SW_Attack", skill: "SW_Attack", buff: "SW_Raise", hit: "SW_Hit", death: "SW_Death" },
 };
-/** O golpe encosta no quadro 14 de 30 (tools/art/fatia-vertical/biped_anim.py). */
-CLIP_IMPACT.KB_Attack = 14 / 30;
-CLIP_IMPACT.SW_Attack = 14 / 30;
+/** O golpe encosta quando a mão termina o movimento rápido (quadro 16 de 30, medido na velocidade da mão). */
+CLIP_IMPACT.KB_Attack = 16 / 30;
+CLIP_IMPACT.SW_Attack = 16 / 30;
 
 export type Slot = "handslot.r" | "handslot.l";
 /** Armas padrão de cada modelo. Os heróis usam o que o servidor manda (equipamento). */
@@ -170,6 +200,8 @@ interface ModelAssets {
   heads: Map<string, AbstractMesh>;
   /** Modelo do estilo B (?remaster=1): clipes e LODs no próprio arquivo. */
   remaster: boolean;
+  /** Máscara de repintura do remaster (R pano, G pele): a base é KTX2 e não dá para ler os pixels. */
+  mask: Texture | null;
 }
 
 export class CharacterModels {
@@ -235,18 +267,56 @@ export class CharacterModels {
     });
   }
 
+  /**
+   * Remaster: a textura-base é KTX2 (a GPU lê, a CPU não). O pano e a pele são tingidos por um shader
+   * que mistura a base com a máscara pequena (R pano, G pele) numa textura nova, desenhada uma vez por
+   * combinação de cores. A luz pintada da base é mantida (o brilho do pixel original escala a cor nova).
+   */
+  private async tintMaterial(base: Material, src: Texture, mask: Texture, model: string, look: BodyLook, pal: BodyPalettes): Promise<Material | null> {
+    await new Promise<void>((ok) => (mask.isReady() ? ok() : mask.onLoadObservable.addOnce(() => ok())));
+    const scene = base.getScene();
+    Effect.ShadersStore[`${TINT_SHADER}PixelShader`] ??= TINT_FRAGMENT;
+    const { width } = src.getSize();
+    const tex = new ProceduralTexture(`${src.name}-${colorKey(model, look)}`, width || 1024, TINT_SHADER, scene, null, true, false);
+    const mid = (s: { top: string; bottom: string } | undefined): Color3 => {
+      if (!s) return Color3.White();
+      const a = Color3.FromHexString(s.top);
+      const b = Color3.FromHexString(s.bottom);
+      return new Color3((a.r + b.r) / 2, (a.g + b.g) / 2, (a.b + b.b) / 2);
+    };
+    const outfit = look.outfit > 0 ? outfitShade(pal, look.outfit) : undefined;
+    const skin = look.skin > 0 ? pal.skins[look.skin - 1] : undefined;
+    tex.setTexture("baseSampler", src);
+    tex.setTexture("maskSampler", mask);
+    tex.setColor3("outfit", mid(outfit));
+    tex.setColor3("skin", skin ? Color3.FromHexString(skin.top) : Color3.White());
+    tex.setFloat("hasOutfit", outfit ? 1 : 0);
+    tex.setFloat("hasSkin", skin ? 1 : 0);
+    // A base em KTX2 sRGB já chega linear ao shader; sem o formato sRGB chega em gama.
+    tex.setFloat("baseIsLinear", (src.getInternalTexture() as { _useSRGBBuffer?: boolean } | null)?._useSRGBBuffer ? 1 : 0);
+    tex.refreshRate = 0; // desenha uma vez
+    tex.gammaSpace = true; // a saída é gama; o PBR converte para linear
+    tex.wrapU = src.wrapU;
+    tex.wrapV = src.wrapV;
+    const mat = base.clone(`${base.name}-${colorKey(model, look)}`);
+    if (mat instanceof PBRMaterial) mat.albedoTexture = tex;
+    else if (mat instanceof StandardMaterial) mat.diffuseTexture = tex;
+    return mat;
+  }
+
   /** Cópia do material com as faixas de pele, cabelo e roupa repintadas. */
   private async paintMaterial(base: Material, model: string, look: BodyLook): Promise<Material | null> {
     const pal = await bodyPalettes();
     const src = base instanceof PBRMaterial ? base.albedoTexture : base instanceof StandardMaterial ? base.diffuseTexture : null;
     if (!pal || !(src instanceof Texture)) return null;
     await new Promise<void>((ok) => (src.isReady() ? ok() : src.onLoadObservable.addOnce(() => ok())));
+    const mask = this.models.get(model)?.mask;
+    if (REMASTER && mask) return this.tintMaterial(base, src, mask, model, look, pal);
     const { width, height } = src.getSize();
     const pixels = await src.readPixels()?.catch(() => null);
     if (!pixels || !width) return null;
     const data = new Uint8Array(pixels.buffer, pixels.byteOffset, width * height * 4).slice();
-    if (REMASTER && REMASTER_FILES[model]) paintRemasterTexture(data, width, height, look, pal);
-    else paintTexture(data, width, height, model, look, pal);
+    paintTexture(data, width, height, model, look, pal);
     const scene = base.getScene();
     const tex = RawTexture.CreateRGBATexture(data, width, height, scene, true, src.invertY, Texture.TRILINEAR_SAMPLINGMODE);
     tex.name = `${src.name}-${colorKey(model, look)}`;
@@ -295,14 +365,15 @@ export class CharacterModels {
     for (const [id, body, remaster] of bodies) {
       if (!body) continue;
       const weapons: ModelAssets["weapons"] = {};
-      // O esqueleto do remaster já traz a espada e o escudo no corpo.
-      for (const [slot, file] of remaster && id === "skeleton_warrior" ? [] : (Object.entries(allWeapons[id] ?? {}) as [Slot, string][])) {
+      for (const [slot, file] of Object.entries(allWeapons[id] ?? {}) as [Slot, string][]) {
         const w = weaponByFile.get(file);
         if (w) weapons[slot] = w;
       }
       const heads = new Map<string, AbstractMesh>();
       for (const m of body.meshes) if (m.name.startsWith("Head_")) heads.set(m.name.slice(5), m);
-      models.set(id, { body, weapons, scale: measureScale(body, id), heads, remaster });
+      const maskFile = remaster ? REMASTER_MASKS[id] : undefined;
+      const mask = maskFile ? new Texture(`${BASE}${maskFile}`, scene, true, false) : null;
+      models.set(id, { body, weapons, scale: measureScale(body, id), heads, remaster, mask });
     }
 
     // Os grupos de animação servem de molde; não tocam sozinhos.

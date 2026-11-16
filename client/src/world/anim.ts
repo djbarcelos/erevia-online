@@ -32,6 +32,9 @@ export interface PlayOpts {
  */
 export class AnimController {
   private runWeight = 0;
+  /** 0 = correr, 1 = andar (só modelos com clipe "walk": o remaster). */
+  private walkMix = 0;
+  private walkRatio = 1;
   private actionWeight = 0;
   private action: AnimationGroup | null = null;
   private actionDone = true;
@@ -83,6 +86,11 @@ export class AnimController {
     this.groups = [...new Set(anims.values())];
     const idle = anims.get("idle");
     const run = anims.get("run");
+    const walk = anims.get("walk");
+    if (walk) {
+      walk.weight = 0;
+      walk.start(true);
+    }
     if (idle) {
       idle.weight = 1;
       idle.start(true);
@@ -236,6 +244,8 @@ export class AnimController {
     const run = this.anims.get("run");
     if (idle) idle.speedRatio = 1;
     if (run) run.speedRatio = this.runRatio;
+    const walk = this.anims.get("walk");
+    if (walk) walk.speedRatio = this.walkRatio;
     // Ação parada no fim (ou saindo de cena) fica parada; a que ainda toca volta a andar.
     // (A morte que começou durante a pausa também volta; a já congelada no fim, não.)
     if (this.action && !this.actionDone && !this.frozen) this.action.speedRatio = this.actionSpeed;
@@ -323,8 +333,9 @@ export class AnimController {
    * active = false (fora da tela ou longe): os grupos pausam e o esqueleto fica congelado
    * na última pose até voltar (ver sleep/wake).
    */
-  update(dt: number, moving: boolean, runSpeedRatio: number, active = true): void {
+  update(dt: number, moving: boolean, runSpeedRatio: number, active = true, speed = Infinity): void {
     this.runRatio = runSpeedRatio;
+    this.walkRatio = Math.min(1.5, Math.max(0.5, speed / WALK_ANIM_SPEED));
     if (active !== this.active) {
       this.active = active;
       if (active) this.wake();
@@ -339,6 +350,8 @@ export class AnimController {
     if (!active) return;
     const k = 1 - Math.exp(-BLEND_RATE * dt);
     this.runWeight += ((moving && !this.holding ? 1 : 0) - this.runWeight) * k;
+    // Devagar (monstros, lentidão): clipe de andar, senão o personagem "corre" em câmera lenta.
+    this.walkMix += ((speed < WALK_BELOW ? 1 : 0) - this.walkMix) * k;
     // A ação chega ao fim no próximo quadro: para ali (velocidade 0, ainda na mistura). Em
     // loop o Babylon voltaria ao primeiro quadro, e o corpo pularia para o começo do golpe.
     const a = this.action;
@@ -386,14 +399,24 @@ export class AnimController {
     // Peso exatamente 0 faz o Babylon pular a animação (não calcula os ossos). As misturas
     // convergem exponencialmente e nunca chegam a 0 sozinhas, então zeramos as sobras.
     if (idle) idle.weight = snap(loco * (1 - this.runWeight));
+    const walk = this.anims.get("walk");
+    const walkW = walk ? this.walkMix : 0;
     if (run) {
-      run.weight = snap(loco * this.runWeight);
+      run.weight = snap(loco * this.runWeight * (1 - walkW));
       run.speedRatio = runSpeedRatio;
+    }
+    if (walk) {
+      walk.weight = snap(loco * this.runWeight * walkW);
+      walk.speedRatio = this.walkRatio;
     }
     if (this.action) this.action.weight = Math.max(this.actionWeight, 0.001);
     for (const f of this.fading) f.g.weight = f.w;
   }
 }
+
+/** Velocidade (m/s) abaixo da qual o personagem anda em vez de correr, e a que o clipe de andar casa com o chão. */
+const WALK_BELOW = 3.4;
+const WALK_ANIM_SPEED = 1.9;
 
 function snap(w: number): number {
   return w < 0.01 ? 0 : w > 0.99 ? 1 : w;
