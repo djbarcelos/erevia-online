@@ -48,6 +48,9 @@
         "^Head_"
       ]
     },
+    "knight_b.glb": {
+      "categoria": "personagem"
+    },
     "mage.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -65,6 +68,15 @@
           "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
         }
       }
+    },
+    "plaza_BannerPost_b.glb": {
+      "categoria": "cenario"
+    },
+    "plaza_Fountain_b.glb": {
+      "categoria": "cenario"
+    },
+    "plaza_Paving_b.glb": {
+      "categoria": "cenario"
     },
     "props/loot_sack.glb": {
       "categoria": "cenario"
@@ -126,6 +138,9 @@
           "motivo": "KayKit legado, substituído na #98"
         }
       }
+    },
+    "skeleton_warrior_b.glb": {
+      "categoria": "monstro"
     },
     "weapons/axe_1handed.glb": {
       "categoria": "arma"

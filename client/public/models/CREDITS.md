@@ -19,3 +19,8 @@ node scripts/build-models.mjs ../assets-src/kaykit/x    # personagens, monstros,
 node scripts/build-scenery.mjs ../assets-src/kaykit/x   # kits de cenário (env-forest.glb, env-town.glb)
 node scripts/build-world.mjs                            # layout + colisão (cliente e servidor)
 ```
+
+## Remaster (estilo B)
+
+`knight_b.glb`, `skeleton_warrior_b.glb` e `plaza_*_b.glb` (só carregam com `?remaster=1`) são **modelos próprios do Erevia**,
+feitos em código bpy no Blender (`tools/art/fatia-vertical/`), sem biblioteca, gerador nem arquivo externo. Mesma licença do projeto.
