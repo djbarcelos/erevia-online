@@ -164,3 +164,39 @@ export function paintTexture(data: Uint8Array, w: number, h: number, model: stri
   if (look.hair > 0) fill(HAIR_CELLS, pal.hairs[look.hair - 1]);
   if (look.outfit > 0) fill(OUTFIT_CELLS[model] ?? [], outfitShade(pal, look.outfit));
 }
+
+/**
+ * Remaster (texturas geradas, sem o atlas 8x4): a roupa é tingida por máscara de cor (o pano vermelho
+ * do cavaleiro, mantendo a luz pintada) e a pele é um quadradinho no canto superior direito, onde
+ * a cabeça por baixo do elmo está mapeada. Cabelo não existe nesses modelos.
+ */
+export function paintRemasterTexture(data: Uint8Array, w: number, h: number, look: BodyLook, pal: BodyPalettes): void {
+  const outfit = look.outfit > 0 ? outfitShade(pal, look.outfit) : undefined;
+  if (outfit) {
+    const a = rgb(outfit.top);
+    const b = rgb(outfit.bottom);
+    const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+    for (let i = 0; i < w * h * 4; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const bl = data[i + 2];
+      if (r < 70 || r < 1.4 * g || r < 1.4 * bl) continue; // só o pano vermelho
+      const k = Math.min(1.6, (0.299 * r + 0.587 * g + 0.114 * bl) / 85);
+      data[i] = Math.min(255, mid[0] * k);
+      data[i + 1] = Math.min(255, mid[1] * k);
+      data[i + 2] = Math.min(255, mid[2] * k);
+    }
+  }
+  const skin = look.skin > 0 ? pal.skins[look.skin - 1] : undefined;
+  if (skin) {
+    const c = rgb(skin.top);
+    for (let y = 0; y < Math.floor(h * 0.045); y++) {
+      for (let x = Math.ceil(w * 0.955); x < w; x++) {
+        const i = (y * w + x) * 4;
+        data[i] = c[0];
+        data[i + 1] = c[1];
+        data[i + 2] = c[2];
+      }
+    }
+  }
+}
