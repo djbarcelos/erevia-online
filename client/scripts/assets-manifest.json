@@ -42,14 +42,14 @@
         }
       }
     },
+    "knight_b.glb": {
+      "categoria": "personagem"
+    },
     "knight.glb": {
       "categoria": "personagem",
       "variantes": [
         "^Head_"
       ]
-    },
-    "knight_b.glb": {
-      "categoria": "personagem"
     },
     "mage.glb": {
       "categoria": "personagem",
@@ -126,6 +126,9 @@
         }
       }
     },
+    "skeleton_warrior_b.glb": {
+      "categoria": "monstro"
+    },
     "skeleton_warrior.glb": {
       "categoria": "monstro",
       "excecoes": {
@@ -138,9 +141,6 @@
           "motivo": "KayKit legado, substituído na #98"
         }
       }
-    },
-    "skeleton_warrior_b.glb": {
-      "categoria": "monstro"
     },
     "weapons/axe_1handed.glb": {
       "categoria": "arma"
@@ -157,10 +157,10 @@
     "weapons/shield_round_barbarian.glb": {
       "categoria": "arma"
     },
-    "weapons/shield_spikes.glb": {
+    "weapons/shield_spikes_color.glb": {
       "categoria": "arma"
     },
-    "weapons/shield_spikes_color.glb": {
+    "weapons/shield_spikes.glb": {
       "categoria": "arma"
     },
     "weapons/shield_square.glb": {
@@ -190,10 +190,10 @@
     "weapons/sword_1handed.glb": {
       "categoria": "arma"
     },
-    "weapons/sword_2handed.glb": {
+    "weapons/sword_2handed_color.glb": {
       "categoria": "arma"
     },
-    "weapons/sword_2handed_color.glb": {
+    "weapons/sword_2handed.glb": {
       "categoria": "arma"
     },
     "weapons/wand.glb": {

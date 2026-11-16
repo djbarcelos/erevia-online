@@ -23,7 +23,7 @@ import { reportClientError } from "../net/errors";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
 import { lodFor, REMASTER, REMASTER_FILES } from "./remaster";
-import { bodyPalettes, colorKey, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook } from "./body-look";
+import { bodyPalettes, colorKey, needsRepaint, normalLook, ORIGINAL_LOOK, paintRemasterTexture, paintTexture, type BodyLook } from "./body-look";
 
 /**
  * Personagens e monstros KayKit (CC0). Todos usam o mesmo esqueleto ("Rig_Medium"),
@@ -245,7 +245,8 @@ export class CharacterModels {
     const pixels = await src.readPixels()?.catch(() => null);
     if (!pixels || !width) return null;
     const data = new Uint8Array(pixels.buffer, pixels.byteOffset, width * height * 4).slice();
-    paintTexture(data, width, height, model, look, pal);
+    if (REMASTER && REMASTER_FILES[model]) paintRemasterTexture(data, width, height, look, pal);
+    else paintTexture(data, width, height, model, look, pal);
     const scene = base.getScene();
     const tex = RawTexture.CreateRGBATexture(data, width, height, scene, true, src.invertY, Texture.TRILINEAR_SAMPLINGMODE);
     tex.name = `${src.name}-${colorKey(model, look)}`;
