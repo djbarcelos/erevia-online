@@ -79,8 +79,15 @@ func TestLateAreas(t *testing.T) {
 			t.Errorf("%s: %d monstros", r, perRegion[r])
 		}
 	}
-	// Os Confins são os cantos dos Ermos Partidos: com os 20 do anel, cabem no orçamento.
-	if n := perRegion["Confins Partidos"] + 20; n > 45 {
+	// Os Confins são os cantos dos Ermos Partidos: com os do anel (os brutos e os de papel,
+	// tunnel#129), cabem no orçamento.
+	ermos := 0
+	for _, s := range DefaultSpawns() {
+		if !s.Area && !s.Fixed && s.RMin == 116 {
+			ermos += s.Count
+		}
+	}
+	if n := perRegion["Confins Partidos"] + ermos; ermos < 20 || n > 45 {
 		t.Errorf("Ermos + Confins: %d", n)
 	}
 }

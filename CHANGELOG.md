@@ -13,6 +13,17 @@ Como escrever (o client/scripts/build-changelog.mjs lê exatamente este formato)
 O rascunho sai de "node client/scripts/changelog-draft.mjs" (PRs mergeados desde a última versão).
 -->
 
+## 2026-11-16 · Monstros com papel
+
+### Novidades
+- **Monstros com papel na luta:** alguns monstros novos não só perseguem e batem. O quadro do alvo mostra o papel com um ícone pequeno; passe o mouse (ou segure o dedo) para ler a dica.
+- **Campos dos Ossos (6–12):** o **Esqueleto Lançador** arremessa lâminas de longe e recua quando você encosta; o **Esqueleto Espreitador** fica escondido até você chegar perto, e o primeiro golpe dele dói mais; a **Ossada Instável** corre até você e explode (saia do círculo no chão); e o bando dos **Saqueadores Ossudos**, acampado a sudoeste, deixa você passar de dia, mas à noite ataca, e bater em um traz o bando inteiro.
+- **Ermos Partidos (13–20):** a **Sentinela Ossuda** segura com o escudo boa parte do dano físico que vem de frente (ataque pelos lados, pelas costas ou com magia), e o **Esqueleto Necromante** chama Lacaios Erguidos durante a luta, que caem com ele.
+- **Vale das Pedras Vivas (20–30):** o **Golem de Musgo**, que só briga com quem bate nele, cura os golens feridos em volta; e o **Golem de Cascalho**, ao cair, vira dois Cascalhos Vivos.
+
+### Melhorias
+- **Auto-caça:** passa pelos monstros neutros (os que só atacam quem bate neles), a não ser que você ligue **Atacar monstros neutros** em Configurações → Jogo. Ela também prefere quem já está brigando com você e, se um alvo fica fora de alcance (como o Lançador que recuou para onde não dá para ir), parte para outro em vez de ficar parada.
+
 ## 2026-11-14 · Subclasse
 
 ### Novidades

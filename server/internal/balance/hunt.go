@@ -15,7 +15,9 @@ import (
 const (
 	// Onde caça: entre os grupos de monstros que nascem no nível dele (DefaultSpawns, sem
 	// chefes nem raid), o da região mais nova (maior nível mínimo): no 20 já vai para o Vale
-	// das Pedras Vivas. Monstros que dividem a região entram na proporção da quantidade.
+	// das Pedras Vivas. Monstros que dividem a região entram na proporção da quantidade. Os
+	// de papel (atirador, curandeiro...) e os neutros ficam fora da conta, que só sabe lutar
+	// com brutos (game.MonsterDef.BalanceBaseline): são poucos por área (tunnel#129).
 	huntLevelSpread = 2 // caça monstros até 2 níveis acima ou abaixo (contam como do nível dele)
 	// Deslocamento: os monstros nascem espalhados por igual na região; a distância média até
 	// o vizinho mais perto é 0,5 × √(área por monstro). Anda 50% a mais (o mais perto nem
@@ -63,7 +65,7 @@ func sameRegion(a, b game.Spawn) bool {
 
 func huntable(s game.Spawn) bool {
 	d := game.Monsters[s.Monster]
-	return d != nil && !s.Fixed && !d.Boss && !d.Raid && !d.NoGear && s.Count > 0
+	return d != nil && !s.Fixed && !d.Boss && !d.Raid && !d.NoGear && d.BalanceBaseline() && s.Count > 0
 }
 
 // HuntFor escolhe a região de caça do nível.

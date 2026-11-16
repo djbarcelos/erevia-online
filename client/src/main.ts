@@ -88,7 +88,7 @@ import { RaidUi } from "./ui/raid";
 import { RaidDirector } from "./world/raid";
 import { MonsterVariants } from "./world/variants";
 import { AutoHunt } from "./world/autohunt";
-import { nearestAllowed, QuestGo, type GoTarget, type StoneInfo } from "./world/questgo";
+import { QuestGo, type GoTarget, type StoneInfo } from "./world/questgo";
 import { GoPill } from "./ui/quest-go-pill";
 import type { QuestTarget } from "./ui/quest-nav";
 import { GroundLoot } from "./world/loot";
@@ -98,7 +98,7 @@ import { PickAreas } from "./world/pick";
 import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
 import { loadEnvironment, type Environment } from "./world/environment";
-import { DayNight, WorldClock } from "./world/daynight";
+import { DayNight, isNight, WorldClock } from "./world/daynight";
 import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
 import { Collision, loadWorldData, worldBounds } from "./world/world-data";
@@ -607,27 +607,19 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   };
 
   // ---------- Auto-caça ----------
-  /** Monstro vivo mais perto entre os desses nomes ("Caçar aqui"); 4×/s no máximo. */
-  const nearestNamed = (names: readonly string[]) => {
-    const p = entities.localPosition();
-    if (!p) return null;
-    const list: { id: number; name: string; dist: number }[] = [];
-    entities.forEachMarker((m) => {
-      if (m.kind !== EntityKind.MONSTER) return;
-      const name = entities.info(m.id)?.name;
-      if (name !== undefined) list.push({ id: m.id, name, dist: Math.hypot(m.x - p.x, m.z - p.z) });
-    });
-    return nearestAllowed(list, names);
-  };
   const auto = new AutoHunt({
     dead: () => entities.localDead,
     stats: () => lastStats,
-    nearestMonster: (names) => (names && names.length ? nearestNamed(names) : entities.nearestMonster()),
+    // Os monstros na tela; quem escolhe (nome, neutro, invisível, travado) é o huntrules.ts.
+    monsters: () => entities.huntCandidates(isNight(clock.phase())),
     targetId: () => targetId,
-    isEnemy: (id) => entities.isEnemy(id),
-    nameOf: (id) => entities.info(id)?.name,
     distanceTo: (id) => entities.reachDistanceTo(id),
     attack: attackTarget,
+    halt: () => {
+      // Clicar no chão onde está: o servidor larga o ataque e para.
+      const p = entities.localPosition();
+      if (p) conn.moveTo(p.x, p.z);
+    },
     hotbarSkills: () =>
       hud
         .getHotbar()

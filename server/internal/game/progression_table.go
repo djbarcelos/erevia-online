@@ -38,13 +38,13 @@ type ProgressionRow struct {
 }
 
 // huntGroup: os spawns caçados no nível l (o grupo de começo mais alto que cobre o nível,
-// sem chefes nem pontos fixos).
+// sem chefes, pontos fixos nem monstros de papel; ver BalanceBaseline).
 func huntGroup(l int) []Spawn {
 	best := -1
 	var group []Spawn
 	for _, s := range DefaultSpawns() {
 		def := Monsters[s.Monster]
-		if def == nil || def.Boss || def.Raid || s.Fixed {
+		if def == nil || def.Boss || def.Raid || s.Fixed || !def.BalanceBaseline() {
 			continue
 		}
 		hi := max(s.LevelMax, s.LevelMin)

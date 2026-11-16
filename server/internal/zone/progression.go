@@ -46,6 +46,7 @@ func (z *Zone) kill(dead, killer *entity) {
 		} else {
 			z.dropLoot(dead, owner)
 		}
+		z.archDeath(dead) // dividir, explodir e os lacaios do invocador (com o ódio ainda aqui)
 		ms.forget()
 		ms.corpseEnd = z.now + corpseSeconds
 		ms.respawnAt = z.now + ms.spawn.Respawn*(1+z.rng.Float64())

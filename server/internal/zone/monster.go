@@ -44,10 +44,16 @@ type monsterState struct {
 	// Fora do período do spawn (game.When): fora do mundo e sem renascer até o período
 	// voltar (spawnperiod.go).
 	dormant bool
+	arch    archState // arquétipo (archetypes.go)
 }
+
+// unseen: o monstro não está no mundo para os jogadores (corpo sumido ou emboscador
+// escondido): fora da AOI, sem clique e fora das áreas.
+func (ms *monsterState) unseen() bool { return ms.hidden || ms.arch.lurking }
 
 func (z *Zone) spawnMonsters() {
 	points := game.ExpandSpawns(z.cfg.Spawns, z.rng)
+	packs := map[int][]*entity{} // matilhas: grupo de spawn → membros
 	for i, sp := range points {
 		id := monsterIDBase + uint32(i)
 		home := z.freeSpot(clampToZone(Vec2{X: sp.X, Z: sp.Z}, z.bounds()))
@@ -71,7 +77,14 @@ func (z *Zone) spawnMonsters() {
 		}
 		m.sentHP, m.sentMaxHP = m.hpInt(), m.maxHPInt()
 		z.monsters[id] = m
+		if sp.Monster.Archetype == game.ArchPack {
+			packs[sp.Group] = append(packs[sp.Group], m)
+		}
+		if !m.dead {
+			z.archRevive(m) // o emboscador já nasce escondido
+		}
 	}
+	z.linkPacks(packs)
 }
 
 // think é a IA do monstro: vagar → perseguir → atacar → desistir e voltar.
@@ -79,6 +92,9 @@ func (z *Zone) think(m *entity) {
 	ms := m.mon
 	if m.stunned(z.now) {
 		return
+	}
+	if ms.def.Archetype == game.ArchShield {
+		z.turnShield(m) // vira devagar para quem ataca (archetypes.go)
 	}
 	// Raid boss: fases, habilidades e reinício rodam mesmo provocado (o tanque segura o
 	// chefe, mas a luta continua).
@@ -119,14 +135,24 @@ func (z *Zone) think(m *entity) {
 
 	z.pruneHate(m)
 
+	// Papéis (archetypes.go): o emboscador escondido, o pavio aceso e o recuo do atirador
+	// seguram o resto do think; o curandeiro cura com ou sem luta.
+	role := ms.def.Archetype != game.ArchBrute
+	if role && z.archBefore(m) {
+		return
+	}
+
 	// Invasores procuram alvo a cada invAggroEvery ticks (são muitos de uma vez na cidade).
-	if (ms.def.Aggressive || ms.invader) && len(ms.hate) == 0 && (!ms.invader || (z.tick+m.id)%invAggroEvery == 0) {
+	if z.monsterAggressive(m) && len(ms.hate) == 0 && (!ms.invader || (z.tick+m.id)%invAggroEvery == 0) {
 		if p := z.nearestPlayer(m.pos, z.aggroRange()); p != nil {
 			ms.hate[p.id] = 1
 		}
 	}
 
 	if top := topHate(ms.hate); top != 0 {
+		if role && z.archFight(m, top) {
+			return
+		}
 		if m.act.kind == actNone || m.act.target != top {
 			m.act = action{kind: actAttack, target: top}
 		}
@@ -139,6 +165,9 @@ func (z *Zone) think(m *entity) {
 
 	if m.act.kind != actNone {
 		m.clearAction()
+	}
+	if (role || ms.summon) && z.archCalm(m) {
+		return
 	}
 	if ms.invader {
 		z.marchInvader(m) // sem alvo: segue para a praça (e briga com quem achar no caminho)
@@ -180,6 +209,7 @@ func (z *Zone) resetMonster(m *entity) {
 	}
 	m.mon.forget()
 	m.mon.stopAbilities()
+	z.archReset(m)
 	m.mon.returning = true
 	m.clearAction()
 	m.repathAt = 0
@@ -227,6 +257,7 @@ func (z *Zone) reviveMonster(m *entity) {
 	m.sentHP, m.sentMaxHP = m.hpInt(), m.maxHPInt()
 	m.spawnSeq++ // a AOI manda o Spawn novo a quem estiver perto, no fim do tick
 	z.aoiDirty = true
+	z.archRevive(m)
 }
 
 func (z *Zone) nearestPlayer(from Vec2, maxDist float64) *entity {
