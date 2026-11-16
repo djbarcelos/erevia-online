@@ -26,11 +26,14 @@ Tudo em `server/internal/game/formulas.go`:
   em dobro continua igual: ele é proporcional, então com a curva 40× mais longa o fim de
   semana encurta o mesmo tanto (quem joga todo dia o mesmo tanto ganha ~30% a mais na
   semana), e é o que traz gente nos sábados.
-- **Missões** (`game/quests.go`): o tutorial (2.410 de XP, no começo), a Encruzilhada (20)
-  e os **contratos de caça**, um por nível do 5 ao 39, gerados dos dados: cada um pede ~25%
-  dos abates do nível nos monstros daquele nível e paga 30% da XP dele. Assim ~30% da XP
-  de cada faixa vem de missões. O contrato do nível L só chega até o nível L+2: quem já
-  passou não recebe uma pilha de contratos velhos.
+- **Missões** (`game/quests.go`): o tutorial (2.410 de XP, no começo), a Encruzilhada (20),
+  as **linhas de história das regiões** (`game/story.go`, tunnel#71) e os **contratos de
+  caça**, um por nível do 5 ao 39, gerados dos dados: cada um pede ~25% dos abates do nível
+  nos monstros daquele nível e paga 30% da XP dele, menos a XP das missões de história do
+  mesmo nível. Assim ~30% da XP de cada faixa vem de missões. O contrato do nível L só
+  chega até o nível L+2: quem já passou não recebe uma pilha de contratos velhos. As
+  **diárias** (`game/dailies.go`) ficam fora da tabela: repetem, e a conta delas é por dia
+  (seção "Missões de história e diárias").
 - **Maestria** (`game/mastery.go`): abre no 40, e 1 ponto custa `XPToNext(39)` =
   45.200.000 (o mesmo que o 39 → 40). Quem ganhou pontos no 30 (o máximo de antes) fica com
   eles e continua usando a árvore, mas não ganha pontos novos do 30 ao 39.
@@ -95,7 +98,7 @@ Premissa: 25 s por abate. Gerada por `game.ProgressionMarkdown`.
 | 1 → 2 | 43 | Esqueleto Lacaio | 12 | 43 | 0 | 0 | 0,0 |
 | 2 → 3 | 265 | Esqueleto Lacaio | 36 | 265 | 0 | 0 | 0,0 |
 | 3 → 4 | 1.060 | Esqueleto Lacaio | 70 | 1.060 | 0 | 0 | 0,0 |
-| 4 → 5 | 3.460 | Esqueleto Lacaio | 110 | 1.042 | 22 | 9 | 0,2 |
+| 4 → 5 | 3.460 | Esqueleto Lacaio | 110 | 1.279 | 20 | 8 | 0,1 |
 | 5 → 6 | 10.300 | Esqueleto Lacaio | 158 | 3.090 | 46 | 19 | 0,5 |
 | 6 → 7 | 23.700 | Esqueleto Guerreiro, Esqueleto Ladino | 281 | 7.110 | 60 | 25 | 0,9 |
 | 7 → 8 | 39.300 | Esqueleto Guerreiro, Esqueleto Ladino | 360 | 11.790 | 77 | 32 | 1,4 |
@@ -103,7 +106,7 @@ Premissa: 25 s por abate. Gerada por `game.ProgressionMarkdown`.
 | 9 → 10 | 98.600 | Esqueleto Guerreiro, Esqueleto Ladino | 538 | 29.580 | 129 | 54 | 3,0 |
 | 10 → 11 | 124.000 | Esqueleto Guerreiro, Esqueleto Ladino | 637 | 37.200 | 137 | 57 | 4,0 |
 | 11 → 12 | 158.000 | Esqueleto Guerreiro, Esqueleto Ladino | 742 | 47.400 | 150 | 63 | 5,0 |
-| 12 → 13 | 200.000 | Esqueleto Guerreiro, Esqueleto Ladino | 853 | 60.000 | 165 | 69 | 6,2 |
+| 12 → 13 | 200.000 | Esqueleto Guerreiro, Esqueleto Ladino | 853 | 60.000 | 165 | 69 | 6,1 |
 | 13 → 14 | 265.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.030 | 79.500 | 181 | 75 | 7,4 |
 | 14 → 15 | 328.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.160 | 98.400 | 199 | 83 | 8,8 |
 | 15 → 16 | 403.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.295 | 120.900 | 218 | 91 | 10,3 |
@@ -111,31 +114,31 @@ Premissa: 25 s por abate. Gerada por `game.ProgressionMarkdown`.
 | 17 → 18 | 594.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.582 | 178.200 | 263 | 110 | 13,8 |
 | 18 → 19 | 715.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.733 | 214.500 | 289 | 120 | 15,8 |
 | 19 → 20 | 857.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.890 | 257.100 | 318 | 133 | 18,0 |
-| 20 → 21 | 2.620.000 | Golem de Pedra | 4.827 | 786.000 | 380 | 158 | 20,7 |
+| 20 → 21 | 2.620.000 | Golem de Pedra | 4.827 | 786.000 | 380 | 158 | 20,6 |
 | 21 → 22 | 3.080.000 | Golem de Pedra | 5.219 | 924.000 | 414 | 173 | 23,5 |
-| 22 → 23 | 3.620.000 | Golem de Pedra | 5.623 | 1.086.000 | 451 | 188 | 26,7 |
+| 22 → 23 | 3.620.000 | Golem de Pedra | 5.623 | 1.086.000 | 451 | 188 | 26,6 |
 | 23 → 24 | 4.230.000 | Golem de Pedra | 6.037 | 1.269.000 | 491 | 205 | 30,1 |
 | 24 → 25 | 4.940.000 | Golem de Pedra | 6.462 | 1.482.000 | 536 | 223 | 33,8 |
 | 25 → 26 | 5.740.000 | Golem de Pedra | 6.899 | 1.722.000 | 583 | 243 | 37,8 |
 | 26 → 27 | 6.660.000 | Golem de Pedra | 7.345 | 1.998.000 | 635 | 265 | 42,2 |
-| 27 → 28 | 7.710.000 | Golem de Pedra | 7.803 | 2.313.000 | 692 | 288 | 47,1 |
+| 27 → 28 | 7.710.000 | Golem de Pedra | 7.803 | 2.313.000 | 692 | 288 | 47,0 |
 | 28 → 29 | 8.900.000 | Golem de Pedra | 8.270 | 2.670.000 | 754 | 314 | 52,3 |
 | 29 → 30 | 10.300.000 | Golem de Pedra | 8.748 | 3.090.000 | 825 | 344 | 58,0 |
-| 30 → 31 | 13.400.000 | Golem Ancestral | 10.621 | 4.020.000 | 884 | 368 | 64,2 |
+| 30 → 31 | 13.400.000 | Golem Ancestral | 10.621 | 4.020.000 | 884 | 368 | 64,1 |
 | 31 → 32 | 15.300.000 | Golem Ancestral | 11.193 | 4.590.000 | 957 | 399 | 70,8 |
 | 32 → 33 | 17.500.000 | Golem Ancestral | 11.776 | 5.250.000 | 1.041 | 434 | 78,0 |
 | 33 → 34 | 20.700.000 | Cavaleiro Ossário, Devoto do Ossário | 12.908 | 6.210.000 | 1.123 | 468 | 85,8 |
 | 34 → 35 | 23.500.000 | Cavaleiro Ossário, Devoto do Ossário | 13.540 | 7.050.000 | 1.215 | 506 | 94,3 |
 | 35 → 36 | 27.700.000 | Ceifador Partido, Arcanista Partido | 14.773 | 8.310.000 | 1.313 | 547 | 103,4 |
 | 36 → 37 | 31.400.000 | Ceifador Partido, Arcanista Partido | 15.454 | 9.420.000 | 1.423 | 593 | 113,3 |
-| 37 → 38 | 35.500.000 | Ceifador Partido, Arcanista Partido | 16.147 | 10.650.000 | 1.539 | 641 | 124,0 |
+| 37 → 38 | 35.500.000 | Ceifador Partido, Arcanista Partido | 16.147 | 10.650.000 | 1.539 | 641 | 123,9 |
 | 38 → 39 | 40.100.000 | Ceifador Partido, Arcanista Partido | 16.851 | 12.030.000 | 1.666 | 694 | 135,5 |
 | 39 → 40 | 45.200.000 | Ceifador Partido, Arcanista Partido | 17.566 | 13.560.000 | 1.802 | 751 | 148,0 |
-| **1 → 40** | **332.474.828** | | | | **21.318** | **8.883** | **148,0 h** |
+| **1 → 40** | **332.474.828** | | | | **21.316** | **8.882** | **148,0 h** |
 
 | Faixa | Abates | Horas | Tempo-alvo | Diferença | XP de missões |
 |---|---:|---:|---:|---:|---:|
-| 1 → 10 | 434 | 3,0 | 3,0 | +0,5% | 30% |
+| 1 → 10 | 432 | 3,0 | 3,0 | +0,0% | 30% |
 | 10 → 20 | 2.160 | 15,0 | 15,0 | +0,0% | 30% |
 | 20 → 30 | 5.761 | 40,0 | 40,0 | +0,0% | 30% |
 | 30 → 40 | 12.963 | 90,0 | 90,0 | +0,0% | 30% |
@@ -159,6 +162,41 @@ fica em ~148 h.
 - O começo continua rápido (o jogador aprende o jogo e escolhe a classe), o meio dá a
   segunda classe (nível 20) com ~18 h de jogo, e o fim é a parte longa, como no Lineage 2.
 - Referência: o WoW Classic leva ~150–240 h até o 60.
+
+## Missões de história e diárias (tunnel#71)
+
+A curva (~148 h até o 40) não muda. As missões novas foram dimensionadas assim:
+
+**Linhas de história.** São 7 linhas, uma por região (Arredores, Campos dos Ossos, Ermos
+Partidos, Vale das Pedras Vivas, Fundo do Vale, Vigília Ossária e Confins Partidos): um
+convite que chega com o nível e de 3 a 4 missões que o contador de história da região dá e
+recebe na conversa, 33 missões ao todo. Cada uma paga uma fração da barra do nível dela:
+1% o convite, 5% uma missão comum, 6% a que fecha a linha com chefe ou raid. Essa XP **sai
+de dentro do orçamento de 30%**: o contrato de caça do nível L paga `30% × XPToNext(L) −
+StoryXPAt(L)`, e em nenhum nível a história passa de 12% da barra (o contrato fica com pelo
+menos 18%). Os abates que o contrato pede continuam os mesmos. Quem faz as duas coisas
+recebe os mesmos 30% de antes, então a tabela acima não muda (o teste
+`TestStoryXPComesOutOfTheContract` trava a soma).
+
+A exceção são os Arredores: as missões dos níveis 3 e 4 vêm antes do primeiro contrato (no
+5), então não há de onde tirar. Elas somam 237 de XP, 2 abates (~1 min) a menos no 4 → 5.
+
+Quem pula a história fica com só o contrato: no máximo 12% da barra a menos no nível, ou
+seja, alguns abates a mais. O resto da recompensa da história é em moedas (50 × o nível da
+missão), poções e pergaminhos e, do 30 em diante, 100 de reputação com a Ordem do Bastião
+(Fundo do Vale e Vigília Ossária) ou com a Guarda (Confins Partidos), 200 na última.
+
+**Diárias.** O Arauto da praça oferece 3 por dia (coleta, entrega e ronda ou chefe), do 5
+ao 35. Cada uma paga a XP de **2 abates do nível do jogador** (`HuntKillXP`, a XP média
+da tabela), calculada na hora da entrega: as 3 do dia valem 6 abates, **2,5 min de caça**.
+E custam mais do que isso para fazer: a coleta pede de ~20 a ~35 abates (os materiais caem
+em 15% a 60% dos abates), a entrega pede juntar ou comprar os itens e levar a alguém, e a
+ronda é andar até lugares longe da caça. Por minuto de jogo, a diária dá menos XP que
+caçar, então a curva em horas de jogo não encurta. Mesmo contando a XP delas como de graça,
+quem joga 2 h por dia ganha ~2% a mais por dia (2,5 min em 120) e quem joga 1 h, ~4%.
+
+O peso da diária está no resto: moedas (35 × o meio da faixa da diária, de 250 a 1.190),
+2 ou 3 poções e 15 de reputação com a Guarda de Vel'Aran.
 
 ## Vitalidade (tunnel#150)
 

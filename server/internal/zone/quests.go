@@ -2,6 +2,7 @@ package zone
 
 import (
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 
@@ -33,6 +34,7 @@ func (q *activeQuest) complete() bool {
 type questLog struct {
 	active []*activeQuest
 	done   map[string]bool
+	daily  game.DailyState // as diárias do dia (dailies.go); as aceitas ficam em active
 	// doneSent: a lista de concluídas já foi ao cliente nesta sessão (depois disso ela só vai
 	// de novo quando uma missão termina).
 	doneSent bool
@@ -43,7 +45,12 @@ type questLog struct {
 func loadQuests(st game.QuestState, level int) questLog {
 	q := questLog{done: map[string]bool{}}
 	for _, id := range st.Done {
-		q.done[id] = true
+		if def := game.Quests[id]; def == nil || def.Daily == 0 { // diária nunca fica concluída para sempre
+			q.done[id] = true
+		}
+	}
+	if d := game.NormalDaily(st.Daily); d != nil {
+		q.daily = *d
 	}
 	ids := make([]string, 0, len(st.Active))
 	for id := range st.Active {
@@ -52,8 +59,8 @@ func loadQuests(st game.QuestState, level int) questLog {
 	slices.Sort(ids)
 	for _, id := range ids {
 		def := game.Quests[id]
-		if def == nil || q.done[id] {
-			continue // missão que deixou de existir
+		if def == nil || q.done[id] || def.Daily != 0 && (!q.daily.Offered(id) || q.daily.Delivered(id)) {
+			continue // missão que deixou de existir (ou diária fora do rol)
 		}
 		prog := make([]int, len(def.Steps))
 		copy(prog, st.Active[id])
@@ -79,17 +86,26 @@ func (q *questLog) state() game.QuestState {
 		st.Done = append(st.Done, id)
 	}
 	slices.Sort(st.Done)
+	if q.daily.Day != 0 {
+		d := game.DailyState{Day: q.daily.Day, Offer: slices.Clone(q.daily.Offer), Done: slices.Clone(q.daily.Done)}
+		st.Daily = &d
+	}
 	return st
 }
 
 // questEvent soma 1 aos objetivos que batem com o acontecimento.
 func (z *Zone) questEvent(p *entity, goal game.QuestGoal, target string) {
-	if p.pl == nil {
-		return
+	z.questEventN(p, goal, target, 1)
+}
+
+// questEventN soma n (itens pegos do chão, por exemplo). Devolve se mandou o QuestLog.
+func (z *Zone) questEventN(p *entity, goal game.QuestGoal, target string, n int) bool {
+	if p.pl == nil || n <= 0 {
+		return false
 	}
-	z.questUpdate(p, func(s game.QuestStep, cur int) int {
+	return z.questUpdate(p, func(s game.QuestStep, cur int) int {
 		if s.Matches(goal, target) {
-			return cur + 1
+			return cur + n
 		}
 		return cur
 	})
@@ -126,6 +142,7 @@ func (z *Zone) questLevelUp(p *entity) {
 // questUpdate aplica f a cada objetivo, conclui o que completou e avisa o cliente se mudou
 // (devolve se mandou o QuestLog).
 func (z *Zone) questUpdate(p *entity, f func(s game.QuestStep, cur int) int) bool {
+	stale := z.dailyRefresh(p) // a diária de ontem não anda hoje
 	changed := false
 	for _, a := range p.pl.quests.active {
 		for i, s := range a.def.Steps {
@@ -136,12 +153,15 @@ func (z *Zone) questUpdate(p *entity, f func(s game.QuestStep, cur int) int) boo
 		}
 	}
 	if !changed {
-		return false
+		if stale {
+			z.sendQuests(p, "")
+		}
+		return stale
 	}
 	z.saveSoon(p)
 	completed := ""
 	for {
-		i := slices.IndexFunc(p.pl.quests.active, (*activeQuest).complete)
+		i := slices.IndexFunc(p.pl.quests.active, (*activeQuest).finishesAlone)
 		if i < 0 {
 			break
 		}
@@ -156,10 +176,18 @@ func (z *Zone) questUpdate(p *entity, f func(s game.QuestStep, cur int) int) boo
 
 // finishQuest entrega a recompensa e começa a próxima missão da sequência.
 func (z *Zone) finishQuest(p *entity, def *game.QuestDef) {
-	p.pl.quests.done[def.ID] = true
+	if def.Daily != 0 {
+		p.pl.quests.daily.Done = append(p.pl.quests.daily.Done, def.ID) // volta outro dia, se sair no sorteio
+	} else {
+		p.pl.quests.done[def.ID] = true
+	}
 	z.achEvent(p, game.AchQuest, def.ID)
 	r := def.Reward
-	z.system(p, fmt.Sprintf("Missão concluída: %s. Recompensa: %s.", def.Title, rewardText(r)))
+	xp := r.XPAt(p.level)
+	z.system(p, fmt.Sprintf("Missão concluída: %s. Recompensa: %s.", def.Title, rewardText(r, p.level)))
+	if def.Giver != "" { // telemetria das missões de NPC (linhas de história e diárias)
+		z.track(p, "quest_done", def.ID, xp, map[string]any{"region": def.Region, "daily": def.Daily != 0})
+	}
 	if r.Gold > 0 {
 		p.pl.inv.gold += r.Gold
 		z.trackGold(p, "quest", r.Gold)
@@ -191,10 +219,24 @@ func (z *Zone) finishQuest(p *entity, def *game.QuestDef) {
 	if r.Gold > 0 || len(r.Items) > 0 {
 		z.inventoryChanged(p, false)
 	}
-	if r.XP > 0 {
-		z.grantXPFrom(p, xpQuest, r.XP) // pode subir de nível (e andar objetivos de nível da próxima)
+	if f := game.FactionByID(r.Faction); f != nil && r.Rep > 0 {
+		_, before, after := p.pl.contracts.rep.Add(r.Faction, r.Rep)
+		up := ""
+		if after > before {
+			up = fmt.Sprintf("%s com a %s", game.RepGradeNames[after], f.Name)
+			z.systemAfterFlush(p, fmt.Sprintf("Sua reputação com a %s subiu para %s!", f.Name, game.RepGradeNames[after]))
+		}
+		z.sendReputation(p, false, up)
 	}
-	if next := game.Quests[def.Next]; next != nil && !p.pl.quests.done[next.ID] {
+	if xp > 0 {
+		z.grantXPFrom(p, xpQuest, xp) // pode subir de nível (e andar objetivos de nível da próxima)
+	}
+	if next := game.Quests[def.Next]; next != nil && next.Giver != "" {
+		// A próxima da linha é oferecida na conversa (talk.go), não chega sozinha.
+		if !p.pl.quests.done[next.ID] && !p.pl.quests.has(next.ID) {
+			z.systemAfterFlush(p, fmt.Sprintf("%s tem mais a dizer: «%s».", next.Giver, next.Title))
+		}
+	} else if next != nil && !p.pl.quests.done[next.ID] {
 		p.pl.quests.active = append(p.pl.quests.active, &activeQuest{def: next, progress: make([]int, len(next.Steps))})
 		z.system(p, "Nova missão: "+next.Title+".")
 		z.questLevel(p) // objetivo de nível que já está cumprido
@@ -229,10 +271,10 @@ func (q *questLog) has(id string) bool {
 	return slices.ContainsFunc(q.active, func(a *activeQuest) bool { return a.def.ID == id })
 }
 
-func rewardText(r game.QuestReward) string {
+func rewardText(r game.QuestReward, level int) string {
 	var parts []string
-	if r.XP > 0 {
-		parts = append(parts, fmt.Sprintf("%d XP", r.XP))
+	if xp := r.XPAt(level); xp > 0 {
+		parts = append(parts, fmt.Sprintf("%d XP", xp))
 	}
 	if r.Gold > 0 {
 		parts = append(parts, fmt.Sprintf("%d moedas", r.Gold))
@@ -241,6 +283,9 @@ func rewardText(r game.QuestReward) string {
 		if d := game.Items[it.ID]; d != nil {
 			parts = append(parts, itemLabel(d, it.Count))
 		}
+	}
+	if f := game.FactionByID(r.Faction); f != nil && r.Rep > 0 {
+		parts = append(parts, fmt.Sprintf("%d de reputação (%s)", r.Rep, f.Name))
 	}
 	if len(parts) == 0 {
 		return "nenhuma"
@@ -253,10 +298,17 @@ func rewardText(r game.QuestReward) string {
 // últimas (o QuestLog vai a cada monstro da missão e a lista só cresce).
 func (z *Zone) sendQuests(p *entity, completed string) {
 	log := &pb.QuestLog{Completed: completed}
+	if p.pl.quests.daily.Day != 0 {
+		log.DailyResetMs = game.NextDailyReset(p.pl.quests.daily.Day, z.eventLoc()).UnixMilli()
+	}
 	for _, a := range p.pl.quests.active {
-		q := &pb.QuestInfo{Id: a.def.ID, Title: a.def.Title, Text: a.def.Text, Reward: rewardText(a.def.Reward), Category: questCategoryPB(a.def.Category)}
+		q := &pb.QuestInfo{Id: a.def.ID, Title: a.def.Title, Text: a.def.Text, Reward: rewardText(a.def.Reward, p.level),
+			Category: questCategoryPB(a.def.Category), Region: a.def.Region}
 		for i, s := range a.def.Steps {
 			q.Steps = append(q.Steps, z.stepInfo(p, s, a.progress[i]))
+		}
+		if a.def.TurnIn != "" { // o último passo: voltar a quem recebe (o "Ir" aponta para ele)
+			q.Steps = append(q.Steps, z.stepInfo(p, turnInStep(a.def), 0))
 		}
 		log.Quests = append(log.Quests, q)
 	}
@@ -291,6 +343,64 @@ func questCategoryPB(c game.QuestCategory) pb.QuestCategory {
 		return pb.QuestCategory_QUEST_CATEGORY_TUTORIAL
 	}
 	return pb.QuestCategory_QUEST_CATEGORY_UNSPECIFIED
+}
+
+// finishesAlone: a missão terminou e não espera entrega a ninguém.
+func (q *activeQuest) finishesAlone() bool { return q.def.TurnIn == "" && q.complete() }
+
+// turnInStep: o passo de voltar a quem recebe a missão (só no QuestLog: a entrega é na
+// conversa, NPC_TALK_TURN_IN).
+func turnInStep(def *game.QuestDef) game.QuestStep {
+	return game.QuestStep{Goal: game.GoalTalk, Target: def.TurnIn, Count: 1, Text: "Voltar a " + def.TurnIn}
+}
+
+// checkVisits: 1×/s, só para quem tem um lugar para visitar pendente (GoalVisit).
+func (z *Zone) checkVisits() {
+	for _, p := range z.players {
+		if p.dead {
+			continue
+		}
+		var reached []string
+		for _, a := range p.pl.quests.active {
+			for i, s := range a.def.Steps {
+				if s.Goal == game.GoalVisit && a.progress[i] < s.Count && s.Place != nil &&
+					math.Hypot(p.pos.X-s.Place.X, p.pos.Z-s.Place.Z) <= s.Place.Radius && !slices.Contains(reached, s.Target) {
+					reached = append(reached, s.Target)
+				}
+			}
+		}
+		for _, key := range reached {
+			z.questEvent(p, game.GoalVisit, key)
+		}
+	}
+}
+
+// questCollect: pegou do chão um material do saque de um monstro (loot.go). Itens que o
+// jogador largou ou que sobraram de recompensa não contam.
+func (z *Zone) questCollect(p *entity, g *groundItem) {
+	if !g.loot || g.def.Kind != game.KindMaterial {
+		z.questHave(p, g.def.ID)
+		return
+	}
+	if !z.questEventN(p, game.GoalCollect, g.def.ID, g.count) {
+		z.questHave(p, g.def.ID)
+	}
+}
+
+// questHave: a bolsa ganhou um item que uma entrega pendente pede; o QuestLog vai de novo
+// (o passo mostra quantos o jogador tem, e o "Ir" troca de "onde achar" para "a quem levar").
+func (z *Zone) questHave(p *entity, item string) {
+	if p.pl == nil {
+		return
+	}
+	for _, a := range p.pl.quests.active {
+		for i, s := range a.def.Steps {
+			if s.Goal == game.GoalDeliver && s.Target == item && a.progress[i] < s.Count {
+				z.sendQuests(p, "")
+				return
+			}
+		}
+	}
 }
 
 // checkLeaveTown: 1×/s, só para quem tem o objetivo de sair da cidade pendente.

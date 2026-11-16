@@ -1,6 +1,7 @@
 package zone
 
 import (
+	"fmt"
 	"math"
 	"strings"
 
@@ -47,13 +48,29 @@ func (z *Zone) questPlace(p *entity, s game.QuestStep) (game.QuestPlace, bool) {
 		return z.shopPlace(p, s)
 	case game.GoalTalk, game.GoalSpec:
 		return z.talkPlace(p, s)
+	case game.GoalCollect:
+		return game.HuntPlace(z.cfg.Spawns, game.LootSources(s.Target), p.level, p.pos.X, p.pos.Z)
+	case game.GoalDeliver:
+		return z.deliverPlace(p, s)
 	}
 	return game.QuestPlace{}, false // usar skill, tomar poção: em qualquer lugar
 }
 
 // placeByLevel diz se o lugar do objetivo muda com o nível (reenviar ao subir).
 func placeByLevel(s game.QuestStep) bool {
-	return s.Place == nil && (s.Goal == game.GoalKill || s.Goal == game.GoalLevel)
+	return s.Place == nil && (s.Goal == game.GoalKill || s.Goal == game.GoalLevel || s.Goal == game.GoalCollect || s.Goal == game.GoalDeliver)
+}
+
+// deliverPlace: com os itens na bolsa, quem recebe; senão, onde arranjar: a loja que vende
+// ou a caça dos monstros que deixam cair.
+func (z *Zone) deliverPlace(p *entity, s game.QuestStep) (game.QuestPlace, bool) {
+	if p.pl.inv.countOf(s.Target) >= s.Count {
+		return z.talkPlace(p, game.QuestStep{Goal: game.GoalTalk, Target: s.NPC})
+	}
+	if pl, ok := z.shopPlace(p, game.QuestStep{Goal: game.GoalBuy, Target: s.Target}); ok {
+		return pl, true
+	}
+	return game.HuntPlace(z.cfg.Spawns, game.LootSources(s.Target), p.level, p.pos.X, p.pos.Z)
 }
 
 func nearestGate(pos Vec2) game.QuestPlace {
@@ -137,11 +154,22 @@ func (z *Zone) stepInfo(p *entity, s game.QuestStep, progress int) *pb.QuestStep
 		info.X, info.Z, info.Radius = float32(pl.X), float32(pl.Z), float32(pl.Radius)
 		info.PlaceName = pl.Name
 	}
-	if s.Goal == game.GoalKill {
-		for _, id := range s.Monsters() {
-			if def := game.Monsters[id]; def != nil {
-				info.Monsters = append(info.Monsters, def.Name)
-			}
+	var hunt []string
+	switch s.Goal {
+	case game.GoalKill:
+		hunt = s.Monsters()
+	case game.GoalCollect:
+		hunt = game.LootSources(s.Target)
+	case game.GoalDeliver:
+		have := p.pl.inv.countOf(s.Target)
+		info.Text = fmt.Sprintf("%s (na bolsa: %d)", s.Text, have)
+		if have < s.Count && info.Place == pb.QuestPlaceKind_QUEST_PLACE_KIND_HUNT {
+			hunt = game.LootSources(s.Target)
+		}
+	}
+	for _, id := range hunt {
+		if def := game.Monsters[id]; def != nil {
+			info.Monsters = append(info.Monsters, def.Name)
 		}
 	}
 	return info

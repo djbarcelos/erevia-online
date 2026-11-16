@@ -37,6 +37,7 @@ func TestPlaceKindsMatchTheProtocol(t *testing.T) {
 		{game.PlaceNone, pb.QuestPlaceKind_QUEST_PLACE_KIND_NONE}, {game.PlaceHunt, pb.QuestPlaceKind_QUEST_PLACE_KIND_HUNT},
 		{game.PlaceNPC, pb.QuestPlaceKind_QUEST_PLACE_KIND_NPC}, {game.PlaceGate, pb.QuestPlaceKind_QUEST_PLACE_KIND_GATE},
 		{game.PlaceStone, pb.QuestPlaceKind_QUEST_PLACE_KIND_STONE}, {game.PlaceShop, pb.QuestPlaceKind_QUEST_PLACE_KIND_SHOP},
+		{game.PlaceSpot, pb.QuestPlaceKind_QUEST_PLACE_KIND_SPOT},
 	} {
 		if pb.QuestPlaceKind(c.g) != c.p {
 			t.Errorf("game place %d maps to %v, want %v", c.g, pb.QuestPlaceKind(c.g), c.p)
@@ -56,17 +57,24 @@ func TestEveryQuestStepHasThePlaceOfItsGoal(t *testing.T) {
 		game.GoalTeleport:  pb.QuestPlaceKind_QUEST_PLACE_KIND_STONE,
 		game.GoalTalk:      pb.QuestPlaceKind_QUEST_PLACE_KIND_NPC,
 		game.GoalSpec:      pb.QuestPlaceKind_QUEST_PLACE_KIND_NPC,
+		game.GoalCollect:   pb.QuestPlaceKind_QUEST_PLACE_KIND_HUNT,
+		game.GoalVisit:     pb.QuestPlaceKind_QUEST_PLACE_KIND_SPOT,
+		// Entregar, sem os itens na bolsa: onde arranjar (a loja que vende ou a caça).
+		game.GoalDeliver: pb.QuestPlaceKind_QUEST_PLACE_KIND_SHOP,
 	}
 	z := newQuestZone()
 	p, _ := joinAt(z, 1, "knight", 3, -2, 0)
 	for id, q := range game.Quests {
-		p.level = max(1, q.Unlock)
+		p.level = max(1, q.Unlock, q.Level)
 		for i, s := range q.Steps {
 			k, ok := want[s.Goal]
 			if !ok {
 				t.Fatalf("%s step %d: goal %d without an expected place", id, i, s.Goal)
 			}
 			info := z.stepInfo(p, s, 0)
+			if s.Goal == game.GoalDeliver && game.Items[s.Target].Kind == game.KindMaterial {
+				k = pb.QuestPlaceKind_QUEST_PLACE_KIND_HUNT // material: não se compra, se caça
+			}
 			if info.Place != k {
 				t.Errorf("%s step %d (%s): place %v, want %v", id, i, s.Text, info.Place, k)
 				continue
@@ -187,6 +195,11 @@ func TestQuestLogSendsPlacesAndRefreshesOnLevelUp(t *testing.T) {
 	p.pl.quests.active = []*activeQuest{{def: game.Quests["tut_skill"], progress: []int{0}}}
 	for l := 9; l <= 11; l++ { // os contratos do 9 ao 11 chegariam e reenviariam
 		p.pl.quests.done[game.ContractID(l)] = true
+	}
+	for _, q := range game.QuestsByUnlock { // os convites das linhas de história também
+		if q.Region != "" {
+			p.pl.quests.done[q.ID] = true
+		}
 	}
 	n = peer.questLogCount()
 	z.grantXP(p, game.XPLevelStart(11)-p.pl.xp)

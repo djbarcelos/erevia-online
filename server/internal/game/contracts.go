@@ -290,8 +290,8 @@ func mix64(x uint64) uint64 {
 	return x ^ (x >> 31)
 }
 
-func contractSeed(char uint32, slot ContractSlot, period int) uint64 {
-	return mix64(uint64(char)<<32 ^ uint64(slot)<<24 ^ mix64(uint64(int64(period))))
+func contractSeed(char uint32, slot uint64, period int) uint64 {
+	return mix64(uint64(char)<<32 ^ slot<<24 ^ mix64(uint64(int64(period))))
 }
 
 // DayRegion: a região do dia do personagem. Roda pelas três de ContractRegions, um passo
@@ -314,14 +314,14 @@ func DailyContracts(char uint32, day int) []*ContractDef {
 		if len(pool) == 0 {
 			continue
 		}
-		out = append(out, pool[int(uint64(int64(turn)+int64(contractSeed(char, slot, 0)%1024))%uint64(len(pool)))])
+		out = append(out, pool[int(uint64(int64(turn)+int64(contractSeed(char, uint64(slot), 0)%1024))%uint64(len(pool)))])
 	}
 	return out
 }
 
 // WeeklyContract: o semanal do personagem na semana, sem repetir o da semana anterior.
 func WeeklyContract(char uint32, week int) *ContractDef {
-	return pickNoRepeat(contractPool(ContractWeekly, ""), char, ContractWeekly, week)
+	return pickNoRepeat(contractPool(ContractWeekly, ""), char, uint64(ContractWeekly), week)
 }
 
 // OfferedContracts: o que o quadro oferece ao personagem no dia (diários e o semanal).
@@ -338,12 +338,13 @@ func OfferedContracts(char uint32, day int) []*ContractDef {
 // (embaralhada com a semente do personagem). Dentro do ciclo nada repete; na emenda, se o
 // primeiro do ciclo for o último do anterior, os dois primeiros trocam de lugar (com 3 ou
 // mais opções a troca nunca mexe no último do ciclo, então a conta fecha). Com 2 opções,
-// alterna.
-func pickNoRepeat(pool []*ContractDef, char uint32, slot ContractSlot, period int) *ContractDef {
+// alterna. Serve aos contratos e às diárias (dailies.go): slot separa as sementes.
+func pickNoRepeat[T any](pool []T, char uint32, slot uint64, period int) T {
 	n := len(pool)
 	switch n {
 	case 0:
-		return nil
+		var none T
+		return none
 	case 1:
 		return pool[0]
 	case 2:

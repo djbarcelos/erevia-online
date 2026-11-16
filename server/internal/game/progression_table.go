@@ -92,11 +92,20 @@ func huntXP(l int) (float64, string) {
 	return xp / float64(count), strings.Join(names, ", ")
 }
 
+// HuntKillXP: a XP média de um abate de quem caça no próprio nível (a mesma da tabela).
+func HuntKillXP(level int) float64 {
+	xp, _ := huntXP(min(max(level, 1), MaxLevel-1))
+	return xp
+}
+
 // TheoreticalProgression monta a tabela do nível 1 ao MaxLevel−1.
 func TheoreticalProgression(secPerKill float64) []ProgressionRow {
 	questAt := map[int]int64{}
 	for _, q := range questList {
-		questAt[max(1, q.Unlock)] += q.Reward.XP
+		if q.Daily != 0 {
+			continue // diárias: repetem, a conta delas é por dia (docs/progressao.md)
+		}
+		questAt[max(1, q.Unlock, q.Level)] += q.Reward.XP
 	}
 	var left int64
 	out := make([]ProgressionRow, 0, MaxLevel-1)

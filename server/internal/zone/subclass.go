@@ -24,8 +24,9 @@ import (
 // invariantes e salvamento continuam lendo os mesmos campos. As outras classes ficam em
 // pl.classes; a troca guarda a ativa lá e traz a nova para os campos. Nada roda por tick.
 
-// guardian: Edrian, o Guardião das Sendas, ao sul do poço (o Barbeiro fica ao norte).
-var guardian = npcDef{name: game.TalkGuardian, title: "Guardião das Sendas", model: "knight", x: 0, z: -9.5,
+// guardian: Edrian, o Guardião das Sendas, ao sul do poço (o Barbeiro fica ao norte), a
+// sudoeste da Iselda: entre ela e o Severino ele ficava a 1,6 m de cada um.
+var guardian = npcDef{name: game.TalkGuardian, title: "Guardião das Sendas", model: "knight", x: -4.5, z: -11.5,
 	role: pb.NpcRole_NPC_ROLE_SUBCLASS, look: &game.Appearance{Skin: 4, Hair: 5, Outfit: 6, Head: "ranger"}}
 
 // guardianID: depois do Leiloeiro (o último NPC da cidade).
@@ -38,12 +39,12 @@ func (z *Zone) spawnGuardian(id uint32) {
 	}
 	d := guardian
 	pos := z.freeSpot(Vec2{X: d.x, Z: d.z})
-	z.npcs[id] = &entity{
+	z.addNPC(&entity{
 		id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
 		name: d.name, model: d.model, level: 1, scale: 1,
 		pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
 		npc: &npcState{title: d.title, role: d.role, look: d.look},
-	}
+	})
 }
 
 // classTreePB: a árvore da classe (ativas e passivas, mais as skills dos dois caminhos: a

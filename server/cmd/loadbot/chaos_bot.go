@@ -63,6 +63,7 @@ type npcSeen struct {
 	recipes []string
 	crafts  bool
 	name    string
+	talk    bool // conversa (NpcTalk)
 }
 
 // chaosSession é uma conexão e o que ela recebeu do servidor.
@@ -110,6 +111,8 @@ type chaosSession struct {
 	// Casa de leilões: anúncios vistos na busca e os meus; cartas com anexo não retirado.
 	aucFound, aucMine []aucSeen
 	attach            []uint64
+	// A última conversa aberta (NpcDialog): as opções que o servidor ofereceu.
+	dialog *pb.NpcDialog
 }
 
 // ---------- Passos ----------
@@ -406,6 +409,8 @@ func (b *chaosBot) read(s *chaosSession) {
 			}
 		case *pb.ServerMessage_Auction:
 			s.onAuction(v.Auction)
+		case *pb.ServerMessage_NpcDialog:
+			s.dialog = v.NpcDialog
 		case *pb.ServerMessage_Achievements:
 			if v.Achievements.Full {
 				s.titles = s.titles[:0]
@@ -464,6 +469,7 @@ func (s *chaosSession) welcome(w *pb.Welcome) {
 			n.recipes = append(n.recipes, r.Id)
 		}
 		n.crafts = len(ni.Recipes) > 0
+		n.talk = ni.Talk
 	}
 	for _, g := range w.GroundItems {
 		s.ground[g.Id] = vec{float64(g.X), float64(g.Z)}

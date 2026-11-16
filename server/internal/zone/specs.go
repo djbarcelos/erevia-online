@@ -14,19 +14,20 @@ import (
 // Entity.spec e no PlayerStatus (estado do jogador, como o título: muda só quando ele
 // escolhe ou troca). Nada roda por tick.
 
-// master: Ysolde, a Mestra dos Caminhos, do lado leste do poço (o Otto fica no oeste).
-var master = npcDef{name: "Ysolde", title: "Mestra dos Caminhos", model: "mage", x: 8, z: 6,
+// master: Ysolde, a Mestra dos Caminhos, do lado leste do poço (o Otto fica no oeste), a
+// 4,5 m da Pedra de Teleporte da praça (7, 7): perto demais, o clique pegava um pelo outro.
+var master = npcDef{name: "Ysolde", title: "Mestra dos Caminhos", model: "mage", x: 9.5, z: 2.5,
 	role: pb.NpcRole_NPC_ROLE_MASTER, look: &game.Appearance{Skin: 3, Hair: 5, Outfit: 6, Head: "mage"}}
 
 func (z *Zone) spawnMaster(id uint32) {
 	d := master
 	pos := z.freeSpot(Vec2{X: d.x, Z: d.z})
-	z.npcs[id] = &entity{
+	z.addNPC(&entity{
 		id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
 		name: d.name, model: d.model, level: 1, scale: 1,
 		pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
 		npc: &npcState{title: d.title, role: d.role, look: d.look},
-	}
+	})
 }
 
 // specCatalog: as 8 especializações (o cliente mostra o nome e a cor das dos outros).

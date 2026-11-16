@@ -184,6 +184,7 @@ func (z *Zone) runPickup(p *entity) {
 		inv.put(g.def, g.count, g.enchant)
 		z.trackItem(p, true, g.def.ID, g.count, "loot")
 		z.contractLoot(p, g)
+		z.questCollect(p, g) // missões: coletar e entregar (quests.go)
 	}
 	delete(z.ground, g.id)
 	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundRemoved{GroundRemoved: &pb.GroundItemsRemoved{

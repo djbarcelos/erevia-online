@@ -50,6 +50,8 @@ func (z *Zone) onProgress(e progressEvent) {
 		z.onReputationCmd(p, m)
 	case *pb.BestiaryCmd:
 		z.onBestiaryCmd(p, m)
+	case *pb.NpcTalk:
+		z.onNpcTalk(p, m)
 	}
 }
 

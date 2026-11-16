@@ -29,6 +29,9 @@ func TestQuestDataIsConsistent(t *testing.T) {
 	follow(TutorialStart)
 	chained := 0
 	for _, q := range Quests {
+		if q.Daily != 0 {
+			continue // diárias: saem do sorteio do dia (dailies.go)
+		}
 		if q.Unlock == 0 {
 			chained++
 		} else if q.Unlock < 1 || q.Unlock > MaxLevel || q.Next != "" && Quests[q.Next] == nil {
@@ -48,7 +51,7 @@ func TestQuestDataIsConsistent(t *testing.T) {
 			if s.Count < 1 || s.Text == "" {
 				t.Errorf("%s: step %+v needs count and text", q.ID, s)
 			}
-			if s.Goal == GoalTalk && s.Target != TalkMaster && s.Target != TalkGuardian {
+			if s.Goal == GoalTalk && s.Target != TalkMaster && s.Target != TalkGuardian && TalkerByName(s.Target) == nil {
 				t.Errorf("%s: unknown talk target %q", q.ID, s.Target)
 			}
 			if s.Goal == GoalKill && s.Target != "" {

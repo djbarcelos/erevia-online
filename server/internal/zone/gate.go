@@ -82,12 +82,12 @@ func (z *Zone) spawnGates() {
 		}
 		pos := z.freeSpot(Vec2{X: g.X, Z: g.Z})
 		id := gateIDBase + uint32(i)
-		z.npcs[id] = &entity{
+		z.addNPC(&entity{
 			id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
 			name: g.Name, model: gateModel, level: 1, scale: 1,
 			pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
 			npc: &npcState{title: "Portão para " + g.title(), role: pb.NpcRole_NPC_ROLE_GATE, stone: i},
-		}
+		})
 	}
 }
 

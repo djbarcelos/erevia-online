@@ -48,6 +48,7 @@ message ClientMessage {
     AuctionCmd auction_cmd = 44; // Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, retirar do correio
     UseGate use_gate = 60; // zonas: atravessar o portão para outro mapa
     SubclassCmd subclass_cmd = 67; // Subclasse: falar com o Guardião das Sendas, escolher e trocar de classe
+    NpcTalk npc_talk = 45; // conversa com NPC: abrir, aceitar e entregar missão, perguntar
   }
 }
 
@@ -540,6 +541,7 @@ message ServerMessage {
     ZoneChange zone_change = 60; // saiu pelo portão: o próximo Welcome é o do outro mapa
     VitalityState vitality = 65; // vitalidade e recuperação (ao entrar e quando mudam)
     SubclassState subclass = 67; // Subclasse: as classes do personagem e a ativa (janela do Guardião das Sendas)
+    NpcDialog npc_dialog = 45; // a janela de conversa do NPC (resposta ao NpcTalk)
   }
 }
 
@@ -697,6 +699,8 @@ message QuestLog {
   // QuestLog ficam vazias e o cliente guarda as últimas.
   repeated QuestDone done = 3;
   bool done_full = 4;
+  // Diárias: a próxima meia-noite de Brasília (quando as diárias renovam), em ms.
+  int64 daily_reset_ms = 5;
 }
 
 message QuestInfo {
@@ -706,6 +710,7 @@ message QuestInfo {
   repeated QuestStepInfo steps = 4;
   string reward = 5; // resumo da recompensa ("120 XP · 30 moedas")
   QuestCategory category = 6; // grupo no Diário (QuestCategory, no fim do arquivo)
+  string region = 7; // região da linha de história ("Arredores"); vazio nas outras
 }
 
 // Onde fica um objetivo: o minimapa, o mapa e a seta da borda da tela apontam para lá.
@@ -716,6 +721,7 @@ enum QuestPlaceKind {
   QUEST_PLACE_KIND_GATE = 3; // portão da cidade
   QUEST_PLACE_KIND_STONE = 4; // Pedra de Teleporte
   QUEST_PLACE_KIND_SHOP = 5; // loja (NPC que vende)
+  QUEST_PLACE_KIND_SPOT = 6; // um lugar para visitar (chegou quando entra no raio)
 }
 
 message QuestStepInfo {
@@ -964,6 +970,7 @@ enum NpcRole {
   NPC_ROLE_AUCTION = 5; // Leiloeiro (casa de leilões)
   NPC_ROLE_GATE = 6; // portão para outro mapa (UseGate)
   NPC_ROLE_SUBCLASS = 7; // Guardião das Sendas (subclasse)
+  NPC_ROLE_QUEST = 8; // contador de história: dá e recebe missões (NpcTalk)
 }
 
 // Atributos e skills aprendidas do jogador.
@@ -1207,6 +1214,7 @@ message NpcInfo {
   repeated TeleportDest dests = 4; // pedras de teleporte: destinos
   repeated RecipeInfo recipes = 5; // Ferreiro: o que dá para criar
   string gate_to = 6; // portão: nome do mapa de destino
+  bool talk = 7; // conversa: o clique manda NpcTalk (o servidor responde com NpcDialog)
 }
 
 message RecipeInfo {
@@ -1786,4 +1794,54 @@ message AuctionUpdate {
   uint64 gone_id = 12; // anúncio que saiu (comprado ou cancelado): o cliente tira da lista
   uint32 pending = 13; // operações da casa de leilões ainda sem confirmação do banco
   uint32 claimable = 14; // anexos no correio esperando para retirar (os que o servidor conhece)
+}
+
+// ---------- Conversa com NPCs (missões por região e diárias, tunnel#71) ----------
+// Clicar num NPC com talk = true manda NPC_TALK_OPEN. O servidor responde com NpcDialog: a
+// fala dele e as opções (aceitar e entregar missões, perguntar, o serviço do NPC e sair).
+// Tudo vem dos dados do servidor; o cliente só desenha. Cada opção escolhida volta como
+// NpcTalk, e o servidor confere de novo (NPC perto, missão disponível, passo cumprido).
+
+enum NpcTalkKind {
+  NPC_TALK_UNSPECIFIED = 0;
+  NPC_TALK_OPEN = 1; // clicou no NPC (também conta como "falar com")
+  NPC_TALK_ACCEPT = 2; // aceitar a missão quest_id
+  NPC_TALK_TURN_IN = 3; // entregar a missão quest_id (ou os itens que ela pede)
+  NPC_TALK_ASK = 4; // perguntar sobre o assunto topic
+}
+
+message NpcTalk {
+  uint32 npc_id = 1;
+  NpcTalkKind kind = 2;
+  string quest_id = 3;
+  string topic = 4;
+}
+
+enum DialogOptionKind {
+  DIALOG_OPTION_UNSPECIFIED = 0;
+  DIALOG_OPTION_ACCEPT = 1; // aceitar a missão quest_id
+  DIALOG_OPTION_TURN_IN = 2; // entregar a missão quest_id
+  DIALOG_OPTION_ASK = 3; // perguntar sobre topic
+  DIALOG_OPTION_SERVICE = 4; // o serviço do NPC (loja, armazém, contratos...): o cliente abre a janela de sempre
+  DIALOG_OPTION_LEAVE = 5; // sair da conversa
+}
+
+message DialogOption {
+  DialogOptionKind kind = 1;
+  string label = 2; // o texto do botão
+  string quest_id = 3;
+  string topic = 4;
+  string detail = 5; // aceitar: o que a missão pede, com um pouco de história
+  string reward = 6; // aceitar e entregar: a recompensa ("1.200 XP · 300 moedas")
+}
+
+message NpcDialog {
+  uint32 npc_id = 1;
+  string name = 2;
+  string title = 3;
+  string text = 4; // a fala do NPC
+  repeated DialogOption options = 5;
+  // Sem conversa agora (NPC de serviço sem missão para o jogador): o cliente abre o serviço
+  // direto, como antes das conversas.
+  bool service = 6;
 }

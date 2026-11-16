@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 )
 
@@ -22,6 +23,9 @@ const (
 	GoalTeleport                       // viajar com uma Pedra de Teleporte
 	GoalTalk                           // falar com um NPC (Target: TalkMaster…)
 	GoalSpec                           // escolher a especialização (segunda classe)
+	GoalCollect                        // pegar do chão itens do saque de monstros (Target: ids de item)
+	GoalVisit                          // chegar a um lugar (Place, obrigatório; Target: a chave do lugar)
+	GoalDeliver                        // entregar itens (Target: o id do item) ao NPC (NPC) na conversa
 )
 
 // QuestStep é um objetivo: chegar a Count no Goal.
@@ -33,6 +37,10 @@ type QuestStep struct {
 	// Place fixa à mão onde fica o objetivo (missões de história). nil = o servidor
 	// calcula pelo tipo (área de caça do monstro, NPC, portão, pedra...).
 	Place *QuestPlace
+	// NPC: GoalDeliver, o nome de quem recebe os itens (a entrega é na conversa com ele).
+	NPC string
+	// Say: GoalTalk, a fala do NPC quando o passo se cumpre na conversa com ele.
+	Say string
 }
 
 // Matches diz se um acontecimento (goal, alvo) conta para este objetivo.
@@ -61,6 +69,20 @@ type QuestReward struct {
 	XP    int64
 	Gold  int64
 	Items []QuestItem
+	// XPKills > 0 (diárias): a XP é a de XPKills abates do nível do jogador (HuntKillXP),
+	// calculada na entrega. Assim a diária vale o mesmo tempo de caça em qualquer nível.
+	XPKills float64
+	// Reputação com a facção (reputation.go).
+	Faction string
+	Rep     int
+}
+
+// XPAt: a XP da recompensa para quem está no nível level.
+func (r QuestReward) XPAt(level int) int64 {
+	if r.XPKills > 0 {
+		return int64(math.Round(r.XPKills * HuntKillXP(level)))
+	}
+	return r.XP
 }
 
 // QuestCategory agrupa as missões no Diário (J). Os números são os do QuestCategory do
@@ -87,12 +109,30 @@ type QuestDef struct {
 	Until int
 	// Category: o grupo no Diário (obrigatório; o teste dos dados confere).
 	Category QuestCategory
+
+	// Missões com NPC (linhas de história e diárias, tunnel#71; dados em story.go e
+	// dailies.go). Giver: o NPC (Talker) que oferece na conversa: a missão não chega
+	// sozinha, o jogador aceita. TurnIn: quem recebe: com os passos cumpridos a missão
+	// espera a entrega na conversa com ele ("" = termina sozinha, como as outras).
+	Giver, TurnIn string
+	// Level: nível mínimo para aceitar (e o nível em que a XP entra na progressão teórica).
+	Level int
+	// Region: a região da linha de história (o Diário mostra).
+	Region string
+	// Done: a fala de quem recebe, na entrega.
+	Done string
+	// Daily: a vaga da diária (0 = não é diária). Diárias saem do sorteio do dia
+	// (DailyQuests), vão até MaxLevel e nunca entram nas concluídas para sempre.
+	Daily    DailySlot
+	MaxLevel int
 }
 
 // QuestState é o que fica salvo: progresso das missões ativas e as concluídas.
 type QuestState struct {
 	Active map[string][]int `json:"active,omitempty"`
 	Done   []string         `json:"done,omitempty"`
+	// Daily: as diárias do dia (o sorteio e as já entregues). As aceitas ficam em Active.
+	Daily *DailyState `json:"daily,omitempty"`
 }
 
 // TutorialStart é a primeira missão de um personagem novo.
@@ -102,9 +142,12 @@ const TutorialStart = "tut_gate"
 // tutorial (personagens de antes das missões).
 const TutorialSkipLevel = 5
 
-// questList: o tutorial dos primeiros ~15 minutos, em ordem, a segunda classe, a
-// subclasse e os contratos de caça.
-var questList = append([]*QuestDef{
+// questList: o tutorial dos primeiros ~15 minutos, em ordem, as linhas de história das
+// regiões (story.go), a segunda classe, a subclasse, as diárias (dailies.go) e os contratos
+// de caça.
+var questList = slices.Concat(tutorialQuests, storyQuests, classQuests, dailyQuests, contractQuests())
+
+var tutorialQuests = []*QuestDef{
 	{
 		ID: "tut_gate", Title: "Além das muralhas", Category: QuestTutorial,
 		Text:   "Vel'Aran está segura atrás das muralhas, mas a sua jornada começa lá fora. Saia por qualquer portão.",
@@ -160,6 +203,9 @@ var questList = append([]*QuestDef{
 		Steps:  []QuestStep{{Goal: GoalKill, Target: "skeleton_warrior|skeleton_rogue", Count: 5, Text: "Derrotar Esqueletos Guerreiros ou Ladinos"}},
 		Reward: QuestReward{XP: 1500, Gold: 200, Items: []QuestItem{{ID: "scroll_ench_weapon", Count: 1}, {ID: "scroll_return", Count: 2}}},
 	},
+}
+
+var classQuests = []*QuestDef{
 	// Segunda classe: chega no nível 20 e termina na escolha do caminho.
 	{
 		ID: SpecQuest, Title: "A Encruzilhada", Unlock: SpecLevel, Category: QuestStory,
@@ -195,11 +241,14 @@ var questList = append([]*QuestDef{
 		Steps:  []QuestStep{{Goal: GoalTalk, Target: TalkGuardian, Count: 1, Text: "Fazer o juramento com Edrian"}},
 		Reward: QuestReward{Items: []QuestItem{{ID: "scroll_return", Count: 3}}},
 	},
-}, contractQuests()...)
+}
 
 // Contratos de caça (tunnel#149): um por nível, do ContractFrom ao 39, gerados dos dados.
 // Cada um pede uma parte dos abates do nível nos monstros que se caçam nele e paga
 // ContractXPShare da XP do nível: com o tutorial, ~30% da XP de cada faixa vem de missões.
+// As linhas de história (story.go) saem de dentro desse orçamento: o contrato do nível L
+// paga os 30% menos a XP das missões de história do nível L (StoryXPAt), então a soma das
+// missões continua em 30% e a curva não encurta (docs/progressao.md, "Missões").
 const (
 	ContractFrom     = 5
 	ContractXPShare  = 0.30
@@ -233,8 +282,9 @@ func contractQuests() []*QuestDef {
 			names[i] = Monsters[id].Name
 		}
 		who := strings.Join(names, " ou ")
-		xp := int64(math.Round(float64(XPToNext(l)) * ContractXPShare))
-		kills := float64(XPToNext(l)-xp) / perKill
+		full := int64(math.Round(float64(XPToNext(l)) * ContractXPShare))
+		xp := full - StoryXPAt(l)
+		kills := float64(XPToNext(l)-full) / perKill
 		count := max(5, int(math.Round(kills*contractKillPart/5))*5)
 		out = append(out, &QuestDef{
 			ID: ContractID(l), Title: fmt.Sprintf("Contrato: %s (nível %d)", region, l), Unlock: l, Until: l + ContractWindow,

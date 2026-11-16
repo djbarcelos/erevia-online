@@ -287,6 +287,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			z.ProgressAction(ctx, id, m.BestiaryCmd)
 		case *pb.ClientMessage_SubclassCmd:
 			z.ProgressAction(ctx, id, m.SubclassCmd)
+		case *pb.ClientMessage_NpcTalk:
+			z.ProgressAction(ctx, id, m.NpcTalk)
 		case *pb.ClientMessage_TradeCmd:
 			z.Trade(ctx, id, m.TradeCmd)
 		case *pb.ClientMessage_AuctionCmd:

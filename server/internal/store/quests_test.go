@@ -24,7 +24,13 @@ func TestQuestsRoundTrip(t *testing.T) {
 		t.Fatalf("new character quests = %+v, %v", got.Quests, err)
 	}
 
-	q := game.QuestState{Active: map[string][]int{"tut_skill": {2}}, Done: []string{"tut_gate", "tut_hunt"}}
+	// Uma missão de região esperando a entrega e as diárias do dia (sorteio, aceita e entregue)
+	// vão no mesmo JSON de characters.quests (sem coluna nova).
+	q := game.QuestState{
+		Active: map[string][]int{"tut_skill": {2}, "cam_estandarte": {1, 8}, "d_cranios": {3}},
+		Done:   []string{"tut_gate", "tut_hunt", "cam_covas"},
+		Daily:  &game.DailyState{Day: 20773, Offer: []string{"d_cranios", "d_encomenda", "d_ronda_campos"}, Done: []string{"d_encomenda"}},
+	}
 	if err := s.SaveStates(ctx, []store.CharacterState{{CharacterID: c.ID, Level: 2, XP: 200, HP: -1, MP: -1, Quests: q, Seq: 1}}); err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +38,10 @@ func TestQuestsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(got.Quests.Active["tut_skill"], []int{2}) || !slices.Equal(got.Quests.Done, q.Done) {
+	if !slices.Equal(got.Quests.Active["tut_skill"], []int{2}) || !slices.Equal(got.Quests.Done, q.Done) ||
+		!slices.Equal(got.Quests.Active["cam_estandarte"], []int{1, 8}) || !slices.Equal(got.Quests.Active["d_cranios"], []int{3}) ||
+		got.Quests.Daily == nil || got.Quests.Daily.Day != 20773 || !slices.Equal(got.Quests.Daily.Offer, q.Daily.Offer) ||
+		!slices.Equal(got.Quests.Daily.Done, q.Daily.Done) {
 		t.Fatalf("quests after save = %+v", got.Quests)
 	}
 }

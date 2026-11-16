@@ -122,6 +122,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.ProgressAction(ctx, id, m.SpecCmd)
 	case *pb.ClientMessage_SubclassCmd:
 		z.ProgressAction(ctx, id, m.SubclassCmd)
+	case *pb.ClientMessage_NpcTalk:
+		z.ProgressAction(ctx, id, m.NpcTalk)
 	case *pb.ClientMessage_TradeCmd:
 		z.Trade(ctx, id, m.TradeCmd)
 	case *pb.ClientMessage_AuctionCmd:
@@ -572,6 +574,9 @@ func (h *fuzzHarness) ledger() fuzzLedger {
 			for q := range p.pl.quests.done {
 				l.done = append(l.done, fmt.Sprintf("%d:%s", id, q))
 			}
+			for _, q := range p.pl.quests.daily.Done { // diárias de hoje (o relógio do fuzz não vira o dia)
+				l.done = append(l.done, fmt.Sprintf("%d:%s", id, q))
+			}
 			for c, pr := range p.pl.contracts.st.Taken {
 				if pr.Done {
 					l.contracts = append(l.contracts, fmt.Sprintf("%d:%d:%s", id, p.pl.contracts.st.Day, c))
@@ -833,7 +838,7 @@ func fuzzSpotFor(msg *pb.ClientMessage) byte {
 		return 0
 	}
 	id := uint32(inner.Get(nf).Uint())
-	if n := id - npcIDBase; id >= npcIDBase && n <= fuzzGuardianID-npcIDBase {
+	if n := id - npcIDBase; id >= npcIDBase && id <= lastNPCID() {
 		return byte(n)
 	}
 	return 0
@@ -862,11 +867,21 @@ func fuzzFixedSetup(spot byte) []byte {
 }
 
 // fuzzMasterID: a Mestra dos Caminhos (depois dela vêm o Quadro de Contratos, boardID, o
-// Leiloeiro e o Guardião das Sendas, o último NPC; ver spawnNPCs).
+// Leiloeiro, o Guardião das Sendas e os NPCs da conversa, talk.go; ver spawnNPCs).
 var (
 	fuzzMasterID   = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1)
 	fuzzGuardianID = guardianID
 )
+
+// fuzzTalkerID: o id do NPC novo (Arauto ou contador de história) pelo nome.
+func fuzzTalkerID(name string) uint32 {
+	for i, t := range game.SpawnedTalkers() {
+		if t.Name == name {
+			return talkerFirstID + uint32(i)
+		}
+	}
+	panic("sem NPC " + name)
+}
 
 // fuzzSubclass: a subclasse de quem começa no 30 (a classe seguinte na lista), já com o
 // juramento feito. Não lê bytes: o formato da montagem continua o mesmo.
@@ -952,6 +967,16 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_SubclassCmd{SubclassCmd: &pb.SubclassCmd{Kind: pb.SubclassCmdKind_SUBCLASS_CMD_TALK, NpcId: fuzzGuardianID}}},
 		{Msg: &pb.ClientMessage_SubclassCmd{SubclassCmd: &pb.SubclassCmd{Kind: pb.SubclassCmdKind_SUBCLASS_CMD_CHOOSE, NpcId: fuzzGuardianID, Class: "rogue"}}},
 		{Msg: &pb.ClientMessage_SubclassCmd{SubclassCmd: &pb.SubclassCmd{Kind: pb.SubclassCmdKind_SUBCLASS_CMD_SWITCH, NpcId: fuzzGuardianID, Class: "mage"}}},
+		// Conversa (missões por região e diárias): falar com o Irmão Gaspar (a linha do Fundo, no
+		// nível da Ana), aceitar, entregar e perguntar; o Arauto e a diária de hoje da Ana; e a
+		// Mercadora, que sem missão abre a loja direto.
+		{Msg: &pb.ClientMessage_NpcTalk{NpcTalk: &pb.NpcTalk{Kind: pb.NpcTalkKind_NPC_TALK_OPEN, NpcId: fuzzTalkerID(game.TalkMonk)}}},
+		{Msg: &pb.ClientMessage_NpcTalk{NpcTalk: &pb.NpcTalk{Kind: pb.NpcTalkKind_NPC_TALK_ACCEPT, NpcId: fuzzTalkerID(game.TalkMonk), QuestId: "fun_musgo"}}},
+		{Msg: &pb.ClientMessage_NpcTalk{NpcTalk: &pb.NpcTalk{Kind: pb.NpcTalkKind_NPC_TALK_TURN_IN, NpcId: fuzzTalkerID(game.TalkMonk), QuestId: "fun_musgo"}}},
+		{Msg: &pb.ClientMessage_NpcTalk{NpcTalk: &pb.NpcTalk{Kind: pb.NpcTalkKind_NPC_TALK_ASK, NpcId: fuzzTalkerID(game.TalkMonk), Topic: "ordem"}}},
+		{Msg: &pb.ClientMessage_NpcTalk{NpcTalk: &pb.NpcTalk{Kind: pb.NpcTalkKind_NPC_TALK_ACCEPT, NpcId: fuzzTalkerID(game.TalkHerald),
+			QuestId: game.DailyQuests(1, game.ContractDay(testConfig().Clock(), brasilia), 30)[0].ID}}},
+		{Msg: &pb.ClientMessage_NpcTalk{NpcTalk: &pb.NpcTalk{Kind: pb.NpcTalkKind_NPC_TALK_OPEN, NpcId: npc}}},
 	}
 	return out
 }
@@ -1311,6 +1336,15 @@ func (g *fuzzGen) named(fd protoreflect.FieldDescriptor) (protoreflect.Value, bo
 			return str(game.MasteryNodes[r.pick(len(game.MasteryNodes))].ID)
 		case "spec":
 			return str(game.SpecList[r.pick(len(game.SpecList))].ID)
+		case "quest_id": // NpcTalk: uma do rol de hoje de quem manda, uma das linhas ou qualquer uma
+			if p := g.sender(); p != nil && r.byte()&1 == 0 && len(p.pl.quests.daily.Offer) > 0 {
+				return str(p.pl.quests.daily.Offer[r.pick(len(p.pl.quests.daily.Offer))])
+			}
+			all := game.QuestsInOrder()
+			return str(all[r.pick(len(all))].ID)
+		case "topic": // NpcTalk: um assunto de algum NPC
+			tk := game.Talkers[r.pick(len(game.Talkers))]
+			return str(tk.Topics[r.pick(len(tk.Topics))].ID)
 		case "name", "to":
 			return str(g.h.names[r.byte()&1])
 		}
