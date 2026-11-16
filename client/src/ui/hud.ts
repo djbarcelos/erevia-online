@@ -38,6 +38,7 @@ import { drawQuestTarget, QuestArrow, questStepTarget, QuestTracker, type Projec
 import { levelText, regionAt, type Region } from "./regions";
 import { createJoystick } from "./touch-controls";
 import { specInfo } from "./specs";
+import { neutralNow, neutralText, roleInfo, type RoleInfo } from "../world/roles";
 import { masteryTip } from "./windows/mastery";
 
 /** Vitalidade em % do teto (0 a 100). */
@@ -967,9 +968,38 @@ export class Hud {
     if (spec && specEl) specEl.style.color = spec.color;
     // Jogador: a classe ativa (a subclasse em uso) depois do nível.
     const clsText = pc && info.cls ? ` ${classInfo(info.cls).label}` : "";
-    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}${clsText}`), specEl, info.boss ? el("em", null, "CHEFE") : "", info.rare ? el("em", "t-rare", "RARO") : "");
+    // Monstros: o papel na luta (tunnel#129), um ícone com a dica, como o selo de raro.
+    const role = info.kind === EntityKind.MONSTER ? roleInfo(info) : null;
+    // Só refaz o nome quando algo muda: o quadro atualiza a cada snapshot, e recriar o selo
+    // perderia o mouse em cima dele (a dica).
+    const key = [info.name, npc ? info.title : "", info.level, clsText, spec?.name ?? "", info.boss, info.rare, role?.key ?? ""].join("|");
+    this.tRoleOf = info;
+    if (this.tName.dataset.key !== key) {
+      this.tName.dataset.key = key;
+      this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}${clsText}`), specEl, info.boss ? el("em", null, "CHEFE") : "", info.rare ? el("em", "t-rare", "RARO") : "", role ? this.roleBadge(role) : "");
+    }
     this.tHp.root.hidden = npc;
     this.tHp.set(info.hp, info.maxHp, info.dead ? "Morto" : undefined);
+  }
+
+  /** O alvo cujo papel o selo mostra (a dica lê na hora: o neutro de dia muda à noite). */
+  private tRoleOf: EntityInfo | null = null;
+
+  /** Selo do papel do monstro no quadro do alvo: ícone e, no mouse (ou toque longo), a dica. */
+  private roleBadge(r: RoleInfo): HTMLElement {
+    const badge = el("em", `t-role t-role-${r.key}`);
+    badge.innerHTML = r.icon;
+    badge.setAttribute("aria-label", r.label);
+    tooltip(badge, () => {
+      const cur = this.tRoleOf;
+      const ri = cur ? roleInfo(cur) : null;
+      if (!cur || !ri) return null;
+      const night = isNight(this.cb.clock());
+      const n = ri.key === "neutral" && cur.neutral ? "" : neutralText(cur, night); // o selo neutro já diz
+      const calm = neutralNow(cur, night) ? "<div class=\"cmp muted\">A auto-caça passa por ele (Configurações → Jogo).</div>" : "";
+      return `<h4>${ri.label}</h4>${ri.hint}${n ? `<br>${n}` : ""}${calm}`;
+    });
+    return badge;
   }
 
   setEffects(mine: ActiveEffect[], target: ActiveEffect[]): void {

@@ -226,6 +226,11 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
           row("Tomar poção abaixo de", slider(s.autoPotion, 10, 90, 5, set("autoPotion"), pct)),
           row("Voltar à cidade sem poção", toggle(s.autoReturn, set("autoReturn"), "Voltar à cidade")),
           row("Pegar itens do chão", toggle(s.autoLoot, set("autoLoot"), "Pegar itens")),
+          row(
+            "Atacar monstros neutros",
+            toggle(s.autoNeutral, set("autoNeutral"), "Atacar neutros"),
+            "Neutros só atacam quem bate neles (como os Saqueadores, de dia). Desligado, a auto-caça passa por eles.",
+          ),
         ),
         group(
           "Tela",
