@@ -51,7 +51,7 @@ import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens
 import { EntityManager } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
-import { runBench, wantBench } from "./ui/bench";
+import { runBench, setupShots, wantBench, wantShots } from "./ui/bench";
 import { enchantedName, GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { contractNotice, ContractsStore, ContractsWindow } from "./ui/contracts";
@@ -100,6 +100,7 @@ import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
 import { loadEnvironment, type Environment } from "./world/environment";
 import { DayNight, isNight, WorldClock } from "./world/daynight";
+import { configureKtx2 } from "./world/assets";
 import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
 import { clearRadius, heightAt } from "./world/terrain";
@@ -267,6 +268,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       reportClientError("model", "cenário não carregou", { error: String((err as Error)?.message ?? err) }, err);
     });
 
+  // Texturas KTX2 dos assets novos (pipeline de arte) decodificam com os arquivos do próprio site.
+  configureKtx2();
   // Modelos 3D carregam em segundo plano; até lá, cápsulas coloridas.
   CharacterModels.load(world.scene)
     .then((models) => entities.setModels(models))
@@ -1532,8 +1535,28 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     }, 3000);
   }
 
+  if (wantShots()) {
+    window.setTimeout(() => {
+      setupShots({
+        engine: world.engine,
+        scene: world.scene,
+        camera: world.camera,
+        regions,
+        bounds: worldBounds(worldData),
+        setTime: (p) => clock.setFixed(p),
+        setFocus: (p) => (benchFocus = p ? new Vector3(p.x, 0, p.z) : null),
+        forEachMarker: entities.forEachMarker.bind(entities),
+        forEachRoot: entities.forEachRoot.bind(entities),
+        settle: () => env?.fader.settle(),
+        pooled: () => env?.fader.pooled() ?? [],
+        hud: $("hud"),
+        gui: world.gui,
+      });
+    }, 3000);
+  }
+
   // "O que há de novo": abre sozinha uma vez por versão do changelog (fora da medição de FPS).
-  if (!wantBench()) {
+  if (!wantBench() && !wantShots()) {
     void loadNews().then((news) => {
       if (news && wm.layer.isConnected && takeUnseenNews(news.latest)) void wm.show("news");
     });
