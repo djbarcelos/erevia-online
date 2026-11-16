@@ -220,7 +220,7 @@ func (z *Zone) spreadPlague(dead *entity) {
 	}
 	def := &game.EffectDef{Kind: game.EffectPlague, Duration: game.Skills[game.SkillPlague].OnTarget.Duration.At(1), Value: ef.value}
 	for _, m := range z.monsters {
-		if m != dead && !m.dead && !m.mon.hidden && dist(m.pos, dead.pos)-m.bodyRadius() <= game.PlagueSpread {
+		if m != dead && !m.dead && !m.mon.unseen() && dist(m.pos, dead.pos)-m.bodyRadius() <= game.PlagueSpread {
 			z.applyEffect(src, m, def)
 		}
 	}

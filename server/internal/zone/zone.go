@@ -1124,6 +1124,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 	}
 	if e.mon != nil {
 		out.Tint = e.mon.def.Tint
+		out.Role = rolePB(e.mon.def) // papel na luta e neutro (archetypes.go; nil = bruto)
 	}
 	if e.pl != nil {
 		w, o, g := e.pl.inv.look()

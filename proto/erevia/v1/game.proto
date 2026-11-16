@@ -1332,6 +1332,27 @@ message Entity {
   string tint = 27; // monstros: cor da variante (#rrggbb; "" = a do modelo)
   string active_class = 28; // jogadores: classe ativa (subclasse; "" = a do modelo, a principal)
   bool rare = 40; // monstro raro (named): nome dourado e selo no quadro do alvo
+  MonsterRole role = 41; // monstros: papel na luta e se é neutro (ausente = bruto)
+}
+
+// Papel do monstro na luta (arquétipo de IA, tunnel#129): o quadro do alvo mostra o ícone e
+// a dica, e a auto-caça pula os neutros. Ausente = bruto e não neutro (o de sempre).
+message MonsterRole {
+  MonsterArchetype archetype = 1;
+  bool neutral = 2; // só ataca quem bateu nele
+  bool neutral_by_day = 3; // neutro de dia e agressivo à noite (o cliente olha a hora do mundo)
+}
+
+enum MonsterArchetype {
+  MONSTER_ARCHETYPE_UNSPECIFIED = 0; // bruto: persegue e bate
+  MONSTER_ARCHETYPE_ARCHER = 1; // atirador: fica longe e recua quando o alvo encosta
+  MONSTER_ARCHETYPE_HEALER = 2; // curandeiro: cura um aliado ferido
+  MONSTER_ARCHETYPE_SUMMONER = 3; // invocador: chama lacaios
+  MONSTER_ARCHETYPE_AMBUSHER = 4; // emboscador: escondido até você chegar perto
+  MONSTER_ARCHETYPE_PACK = 5; // matilha: puxar um puxa o bando
+  MONSTER_ARCHETYPE_SHIELD = 6; // escudo frontal: toma menos dano de frente
+  MONSTER_ARCHETYPE_SPLITTER = 7; // dividir: ao morrer, vira dois menores
+  MONSTER_ARCHETYPE_EXPLODER = 8; // explosivo: explode com aviso no chão
 }
 
 message EntityState {

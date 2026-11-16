@@ -45,6 +45,7 @@ func (z *Zone) kill(dead, killer *entity) {
 		if len(takers) == 0 && killer != nil && killer.pl != nil && !killer.dead {
 			takers = []*entity{killer} // sem ódio registrado (ex.: veneno de quem saiu)
 		}
+		z.archDeath(dead) // dividir, explodir e os lacaios do invocador (com o ódio ainda aqui)
 		ms.hate = map[uint32]float64{}
 		ms.corpseEnd = z.now + corpseSeconds
 		ms.respawnAt = z.now + ms.spawn.Respawn*(1+z.rng.Float64())

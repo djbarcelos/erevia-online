@@ -210,10 +210,17 @@ func (z *Zone) summon(m *entity, n int) {
 	if def == nil {
 		return
 	}
-	level := max(1, m.level-5)
+	m.mon.raid.summons = append(m.mon.raid.summons, z.summonAround(m, def, max(1, m.level-5), n, 4)...)
+}
+
+// summonAround chama n monstros def no nível level, num anel de raio radius em volta de m
+// (o chefe do raid, o invocador e o que divide). São invocações: não renascem, somem ao
+// morrer e voltam para a casa de m. Já chegam bravos com quem m odeia; o Spawn vai pela AOI.
+func (z *Zone) summonAround(m *entity, def *game.MonsterDef, level, n int, radius float64) []uint32 {
+	ids := make([]uint32, 0, n)
 	for i := range n {
 		a := 2 * math.Pi * float64(i) / float64(n)
-		spot := z.freeSpot(Vec2{X: m.pos.X + 4*math.Cos(a), Z: m.pos.Z + 4*math.Sin(a)})
+		spot := z.freeSpot(Vec2{X: m.pos.X + radius*math.Cos(a), Z: m.pos.Z + radius*math.Sin(a)})
 		z.summonSeq++
 		id := summonIDBase + z.summonSeq
 		g := &entity{
@@ -228,14 +235,14 @@ func (z *Zone) summon(m *entity, n int) {
 		}
 		g.hp = g.stats.MaxHP
 		g.sentHP, g.sentMaxHP = g.hpInt(), g.maxHPInt()
-		// Já chegam bravos com quem está batendo no chefe.
 		for pid, v := range m.mon.hate {
 			g.mon.hate[pid] = v
 		}
 		z.monsters[id] = g
-		m.mon.raid.summons = append(m.mon.raid.summons, id) // Spawn pela AOI
+		ids = append(ids, id)
 		z.aoiDirty = true
 	}
+	return ids
 }
 
 // dismissSummons tira as invocações do chefe do mundo.

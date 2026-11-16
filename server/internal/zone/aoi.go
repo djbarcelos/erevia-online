@@ -32,7 +32,7 @@ func cellOf(p Vec2) cellKey {
 
 // aoiVisible: entra na AOI (jogadores e monstros cujo corpo ainda está no mundo).
 func aoiVisible(e *entity) bool {
-	return e.mon == nil || !e.mon.hidden
+	return e.mon == nil || !e.mon.unseen()
 }
 
 // aoiGrid indexa jogadores e monstros visíveis por célula.
