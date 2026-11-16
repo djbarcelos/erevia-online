@@ -135,6 +135,34 @@ CLIP_IMPACT.KB_Attack = 16 / 30;
 CLIP_IMPACT.SW_Attack = 16 / 30;
 
 export type Slot = "handslot.r" | "handslot.l";
+
+/**
+ * Pega de cada arma nos heróis do remaster, por arquivo: rotação (graus, XYZ) e deslocamento (m na escala
+ * da arma, ou seja, 0,4 m reais por unidade), os dois no eixo do osso da mão: X lateral, Y ao longo do braço
+ * (para os dedos, com o braço pendurado), Z para a frente. Os encaixes
+ * `handslot.*` dos GLB deixam a lâmina (Y da arma) apontando para a frente da mão; aqui cada tipo ganha a
+ * sua pega: espada para cima e para a frente, escudo preso ao antebraço, cajado em pé. Calibrado no
+ * laboratório (client/lab.html). Os modelos KayKit (sem ?remaster=1) não usam esta tabela.
+ */
+export interface Grip {
+  rot: [number, number, number];
+  pos: [number, number, number];
+  /** Escala extra da arma (o cajado dos heróis é maior que eles, pelo guia de arte). */
+  scale?: number;
+  /** Mão em que os números foram calibrados (padrão: direita). Na outra mão a pega é espelhada. */
+  hand?: "r" | "l";
+}
+/** Inverso da rotação dos encaixes (0,5 0,5 0,5 0,5): com ele a arma fica no eixo do osso da mão (X lateral, Y ao longo do braço, Z para a frente). */
+const SLOT_INV = new Quaternion(-0.5, -0.5, -0.5, 0.5);
+const BLADE: Grip = { rot: [125, 0, 20], pos: [0, 0, 0] };
+const SHIELD: Grip = { rot: [0, 20, 0], pos: [-0.02, -0.45, 0.12], hand: "l" };
+export const WEAPON_GRIPS: Record<string, Grip> = {
+  sword_1handed: BLADE, sword_2handed: BLADE, sword_2handed_color: BLADE, axe_1handed: BLADE, axe_2handed: BLADE,
+  dagger: BLADE, wand: BLADE,
+  staff: { rot: [165, 0, 10], pos: [0, 0, 0], scale: 1.4 },
+  shield_badge_color: SHIELD, shield_round_barbarian: SHIELD, shield_square: SHIELD, shield_spikes: SHIELD,
+  shield_spikes_color: SHIELD,
+};
 /** Armas padrão de cada modelo. Os heróis usam o que o servidor manda (equipamento). */
 const WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
   knight: {},
@@ -219,6 +247,11 @@ export class CharacterModels {
   /** Cópias do remaster com LOD, reavaliadas a cada 250 ms pela distância da câmera. */
   private lodInstances = new Set<{ root: TransformNode; level: number; set: (l: number) => void }>();
   private lodTick: Observer<Scene> | null = null;
+  /** Nome do arquivo de cada arma carregada (para achar a pega em WEAPON_GRIPS). */
+  private _wfo: Map<AssetContainer, string> | null = null;
+  private get weaponFileOf(): Map<AssetContainer, string> {
+    return (this._wfo ??= new Map([...this.weaponFiles].filter(([, c]) => c).map(([f, c]) => [c!, f])));
+  }
 
   private watchLod(e: { root: TransformNode; level: number; set: (l: number) => void }): () => void {
     this.lodInstances.add(e);
@@ -482,6 +515,16 @@ export class CharacterModels {
       for (const child of wRoot.getChildren() as TransformNode[]) {
         child.parent = hand as TransformNode;
         child.position = Vector3.Zero();
+        const grip = assets.remaster ? WEAPON_GRIPS[this.weaponFileOf.get(container) ?? ""] : undefined;
+        if (grip) {
+          const d = Math.PI / 180;
+          // Rotação e deslocamento no eixo do osso da mão (o encaixe é desfeito antes).
+          const mirror = (grip.hand ?? "r") !== (slot === "handslot.l" ? "l" : "r") ? -1 : 1;
+          const q = Quaternion.FromEulerAngles(grip.rot[0] * d, grip.rot[1] * d * mirror, grip.rot[2] * d * mirror);
+          child.rotationQuaternion = SLOT_INV.multiply(q).multiply(child.rotationQuaternion ?? Quaternion.Identity());
+          new Vector3(grip.pos[0] * mirror, grip.pos[1], grip.pos[2]).rotateByQuaternionToRef(SLOT_INV, child.position);
+          if (grip.scale) child.scaling.scaleInPlace(grip.scale);
+        }
         nodes.push(child);
         const glow = glowKey(grade, enchant);
         if (glow) {
