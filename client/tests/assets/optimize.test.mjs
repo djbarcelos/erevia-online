@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkAssets } from '../../scripts/check-assets.mjs';
 import { measure } from '../../scripts/lib/asset-budget.mjs';
-import { compressTextures, generateLods } from '../../scripts/lib/asset-optimize.mjs';
+import { compressTextures, generateLods, resizeTextures } from '../../scripts/lib/asset-optimize.mjs';
 import { denseDoc, makeDoc, writeGlb } from './helpers.mjs';
 
 // Registrar a extensão ensina o gltf-transform a medir imagens KTX2.
@@ -54,6 +54,23 @@ test('generateLods: o LOD usa o mesmo esqueleto e os mesmos atributos do LOD0', 
   assert.equal(lod1.getSkin(), skin);
   assert.equal(lod1.getMesh().listPrimitives()[0].getAttribute('POSITION'), lod0.getMesh().listPrimitives()[0].getAttribute('POSITION'));
   assert.equal(lod1.getMesh().listPrimitives()[0].getMaterial(), lod0.getMesh().listPrimitives()[0].getMaterial());
+});
+
+test('resizeTextures reduz por potências de 2 até o limite e deixa texturas pequenas quietas', async () => {
+  const big = makeDoc({ nodes: [['Corpo', 4]], texture: 256 });
+  assert.equal(await resizeTextures(big, 64), 1);
+  assert.equal(measure(big).texture, 64);
+  assert.equal(big.getRoot().listTextures()[0].getMimeType(), 'image/png');
+  const small = makeDoc({ nodes: [['Corpo', 4]], texture: 32 });
+  assert.equal(await resizeTextures(small, 64), 0);
+  assert.equal(measure(small).texture, 32);
+});
+
+test('generateLods com prune também gera os dois LODs', async () => {
+  const doc = denseDoc(60);
+  const res = await generateLods(doc, 'personagem', { prune: true });
+  assert.equal(res.generated, 2);
+  assert.ok(measure(doc).tris[2] > 0);
 });
 
 test('compressTextures troca o PNG por KTX2 (KHR_texture_basisu) e o tamanho continua legível', async () => {

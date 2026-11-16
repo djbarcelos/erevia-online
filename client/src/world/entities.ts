@@ -1560,7 +1560,7 @@ export class EntityManager {
         }
         // Andar acaba com o emote na hora (o aviso do servidor chega depois).
         if (moving && v.anim.emoting) v.anim.endEmote();
-        v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active);
+        v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active, v.speed);
       }
     }
   }

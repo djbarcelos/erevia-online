@@ -29,7 +29,7 @@ function indicesOf(prim) {
  * Cria a malha de um LOD: as mesmas posições, UVs, pesos de osso e material (os atributos são
  * compartilhados com o LOD0, então o arquivo só ganha os índices novos), com `ratio` dos triângulos.
  */
-function simplifiedMesh(doc, mesh, ratio, name) {
+function simplifiedMesh(doc, mesh, ratio, name, flags) {
   const lod = doc.createMesh(name);
   const buffer = doc.getRoot().listBuffers()[0];
   for (const prim of mesh.listPrimitives()) {
@@ -37,7 +37,7 @@ function simplifiedMesh(doc, mesh, ratio, name) {
     const indices = indicesOf(prim);
     const target = Math.max(3, Math.floor((indices.length * ratio) / 3) * 3);
     // Erro máximo 1 (relativo ao tamanho da malha): o alvo de triângulos manda, não o erro.
-    const [simplified] = MeshoptSimplifier.simplify(indices, positions, 3, target, 1, ['LockBorder']);
+    const [simplified] = MeshoptSimplifier.simplify(indices, positions, 3, target, 1, flags);
     const next = doc.createPrimitive().setMode(prim.getMode()).setMaterial(prim.getMaterial());
     for (const semantic of prim.listSemantics()) next.setAttribute(semantic, prim.getAttribute(semantic));
     let max = 0;
@@ -59,7 +59,9 @@ function simplifiedMesh(doc, mesh, ratio, name) {
  * nas proporções do guia para a categoria. Não mexe em quem já tem LOD vindo do Blender.
  * Retorna { generated: n de nós criados, skipped: motivo | null }.
  */
-export async function generateLods(doc, category, { skip = () => false } = {}) {
+export async function generateLods(doc, category, { skip = () => false, prune = false } = {}) {
+  // prune: também descarta as ilhas pequenas (malhas de IA com peças soltas não descem do piso de ~1.100 triângulos sem isso).
+  const flags = prune ? ['LockBorder', 'Prune'] : ['LockBorder'];
   const ratios = BUDGET[category].ratios;
   const nodes = doc.getRoot().listNodes();
   if (nodes.some((n) => LOD_SUFFIX.test(n.getName()))) return { generated: 0, skipped: 'já tem LOD do Blender' };
@@ -72,7 +74,7 @@ export async function generateLods(doc, category, { skip = () => false } = {}) {
       if (!ratio) return;
       const lodNode = doc
         .createNode(`${node.getName()}_LOD${i + 1}`)
-        .setMesh(simplifiedMesh(doc, mesh, ratio, `${mesh.getName() || node.getName()}_LOD${i + 1}`))
+        .setMesh(simplifiedMesh(doc, mesh, ratio, `${mesh.getName() || node.getName()}_LOD${i + 1}`, flags))
         .setTranslation(node.getTranslation())
         .setRotation(node.getRotation())
         .setScale(node.getScale());
@@ -110,4 +112,38 @@ export async function compressTextures(doc, { etc1s = false } = {}) {
     ktx2({ ...common, slots: /^(?!baseColorTexture|emissiveTexture)/, isPerceptual: false, isSetKTX2SRGBTransferFunc: false }),
   );
   return doc.getRoot().listTextures().filter((t) => t.getMimeType() === 'image/ktx2').length;
+}
+
+/**
+ * Reduz as texturas que passam de `maxPx` (maior lado) por média de blocos, direto no GLB, antes
+ * da medição do orçamento e do KTX2. Saída em PNG. Pensado para a textura 2K que o Meshy entrega
+ * (o guia pede até 1024 px para personagem e monstro). Só divide por potências de 2.
+ */
+export async function resizeTextures(doc, maxPx) {
+  let n = 0;
+  for (const tex of doc.getRoot().listTextures()) {
+    const [w0, h0] = tex.getSize() ?? [0, 0];
+    let f = 1;
+    while (Math.max(w0, h0) / f > maxPx) f *= 2;
+    if (f === 1) continue;
+    const src = await imageDecoder(tex.getImage());
+    const w = Math.floor(src.width / f);
+    const h = Math.floor(src.height / f);
+    const out = new PNG({ width: w, height: h });
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const acc = [0, 0, 0, 0];
+        for (let dy = 0; dy < f; dy++) {
+          for (let dx = 0; dx < f; dx++) {
+            const i = ((y * f + dy) * src.width + (x * f + dx)) * 4;
+            for (let c = 0; c < 4; c++) acc[c] += src.data[i + c];
+          }
+        }
+        for (let c = 0; c < 4; c++) out.data[(y * w + x) * 4 + c] = Math.round(acc[c] / (f * f));
+      }
+    }
+    tex.setImage(PNG.sync.write(out)).setMimeType('image/png');
+    n++;
+  }
+  return n;
 }

@@ -4,7 +4,7 @@
 //
 // Uso (dentro de client/):
 //   node scripts/import-asset.mjs <arquivo.glb> <categoria> [nome] [--check] [--force]
-//        [--no-lod] [--no-ktx2] [--etc1s] [--variantes=<regex>]
+//        [--no-lod] [--lod-prune] [--no-ktx2] [--etc1s] [--resize=<px>] [--variantes=<regex>]
 //   categorias: personagem, arma, monstro, chefe, cenario
 //   ex.: node scripts/import-asset.mjs ~/arte/CH_Knight/exports/CH_Knight.glb personagem knight_b
 //
@@ -19,7 +19,7 @@ import { dedup, join as joinMeshes, prune, resample } from '@gltf-transform/func
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { BUDGET, evaluate, measure } from './lib/asset-budget.mjs';
-import { compressTextures, generateLods } from './lib/asset-optimize.mjs';
+import { compressTextures, generateLods, resizeTextures } from './lib/asset-optimize.mjs';
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const flags = new Set(process.argv.slice(2).filter((a) => a.startsWith('--')));
@@ -39,8 +39,14 @@ const doc = await io.read(resolve(input));
 // keepNamed: os nós _LOD1/_LOD2 de peças estáticas não podem ser juntos ao LOD0.
 await doc.transform(dedup(), prune(), resample(), joinMeshes({ keepNamed: true }));
 
+const resize = process.argv.slice(2).find((a) => a.startsWith('--resize='));
+if (resize) {
+  const n = await resizeTextures(doc, Number(resize.slice(9)));
+  if (n) console.log(`  textura reduzida para no máximo ${resize.slice(9)} px (${n})`);
+}
+
 if (!flags.has('--no-lod')) {
-  const lod = await generateLods(doc, category);
+  const lod = await generateLods(doc, category, { prune: flags.has('--lod-prune') });
   console.log(lod.generated ? `  LOD gerado: ${lod.generated} nó(s) _LOD1/_LOD2` : `  LOD: ${lod.skipped}`);
 }
 
