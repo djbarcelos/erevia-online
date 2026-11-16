@@ -672,6 +672,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		MapTitle:     z.mapTitle(),
 	}}})
 	z.sendSelfStats(p)
+	z.dailyRefresh(p) // as diárias de ontem saem antes do primeiro QuestLog
 	z.sendQuests(p, "")
 	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
 	// Bestiário antes das conquistas: pode tirar um título de família que não vale.
@@ -879,6 +880,7 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysInvites, z.expireInvites)
 		z.runSystem(sysParties, z.syncParties)
 		z.runSystem(sysLeaveTown, z.checkLeaveTown)
+		z.runSystem(sysVisits, z.checkVisits) // lugares das missões (GoalVisit)
 		z.runSystem(sysTrades, z.checkTrades)
 		z.runSystem(sysXP2, z.updateXP2)
 		z.runSystem(sysXPTally, z.flushXPTallies)

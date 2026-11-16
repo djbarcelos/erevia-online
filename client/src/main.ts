@@ -55,7 +55,8 @@ import { runBench, wantBench } from "./ui/bench";
 import { enchantedName, GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { contractNotice, ContractsStore, ContractsWindow } from "./ui/contracts";
-import { ContractCmdKind, ReputationCmdKind } from "./gen/erevia/v1/game_pb";
+import { ContractCmdKind, NpcTalkKind, ReputationCmdKind } from "./gen/erevia/v1/game_pb";
+import { NpcDialogWindow } from "./ui/dialog";
 import { TeleportWindow } from "./ui/teleport";
 import { SpecWindow } from "./ui/spec";
 import { SubclassWindow } from "./ui/subclass";
@@ -859,6 +860,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     hud.element,
   );
+  // Conversa com NPCs (ui/dialog.ts): as opções vêm do servidor; o serviço abre a janela de sempre.
+  const dialogWin = new NpcDialogWindow(
+    {
+      accept: (npc, q) => conn.npcTalk(NpcTalkKind.NPC_TALK_ACCEPT, npc, q),
+      turnIn: (npc, q) => conn.npcTalk(NpcTalkKind.NPC_TALK_TURN_IN, npc, q),
+      ask: (npc, topic) => conn.npcTalk(NpcTalkKind.NPC_TALK_ASK, npc, "", topic),
+      service: (npc) => openService(npc),
+    },
+    hud.element,
+  );
   const barberWin = new BarberWindow(
     store,
     {
@@ -917,23 +928,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       specWin.close();
       contractsWin.close();
       subWin.close();
-      if (contracts.isBoard(id)) contractsWin.open(id, `${info.title} · ${info.name}`);
-      else if (npc?.role === NpcRole.GATE) conn.useGate(id); // portão: o servidor confere as regras
-      else if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
-      // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
-      else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
-      // O Leiloeiro responde com AuctionUpdate.open (abre a janela da casa de leilões).
-      else if (npc?.role === NpcRole.AUCTION) conn.auctionCmd(AuctionCmdKind.AUCTION_CMD_OPEN, id);
-      // O Guardião das Sendas responde com SubclassState (abre a janela) ou com um conselho.
-      else if (npc?.role === NpcRole.SUBCLASS) conn.subclassCmd(SubclassCmdKind.SUBCLASS_CMD_TALK, id);
-      else if (npc?.role === NpcRole.TELEPORT) {
-        // Indo pela pedra com o "Ir": o destino da missão vem destacado (quem escolhe é o jogador).
-        const o = questGo.phase === "toStone" && questGo.offer?.npcId === id ? questGo.offer : null;
-        teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests, o?.destId ?? 0);
-      } else if (npc?.role === NpcRole.STORAGE) {
-        storageWin.open(id, `${info.title} · ${info.name}`);
-        conn.storageGold(id, 0); // pede o conteúdo
-      } else shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? [], npcRecipes.get(id) ?? []);
+      dialogWin.close();
+      // Conversa (missões e falas): o servidor responde com NpcDialog, ou manda abrir o
+      // serviço direto quando o NPC não tem nada de missão para o jogador.
+      if (npc?.talk) conn.npcTalk(NpcTalkKind.NPC_TALK_OPEN, id);
+      else openService(id);
       return;
     }
     // Para a ~2 m do NPC, do lado de quem chega.
@@ -946,12 +945,35 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (dest) conn.moveTo(dest.x, dest.z);
     pendingShop = id;
   };
+  // A janela de sempre do NPC (loja, pedra, armazém, contratos, leilão, Mestra, Guardião...).
+  function openService(id: number): void {
+    const info = entities.info(id);
+    if (!info) return;
+    const npc = npcInfo.get(id);
+    if (contracts.isBoard(id)) contractsWin.open(id, `${info.title} · ${info.name}`);
+    else if (npc?.role === NpcRole.GATE) conn.useGate(id); // portão: o servidor confere as regras
+    else if (npc?.role === NpcRole.BARBER) void barberWin.open(id, `${info.title} · ${info.name}`);
+    // A Mestra responde com SpecChoice (abre a janela) ou com um conselho no chat.
+    else if (npc?.role === NpcRole.MASTER) conn.specCmd(SpecCmdKind.SPEC_CMD_TALK, id);
+    // O Leiloeiro responde com AuctionUpdate.open (abre a janela da casa de leilões).
+    else if (npc?.role === NpcRole.AUCTION) conn.auctionCmd(AuctionCmdKind.AUCTION_CMD_OPEN, id);
+    // O Guardião das Sendas responde com SubclassState (abre a janela) ou com um conselho.
+    else if (npc?.role === NpcRole.SUBCLASS) conn.subclassCmd(SubclassCmdKind.SUBCLASS_CMD_TALK, id);
+    else if (npc?.role === NpcRole.TELEPORT) {
+      // Indo pela pedra com o "Ir": o destino da missão vem destacado (quem escolhe é o jogador).
+      const o = questGo.phase === "toStone" && questGo.offer?.npcId === id ? questGo.offer : null;
+      teleportWin.open(id, `${info.title} · ${info.name}`, npc.dests, o?.destId ?? 0);
+    } else if (npc?.role === NpcRole.STORAGE) {
+      storageWin.open(id, `${info.title} · ${info.name}`);
+      conn.storageGold(id, 0); // pede o conteúdo
+    } else shop.open(id, `${info.title} ${info.name}`, npcStock.get(id) ?? [], npcRecipes.get(id) ?? []);
+  }
 
   // ---------- "Ir" das missões (world/questgo.ts) ----------
   // Anda com o mesmo comando do clique no mapa; "Caçar aqui" liga a auto-caça só com os
   // monstros do passo. O intervalo de 250 ms do Ir só existe enquanto ele está ativo.
   const toGoTarget = (t: QuestTarget | null): GoTarget | null =>
-    t && { questId: t.questId, step: t.step, x: t.x, z: t.z, radius: t.radius, name: t.name, hunt: t.kind === QuestPlaceKind.HUNT, monsters: t.monsters };
+    t && { questId: t.questId, step: t.step, x: t.x, z: t.z, radius: t.radius, name: t.name, hunt: t.kind === QuestPlaceKind.HUNT, monsters: t.monsters, spot: t.kind === QuestPlaceKind.SPOT };
   const stoneInfos = (): StoneInfo[] =>
     welcome.npcs
       .filter((n) => n.role === NpcRole.TELEPORT)
@@ -1325,6 +1347,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       ev.preventDefault();
       if (invites.open) invites.answer(false);
       else if (hud.channeling) conn.cancelChannel();
+      else if (dialogWin.isOpen) dialogWin.close();
       else if (teleportWin.isOpen) teleportWin.close();
       else if (contractsWin.isOpen) contractsWin.close();
       else if (specWin.isOpen) specWin.close();
@@ -1448,6 +1471,10 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (teleportWin.isOpen) {
       const d = entities.distanceTo(teleportWin.npcId);
       if (d === null || d > SHOP_KEEP_DIST) teleportWin.close();
+    }
+    if (dialogWin.isOpen) {
+      const d = entities.distanceTo(dialogWin.npcId);
+      if (d === null || d > SHOP_KEEP_DIST) dialogWin.close();
     }
     if (storageWin.isOpen) {
       const d = entities.distanceTo(storageWin.npcId);
@@ -1614,6 +1641,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       invites.dispose();
       shop.dispose();
       teleportWin.dispose();
+      dialogWin.dispose();
       contractsWin.dispose();
       specWin.dispose();
       subWin.dispose();
@@ -1758,6 +1786,15 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "trade":
           tradeWin.set(msg.msg.value);
           break;
+        case "npcDialog": {
+          const d = msg.msg.value;
+          // Sem conversa agora: o serviço direto (só se o jogador ainda estiver perto).
+          if (d.service) {
+            const dist = entities.distanceTo(d.npcId);
+            if (dist !== null && dist <= SHOP_KEEP_DIST) openService(d.npcId);
+          } else dialogWin.open(d);
+          break;
+        }
         case "questLog": {
           const log = msg.msg.value;
           hud.setQuests(log);

@@ -314,12 +314,12 @@ var auctioneerID = boardID + 1
 func (z *Zone) spawnAuctioneer(id uint32) {
 	d := auctioneer
 	pos := z.freeSpot(Vec2{X: d.x, Z: d.z})
-	z.npcs[id] = &entity{
+	z.addNPC(&entity{
 		id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
 		name: d.name, model: d.model, level: 1, scale: 1,
 		pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
 		npc: &npcState{title: d.title, role: d.role, look: d.look},
-	}
+	})
 }
 
 // auctionNPC: o leiloeiro perto do jogador (senão avisa e devolve nil).

@@ -106,7 +106,7 @@ func TestChooseSpecThroughCrossroads(t *testing.T) {
 	if c == nil || c.Current != "" || c.NpcId != masterOf(z).id || c.ChangeCost != uint64(game.SpecChangeCost) {
 		t.Fatalf("janela da Mestra: %+v", c)
 	}
-	if q := p.pl.quests.active[0]; q.def.ID != game.SpecQuest || q.progress[0] != 1 || q.progress[1] != 0 {
+	if q := questOf(p, game.SpecQuest); q == nil || q.progress[0] != 1 || q.progress[1] != 0 {
 		t.Fatalf("missão depois de falar: %+v", q.progress)
 	}
 

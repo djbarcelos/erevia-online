@@ -20,6 +20,7 @@ const (
 	PlaceGate                   // portão da cidade
 	PlaceStone                  // Pedra de Teleporte
 	PlaceShop                   // loja (NPC que vende)
+	PlaceSpot                   // um lugar para visitar (GoalVisit)
 )
 
 // QuestPlace é onde fica um objetivo. Name é o rótulo no mapa.
@@ -190,4 +191,23 @@ func (s QuestStep) Monsters() []string {
 		return nil
 	}
 	return strings.Split(s.Target, "|")
+}
+
+// LootSources: os monstros comuns (sem chefes, raid e invocações) que deixam cair o item,
+// em ordem de id. É para onde o "Ir" de um passo de coletar manda caçar.
+func LootSources(item string) []string {
+	var out []string
+	for id, m := range Monsters {
+		if m.Boss || m.Raid || m.Rare != nil || m.NoGear {
+			continue
+		}
+		for _, l := range m.Loot {
+			if l.ItemID == item {
+				out = append(out, id)
+				break
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
 }

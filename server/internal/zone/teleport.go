@@ -50,12 +50,12 @@ type channelState struct {
 func (z *Zone) spawnStones(firstID uint32) {
 	for i, d := range teleportStones {
 		pos := z.freeSpot(Vec2{X: d.x, Z: d.z})
-		z.npcs[firstID+uint32(i)] = &entity{
+		z.addNPC(&entity{
 			id: firstID + uint32(i), kind: pb.EntityKind_ENTITY_KIND_NPC,
 			name: d.name, model: stoneModel, level: 1, scale: 1,
 			pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
 			npc: &npcState{title: "Pedra de Teleporte", role: pb.NpcRole_NPC_ROLE_TELEPORT, stone: i},
-		}
+		})
 	}
 }
 

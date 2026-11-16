@@ -10,6 +10,7 @@ import {
   type FriendCmdKind,
   type SpecCmdKind,
   type SubclassCmdKind,
+  type NpcTalkKind,
   type MasteryCmdKind,
   type ContractCmdKind,
   type ReputationCmdKind,
@@ -204,6 +205,11 @@ export class Connection {
   /** Guardião das Sendas (subclasse): falar, escolher a subclasse ou trocar a classe ativa. */
   subclassCmd(kind: SubclassCmdKind, npcId: number, cls = ""): void {
     this.send({ case: "subclassCmd", value: { kind, npcId, class: cls } });
+  }
+
+  /** Conversa com NPC: abrir, aceitar ou entregar a missão questId, perguntar sobre topic. */
+  npcTalk(kind: NpcTalkKind, npcId: number, questId = "", topic = ""): void {
+    this.send({ case: "npcTalk", value: { kind, npcId, questId, topic } });
   }
 
   /** Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, meus anúncios e retirar do correio. */

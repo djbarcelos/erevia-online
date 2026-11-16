@@ -59,12 +59,12 @@ var boardID = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+2)
 func (z *Zone) spawnBoard(id uint32) {
 	d := contractBoard
 	pos := z.freeSpot(Vec2{X: d.x, Z: d.z})
-	z.npcs[id] = &entity{
+	z.addNPC(&entity{
 		id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
 		name: d.name, model: d.model, level: 1, scale: 1,
 		pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
 		npc: &npcState{title: d.title, look: d.look},
-	}
+	})
 }
 
 // atBoard: o jogador está perto do quadro (senão avisa).

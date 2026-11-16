@@ -21,6 +21,9 @@ func (f *fakePeer) lastQuestLog() *pb.QuestLog {
 func activeIDs(p *entity) []string {
 	var ids []string
 	for _, a := range p.pl.quests.active {
+		if a.def.Region != "" && a.def.Unlock > 0 {
+			continue // os convites das linhas de história chegam com o nível (talk_test.go)
+		}
 		ids = append(ids, a.def.ID)
 	}
 	return ids

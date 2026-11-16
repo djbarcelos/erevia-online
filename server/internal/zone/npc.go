@@ -13,12 +13,13 @@ const (
 )
 
 type npcState struct {
-	title string
-	role  pb.NpcRole
-	stock []*game.ItemDef
-	stone int // pedra de teleporte: índice em teleportStones (role TELEPORT)
-	crafts bool // Ferreiro: cria itens com as receitas
-	look  *game.Appearance // NPC com modelo de herói: o visual dele
+	title  string
+	role   pb.NpcRole
+	stock  []*game.ItemDef
+	stone  int              // pedra de teleporte: índice em teleportStones (role TELEPORT)
+	crafts bool             // Ferreiro: cria itens com as receitas
+	look   *game.Appearance // NPC com modelo de herói: o visual dele
+	talk   *game.Talker     // conversa (talk.go); nil = o clique abre o serviço direto
 }
 
 type npcDef struct {
@@ -53,7 +54,7 @@ func (z *Zone) spawnNPCs() {
 				n.npc.stock = append(n.npc.stock, def)
 			}
 		}
-		z.npcs[n.id] = n
+		z.addNPC(n)
 	}
 	z.spawnStones(npcIDBase + uint32(len(townNPCs)))
 	z.spawnKeeper(npcIDBase + uint32(len(townNPCs)+len(teleportStones)))
@@ -61,6 +62,7 @@ func (z *Zone) spawnNPCs() {
 	z.spawnBoard(boardID) // o Quadro de Contratos (contracts.go)
 	z.spawnAuctioneer(auctioneerID)
 	z.spawnGuardian(guardianID) // o Guardião das Sendas (subclass.go)
+	z.spawnTalkers()            // o Arauto e os contadores de história (talk.go), depois do Guardião
 }
 
 // storageKeeper: o Guarda do Armazém, na praça, do lado oeste do poço.
@@ -69,18 +71,18 @@ var storageKeeper = npcDef{name: "Otto", title: "Guarda do Armazém", model: "kn
 func (z *Zone) spawnKeeper(id uint32) {
 	d := storageKeeper
 	pos := z.freeSpot(Vec2{X: d.x, Z: d.z})
-	z.npcs[id] = &entity{
+	z.addNPC(&entity{
 		id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
 		name: d.name, model: d.model, level: 1, scale: 1,
 		pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
 		npc: &npcState{title: d.title, role: pb.NpcRole_NPC_ROLE_STORAGE},
-	}
+	})
 }
 
 func (z *Zone) npcList() []*pb.NpcInfo {
 	out := make([]*pb.NpcInfo, 0, len(z.npcs))
 	for _, n := range z.npcs {
-		info := &pb.NpcInfo{Id: n.id, Role: n.npc.role}
+		info := &pb.NpcInfo{Id: n.id, Role: n.npc.role, Talk: n.npc.talk != nil}
 		for _, d := range n.npc.stock {
 			info.Stock = append(info.Stock, d.ID)
 		}
@@ -141,6 +143,7 @@ func (z *Zone) buy(p *entity, npcID uint32, itemID string, count int) {
 	z.system(p, fmt.Sprintf("Você comprou %s por %d moedas.", itemLabel(def, count), cost))
 	z.inventoryChanged(p, false)
 	z.questEvent(p, game.GoalBuy, def.ID)
+	z.questHave(p, def.ID) // uma entrega pode pedir o que se compra (quests.go)
 }
 
 func (z *Zone) sell(p *entity, npcID uint32, slot, count int) {

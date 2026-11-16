@@ -52,6 +52,7 @@ var chaosActions = []chaosAction{
 	{"especializacao", 1, actSpec},
 	{"maestria", 1, actMastery},
 	{"contratos", 2, actContracts},
+	{"conversa", 3, actTalk},
 	{"bestiario", 1, actBestiary},
 	{"amigos", 1, actFriend},
 	{"correio", 2, actMail},
@@ -884,6 +885,58 @@ func actContracts(b *chaosBot, s *chaosSession, r [6]uint64) {
 		label = "contratos!lixo"
 	}
 	b.emit(s, label, msg)
+}
+
+// actTalk: conversa com NPC (missões por região e diárias): abrir, escolher uma opção que o
+// servidor ofereceu (aceitar, entregar, perguntar) ou, às vezes, pedir o que não vale:
+// missão de outro NPC, que não existe, NPC que não conversa ou tipo inválido. Quem está
+// longe anda até o NPC antes (o servidor recusa de longe).
+func actTalk(b *chaosBot, s *chaosSession, r [6]uint64) {
+	s.mu.Lock()
+	id, n := s.npcBy(r[2], func(n *npcSeen) bool { return n.talk })
+	if closest := s.nearestNPC(func(n *npcSeen) bool { return n.talk }); closest != 0 && pct(r[2]>>16) < 60 {
+		id, n = closest, s.npcs[closest] // o mais perto: o bot chega lá e a conversa anda
+	}
+	if d := s.dialog; d != nil && s.npcs[d.NpcId] != nil && pct(r[2]>>32) < 70 {
+		id, n = d.NpcId, s.npcs[d.NpcId] // continua a conversa aberta (aceitar, entregar, perguntar)
+	}
+	var near bool
+	var to vec
+	if n != nil {
+		to, near = n.pos, math.Hypot(n.pos.x-s.pos.x, n.pos.z-s.pos.z) < 5
+	}
+	var opts []*pb.DialogOption
+	if d := s.dialog; d != nil && d.NpcId == id {
+		opts = slices.Clone(d.Options)
+	}
+	s.mu.Unlock()
+	if n != nil && !near && pct(r[1]) < 50 {
+		b.emit(s, "conversa:ir", &pb.ClientMessage{Msg: &pb.ClientMessage_MoveTo{MoveTo: &pb.MoveTo{X: float32(to.x + 1.5), Z: float32(to.z)}}})
+		return
+	}
+	m := &pb.NpcTalk{NpcId: id, Kind: pb.NpcTalkKind_NPC_TALK_OPEN}
+	label := "conversa:abrir"
+	if len(opts) > 0 && pct(r[3]) < 70 {
+		o := opts[pickN(r[4], len(opts))]
+		switch o.Kind {
+		case pb.DialogOptionKind_DIALOG_OPTION_ACCEPT:
+			m.Kind, m.QuestId, label = pb.NpcTalkKind_NPC_TALK_ACCEPT, o.QuestId, "conversa:aceitar"
+		case pb.DialogOptionKind_DIALOG_OPTION_TURN_IN:
+			m.Kind, m.QuestId, label = pb.NpcTalkKind_NPC_TALK_TURN_IN, o.QuestId, "conversa:entregar"
+		case pb.DialogOptionKind_DIALOG_OPTION_ASK:
+			m.Kind, m.Topic, label = pb.NpcTalkKind_NPC_TALK_ASK, o.Topic, "conversa:perguntar"
+		}
+	}
+	if bad(r[5], 15) {
+		all := game.QuestsInOrder()
+		lixo := []string{"", "nao_existe", strings.Repeat("q", 200), all[pickN(r[4]>>8, len(all))].ID}[pickN(r[4]>>16, 4)]
+		m = &pb.NpcTalk{Kind: pb.NpcTalkKind(pickN(r[3]>>8, 6)), QuestId: lixo, Topic: lixo, NpcId: id}
+		if pickN(r[5]>>8, 2) == 0 {
+			m.NpcId = badU32(badIDs, r[5]>>16)
+		}
+		label = "conversa!lixo"
+	}
+	b.emit(s, label, &pb.ClientMessage{Msg: &pb.ClientMessage_NpcTalk{NpcTalk: m}})
 }
 
 func actFriend(b *chaosBot, s *chaosSession, r [6]uint64) {

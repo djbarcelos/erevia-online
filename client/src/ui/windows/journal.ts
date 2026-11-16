@@ -44,10 +44,11 @@ const PLACE: Record<QuestPlaceKind, string> = {
   [QuestPlaceKind.GATE]: "Portão",
   [QuestPlaceKind.STONE]: "Pedra de Teleporte",
   [QuestPlaceKind.SHOP]: "Loja",
+  [QuestPlaceKind.SPOT]: "Lugar",
 };
 
-function grouped<T extends { category: QuestCategory }>(list: readonly T[]): { label: string; items: T[] }[] {
-  return GROUPS.map((g) => ({ label: g.label, items: list.filter((q) => groupOf(q.category) === g.cat) })).filter((g) => g.items.length > 0);
+function grouped<T extends { category: QuestCategory }>(list: readonly T[]): { cat: QuestCategory; label: string; items: T[] }[] {
+  return GROUPS.map((g) => ({ cat: g.cat, label: g.label, items: list.filter((q) => groupOf(q.category) === g.cat) })).filter((g) => g.items.length > 0);
 }
 
 function stepRow(s: QuestStepInfo): HTMLElement {
@@ -95,6 +96,7 @@ export function buildJournal(d: JournalDeps): HTMLElement {
       "jr-head",
       el("span", "jr-mark", tracked ? "◎" : pinned ? "•" : ""),
       el("b", "jr-title", q.title),
+      q.region ? el("span", "jr-tag jr-region", q.region) : "",
       pinned ? el("span", "jr-tag", tracked ? "Rastreada" : "Fixada") : "",
       el("span", "jr-sum", `${doneSteps}/${q.steps.length}`),
       el("i", "jr-caret", "▾"),
@@ -152,7 +154,16 @@ export function buildJournal(d: JournalDeps): HTMLElement {
       el("span", null, "Fixadas no painel: ", el("b", null, `${d.quests.pinnedCount()}/${MAX_PINS}`)),
       el("span", null, "Rastreada: ", tracked ? el("b", null, tracked.title) : el("span", "muted", "nenhuma")),
     );
-    const groups = grouped(list).map((g) => el("section", "jr-group", el("h3", "jr-group-title", g.label, el("span", "count", String(g.items.length))), ...g.items.map(card)));
+    const groups = grouped(list).map((g) =>
+      el(
+        "section",
+        "jr-group",
+        el("h3", "jr-group-title", g.label, el("span", "count", String(g.items.length))),
+        // As diárias vêm do Arauto da praça e renovam com o dia (o servidor confere a data).
+        g.cat === QuestCategory.DAILY ? el("p", "muted small jr-group-note", "Do Arauto da praça. Renovam à meia-noite (horário de Brasília).") : "",
+        ...g.items.map(card),
+      ),
+    );
     body.replaceChildren(summary, ...groups);
   };
 
