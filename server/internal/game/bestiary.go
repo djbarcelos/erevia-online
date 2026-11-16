@@ -128,7 +128,9 @@ func BestiaryHigh(m *MonsterDef) bool { return BestiarySpawnLevel(m) > BestiaryB
 
 // BestiaryFamilyCounts: a entrada conta para completar a família (nasce sozinha no mapa; os
 // raros e as invocações são extras).
-func BestiaryFamilyCounts(m *MonsterDef) bool { return m.Rare == nil && BestiarySpawnLevel(m) > 0 }
+func BestiaryFamilyCounts(m *MonsterDef) bool {
+	return m.Rare == nil && !m.BestiaryExtra && BestiarySpawnLevel(m) > 0
+}
 
 // BestiaryFamilyOf devolve a família do monstro pelo modelo e pela faixa (nil = sem família).
 func BestiaryFamilyOf(m *MonsterDef) *BestiaryFamilyDef {

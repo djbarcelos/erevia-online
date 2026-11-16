@@ -236,7 +236,7 @@ func (z *Zone) rareLeave(m *entity) {
 	ms.corpseEnd = z.now + 1.5/float64(z.cfg.TickRate) // o Despawn sai pela AOI
 	ms.respawnAt = z.now + ms.spawn.Respawn*(1+z.rares.rng.Float64())
 	ms.returning = false
-	ms.hate = map[uint32]float64{}
+	ms.forget()
 	ms.stopAbilities()
 	for _, ef := range m.effects {
 		z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: m.id, Effect: pb.Effect(ef.kind)})
@@ -424,7 +424,7 @@ func (z *Zone) reviveDevRare(m *entity) {
 	ms := m.mon
 	m.dead = false
 	ms.hidden, ms.returning = false, false
-	ms.hate = map[uint32]float64{}
+	ms.forget()
 	ms.stopAbilities()
 	ms.windowStart, ms.windowEnd = time.Time{}, time.Time{}
 	m.pos, m.dest, m.path = ms.home, ms.home, nil

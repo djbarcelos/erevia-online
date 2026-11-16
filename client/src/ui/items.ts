@@ -1,4 +1,4 @@
-import { ItemKind, ScrollKind, type EnchantRules, type Inventory, type ItemInfo } from "../gen/erevia/v1/game_pb";
+import { ItemKind, ScrollKind, type EnchantRules, type Inventory, type ItemBonus, type ItemInfo, type ItemSetInfo } from "../gen/erevia/v1/game_pb";
 import { classInfo } from "../classes";
 import { formatSeconds, render, STROKE, type Theme } from "./icons";
 
@@ -25,6 +25,58 @@ export function equippable(info: ItemInfo): boolean {
 
 export const GRADE_COLOR: Record<number, string> = { 1: "#e8e1d4", 2: "#7bd88f", 3: "#6fa8ff", 4: "#c08cff", 5: "#ff9a3c" };
 export const GRADE_NAME: Record<number, string> = { 1: "Comum", 2: "Bom", 3: "Raro", 4: "Épico", 5: "Lendário" };
+
+// ---------- Graus de equipamento (tunnel#153) ----------
+
+/** Letra do grau ("" = sem grau). O grau sai do nível exigido da peça. */
+export const TIER_LETTER: Record<number, string> = { 1: "D", 2: "C", 3: "B" };
+export const WEIGHT_NAME: Record<number, string> = { 1: "Pesada", 2: "Leve", 3: "Manto" };
+
+export function tierLetter(info: ItemInfo): string {
+  return TIER_LETTER[info.tier] ?? "";
+}
+
+/** Selo do grau ao lado do nome ("D", "C", "B"); null = sem grau. */
+export function tierBadge(info: ItemInfo): HTMLElement | null {
+  const t = tierLetter(info);
+  if (!t) return null;
+  const b = el("span", `tier-badge tier-${t.toLowerCase()}`, t);
+  b.title = `Grau ${t}`;
+  return b;
+}
+
+/** Conjuntos (o servidor manda o conjunto inteiro na primeira peça; nas outras, só o id). */
+const itemSets = new Map<string, ItemSetInfo>();
+/** O inventário do jogador local (a dica conta as peças do conjunto que ele veste). */
+let activeStore: ItemStore | undefined;
+
+/** As linhas de um bônus ("+10 de precisão"), na ordem da dica. */
+export function bonusParts(b: ItemBonus | undefined): string[] {
+  if (!b) return [];
+  const out: string[] = [];
+  const sign = (v: number) => (v > 0 ? "+" : "−");
+  const pct = (v: number) => `${sign(v)}${Math.round(Math.abs(v) * 100)}%`;
+  const num = (v: number) => `${sign(v)}${Math.abs(v) % 1 ? Math.abs(v).toFixed(1).replace(".", ",") : Math.abs(v)}`;
+  if (b.pAtk) out.push(`${num(b.pAtk)} de ataque físico`);
+  if (b.mAtk) out.push(`${num(b.mAtk)} de ataque mágico`);
+  if (b.pDef) out.push(`${num(b.pDef)} de defesa física`);
+  if (b.mDef) out.push(`${num(b.mDef)} de defesa mágica`);
+  if (b.maxHp) out.push(`${num(b.maxHp)} de vida`);
+  if (b.maxMp) out.push(`${num(b.maxMp)} de mana`);
+  if (b.crit) out.push(`${pct(b.crit)} de crítico`);
+  if (b.critDamage) out.push(`${pct(b.critDamage)} de dano crítico`);
+  if (b.accuracy) out.push(`${num(b.accuracy)} de precisão`);
+  if (b.evasion) out.push(`${num(b.evasion)} de esquiva`);
+  if (b.atkSpeed && Math.abs(b.atkSpeed - b.castSpeed) < 1e-6) out.push(`${pct(b.atkSpeed)} de velocidade de ataque e de conjuração`);
+  else {
+    if (b.atkSpeed) out.push(`${pct(b.atkSpeed)} de velocidade de ataque`);
+    if (b.castSpeed) out.push(`${pct(b.castSpeed)} de velocidade de conjuração`);
+  }
+  if (b.speed) out.push(`${num(b.speed)} m/s de movimento`);
+  if (b.hpRegen) out.push(`${num(b.hpRegen)}/s de vida`);
+  if (b.mpRegen) out.push(`${num(b.mpRegen)}/s de mana`);
+  return out;
+}
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -99,7 +151,21 @@ export class ItemStore {
   private listeners = new Set<() => void>();
 
   constructor(list: ItemInfo[]) {
-    for (const i of list) this.catalog.set(i.id, i);
+    for (const i of list) {
+      this.catalog.set(i.id, i);
+      if (i.set?.pieces.length) itemSets.set(i.set.id, i.set);
+    }
+    activeStore = this;
+  }
+
+  /** Quantas peças de cada conjunto o jogador veste. */
+  setPiecesWorn(): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const s of this.equip) {
+      const id = s?.info.set?.id;
+      if (id) out.set(id, (out.get(id) ?? 0) + 1);
+    }
+    return out;
   }
 
   get(id: string): ItemInfo | undefined {
@@ -301,9 +367,15 @@ export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
     const name = el("strong", "", enchantedName(info, ench));
     name.style.color = GRADE_COLOR[info.grade] ?? GRADE_COLOR[1];
     const kind = [(info.kind === ItemKind.WEAPON && WEAPON_LABEL[info.weaponType]) || KIND_LABEL[info.kind] || "Item"];
+    if (info.armorWeight) kind.push(WEIGHT_NAME[info.armorWeight] ?? "");
     if (info.slot >= 0) kind.push(GRADE_NAME[info.grade] ?? "");
+    if (tierLetter(info)) kind.push(`Grau ${tierLetter(info)}`);
     if (info.slots.length > 1) kind.push("2 encaixes");
-    title.append(name, el("span", "tip-kind", kind.filter(Boolean).join(" · ")));
+    const nameLine = el("span", "tip-name");
+    nameLine.append(name);
+    const badge = tierBadge(info);
+    if (badge) nameLine.append(badge);
+    title.append(nameLine, el("span", "tip-kind", kind.filter(Boolean).join(" · ")));
     head.append(icon, title);
     t.append(head);
 
@@ -358,18 +430,59 @@ export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
     }
     if (stats.childElementCount) t.append(stats);
 
+    const set = info.set ? itemSets.get(info.set.id) : undefined;
+    if (set) t.append(setBlock(info, set));
     if (info.description) t.append(el("p", "tip-desc", info.description));
     if (info.slot >= 0) {
       const req: string[] = [];
       if (info.classes.length) req.push(info.classes.map((c) => classInfo(c).label).join(", "));
-      if (info.reqLevel > 1) req.push(`nível ${info.reqLevel}`);
+      // O grau tem um nível mínimo (abaixo dele não se veste); do mínimo até o nível da
+      // peça, ela vale com a penalidade de nível.
+      if (info.tierLevel > 1 && info.tierLevel < info.reqLevel) req.push(`nível ${info.reqLevel} (veste do ${info.tierLevel}, com penalidade)`);
+      else if (info.reqLevel > 1) req.push(`nível ${info.reqLevel}`);
       if (req.length) {
         const ok = (!info.classes.length || info.classes.includes(ctx.myClass)) && ctx.myLevel >= info.reqLevel;
         t.append(el("p", `tip-req${ok ? "" : " bad"}`, `Requer: ${req.join(" · ")}`));
       }
+      const pen = bonusParts(info.underLevel);
+      if (pen.length && ctx.myLevel < info.reqLevel) {
+        const wearable = ctx.myLevel >= (info.tierLevel || 1);
+        t.append(
+          el(
+            "p",
+            "tip-penalty",
+            wearable
+              ? `Abaixo do nível ${info.reqLevel}, vestir esta peça dá ${pen.join(", ")} (uma vez, com uma ou mais peças).`
+              : `Só se veste a partir do nível ${info.tierLevel}. Antes do nível ${info.reqLevel}: ${pen.join(", ")}.`,
+          ),
+        );
+      }
     }
     if (ctx.hint) t.append(el("p", "tip-key", ctx.hint));
     return t;
+}
+
+/** O conjunto na dica: nome com as peças vestidas, a escolha do conjunto, as peças (as
+ *  vestidas acesas) e os bônus de 2 e de 4 peças (os que valem, acesos). */
+function setBlock(info: ItemInfo, set: ItemSetInfo): HTMLElement {
+  const worn = activeStore?.setPiecesWorn().get(set.id) ?? 0;
+  const wornKinds = new Set<ItemKind>();
+  for (const s of activeStore?.equip ?? []) if (s?.info.set?.id === set.id) wornKinds.add(s.info.kind);
+  const box = el("div", "tip-set");
+  box.append(el("div", "tip-set-name", `${set.name} (${worn}/${set.pieces.length})`));
+  if (set.theme) box.append(el("div", "tip-set-theme", set.theme));
+  const pieces = el("ul", "tip-set-pieces");
+  for (const id of set.pieces) {
+    const p = activeStore?.get(id);
+    if (!p) continue;
+    pieces.append(el("li", wornKinds.has(p.kind) ? "on" : "", p.kind === info.kind ? `${p.name} ◂` : p.name));
+  }
+  box.append(pieces);
+  for (const b of set.bonuses) {
+    box.append(el("div", `tip-set-bonus${worn >= b.pieces ? " on" : ""}`, `${b.pieces} peças: ${bonusParts(b.bonus).join(", ")}`));
+  }
+  box.append(el("div", "tip-set-note", "A versão Exaltada de cada peça conta como ela."));
+  return box;
 }
 
 /** Uma dica flutuante compartilhada por inventário, loja e barra. */

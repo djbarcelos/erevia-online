@@ -94,8 +94,12 @@ func (z *Zone) moveItem(p *entity, fromPlace, fromSlot, toPlace, toSlot int) {
 		if fromSlot < 0 || fromSlot >= game.BagSize || inv.bag[fromSlot].empty() {
 			return
 		}
+		def := inv.bag[fromSlot].def
 		why = inv.equipTo(fromSlot, toSlot, p.pl.class, p.level)
 		gear = why == ""
+		if gear {
+			defer z.warnAboveLevel(p, def)
+		}
 	case fromPlace == placeEquip && toPlace == placeBag:
 		why = inv.unequip(fromSlot, toSlot, p.pl.class, p.level)
 		gear = why == ""
@@ -143,6 +147,7 @@ func (z *Zone) useItem(p *entity, place, slot int) {
 			return
 		}
 		z.inventoryChanged(p, true)
+		z.warnAboveLevel(p, def)
 	case def.Kind == game.KindPotion:
 		z.drink(p, slot, def)
 	case def.Kind == game.KindScroll && def.Scroll == game.ScrollReturn:
@@ -150,6 +155,20 @@ func (z *Zone) useItem(p *entity, place, slot int) {
 	case def.Kind == game.KindScroll:
 		z.system(p, "Escolha o item que quer encantar (clique nele depois do pergaminho).")
 	}
+}
+
+// warnAboveLevel avisa quem acabou de vestir uma peça acima do próprio nível: ela vale, mas
+// com a penalidade de nível (game.UnderLevelPenalty) até o nível exigido.
+func (z *Zone) warnAboveLevel(p *entity, def *game.ItemDef) {
+	if def.AboveLevel(p.level) {
+		z.system(p, fmt.Sprintf("%s pede o nível %d. Até lá, você fica com %s.", def.Name, def.ReqLevel, underLevelText()))
+	}
+}
+
+// underLevelText: a penalidade de nível em texto ("−100 de precisão e −40% de …").
+func underLevelText() string {
+	u := game.UnderLevelPenalty
+	return fmt.Sprintf("−%.0f de precisão e −%.0f%% de velocidade de ataque e de conjuração", -u.Accuracy, -u.AtkSpeed*100)
 }
 
 // drink usa uma poção: cura na hora e inicia a recarga do grupo (vida ou mana).
@@ -243,17 +262,10 @@ func inventoryPB(inv *inventory) *pb.Inventory {
 }
 
 func itemInfoPB(d *game.ItemDef) *pb.ItemInfo {
-	b := d.Bonus
 	info := &pb.ItemInfo{
 		Id: d.ID, Name: d.Name, Kind: pb.ItemKind(d.Kind), Grade: uint32(d.Grade), Slot: int32(d.Slot()),
 		Classes: d.Classes, ReqLevel: uint32(d.ReqLevel),
-		Bonus: &pb.ItemBonus{
-			MaxHp: int32(b.MaxHP), MaxMp: int32(b.MaxMP), PAtk: int32(b.PAtk), MAtk: int32(b.MAtk),
-			PDef: int32(b.PDef), MDef: int32(b.MDef), Crit: float32(b.Crit),
-			Accuracy: float32(b.Accuracy), Evasion: float32(b.Evasion), Speed: float32(b.Speed),
-			AtkSpeed: float32(b.AtkSpeed), CastSpeed: float32(b.CastSpeed), HpRegen: float32(b.HPRegen),
-			MpRegen: float32(b.MPRegen), CritDamage: float32(b.CritDamage),
-		},
+		Bonus:      itemBonusPB(d.Bonus),
 		WeaponType: d.WeaponType,
 		Stack:      uint32(min(d.Stack, game.MaxStack)), Price: uint32(d.Price), SellPrice: uint32(d.SellPrice()),
 		Icon: d.Icon, Description: d.Description, CooldownGroup: uint32(d.Cooldown),
@@ -266,7 +278,39 @@ func itemInfoPB(d *game.ItemDef) *pb.ItemInfo {
 	if d.Cooldown != game.CooldownNone {
 		info.CooldownMs = uint32(game.CooldownSeconds(d.Cooldown) * 1000)
 	}
+	if d.Equippable() { // graus (tunnel#153)
+		info.Tier, info.TierLevel, info.ArmorWeight = uint32(d.Tier), uint32(d.Tier.MinLevel()), uint32(d.Weight)
+		if d.ReqLevel > d.Tier.MinLevel() { // só a peça que dá para vestir antes do nível dela
+			info.UnderLevel = itemBonusPB(game.UnderLevelPenalty)
+		}
+		if set := game.ItemSets[d.Set]; set != nil {
+			// O conjunto inteiro vai uma vez, na primeira peça (o catálogo vai em todo Welcome);
+			// nas outras, só o id e o nome.
+			info.Set = &pb.ItemSetInfo{Id: set.ID, Name: set.Name}
+			if d.ID == set.Pieces[0] {
+				info.Set = itemSetPB(set)
+			}
+		}
+	}
 	return info
+}
+
+func itemBonusPB(b game.Stats) *pb.ItemBonus {
+	return &pb.ItemBonus{
+		MaxHp: int32(b.MaxHP), MaxMp: int32(b.MaxMP), PAtk: int32(b.PAtk), MAtk: int32(b.MAtk),
+		PDef: int32(b.PDef), MDef: int32(b.MDef), Crit: float32(b.Crit),
+		Accuracy: float32(b.Accuracy), Evasion: float32(b.Evasion), Speed: float32(b.Speed),
+		AtkSpeed: float32(b.AtkSpeed), CastSpeed: float32(b.CastSpeed), HpRegen: float32(b.HPRegen),
+		MpRegen: float32(b.MPRegen), CritDamage: float32(b.CritDamage),
+	}
+}
+
+func itemSetPB(s *game.ItemSet) *pb.ItemSetInfo {
+	out := &pb.ItemSetInfo{Id: s.ID, Name: s.Name, Theme: s.Theme, Pieces: s.Pieces}
+	for _, b := range s.Bonuses {
+		out.Bonuses = append(out.Bonuses, &pb.ItemSetBonus{Pieces: uint32(b.Pieces), Bonus: itemBonusPB(b.Bonus)})
+	}
+	return out
 }
 
 // itemCatalog é montado uma vez: as mensagens são só lidas ao serializar.

@@ -248,6 +248,8 @@ Hoje a IA é uma só. A proposta é um campo `Archetype` em `MonsterDef`, mais p
 | **Explosivo** | ao morrer, explode em círculo de 2,5 m depois de 1,0 s | brilho pulsando | sair do círculo |
 | **Elite** | 3× a vida e 1,5× o dano, com 1 habilidade avisada; nome com moldura prateada | 1,3× maior | grupo de 2–3 |
 
+**Na T3 (pronta):** `MonsterDef.Archetype` e `MonsterDef.Arch` (os números, com os padrões desta tabela em `game/archetypes.go`), mais `Neutral` e `NeutralByDay`; o comportamento fica em `zone/archetypes.go`, com ganchos no `think`. O papel vai para o cliente em `Entity.role` (o quadro do alvo mostra o ícone), e a auto-caça pula os neutros (a não ser com "Atacar monstros neutros") e larga o alvo que trava. Diferenças da tabela: o escudo frontal corta 60% só do dano **físico** (magia passa); o explosivo também explode quando **chega perto** (para, avisa 1,0 s e morre junto); o curandeiro não foge do corpo a corpo; e a Elite continua sendo `MonsterDef.Elite`, não um arquétipo. Os monstros de papel ficam fora do simulador de equilíbrio e são extras no bestiário. Hoje eles aparecem nos Campos dos Ossos (atirador, emboscador, explosivo e a matilha neutra de dia), nos Ermos Partidos (escudo e invocador) e no Vale das Pedras Vivas (curandeiro neutro e o que divide), poucos de cada (ver o `DefaultSpawns`).
+
 **Avisos no chão para monstros comuns (T4).** Hoje só o raid tem aviso (`zone/raid.go`: onda, chuva e marca, com 2,0–5,0 s). A proposta generaliza para **círculo, cone, linha e anel**, com habilidades por dados (`Abilities []AbilityDef`). Os tempos:
 - **Mínimo de 1,0 s em comuns.** A conta: ping de 150 ms + reação de 250 ms + sair de 3 m a 5 m/s (0,6 s).
 - **1,5–2,5 s em elites e chefes de campo.**

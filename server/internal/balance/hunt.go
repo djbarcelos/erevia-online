@@ -15,7 +15,9 @@ import (
 const (
 	// Onde caça: entre os grupos de monstros que nascem no nível dele (DefaultSpawns, sem
 	// chefes nem raid), o da região mais nova (maior nível mínimo): no 20 já vai para o Vale
-	// das Pedras Vivas. Monstros que dividem a região entram na proporção da quantidade.
+	// das Pedras Vivas. Monstros que dividem a região entram na proporção da quantidade. Os
+	// de papel (atirador, curandeiro...) e os neutros ficam fora da conta, que só sabe lutar
+	// com brutos (game.MonsterDef.BalanceBaseline): são poucos por área (tunnel#129).
 	huntLevelSpread = 2 // caça monstros até 2 níveis acima ou abaixo (contam como do nível dele)
 	// Deslocamento: os monstros nascem espalhados por igual na região; a distância média até
 	// o vizinho mais perto é 0,5 × √(área por monstro). Anda 50% a mais (o mais perto nem
@@ -63,7 +65,7 @@ func sameRegion(a, b game.Spawn) bool {
 
 func huntable(s game.Spawn) bool {
 	d := game.Monsters[s.Monster]
-	return d != nil && !s.Fixed && !d.Boss && !d.Raid && !d.NoGear && s.Count > 0
+	return d != nil && !s.Fixed && !d.Boss && !d.Raid && !d.NoGear && d.BalanceBaseline() && s.Count > 0
 }
 
 // HuntFor escolhe a região de caça do nível.
@@ -177,6 +179,16 @@ type regime struct {
 }
 
 func huntRegime(b *Build, h Hunt, def *game.MonsterDef, level int, night, respawnCap bool) regime {
+	minCycle := 0.0
+	if respawnCap {
+		minCycle = h.MinCycle()
+	}
+	return huntRegimeCap(b, h, def, level, night, minCycle)
+}
+
+// huntRegimeCap: huntRegime com o menor intervalo entre abates dado (0 = sem limite; o
+// modo grupo divide a região entre mais caçadores).
+func huntRegimeCap(b *Build, h Hunt, def *game.MonsterDef, level int, night bool, minCycle float64) regime {
 	f := newFight(b, night, true)
 	travel := h.TravelSeconds(b.Stats.Speed)
 	var r regime
@@ -190,8 +202,8 @@ func huntRegime(b *Build, h Hunt, def *game.MonsterDef, level int, night, respaw
 			return r
 		}
 		down := math.Max(travel, f.restNeeded())
-		if respawnCap && out.Time+down < h.MinCycle() {
-			down = h.MinCycle() - out.Time
+		if out.Time+down < minCycle {
+			down = minCycle - out.Time
 			r.respawnLimited = true
 		}
 		if k >= warmupKills {
@@ -213,7 +225,11 @@ func huntRegime(b *Build, h Hunt, def *game.MonsterDef, level int, night, respaw
 // RegimeTTK: tempo médio para matar em regime contra a região do nível (o número que o
 // teste de equilíbrio entre classes compara).
 func RegimeTTK(p Path, level, enchant int) float64 {
-	b := NewBuild(p, level, enchant)
+	return buildRegimeTTK(NewBuild(p, level, enchant), level)
+}
+
+// buildRegimeTTK: o RegimeTTK de um personagem já montado.
+func buildRegimeTTK(b *Build, level int) float64 {
 	h := HuntFor(level)
 	var wsum, ttk float64
 	for _, hm := range h.Monsters {

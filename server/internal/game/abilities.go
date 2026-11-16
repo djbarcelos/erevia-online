@@ -49,6 +49,9 @@ const (
 	HitRaidRain
 	HitRaidMark
 	HitMonsterAbility // padrão das habilidades sem HitID
+	// Cura do curandeiro (archetypes.go): CombatEvent sem dano, com heal = a vida que o alvo
+	// recuperou (nos outros golpes, heal é o que quem bateu roubou).
+	HitMonsterHeal
 )
 
 // Atraso mínimo entre o aviso e o golpe (roadmap, T4): ping de 150 ms + reação de 250 ms

@@ -30,7 +30,7 @@ func (z *Zone) runAction(e *entity) {
 		return
 	}
 	t := z.get(e.act.target)
-	if t == nil || t.dead || t == e || (t.mon != nil && t.mon.hidden) || (e.mon != nil && t.invisible(z.now)) {
+	if t == nil || t.dead || t == e || (t.mon != nil && t.mon.unseen()) || (e.mon != nil && t.invisible(z.now)) {
 		z.cancelQueuedSkill(e)
 		e.clearAction()
 		return
@@ -104,6 +104,11 @@ func (z *Zone) hitInput(src, dst *entity, magic bool, mult, extraCrit float64) g
 		in.ForceCrit = true
 		src.pl.ambushCrit = false
 	}
+	// Emboscador que acabou de aparecer: o primeiro golpe dói mais (archetypes.go).
+	if src.mon != nil && src.mon.arch.ambushHit {
+		in.Mult *= src.mon.def.Arch.AmbushMult
+		src.mon.arch.ambushHit = false
+	}
 	return in
 }
 
@@ -166,7 +171,7 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 				z.system(p, why)
 				return
 			}
-		} else if t == nil || t.mon == nil || t.dead || t.mon.hidden {
+		} else if t == nil || t.mon == nil || t.dead || t.mon.unseen() {
 			z.system(p, "Selecione um alvo.")
 			return
 		}
@@ -188,7 +193,7 @@ func (z *Zone) requestAttack(p *entity, target uint32, force bool) {
 			}
 			return
 		}
-	case t.mon == nil || t.mon.hidden:
+	case t.mon == nil || t.mon.unseen():
 		return
 	}
 	if p.act.kind != actAttack || p.act.target != t.id || p.act.force != force {
@@ -240,6 +245,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			for _, p := range z.players {
 				if p != src && !p.dead && z.allies(src, p) && dist(p.pos, src.pos) <= s.AllyRadius {
 					z.applyEffect(src, p, def)
+					z.markHelp(src) // buff em alguém do grupo
 				}
 			}
 		}
@@ -260,7 +266,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		z.skillHit(src, target, s, rank)
 		if s.Splash > 0 {
 			for _, m := range z.monsters {
-				if m != target && !m.dead && !m.mon.hidden && dist(target.pos, m.pos)-m.bodyRadius() <= s.Splash {
+				if m != target && !m.dead && !m.mon.unseen() && dist(target.pos, m.pos)-m.bodyRadius() <= s.Splash {
 					z.skillHit(src, m, s, rank)
 				}
 			}
@@ -274,7 +280,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		// Mostra a skill mesmo sem acertar ninguém.
 		z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID})
 		for _, m := range z.monsters {
-			if m.dead || m.mon.hidden || dist(src.pos, m.pos)-m.bodyRadius() > s.Range {
+			if m.dead || m.mon.unseen() || dist(src.pos, m.pos)-m.bodyRadius() > s.Range {
 				continue
 			}
 			z.skillHit(src, m, s, rank)
@@ -297,6 +303,9 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 		return
 	}
 	z.onPvPHit(src, dst)
+	if dst.mon != nil && src.pl != nil {
+		z.markHelp(src) // provocar ou enfraquecer também é ajudar o grupo
+	}
 	landed := s.Mult.At(rank) <= 0 // sem dano: o efeito sempre pega
 	if mult := s.Mult.At(rank); mult > 0 {
 		if s.ExecuteBelow > 0 && dst.hp < dst.stats.MaxHP*s.ExecuteBelow {
@@ -382,6 +391,7 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 	src.lastCombat, dst.lastCombat = z.now, z.now
 
 	if dst.mon != nil && src.pl != nil {
+		z.markHelp(src) // conta para a XP do grupo (party.go)
 		dst.mon.hate[src.id] += math.Max(1, hit.Damage)
 		dst.mon.returning = false
 	}
@@ -392,6 +402,13 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 	if v, ok := dst.effect(game.EffectMark, z.now); ok {
 		dmg = math.Round(dmg * (1 + v))
 		ev.Damage = uint32(dmg)
+	}
+	// Escudo frontal (archetypes.go): o golpe físico de frente perde parte do dano, que o
+	// cliente mostra como absorvido.
+	if b := z.shieldBlock(src, dst, dmg, magic); b > 0 {
+		dmg -= b
+		ev.Damage = uint32(dmg)
+		ev.Absorbed += uint32(b)
 	}
 	taken := z.damage(src, dst, dmg, ev)
 
@@ -444,7 +461,7 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 		}
 	}
 	if ev != nil && absorbed > 0 {
-		ev.Absorbed = uint32(math.Round(absorbed))
+		ev.Absorbed += uint32(math.Round(absorbed))
 	}
 	if dmg <= 0 {
 		return absorbed
@@ -460,6 +477,10 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 	}
 	if dst.mon != nil && dst.mon.invader {
 		z.invasionCredit(src, math.Min(dmg, dst.hp))
+	}
+	if dst.mon != nil && src.pl != nil {
+		dst.mon.addDamage(src.id, math.Min(dmg, dst.hp)) // crédito do abate (party.go)
+		z.markHelp(src)
 	}
 	dst.hp -= dmg
 	if dst.hp <= 0 {

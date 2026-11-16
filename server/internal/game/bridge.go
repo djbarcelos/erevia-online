@@ -5,7 +5,9 @@ import (
 	"math"
 )
 
-// Equipamento ponte do 30 ao 40 (tunnel#149), até os graus de equipamento (tunnel#153):
+// Equipamento ponte do 30 ao 40 (tunnel#149). Com os graus de equipamento (tunnel#153,
+// tiers.go) as peças ponte são a arma e a armadura de classe do grau B, ao lado das armas e
+// dos conjuntos do B no 33:
 // para cada classe, uma arma e uma armadura de nível 30 (Rúnicas, das ruínas dos Ilvarin)
 // e de nível 35 (da Partição), em duas raridades. Usa os modelos de hoje.
 //

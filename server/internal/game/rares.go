@@ -86,19 +86,19 @@ var Rares = []*RareDef{
 	{ID: "rare_captain", Name: "Capitão Ossudo", Host: "skeleton_warrior", Chance: 0.02, Level: 14, When: WhenNight,
 		Where:  RareArea{RMin: 80, RMax: 108}, // os Guerreiros dos Campos (os dos Ermos ficam fora)
 		Rumor:  "Algo grande se move nos Campos dos Ossos… passos em marcha na escuridão.",
-		Loot:   []LootEntry{{"captain_insignia", 1, 1, 1}, {"helm_rare", 0.2, 1, 1}},
+		Loot:   append([]LootEntry{{"captain_insignia", 1, 1, 1}, {"helm_rare", 0.2, 1, 1}}, tierLoot(TierD, GradeEpic, 0.015)...),
 		Guards: 2, GuardsAt: 0.5, Shout: "Capitão Ossudo: \"Formação!\""},
 	{ID: "rare_vossk", Name: "Vossk, o Cinzento", Host: "skeleton_mage", Chance: 0.02, Level: 21, When: WhenNight,
 		Where: RareArea{RMin: 116, RMax: 140, AngleMin: 135, AngleMax: 225}, // o oeste dos Ermos
 		Rumor: "Algo grande se move nos Ermos… cinzas giram no ar sem vento.",
-		Loot:  []LootEntry{{"shadow_essence", 1, 2, 2}},
+		Loot:  append([]LootEntry{{"shadow_essence", 1, 2, 2}}, tierLoot(TierC, GradeEpic, 0.015)...),
 		// Chuva de Ossos mirim: 2 círculos de 3 m em quem está na luta, 1,5 s de aviso.
 		Abilities: []AbilityDef{{ID: "vossk_rain", Look: LookRain, Shape: ShapeCircle, Target: AimRandom, Count: 2, Radius: 3,
 			Delay: 1.5, Cooldown: 9, First: 4, Mult: 1.3}}},
 	{ID: "rare_omrun", Name: "Ômrun, Golem Ancião", Host: "stone_golem", Chance: 0.02, Level: 31,
 		Where: RareArea{X: 0, Z: -270, Radius: 52, South: true}, // a metade sul (funda) do Vale
 		Rumor: "Algo grande se move no Vale… o chão treme sob as pedras.",
-		Loot:  []LootEntry{{"rune_core", 1, 2, 2}},
+		Loot:  append([]LootEntry{{"rune_core", 1, 2, 2}}, tierLoot(TierB, GradeEpic, 0.015)...),
 		// Pisão: anel de 3 a 7 m em volta dele, 2,0 s de aviso (colado nele, escapa).
 		Abilities: []AbilityDef{{ID: "omrun_stomp", Shape: ShapeDonut, Target: AimSelf, Inner: 3, Radius: 7,
 			Delay: 2, Cooldown: 12, First: 6, Mult: 1.8, Effect: &EffectDef{Kind: EffectSlow, Duration: 3, Value: 0.4}}}},

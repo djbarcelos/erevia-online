@@ -180,16 +180,16 @@ func invCases() []invCase {
 					t.Fatalf("o item no encaixe errado devia voltar para a bolsa")
 				}
 			}},
-		{name: "item acima do nível", rule: "equip",
+		{name: "item acima do grau", rule: "equip",
 			brk: func(t *testing.T, z *Zone, p *entity) {
 				d := itemWhere(t, func(d *game.ItemDef) bool {
-					return d.Fits(game.SlotWeapon) && d.UsableBy("knight") && d.ReqLevel > 1
+					return d.Fits(game.SlotWeapon) && d.UsableBy("knight") && d.Tier.MinLevel() > 1 // abaixo do grau
 				})
 				p.pl.inv.equip[game.SlotWeapon] = stack{def: d, count: 1}
 			},
 			fixed: func(t *testing.T, z *Zone, p *entity) {
 				if !p.pl.inv.equip[game.SlotWeapon].empty() {
-					t.Fatalf("o item acima do nível devia voltar para a bolsa")
+					t.Fatalf("o item acima do grau devia voltar para a bolsa")
 				}
 			}},
 		{name: "XP abaixo do começo do nível", rule: "level",

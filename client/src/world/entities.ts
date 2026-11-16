@@ -27,6 +27,7 @@ import {
   type EntityState,
   type HpUpdate,
   type LevelUp,
+  type MonsterArchetype,
   type PlayerStatus,
   type Revive,
   type SkillCast,
@@ -46,6 +47,8 @@ import { GRADE_COLOR } from "../ui/items";
 import { settings } from "../ui/kit";
 import { skillFxColors } from "../ui/skill-themes";
 import type { EntityProbe } from "../net/invariants";
+import { FIGHT_MS, type HuntCandidate } from "./huntrules";
+import { ARCH, neutralNow } from "./roles";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -76,6 +79,10 @@ const NPC_COLOR = "#e0c27a";
 
 /** Velocidade dos projéteis (m/s): o dano só aparece quando o projétil chega. */
 const PROJECTILE_SPEED = 26;
+/** Golpe de cura do monstro curandeiro (game.HitMonsterHeal: RAID_HIT_BASE + 4). */
+const MONSTER_HEAL_HIT = 9005;
+/** Lâmina arremessada do atirador. */
+const THROWN_COLOR = new Color3(0.86, 0.8, 0.62);
 /**
  * Quanto da preparação do golpe ainda aparece (s). O servidor decide o dano no instante em
  * que o golpe começa; o cliente começa o clipe perto do impacto e mostra dano, barra de vida
@@ -133,6 +140,10 @@ export interface EntityInfo {
   boss?: boolean;
   /** Monstro raro (named): nome dourado e selo "RARO" no quadro do alvo. */
   rare?: boolean;
+  /** Monstros: papel na luta (Entity.role, tunnel#129; 0 = bruto) e se é neutro. */
+  role?: MonsterArchetype;
+  neutral?: boolean;
+  neutralByDay?: boolean;
   /** Jogadores: normal, em combate (roxo) ou com karma (vermelho). */
   pvpState: PvpState;
   /** Jogadores: nome do clã ("" = sem clã). */
@@ -233,6 +244,8 @@ interface View extends EntityInfo {
   lastLand: number;
   /** Para onde virar (golpes): gira suave até lá; null = segue o movimento. */
   faceYaw: number | null;
+  /** Monstros: último golpe entre ele e você (performance.now(); a auto-caça vê quem briga). */
+  fightAt: number;
   /** Encaixe da mão da arma (rastro do golpe); undefined = ainda não procurado. */
   hand: TransformNode | null | undefined;
   /**
@@ -569,13 +582,13 @@ export class EntityManager {
 
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
-      model: e.model, boss: e.boss, rare: e.rare, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
+      model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
       weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, cls: e.activeClass || e.model, baseColor, clanText, titleText, pkRing: null,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
-      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, hand: undefined,
+      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, fightAt: 0, hand: undefined,
       bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
     };
     this.views.set(e.id, v);
@@ -895,6 +908,20 @@ export class EntityManager {
     const dst = this.views.get(ev.targetId);
     if (!dst) return;
     const now = performance.now();
+    // Cura do monstro curandeiro (tunnel#129): o número verde sai no aliado curado.
+    if (ev.skillId === MONSTER_HEAL_HIT) {
+      if (src && src !== dst) {
+        this.face(src, dst);
+        src.anim?.play("skill", { lead: SWING_LEAD });
+      }
+      this.at(Math.max(now, dst.impactUntil), dst.id, () => {
+        if (ev.heal && showDamage()) this.fx.number(dst.head, "heal", `+${ev.heal}`);
+      });
+      return;
+    }
+    // Quem briga com você (a auto-caça prefere e não pula, mesmo neutro).
+    if (src && ev.targetId === this.localId && src.kind === EntityKind.MONSTER) src.fightAt = now;
+    if (ev.sourceId === this.localId && dst.kind === EntityKind.MONSTER) dst.fightAt = now;
     // Veneno, queimadura e praga: só o número (sem animação de golpe).
     if (ev.dot !== Effect.UNSPECIFIED) {
       // Queimadura no Lendário do guia, veneno no Bom, praga num verde mais seco.
@@ -972,6 +999,10 @@ export class EntityManager {
       } else if (!ev.skillId && isCaster(src.model)) {
         // Ataque básico de quem usa magia (magos e esqueletos magos).
         launch((a, b) => this.fx.arcaneBolt(a, b, travel));
+        impact = release + travel * 1000;
+      } else if (!ev.skillId && src.role === ARCH.archer) {
+        // Atirador (tunnel#129): a lâmina arremessada voa até o alvo.
+        launch((a, b) => this.fx.bolt(a, b, travel, THROWN_COLOR));
         impact = release + travel * 1000;
       }
     }
@@ -1638,6 +1669,26 @@ export class EntityManager {
       if (!best || d < best.dist) best = { id: v.id, dist: d, level: v.level };
     }
     return best;
+  }
+
+  /**
+   * Monstros vivos para a auto-caça (huntrules.ts): distância, vida, se está neutro agora
+   * (night = a hora do mundo), invisível e brigando com você. 4×/s no máximo.
+   */
+  huntCandidates(night: boolean): HuntCandidate[] {
+    const me = this.local;
+    if (!me) return [];
+    const now = performance.now();
+    const out: HuntCandidate[] = [];
+    for (const v of this.views.values()) {
+      if (v.kind !== EntityKind.MONSTER || v.dead) continue;
+      const inv = v.effects.get(Effect.INVISIBLE);
+      out.push({
+        id: v.id, name: v.name, hp: v.hp, dist: Vector3.Distance(me.root.position, v.root.position),
+        neutral: neutralNow(v, night), hidden: !!inv && inv.until > now, fightingMe: now - v.fightAt < FIGHT_MS,
+      });
+    }
+    return out;
   }
 
   /** Vira para o alvo do golpe (suave, no update). */

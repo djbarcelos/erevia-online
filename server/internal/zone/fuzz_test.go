@@ -851,7 +851,13 @@ func fuzzSpotFor(msg *pb.ClientMessage) byte {
 func fuzzFixedSetup(spot byte) []byte {
 	idx := func(list []string, v string) byte { return byte(slices.Index(list, v)) }
 	item := func(id string, count, ench int) []byte {
-		return []byte{idx(fuzzItemIDs, id), byte(slices.Index(fuzzCounts, count)), byte(slices.Index(fuzzEnch, ench))}
+		// Com mais de 256 itens (os graus, tunnel#153), pick lê o índice em 2 bytes.
+		i := slices.Index(fuzzItemIDs, id)
+		b := []byte{byte(i)}
+		if len(fuzzItemIDs) > 256 {
+			b = append(b, byte(i>>8))
+		}
+		return append(b, byte(slices.Index(fuzzCounts, count)), byte(slices.Index(fuzzEnch, ench)))
 	}
 	b := []byte{0b00000101, spot}
 	b = append(b, idx(fuzzClasses, "knight"), byte(slices.Index(fuzzLevels, 30)), 4)

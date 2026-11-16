@@ -291,8 +291,10 @@ func TestPartyAcrossZones(t *testing.T) {
 	if len(ps.Members) != 3 || other == nil || other.Map != "Clareira de Testes" {
 		t.Fatalf("a janela do grupo não mostra o outro mapa: %v", ps.Members)
 	}
-	// XP do grupo: só quem está na mesma zona.
-	if got := a.creditGroup(map[uint32]float64{1: 10}, ana.pos); len(got) != 2 {
+	// XP do grupo: só quem está na mesma zona. Caio ajudou e está aqui; Beto, mesmo com o
+	// dano do grupo, está em outro mapa e não conta.
+	a.markHelp(a.players[3])
+	if got, _ := a.creditScore(map[uint32]float64{1: 10, 2: 50}, ana.pos); len(got) != 2 {
 		t.Fatalf("XP para %d (só os 2 do mesmo mapa)", len(got))
 	}
 	// Chat do grupo cruza zonas.

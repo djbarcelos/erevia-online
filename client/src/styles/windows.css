@@ -1881,8 +1881,18 @@
 }
 
 .pw-rules,
-.pw-empty {
+.pw-empty,
+.pw-xp,
+.pw-xp-warn {
   margin: 0;
+}
+
+.pw-xp {
+  color: var(--gold);
+}
+
+.pw-xp-warn {
+  color: var(--warn);
 }
 
 /* ---------- Fase 4: janela do clã ---------- */

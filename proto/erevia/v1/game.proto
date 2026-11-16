@@ -891,6 +891,13 @@ message PartyMember {
 message PartyState {
   uint32 leader_id = 1;
   repeated PartyMember members = 2;
+  // XP do grupo vista por você (tunnel#151), atualizada 1×/s. No abate contam os membros
+  // vivos, neste mapa, a até 40 m do monstro e que ajudaram (dano, cura ou buff) nos
+  // últimos 30 s; a janela mostra só pela proximidade de você.
+  uint32 xp_near = 3;        // membros vivos neste mapa a até 40 m de você (você incluído; 0 = você morto)
+  uint32 xp_bonus_pct = 4;   // bônus na XP total do abate com eles (+10% por membro além do primeiro)
+  uint32 xp_level_gap = 5;   // diferença entre o maior e o menor nível deles
+  uint32 xp_gap_cut_pct = 6; // quanto essa diferença corta da XP do grupo (0 = nada; 50 = metade)
 }
 
 message ClanMember {
@@ -1300,6 +1307,30 @@ message ItemInfo {
   string weapon_type = 21; // armas: sword, axe, staff, daggers
   ScrollKind scroll = 22;
   bool blessed = 23; // pergaminho abençoado: falhar não quebra (volta a +0)
+  // Graus de equipamento (tunnel#153). O grau sai do nível exigido; abaixo de tier_level a
+  // peça não se equipa, e de tier_level até req_level ela vale com a penalidade under_level.
+  uint32 tier = 24; // 0 sem grau, 1 D, 2 C, 3 B
+  uint32 tier_level = 25; // nível mínimo do grau
+  uint32 armor_weight = 26; // peças de conjunto: 1 pesada, 2 leve, 3 manto (0 = sem peso)
+  // O conjunto da peça (vazio = nenhum). Inteiro (tema, peças e bônus) só na primeira peça do
+  // conjunto; nas outras, só id e nome: o cliente junta pelo id.
+  ItemSetInfo set = 27;
+  ItemBonus under_level = 28; // o que vestir antes de req_level tira (uma vez, com uma ou mais peças); vazio = não se aplica
+}
+
+// Conjunto de armadura (tunnel#153): as peças comuns, na ordem do corpo (a versão épica de
+// cada uma conta como ela), e os bônus por peças vestidas.
+message ItemSetInfo {
+  string id = 1;
+  string name = 2;
+  string theme = 3; // a escolha de jogo do conjunto, em uma frase
+  repeated string pieces = 4;
+  repeated ItemSetBonus bonuses = 5;
+}
+
+message ItemSetBonus {
+  uint32 pieces = 1; // a partir de quantas peças vale
+  ItemBonus bonus = 2;
 }
 
 enum EntityKind {
@@ -1340,6 +1371,27 @@ message Entity {
   string tint = 27; // monstros: cor da variante (#rrggbb; "" = a do modelo)
   string active_class = 28; // jogadores: classe ativa (subclasse; "" = a do modelo, a principal)
   bool rare = 40; // monstro raro (named): nome dourado e selo no quadro do alvo
+  MonsterRole role = 41; // monstros: papel na luta e se é neutro (ausente = bruto)
+}
+
+// Papel do monstro na luta (arquétipo de IA, tunnel#129): o quadro do alvo mostra o ícone e
+// a dica, e a auto-caça pula os neutros. Ausente = bruto e não neutro (o de sempre).
+message MonsterRole {
+  MonsterArchetype archetype = 1;
+  bool neutral = 2; // só ataca quem bateu nele
+  bool neutral_by_day = 3; // neutro de dia e agressivo à noite (o cliente olha a hora do mundo)
+}
+
+enum MonsterArchetype {
+  MONSTER_ARCHETYPE_UNSPECIFIED = 0; // bruto: persegue e bate
+  MONSTER_ARCHETYPE_ARCHER = 1; // atirador: fica longe e recua quando o alvo encosta
+  MONSTER_ARCHETYPE_HEALER = 2; // curandeiro: cura um aliado ferido
+  MONSTER_ARCHETYPE_SUMMONER = 3; // invocador: chama lacaios
+  MONSTER_ARCHETYPE_AMBUSHER = 4; // emboscador: escondido até você chegar perto
+  MONSTER_ARCHETYPE_PACK = 5; // matilha: puxar um puxa o bando
+  MONSTER_ARCHETYPE_SHIELD = 6; // escudo frontal: toma menos dano de frente
+  MONSTER_ARCHETYPE_SPLITTER = 7; // dividir: ao morrer, vira dois menores
+  MONSTER_ARCHETYPE_EXPLODER = 8; // explosivo: explode com aviso no chão
 }
 
 message EntityState {

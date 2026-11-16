@@ -68,9 +68,10 @@ func TestBestiaryFamilies(t *testing.T) {
 		if e.Family != nil && BestiaryFamilyCounts(m) && !e.Family.High && BestiarySpawnLevel(m) > BestiaryBaseMaxLevel {
 			t.Errorf("%s nasce no %d e conta para %s (de base)", m.ID, BestiarySpawnLevel(m), e.Family.Name)
 		}
-		// Raros e invocações são extras (0); os outros pedem o último marco (chefes: 1).
+		// Raros, invocações e os monstros de papel são extras (0); os outros pedem o último
+		// marco (chefes: 1).
 		want := BestiaryMarks(m)[2]
-		if m.Rare != nil || BestiarySpawnLevel(m) == 0 {
+		if m.Rare != nil || m.BestiaryExtra || BestiarySpawnLevel(m) == 0 {
 			want = 0
 		}
 		if got := BestiaryFamilyNeed(m); got != want {

@@ -39,41 +39,42 @@ func TestTypicalBuildsFollowTheRules(t *testing.T) {
 
 func TestTypicalGear(t *testing.T) {
 	for _, c := range Classes() {
-		for _, l := range []int{1, 5, 6, 29, 30, 34, 35, game.MaxLevel} {
+		for _, l := range []int{1, 5, 6, 9, 10, 13, 16, 19, 20, 23, 29, 30, 33, 34, 35, game.MaxLevel} {
 			gear := TypicalGear(c, l, 0)
-			want := game.GradeCommon
-			if l >= 6 {
-				want = game.GradeGood
-			}
-			// Do 30 em diante, a arma e a armadura são as ponte comuns do nível (30 ou 35).
-			bridge := 0
-			for _, lvl := range game.BridgeLevels {
-				if l >= lvl {
-					bridge = lvl
-				}
-			}
-			rings, shield := 0, false
+			rings, shield, setPieces := 0, false, 0
 			for _, p := range gear {
-				w := want
-				isBridge := p.Item.Kind == game.KindWeapon || p.Item.Kind == game.KindArmor
-				if bridge > 0 && isBridge {
-					w = game.GradeCommon
-					if p.Item.ID != game.BridgeWeaponID(c, bridge, w) && p.Item.ID != game.BridgeArmorID(c, bridge, w) {
-						t.Errorf("%s nv %d: %s, want a peça ponte do %d", c, l, p.Item.ID, bridge)
-					}
-				} else if p.Item.Bridge {
-					t.Errorf("%s nv %d: peça ponte %s fora da arma e da armadura", c, l, p.Item.ID)
+				d := p.Item
+				if !typical(d) || d.ReqLevel > l || !d.UsableBy(c) {
+					t.Errorf("%s nv %d: %s (raridade %d, nível %d)", c, l, d.ID, d.Grade, d.ReqLevel)
 				}
-				if p.Item.Grade != w || p.Item.ReqLevel > l || !p.Item.UsableBy(c) {
-					t.Errorf("%s nv %d: %s (raridade %d, nível %d)", c, l, p.Item.ID, p.Item.Grade, p.Item.ReqLevel)
+				if d.Bridge && d.Kind != game.KindWeapon && d.Kind != game.KindArmor {
+					t.Errorf("%s nv %d: peça ponte %s fora da arma e da armadura", c, l, d.ID)
 				}
-				if p.Item.Kind == game.KindRing {
+				if d.Weight != game.WeightNone && d.Weight != typicalWeight[c] {
+					t.Errorf("%s nv %d: %s é de outro peso", c, l, d.ID)
+				}
+				if (d.Graded || d.Bridge) && d.Tier != game.TierFor(l) && d.Tier+1 != game.TierFor(l) {
+					t.Errorf("%s nv %d: %s é do %s", c, l, d.ID, d.Tier.Label())
+				}
+				if d.Set != "" {
+					setPieces++
+				}
+				if d.Kind == game.KindRing {
 					rings++
 				}
-				shield = shield || p.Item.Kind == game.KindShield
+				shield = shield || d.Kind == game.KindShield
+				// A arma é a do grau do nível (ou a ponte, que é do B).
+				if d.Kind == game.KindWeapon && l >= game.TierD.MinLevel() && d.Tier != game.TierFor(l) {
+					t.Errorf("%s nv %d: arma %s do %s", c, l, d.ID, d.Tier.Label())
+				}
 			}
 			if rings != 2 || shield != (c == "knight" || c == "barbarian") {
 				t.Errorf("%s nv %d: %d anéis, escudo %v", c, l, rings, shield)
+			}
+			// Do conjunto D (13) em diante, o jogador típico tem pelo menos 4 peças de um
+			// conjunto do peso dele (o bônus de 4 peças vale).
+			if want := l >= 13; (setPieces >= 4) != want {
+				t.Errorf("%s nv %d: %d peças de conjunto", c, l, setPieces)
 			}
 		}
 	}
@@ -82,8 +83,9 @@ func TestTypicalGear(t *testing.T) {
 		t.Errorf("arma comum do cavaleiro: %s", w)
 	}
 	// +3 soma o encantamento da zona.
-	b0, b3 := GearBonus(TypicalGear("mage", 10, 0)), GearBonus(TypicalGear("mage", 10, 3))
-	if b3.MAtk-b0.MAtk != game.EnchantBonus(game.Items["staff_good"], 3).MAtk {
+	g0 := TypicalGear("mage", 10, 0)
+	b0, b3 := GearBonus(10, g0), GearBonus(10, TypicalGear("mage", 10, 3))
+	if b3.MAtk-b0.MAtk != game.EnchantBonus(g0[0].Item, 3).MAtk {
 		t.Errorf("cajado +3: %v → %v", b0.MAtk, b3.MAtk)
 	}
 }
