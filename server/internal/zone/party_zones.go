@@ -18,7 +18,7 @@ import (
 // são feitas no barramento, que devolve a versão nova; a zona aplica na cópia dela e
 // cutuca as outras zonas do grupo (que conferem na hora, ou no máximo 1 s depois, em
 // syncParties). Assim:
-//   - XP e moedas do grupo (creditGroup, splitGold) e o saque reservado continuam usando
+//   - XP e moedas do grupo (creditKill, splitGold) e o saque reservado continuam usando
 //     só quem está nesta zona: a XP divide entre os membros no mesmo mapa;
 //   - a janela do grupo mostra todo mundo; quem está em outro mapa vem com o nome dele
 //     (PartyMember.map), e a vida e o nível de 1 s atrás.

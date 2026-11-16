@@ -1,11 +1,13 @@
 /**
  * Grupo (tecla P): membros com vida e mana, quem é o líder, e as ações — convidar pelo
- * nome, expulsar e passar a liderança (só o líder) e sair do grupo.
+ * nome, expulsar e passar a liderança (só o líder) e sair do grupo. Em cima, o bônus de XP
+ * de quem está por perto e o aviso quando a diferença de nível corta a XP (tunnel#151).
  */
 
 import { classInfo } from "../../classes";
 import type { PartyState } from "../../gen/erevia/v1/game_pb";
 import { bar, button, el } from "../kit";
+import { PARTY_XP_RANGE, partyXPText } from "../party-xp";
 
 export interface PartyDeps {
   localId: number;
@@ -41,9 +43,12 @@ export function buildParty(d: PartyDeps): HTMLElement {
   const rules = el(
     "p",
     "small muted pw-rules",
-    "Até 6 pessoas. A XP dos monstros é dividida entre quem está perto (até 30 m), pelo nível de cada um, com bônus de 10% por pessoa a mais. Moedas pegas por um membro são divididas com os que estão perto, e o saque reservado vale para o grupo inteiro.",
+    `Até 6 pessoas. O abate é do lado que causou mais dano (o grupo soma o dele), não de quem deu o último golpe. Contam os membros vivos a até ${PARTY_XP_RANGE} m do monstro que ajudaram (dano, cura ou buff) nos últimos 30 s: a XP sobe 10% por membro além do primeiro e é dividida pelo nível de cada um. Se o maior e o menor nível deles ficam a mais de 8 um do outro, a XP do grupo cai pela metade, e mais a cada nível. Moedas pegas por um membro são divididas com os que estão perto, e o saque reservado vale para o grupo inteiro.`,
   );
-  root.append(list, empty, inviteRow, el("div", "pw-foot", leave), rules);
+  const xpBonus = el("p", "small pw-xp");
+  const xpWarn = el("p", "small pw-xp-warn");
+  xpWarn.setAttribute("role", "status");
+  root.append(xpBonus, xpWarn, list, empty, inviteRow, el("div", "pw-foot", leave), rules);
 
   const render = () => {
     const st = d.state();
@@ -52,6 +57,11 @@ export function buildParty(d: PartyDeps): HTMLElement {
     empty.hidden = !solo;
     leave.hidden = solo;
     inviteRow.hidden = !solo && !amLeader;
+    const xp = partyXPText(st);
+    xpBonus.textContent = xp.bonus;
+    xpBonus.hidden = !xp.bonus;
+    xpWarn.textContent = xp.warn;
+    xpWarn.hidden = !xp.warn;
     list.replaceChildren();
     for (const m of st.members) {
       const info = classInfo(m.class);

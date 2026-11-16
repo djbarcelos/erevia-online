@@ -112,6 +112,7 @@ type playerState struct {
 	sentPvp    pb.PvpState
 	killedBy   string // morto: nome de quem matou
 	party      *party
+	helpUntil  float64 // ajudou (dano, buff, cura) até este z.now: conta na XP do grupo (xpTakers)
 	clan       *clan
 	clanLeftAt time.Time     // saiu de um clã (espera para entrar em outro)
 	channel    *channelState // canalizando teleporte ou pergaminho
