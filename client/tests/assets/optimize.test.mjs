@@ -12,38 +12,12 @@ import { fileURLToPath } from 'node:url';
 import { checkAssets } from '../../scripts/check-assets.mjs';
 import { measure } from '../../scripts/lib/asset-budget.mjs';
 import { compressTextures, generateLods } from '../../scripts/lib/asset-optimize.mjs';
-import { makeDoc, writeGlb } from './helpers.mjs';
+import { denseDoc, makeDoc, writeGlb } from './helpers.mjs';
 
 // Registrar a extensão ensina o gltf-transform a medir imagens KTX2.
 new NodeIO().registerExtensions([KHRTextureBasisu]);
 
 const IMPORT = fileURLToPath(new URL('../../scripts/import-asset.mjs', import.meta.url));
-
-/** Uma grade 2D densa (muitos triângulos que o simplify consegue juntar): n×n quadrados. */
-function denseDoc(n) {
-  const doc = makeDoc({ nodes: [], texture: 64 });
-  const buffer = doc.getRoot().listBuffers()[0];
-  const pos = new Float32Array((n + 1) * (n + 1) * 3);
-  for (let y = 0; y <= n; y++) for (let x = 0; x <= n; x++) pos.set([x, y, 0], (y * (n + 1) + x) * 3);
-  const uv = new Float32Array((n + 1) * (n + 1) * 2);
-  for (let i = 0; i < (n + 1) * (n + 1); i++) uv.set([(i % (n + 1)) / n, Math.floor(i / (n + 1)) / n], i * 2);
-  const idx = new Uint16Array(n * n * 6);
-  let k = 0;
-  for (let y = 0; y < n; y++)
-    for (let x = 0; x < n; x++) {
-      const a = y * (n + 1) + x;
-      idx.set([a, a + 1, a + n + 1, a + 1, a + n + 2, a + n + 1], k);
-      k += 6;
-    }
-  const prim = doc
-    .createPrimitive()
-    .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(pos).setBuffer(buffer))
-    .setAttribute('TEXCOORD_0', doc.createAccessor().setType('VEC2').setArray(uv).setBuffer(buffer))
-    .setIndices(doc.createAccessor().setType('SCALAR').setArray(idx).setBuffer(buffer))
-    .setMaterial(doc.getRoot().listMaterials()[0]);
-  doc.getRoot().listScenes()[0].addChild(doc.createNode('Corpo').setMesh(doc.createMesh('Corpo').addPrimitive(prim)));
-  return doc;
-}
 
 test('generateLods cria LOD1 e LOD2 nas proporções do guia, sem recontar o LOD0', async () => {
   const doc = denseDoc(60); // 7200 triângulos

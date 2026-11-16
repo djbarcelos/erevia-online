@@ -79,3 +79,29 @@ export function makeDoc({ nodes = [], materials = 1, texture = 0, bones = 0 } = 
 export async function writeGlb(path, doc) {
   await new NodeIO().write(path, doc);
 }
+
+/** Uma grade 2D densa (muitos triângulos que o simplify consegue juntar): n×n quadrados. */
+export function denseDoc(n) {
+  const doc = makeDoc({ nodes: [], texture: 64 });
+  const buffer = doc.getRoot().listBuffers()[0];
+  const pos = new Float32Array((n + 1) * (n + 1) * 3);
+  for (let y = 0; y <= n; y++) for (let x = 0; x <= n; x++) pos.set([x / n, y / n, 0], (y * (n + 1) + x) * 3);
+  const uv = new Float32Array((n + 1) * (n + 1) * 2);
+  for (let i = 0; i < (n + 1) * (n + 1); i++) uv.set([(i % (n + 1)) / n, Math.floor(i / (n + 1)) / n], i * 2);
+  const idx = new Uint16Array(n * n * 6);
+  let k = 0;
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      const a = y * (n + 1) + x;
+      idx.set([a, a + 1, a + n + 1, a + 1, a + n + 2, a + n + 1], k);
+      k += 6;
+    }
+  const prim = doc
+    .createPrimitive()
+    .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(pos).setBuffer(buffer))
+    .setAttribute('TEXCOORD_0', doc.createAccessor().setType('VEC2').setArray(uv).setBuffer(buffer))
+    .setIndices(doc.createAccessor().setType('SCALAR').setArray(idx).setBuffer(buffer))
+    .setMaterial(doc.getRoot().listMaterials()[0]);
+  doc.getRoot().listScenes()[0].addChild(doc.createNode('Corpo').setMesh(doc.createMesh('Corpo').addPrimitive(prim)));
+  return doc;
+}

@@ -100,6 +100,7 @@ import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
 import { loadEnvironment, type Environment } from "./world/environment";
 import { DayNight, isNight, WorldClock } from "./world/daynight";
+import { configureKtx2 } from "./world/assets";
 import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
 import { Collision, loadWorldData, worldBounds } from "./world/world-data";
@@ -266,6 +267,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       reportClientError("model", "cenário não carregou", { error: String((err as Error)?.message ?? err) }, err);
     });
 
+  // Texturas KTX2 dos assets novos (pipeline de arte) decodificam com os arquivos do próprio site.
+  configureKtx2();
   // Modelos 3D carregam em segundo plano; até lá, cápsulas coloridas.
   CharacterModels.load(world.scene)
     .then((models) => entities.setModels(models))
