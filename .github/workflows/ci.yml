@@ -74,6 +74,10 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm run test:unit
+      # Orçamento do guia de arte (triângulos por LOD, textura, materiais, ossos) de todo GLB de
+      # public/models; categoria e exceções em client/scripts/assets-manifest.json.
+      - name: Orçamento de assets
+        run: npm run check:assets
       # O world.json commitado (cliente e servidor) tem de ser o que os biomas geram.
       - name: world.json igual ao gerado
         run: |

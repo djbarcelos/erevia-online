@@ -1,0 +1,188 @@
+{
+  "_leia": "Categoria de cada GLB de public/models (orçamento em scripts/lib/asset-budget.mjs e docs/guia-de-arte.md, seção 5). variantes: regex de nós que o jogo esconde (conta só a maior). porPeca: kit com várias peças (mede a maior). excecoes: teto de hoje + motivo; só encolhe.",
+  "modelos": {
+    "anims-combatmelee.glb": {
+      "categoria": "animacao"
+    },
+    "anims-combatranged.glb": {
+      "categoria": "animacao"
+    },
+    "anims-general.glb": {
+      "categoria": "animacao"
+    },
+    "anims-movementbasic.glb": {
+      "categoria": "animacao"
+    },
+    "anims-special.glb": {
+      "categoria": "animacao"
+    },
+    "barbarian.glb": {
+      "categoria": "personagem",
+      "variantes": [
+        "^Head_"
+      ],
+      "excecoes": {
+        "tris": {
+          "max": 8708,
+          "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
+        }
+      }
+    },
+    "env-forest.glb": {
+      "categoria": "cenario",
+      "porPeca": true
+    },
+    "env-town.glb": {
+      "categoria": "cenario",
+      "porPeca": true,
+      "excecoes": {
+        "tris": {
+          "max": 3125,
+          "motivo": "KayKit legado, substituído na #100"
+        }
+      }
+    },
+    "knight.glb": {
+      "categoria": "personagem",
+      "variantes": [
+        "^Head_"
+      ]
+    },
+    "mage.glb": {
+      "categoria": "personagem",
+      "variantes": [
+        "^Head_"
+      ]
+    },
+    "npc_merchant.glb": {
+      "categoria": "personagem"
+    },
+    "npc_smith.glb": {
+      "categoria": "personagem",
+      "excecoes": {
+        "tris": {
+          "max": 8900,
+          "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
+        }
+      }
+    },
+    "props/loot_sack.glb": {
+      "categoria": "cenario"
+    },
+    "rogue.glb": {
+      "categoria": "personagem",
+      "variantes": [
+        "^Head_"
+      ]
+    },
+    "skeleton_mage.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "tris": {
+          "max": 4588,
+          "motivo": "KayKit legado, substituído na #98"
+        },
+        "materials": {
+          "max": 2,
+          "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "skeleton_minion.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "tris": {
+          "max": 5288,
+          "motivo": "KayKit legado, substituído na #98"
+        },
+        "materials": {
+          "max": 2,
+          "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "skeleton_rogue.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "tris": {
+          "max": 5278,
+          "motivo": "KayKit legado, substituído na #98"
+        },
+        "materials": {
+          "max": 2,
+          "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "skeleton_warrior.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "tris": {
+          "max": 5934,
+          "motivo": "KayKit legado, substituído na #98"
+        },
+        "materials": {
+          "max": 2,
+          "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "weapons/axe_1handed.glb": {
+      "categoria": "arma"
+    },
+    "weapons/axe_2handed.glb": {
+      "categoria": "arma"
+    },
+    "weapons/dagger.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_badge_color.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_round_barbarian.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_spikes.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_spikes_color.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_square.glb": {
+      "categoria": "arma"
+    },
+    "weapons/skeleton_axe.glb": {
+      "categoria": "arma"
+    },
+    "weapons/skeleton_blade.glb": {
+      "categoria": "arma"
+    },
+    "weapons/skeleton_shield_large_a.glb": {
+      "categoria": "arma"
+    },
+    "weapons/skeleton_staff.glb": {
+      "categoria": "arma",
+      "excecoes": {
+        "tris": {
+          "max": 1519,
+          "motivo": "KayKit legado (cajado do esqueleto), substituído na #98"
+        }
+      }
+    },
+    "weapons/staff.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_1handed.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_2handed.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_2handed_color.glb": {
+      "categoria": "arma"
+    },
+    "weapons/wand.glb": {
+      "categoria": "arma"
+    }
+  }
+}
