@@ -152,6 +152,83 @@
   color: var(--bad);
 }
 
+/* Graus de equipamento (tunnel#153): o selo ao lado do nome, o conjunto e a penalidade. */
+.tip-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tier-badge {
+  display: inline-block;
+  min-width: 1.15em;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-family: var(--font-title);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--gold-hi);
+  vertical-align: middle;
+}
+
+.tier-badge.tier-c {
+  color: #9fd0ff;
+}
+
+.tier-badge.tier-b {
+  color: #ffb07a;
+}
+
+.tip-set {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.tip-set-name {
+  color: var(--gold-hi);
+  font-weight: 600;
+}
+
+.tip-set-theme {
+  margin: 2px 0 4px;
+  font-style: italic;
+}
+
+.tip-set-pieces {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  opacity: 0.75;
+}
+
+.tip-set-pieces .on,
+.tip-set-bonus.on {
+  color: var(--ok);
+  opacity: 1;
+}
+
+.tip-set-bonus {
+  opacity: 0.75;
+}
+
+.tip-set-note {
+  margin-top: 4px;
+  font-size: 0.68rem;
+  opacity: 0.7;
+}
+
+.tip-penalty {
+  margin: 0 0 6px;
+  color: var(--bad);
+  font-size: 0.74rem;
+}
+
 .tip-key {
   margin: 6px 0 0;
   padding-top: 6px;
