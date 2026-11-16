@@ -1,5 +1,6 @@
 import { Color3, Constants, Effect, MeshBuilder, ShaderMaterial, Vector4, type Mesh, type Scene, type Vector3 } from "@babylonjs/core";
 import { TelegraphShape } from "../../gen/erevia/v1/game_pb";
+import { groundClearance, heightAt, terrain } from "../terrain";
 
 /**
  * Avisos no chão das habilidades de monstro (tunnel#130): círculo, cone, linha e anel,
@@ -62,6 +63,8 @@ interface Slot {
   params: Vector4;
   line: Vector4;
   state: Vector4;
+  /** Quanto o aviso sobe para não afundar nas colinas em volta (terrain.ts, groundClearance). */
+  lift: number;
 }
 
 /** A borda mais distante da forma, contada da origem. */
@@ -198,7 +201,7 @@ export class GroundWarnings {
       mesh.setEnabled(false);
       // Compila na carga, não no primeiro golpe.
       if (i === 0) mat.forceCompilation(mesh);
-      const slot: Slot = { mesh, mat, live: null, box: new Vector4(), params: new Vector4(), line: new Vector4(), state: new Vector4() };
+      const slot: Slot = { mesh, mat, live: null, box: new Vector4(), params: new Vector4(), line: new Vector4(), state: new Vector4(), lift: 0 };
       mat.setVector4("uBox", slot.box);
       mat.setVector4("uParams", slot.params);
       mat.setVector4("uLine", slot.line);
@@ -235,7 +238,7 @@ export class GroundWarnings {
       const w = l.w;
       if (w.follow) {
         const p = w.follow();
-        if (p) s.mesh.position.set(p.x, Y, p.z);
+        if (p) s.mesh.position.set(p.x, heightAt(p.x, p.z) + Y + s.lift, p.z);
       }
       const secs = Math.max(0.05, w.durationMs / 1000);
       const age = (now - l.start) / 1000;
@@ -304,7 +307,9 @@ export class GroundWarnings {
     s.state.set(0, 0, 0, 0);
     s.mat.setFloat("uShape", SHAPE_ID[w.shape] ?? 0);
     s.mat.setColor3("uColor", w.color);
-    s.mesh.position.set(w.x, Y, w.z);
+    // Sobe o que as colinas em volta pedirem (no plano da Cripta, 0).
+    s.lift = groundClearance(terrain(), w.x, w.z, Math.min(R, 12));
+    s.mesh.position.set(w.x, heightAt(w.x, w.z) + Y + s.lift, w.z);
     s.mesh.rotation.y = w.angle;
     s.mesh.setEnabled(true);
   }

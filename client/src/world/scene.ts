@@ -20,6 +20,12 @@ import { AdvancedDynamicTexture } from "@babylonjs/gui";
 import { addGroundDetail } from "./ground";
 import { paintTerrain, projection } from "./map-painter";
 import { registerPaletteMaterial } from "./palette-material";
+import { LEGACY_RENDER } from "./render";
+import { enableClouds, registerCloudsPlugin, type CloudDetail } from "./sky-clouds";
+import { buildHeightField, EDGE_Y, setTerrain, type HeightField } from "./terrain";
+import { createTerrain, registerTerrainPlugin, type TerrainDetail } from "./terrain-mesh";
+import { createWater, registerWaterPlugin, type WaterDetail } from "./water";
+import { registerWindPlugin } from "./wind";
 import { worldBounds, type WorldData } from "./world-data";
 
 /** Cor do horizonte ao entardecer (valor inicial; o ciclo dia/noite muda depois). */
@@ -44,6 +50,19 @@ export interface WorldScene {
   sky: { mesh: Mesh; texture: DynamicTexture };
   /** Material do chão de fora do mapa. */
   outerMat: StandardMaterial;
+  /** Relevo da cena (plano no render antigo). Alturas: terrain.ts, heightAt. */
+  field: HeightField;
+  /** Efeitos do mundo novo; o preset de qualidade liga, desliga e simplifica cada um (render.ts). */
+  fx: {
+    /** Terreno com 4 camadas (1) ou 2 (0). */
+    setTerrainDetail(d: TerrainDetail): void;
+    /** Água: 0 simples, 1 ondas, 2 ondas e espuma. */
+    setWaterDetail(d: WaterDetail): void;
+    /** Nuvens: 0 paradas e simples, 1 animadas, 2 animadas e sombreadas. */
+    setCloudDetail(d: CloudDetail): void;
+    /** O lago existe nesta cena. */
+    hasWater: boolean;
+  };
   /** Move a área de sombra para acompanhar o jogador. */
   followShadows(x: number, z: number): void;
   /**
@@ -62,6 +81,17 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   const engine = reuse ?? (await createEngine(canvas));
   // Material de paleta em todo material Standard/PBR criado daqui em diante (só GLSL).
   if (!engine.isWebGPU) registerPaletteMaterial();
+  // Relevo, vento, água e nuvens (tunnel#99) são plugins de material (GLSL): no render antigo e no
+  // WebGPU ficam de fora. O relevo (geometria) vale no WebGPU também; o lago, não.
+  const modern = !LEGACY_RENDER && !engine.isWebGPU;
+  if (modern) {
+    registerTerrainPlugin();
+    registerWindPlugin();
+    registerWaterPlugin();
+    registerCloudsPlugin();
+  }
+  const field = LEGACY_RENDER ? buildHeightField(world, false) : buildHeightField(world, true, !engine.isWebGPU);
+  setTerrain(field);
   const scene = new Scene(engine);
   // O Babylon faz picking a cada movimento do mouse contra todas as malhas clicáveis; o jogo
   // só precisa de pick no clique e no hover (feito à mão, com intervalo), então desligamos.
@@ -96,6 +126,7 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   skyMat.disableLighting = true;
   skyMat.fogEnabled = false;
   skybox.material = skyMat;
+  const setCloudDetail = modern ? enableClouds(skyMat) : () => {};
   skybox.isPickable = false;
   skybox.infiniteDistance = true;
 
@@ -118,20 +149,39 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   shadows.normalBias = 0.02;
   shadows.darkness = 0.35;
 
-  // Chão pintado (grama, estradas, praça).
-  // O mapa é um retângulo (cresceu só para o sul): o chão fica centrado nele.
+  // Chão pintado (grama, estradas, praça). O mapa é um retângulo (cresceu só para o sul).
   const b = worldBounds(world);
-  const ground = MeshBuilder.CreateGround("ground", { width: b.maxX - b.minX, height: b.maxZ - b.minZ, subdivisions: 2 }, scene);
-  ground.position.set((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2);
-  const groundMat = new StandardMaterial("groundMat", scene);
-  groundMat.diffuseTexture = paintGround(scene, world);
-  groundMat.specularColor = new Color3(0.03, 0.03, 0.03);
-  ground.material = groundMat;
-  ground.receiveShadows = true;
-  addGroundDetail(scene, world, groundMat);
+  const macro = paintGround(scene, world);
+  let ground: Mesh;
+  let setTerrainDetail: (d: TerrainDetail) => void = () => {};
+  let setWaterDetail: (d: WaterDetail) => void = () => {};
+  let hasWater = false;
+  if (LEGACY_RENDER) {
+    // O chão de antes: plano, com o detalhe de grama repetido.
+    ground = MeshBuilder.CreateGround("ground", { width: b.maxX - b.minX, height: b.maxZ - b.minZ, subdivisions: 2 }, scene);
+    ground.position.set((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2);
+    const groundMat = new StandardMaterial("groundMat", scene);
+    groundMat.diffuseTexture = macro;
+    groundMat.specularColor = new Color3(0.03, 0.03, 0.03);
+    ground.material = groundMat;
+    ground.receiveShadows = true;
+    addGroundDetail(scene, world, groundMat);
+  } else {
+    // Terreno com colinas: uma malha só, e o lago (outra malha) fora do retângulo jogável.
+    const t = createTerrain(scene, field, macro);
+    ground = t.mesh;
+    setTerrainDetail = t.setDetail;
+    addGroundDetail(scene, world, null);
+    const water = modern ? createWater(scene, field) : null;
+    if (water) {
+      setWaterDetail = water.setDetail;
+      hasWater = true;
+    }
+  }
   // Fora do mapa: um chão grande e simples até as montanhas.
   const outer = MeshBuilder.CreateGround("outer", { width: 1200, height: 1200 }, scene);
-  outer.position.set((b.minX + b.maxX) / 2, -0.05, (b.minZ + b.maxZ) / 2);
+  // Com o terreno novo o chão de fora fica onde a malha termina (EDGE_Y), abaixo do lago.
+  outer.position.set((b.minX + b.maxX) / 2, LEGACY_RENDER ? -0.05 : EDGE_Y - 0.02, (b.minZ + b.maxZ) / 2);
   const outerMat = new StandardMaterial("outerMat", scene);
   outerMat.diffuseColor = new Color3(0.2, 0.26, 0.14);
   outerMat.specularColor = Color3.Black();
@@ -177,6 +227,8 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
     hemi,
     sky: { mesh: skybox, texture: skyTex },
     outerMat,
+    field,
+    fx: { setTerrainDetail, setWaterDetail, setCloudDetail, hasWater },
     followShadows(x, z) {
       // Usa a direção atual da luz (o ciclo dia/noite move o sol e a lua).
       const d = sun.direction;

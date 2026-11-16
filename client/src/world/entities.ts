@@ -49,6 +49,7 @@ import { skillFxColors } from "../ui/skill-themes";
 import type { EntityProbe } from "../net/invariants";
 import { FIGHT_MS, type HuntCandidate } from "./huntrules";
 import { ARCH, neutralNow } from "./roles";
+import { groundClearance, heightAt, terrain } from "./terrain";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -464,7 +465,7 @@ export class EntityManager {
     const v = this.views.get(id);
     if (v) {
       this.selectRing.parent = v.root;
-      this.selectRing.position.set(0, 0.04, 0);
+      this.selectRing.position.set(0, 0.1, 0);
       this.selectRing.scaling.setAll(v.scale);
       this.selectRing.setEnabled(true);
     } else {
@@ -482,7 +483,7 @@ export class EntityManager {
     const scale = e.scale > 0 ? e.scale : 1;
 
     const root = new TransformNode(`e${e.id}`, this.scene);
-    root.position.set(e.x, 0, e.z);
+    root.position.set(e.x, heightAt(e.x, e.z), e.z);
     const visual = new TransformNode(`visual${e.id}`, this.scene);
     visual.parent = root;
 
@@ -502,7 +503,7 @@ export class EntityManager {
     if (isLocal || emblem) {
       const ring = MeshBuilder.CreateTorus(`ring${e.id}`, { diameter: isLocal ? 1.1 : 1.0, thickness: isLocal ? 0.06 : 0.04, tessellation: 32 }, this.scene);
       ring.parent = root;
-      ring.position.y = 0.03;
+      ring.position.y = 0.1;
       ring.material = emblem ? this.ringMaterial(emblem, isLocal ? 0.85 : 0.5) : this.ringMat;
       ring.isPickable = false;
     }
@@ -637,7 +638,8 @@ export class EntityManager {
     emblem.material = this.material("#e2c070");
     const area = MeshBuilder.CreateTorus(`area${v.id}`, { diameter: 16, thickness: 0.08, tessellation: 64 }, this.scene);
     area.parent = v.root;
-    area.position.y = 0.05;
+    // O círculo de 16 m sobe o que as colinas pedirem, para não afundar.
+    area.position.y = 0.05 + groundClearance(terrain(), v.root.position.x, v.root.position.z, 8);
     const areaMat = new StandardMaterial(`areaMat${v.id}`, this.scene);
     areaMat.emissiveColor = new Color3(0.45, 0.7, 1);
     areaMat.disableLighting = true;
@@ -687,10 +689,11 @@ export class EntityManager {
     for (const m of v.root.getChildMeshes(false)) m.isPickable = false;
     const meshes = v.meshes.length ? v.meshes : v.root.getChildMeshes(false);
     let t = 0;
+    const y0 = v.root.position.y; // o chão onde caiu (o relevo)
     const obs = this.scene.onBeforeRenderObservable.add(() => {
       t += this.scene.getEngine().getDeltaTime() / 1000;
       const k = Math.min(1, t / CORPSE_SINK_S);
-      v.root.position.y = -0.5 * v.scale * k * k;
+      v.root.position.y = y0 - 0.5 * v.scale * k * k;
       for (const m of meshes) m.visibility = 1 - k;
       if (k >= 1) {
         this.scene.onBeforeRenderObservable.remove(obs);
@@ -719,7 +722,7 @@ export class EntityManager {
     if (s.teleport) {
       // Piscar/Investida: pula direto (sem deslizar), com clarão nos dois pontos.
       const from = v.root.position.clone();
-      v.root.position.set(s.x, 0, s.z);
+      v.root.position.set(s.x, heightAt(s.x, s.z), s.z);
       v.server.x = v.target.x = s.x;
       v.server.z = v.target.z = s.z;
       if (s.id === this.localId) this.resetLocalPrediction();
@@ -1458,7 +1461,7 @@ export class EntityManager {
     v.maxHp = r.maxHp;
     v.server = { x: r.x, z: r.z };
     v.target = { x: r.x, z: r.z };
-    v.root.position.set(r.x, 0, r.z);
+    v.root.position.set(r.x, heightAt(r.x, r.z), r.z);
     if (r.id === this.localId) this.resetLocalPrediction();
     this.showDead(v, false);
     this.refreshHpBar(v);
@@ -1830,7 +1833,7 @@ export class EntityManager {
     if (red && !v.pkRing) {
       const ring = MeshBuilder.CreateTorus(`pk${v.id}`, { diameter: 1.25, thickness: 0.05, tessellation: 32 }, this.scene);
       ring.parent = v.root;
-      ring.position.y = 0.035;
+      ring.position.y = 0.1;
       ring.material = this.ringMaterial(NAME_COLORS.chaotic, 0.55);
       ring.isPickable = false;
       v.pkRing = ring;
@@ -1937,6 +1940,9 @@ function settle(v: number, target: number): number {
 function setIfChanged(p: Vector3, x: number, z: number): void {
   if (p.x !== x) p.x = x;
   if (p.z !== z) p.z = z;
+  // Na altura do chão (o relevo é só visual: o servidor continua em x, z).
+  const y = heightAt(x, z);
+  if (p.y !== y) p.y = y;
 }
 
 function lerpAngle(a: number, b: number, t: number): number {

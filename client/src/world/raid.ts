@@ -11,6 +11,7 @@ import { GroundWarnings, shapeCenter, shapeContains, type WarningShape } from ".
 import type { RaidUi } from "../ui/raid";
 import type { EntityManager } from "./entities";
 import type { Fx, FxHandle } from "./fx";
+import { heightAt } from "./terrain";
 
 /** Distância em que a barra do chefe aparece (m). */
 const BAR_DISTANCE = 60;
@@ -111,18 +112,18 @@ export class RaidDirector {
         const c = shapeCenter(shape, t.x, t.z);
         const me = this.entities.rootOf(this.localId)?.position;
         const mine = !!me && shapeContains(shape, t.x, t.z, me.x, me.z);
-        this.fx.as(mine, () => this.fx.slam(new Vector3(c.x, 0, c.z), c.radius, color, mine));
+        this.fx.as(mine, () => this.fx.slam(new Vector3(c.x, heightAt(c.x, c.z), c.z), c.radius, color, mine));
         return;
       }
       // A Chuva já começou a cair antes (para encostar junto com o dano).
       const kind = t.kind === TelegraphKind.MARK ? "mark" : "wave";
-      if (t.kind !== TelegraphKind.RAIN) this.fx.telegraphImpact(new Vector3(t.x, 0, t.z), t.radius, color, kind, this.distanceToMe(t.x, t.z) <= t.radius + 1);
+      if (t.kind !== TelegraphKind.RAIN) this.fx.telegraphImpact(new Vector3(t.x, heightAt(t.x, t.z), t.z), t.radius, color, kind, this.distanceToMe(t.x, t.z) <= t.radius + 1);
       return;
     }
     const follow = t.followId ? () => this.entities.rootOf(t.followId)?.position ?? null : undefined;
     this.warnings.add(t.id, { ...shape, x: t.x, z: t.z, color, durationMs: t.durationMs, follow });
     if (t.kind === TelegraphKind.RAIN) {
-      const at = new Vector3(t.x, 0, t.z);
+      const at = new Vector3(t.x, heightAt(t.x, t.z), t.z);
       const timer = window.setTimeout(() => {
         this.rainTimers.delete(t.id);
         this.fx.telegraphImpact(at, t.radius, color, "rain", this.distanceToMe(t.x, t.z) <= t.radius + 1);
@@ -133,7 +134,7 @@ export class RaidDirector {
 
   /** Um Guarda Ossário nasceu: fumaça e runas no chão. */
   onSpawn(id: number, model: string, x: number, z: number): void {
-    if (model === "skeleton_warrior" && this.nearLair(x, z)) this.fx.summonRise(new Vector3(x, 0, z));
+    if (model === "skeleton_warrior" && this.nearLair(x, z)) this.fx.summonRise(new Vector3(x, heightAt(x, z), z));
     void id;
   }
 

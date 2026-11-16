@@ -1,5 +1,6 @@
 import { Color3, Mesh, MeshBuilder, PointerEventTypes, Ray, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import type { PickAreas } from "./pick";
+import { heightAt, rayTerrain, terrain } from "./terrain";
 
 /** Segurando o botão, reenvia o destino no máximo a cada X ms (servidor aceita ~10/s). */
 const HOLD_RESEND_MS = 150;
@@ -35,7 +36,7 @@ export interface InputHandlers {
  * Clique esquerdo: no monstro seleciona e ataca; no chão anda (segurar continua
  * andando em direção ao cursor, como no L2). Mostra um marcador no destino.
  */
-export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers, areas: PickAreas): void {
+export function setupInput(scene: Scene, h: InputHandlers, areas: PickAreas): void {
   const canvas = scene.getEngine().getRenderingCanvas()!;
   const marker = createMarker(scene);
   let holdingGround = false;
@@ -79,12 +80,15 @@ export function setupInput(scene: Scene, ground: Mesh, h: InputHandlers, areas: 
   const moveToCursor = (force: boolean) => {
     const now = performance.now();
     if (!force && now - lastSent < HOLD_RESEND_MS) return;
-    const pick = scene.pick(scene.pointerX, scene.pointerY, (m) => m === ground);
-    if (!pick?.hit || !pick.pickedPoint) return;
+    // O chão é uma função (terrain.ts): o raio do cursor marcha até achar a colina.
+    if (!scene.activeCamera) return;
+    scene.createPickingRayToRef(scene.pointerX, scene.pointerY, null, ray, null);
+    const hit = rayTerrain(terrain(), ray.origin.x, ray.origin.y, ray.origin.z, ray.direction.x, ray.direction.y, ray.direction.z);
+    if (!hit) return;
     lastSent = now;
-    const dest = h.onGround(pick.pickedPoint.x, pick.pickedPoint.z);
+    const dest = h.onGround(hit.x, hit.z);
     if (!dest) return;
-    marker.position.set(dest.x, 0.03, dest.z);
+    marker.position.set(dest.x, heightAt(dest.x, dest.z) + 0.06, dest.z);
     marker.setEnabled(true);
     marker.scaling.setAll(1);
     marker.visibility = 1;

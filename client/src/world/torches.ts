@@ -23,6 +23,7 @@ import {
 import { mulberry32 } from "./map-painter";
 import type { WorldScene } from "./scene";
 import { heightToNormal, outward, rubbleMesh } from "./teleport-stone";
+import { heightAt } from "./terrain";
 
 /**
  * Tochas da cidade: poste de madeira torto e texturizado, braseiro de ferro com garras,
@@ -564,12 +565,12 @@ export class Torches {
     this.tops = [];
     spots.forEach((s, i) => {
       Quaternion.FromEulerAnglesToRef((rand() - 0.5) * 0.06, rand() * Math.PI * 2, (rand() - 0.5) * 0.06, q);
-      Matrix.ComposeToRef(Vector3.One(), q, new Vector3(s.x, 0, s.z), m);
+      Matrix.ComposeToRef(Vector3.One(), q, new Vector3(s.x, heightAt(s.x, s.z), s.z), m);
       m.copyToArray(base, i * 16);
       const top = Vector3.TransformCoordinates(new Vector3(0, FLAME_BASE, 0), m);
       this.tops.push(top);
       Matrix.Translation(top.x, top.y, top.z).copyToArray(flames, i * 16);
-      Matrix.ComposeToRef(new Vector3(1, 1, 1), Quaternion.RotationYawPitchRoll(rand() * 6.28, 0, 0), new Vector3(s.x, 0.065, s.z), m);
+      Matrix.ComposeToRef(new Vector3(1, 1, 1), Quaternion.RotationYawPitchRoll(rand() * 6.28, 0, 0), new Vector3(s.x, heightAt(s.x, s.z) + 0.065, s.z), m);
       m.copyToArray(pools, i * 16);
     });
     this.seeds = spots.map((_, i) => i * 1.731 + 0.37);

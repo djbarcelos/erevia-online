@@ -9,15 +9,18 @@ import { worldBounds, type WorldData } from "./world-data";
  * - estradas: faixas de terra com sulcos e pedrinhas, com as bordas esmaecendo na grama.
  * Tudo gerado aqui (canvas), sem arquivos extras para baixar.
  */
-export function addGroundDetail(scene: Scene, world: WorldData, groundMat: StandardMaterial): void {
-  const detail = grassDetail(scene);
-  const b = worldBounds(world);
-  detail.uScale = (b.maxX - b.minX) / GRASS_TILE_M;
-  detail.vScale = (b.maxZ - b.minZ) / GRASS_TILE_M;
-  groundMat.detailMap.texture = detail;
-  groundMat.detailMap.diffuseBlendLevel = 0.9;
-  groundMat.detailMap.bumpLevel = 0;
-  groundMat.detailMap.isEnabled = true;
+export function addGroundDetail(scene: Scene, world: WorldData, groundMat: StandardMaterial | null): void {
+  // Sem material (terreno novo): as camadas do chão (terrain-mesh.ts) fazem o papel do detalhe de grama.
+  if (groundMat) {
+    const detail = grassDetail(scene);
+    const b = worldBounds(world);
+    detail.uScale = (b.maxX - b.minX) / GRASS_TILE_M;
+    detail.vScale = (b.maxZ - b.minZ) / GRASS_TILE_M;
+    groundMat.detailMap.texture = detail;
+    groundMat.detailMap.diffuseBlendLevel = 0.9;
+    groundMat.detailMap.bumpLevel = 0;
+    groundMat.detailMap.isEnabled = true;
+  }
 
   addPlaza(scene, world.wall.apothem + 0.5);
   addRoads(scene, world.roads);

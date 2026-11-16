@@ -35,6 +35,10 @@ import { QUALITIES, settings, type Quality, type Settings } from "../ui/kit";
 import { RAID_LAIR, regionAt, type Region } from "../ui/regions";
 import { setPaletteColors, setPaletteEnabled } from "./palette-material";
 import type { WorldScene } from "./scene";
+import type { CloudDetail } from "./sky-clouds";
+import type { TerrainDetail } from "./terrain-mesh";
+import type { WaterDetail } from "./water";
+import { setWindRange } from "./wind";
 
 // ---------------------------------------------------------------------------------------
 // Presets
@@ -56,14 +60,23 @@ interface Preset {
   ssao: boolean;
   /** Gradação (ACES, curvas, névoa por região) e o material de paleta. Só o "antigo" desliga. */
   grade: boolean;
+  /** Mundo novo (tunnel#99). Terreno: 0 = 2 camadas (grama e pedra), 1 = as 4 camadas. */
+  terrain: TerrainDetail;
+  /** Vento: alcance (m) em volta da câmera na grama e nos arbustos, e nas árvores; 0 = parado. */
+  windGrass: number;
+  windTree: number;
+  /** Água: 0 = cor, fresnel e céu refletido (parada), 1 = ondas por normal, 2 = ondas e espuma. */
+  water: WaterDetail;
+  /** Nuvens: 0 = paradas e simples, 1 = animadas, 2 = animadas e sombreadas. */
+  clouds: CloudDetail;
 }
 
 const PRESETS: Record<Quality | "antigo", Preset> = {
-  baixa: { scale: 1.25, glow: false, glowKernel: 32, shadowSize: 1024, shadowQuality: ShadowGenerator.QUALITY_LOW, vignette: false, fxaa: false, ssao: false, grade: true },
-  media: { scale: 1, glow: true, glowKernel: 32, shadowSize: 2048, shadowQuality: ShadowGenerator.QUALITY_LOW, vignette: true, fxaa: false, ssao: false, grade: true },
-  alta: { scale: 1, glow: true, glowKernel: 48, shadowSize: 2048, shadowQuality: ShadowGenerator.QUALITY_MEDIUM, vignette: true, fxaa: true, ssao: true, grade: true },
+  baixa: { scale: 1.25, glow: false, glowKernel: 32, shadowSize: 1024, shadowQuality: ShadowGenerator.QUALITY_LOW, vignette: false, fxaa: false, ssao: false, grade: true, terrain: 0, windGrass: 28, windTree: 0, water: 0, clouds: 0 },
+  media: { scale: 1, glow: true, glowKernel: 32, shadowSize: 2048, shadowQuality: ShadowGenerator.QUALITY_LOW, vignette: true, fxaa: false, ssao: false, grade: true, terrain: 1, windGrass: 55, windTree: 80, water: 1, clouds: 1 },
+  alta: { scale: 1, glow: true, glowKernel: 48, shadowSize: 2048, shadowQuality: ShadowGenerator.QUALITY_MEDIUM, vignette: true, fxaa: true, ssao: true, grade: true, terrain: 1, windGrass: 85, windTree: 130, water: 2, clouds: 2 },
   // O render de antes do tunnel#92 (para comparar no ?bench=1).
-  antigo: { scale: 1, glow: true, glowKernel: 48, shadowSize: 2048, shadowQuality: ShadowGenerator.QUALITY_MEDIUM, vignette: false, fxaa: false, ssao: false, grade: false },
+  antigo: { scale: 1, glow: true, glowKernel: 48, shadowSize: 2048, shadowQuality: ShadowGenerator.QUALITY_MEDIUM, vignette: false, fxaa: false, ssao: false, grade: false, terrain: 0, windGrass: 0, windTree: 0, water: 0, clouds: 0 },
 };
 
 const params = new URLSearchParams(location.search);
@@ -268,10 +281,18 @@ export class RenderQuality {
     if (p.grade && scene.imageProcessingConfiguration.vignetteEnabled !== p.vignette) {
       scene.imageProcessingConfiguration.vignetteEnabled = p.vignette;
     }
+    if (!LEGACY_RENDER) {
+      // Terreno, vento, água e nuvens: cada um simplifica ou desliga conforme o preset.
+      const fx = this.world.fx;
+      fx.setTerrainDetail(p.terrain);
+      fx.setWaterDetail(p.water);
+      fx.setCloudDetail(p.clouds);
+      setWindRange(p.windGrass, p.windTree);
+    }
     if (!this.preset || this.preset.fxaa !== p.fxaa || this.preset.ssao !== p.ssao) this.buildPost(p);
     this.preset = p;
     this.presetName = name;
-    console.info(`render: preset ${name} (escala ${p.scale}, brilho ${p.glow ? "sim" : "não"}, sombra ${p.shadowSize}, SSAO ${p.ssao && !!this.ssao ? "sim" : "não"}, FXAA ${p.fxaa ? "sim" : "não"})`);
+    console.info(`render: preset ${name} (escala ${p.scale}, brilho ${p.glow ? "sim" : "não"}, sombra ${p.shadowSize}, SSAO ${p.ssao && !!this.ssao ? "sim" : "não"}, FXAA ${p.fxaa ? "sim" : "não"}, terreno ${p.terrain ? 4 : 2} camadas, vento ${p.windGrass}/${p.windTree} m, água ${p.water}, nuvens ${p.clouds})`);
   }
 
   /**

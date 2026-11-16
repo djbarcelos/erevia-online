@@ -13,6 +13,19 @@ Como escrever (o client/scripts/build-changelog.mjs lê exatamente este formato)
 O rascunho sai de "node client/scripts/changelog-draft.mjs" (PRs mergeados desde a última versão).
 -->
 
+## 2026-11-16.2 · O mundo ganha relevo e vida
+
+### Novidades
+- **Colinas:** o chão deixou de ser uma tábua. Os Arredores, os Campos dos Ossos e os Ermos Partidos agora sobem e descem em colinas suaves, e seu personagem, os monstros, os NPCs, o saque e os avisos no chão acompanham o relevo. A cidade, as estradas, a Cripta e o miolo do Vale continuam planos, então nada mudou nos caminhos que você já conhece. A câmera não atravessa as colinas.
+- **Chão com textura de verdade:** grama, terra, pedra e cascalho se misturam conforme a região: verde vivo nos Arredores, terra e grama seca nos Campos dos Ossos, terra rachada nos Ermos Partidos, rocha no Vale das Pedras Vivas e pedra fria na Cripta. As encostas mostram pedra.
+- **Vento:** a grama, os arbustos e as árvores balançam ao vento, cada tufo no seu ritmo.
+- **Lago:** um lago de água azul-esverdeada, com ondas, reflexo do céu e espuma na margem, ao leste da Floresta, logo depois da borda do mapa. Dá para ver da beira, mas não dá para chegar nele.
+- **Nuvens:** o céu ganhou nuvens que andam devagar e mudam de cor com a hora: douradas ao nascer e ao pôr do sol, brancas ao meio-dia e ralas e azuladas à noite.
+
+### Melhorias
+- As novidades acompanham a qualidade gráfica de Configurações. Na **Baixa**, o vento só mexe na grama perto de você (as árvores ficam paradas), a água é simples e as nuvens ficam paradas. Na **Média** e na **Alta**, tudo anima, e na Alta a água tem espuma e as nuvens têm sombra.
+- Com ?render=antigo no endereço, o jogo continua mostrando o visual de antes (chão plano, sem vento, lago e nuvens).
+
 ## 2026-11-16 · Missões por região, graus de equipamento e monstros com papel
 
 ### Novidades
