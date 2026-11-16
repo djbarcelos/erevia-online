@@ -13,6 +13,17 @@ Como escrever (o client/scripts/build-changelog.mjs lê exatamente este formato)
 O rascunho sai de "node client/scripts/changelog-draft.mjs" (PRs mergeados desde a última versão).
 -->
 
+## 2026-11-16 · Missões por região
+
+### Novidades
+- **Linhas de história:** cada região tem agora quem conte a história dela. **Anselmo**, o moleiro dos Arredores; **Marga**, a coveira dos Campos dos Ossos; **Dárcio**, o batedor dos Ermos Partidos; **Maelis**, a tecelã do Vale das Pedras Vivas; o **Irmão Gaspar**, no Fundo do Vale; **Sor Bertrand**, na Vigília Ossária; e a **Capitã Rovena**, nos Confins Partidos. Um convite chega no Diário quando você alcança o nível da região; fale com eles para aceitar e entregar as missões e descobrir por que o selo do Rei Ossário está rachando.
+- **Conversa com NPCs:** clique num contador de história para ver a fala dele, aceitar e entregar missões e perguntar sobre a região. A Mercadora, o Ferreiro, o Barbeiro, o Armazém, o Quadro de Contratos e o Leiloeiro também ganharam falas: quando têm missão para você, a conversa abre primeiro, com a loja ou o serviço entre as opções.
+- **Missões diárias:** do nível 5 ao 35, **Cássio, o Arauto da Guarda**, na praça, oferece três serviços por dia (coleta, entrega e ronda ou chefe). Pagam moedas, poções e reputação com a Guarda de Vel'Aran, e renovam à meia-noite (horário de Brasília).
+- Missões novas pedem para **pegar materiais do saque**, **levar itens a alguém** e **chegar a lugares do mapa**. O botão **Ir** do Diário leva até a caça, a loja, o lugar ou quem recebe a missão.
+
+### Melhorias
+- A Mestra Ysolde e o Guardião Edrian mudaram um pouco de lugar na praça, para o clique não pegar a Pedra de Teleporte ou o Quadro de Contratos no lugar deles.
+
 ## 2026-11-14 · Subclasse
 
 ### Novidades
