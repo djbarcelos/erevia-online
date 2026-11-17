@@ -11,6 +11,7 @@ import {
   Vector3,
   VertexData,
 } from "@babylonjs/core";
+import { loadNatureKit, natureExtras, remapNature } from "./nature-remaster";
 import { addRemasterPlaza } from "./plaza-remaster";
 import { REMASTER } from "./remaster";
 import { regionProps, townExtras } from "./town-layout";
@@ -21,7 +22,7 @@ import { setWindKind, type WindKind } from "./wind";
 import type { WorldData } from "./world-data";
 
 /** Tipos que projetam sombra (grama, arbustos e adereços pequenos não, para economizar). */
-const CASTS_SHADOW = /^(tree_|rock_3|rock_1_[hk]|rock_2_f|monolith|tavern|church|blacksmith|market|home_|well|windmill|tower_|wall_|town_)/;
+const CASTS_SHADOW = /^(tree_|rock_3|rock_1_[hk]|rock_2_f|rock_l|cliff|monolith|tavern|church|blacksmith|market|home_|well|windmill|tower_|wall_|town_)/;
 /** Tipos que recebem sombra (construções e muralhas ficam mais "assentadas" no chão). */
 const RECEIVES_SHADOW = /^(tavern|church|blacksmith|market|home_|windmill|tower_|wall_|well|monolith|town_)/;
 /** Árvores ficam translúcidas quando tapam o jogador ou o alvo. */
@@ -68,14 +69,22 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
     for (const [kind, mesh] of monolithProtos(scene)) protos.set(kind, mesh);
   }
 
-  // Remaster (tunnel#100): os prédios e adereços da cidade vêm do kit novo, no mesmo layout.
-  // Cada peça nova ocupa o lugar do item antigo de mesmo nome (a escala do world.json já está na malha).
-  const extras = REMASTER && !world.kits ? [...townExtras(), ...regionProps(world)] : [];
+  // Remaster: a natureza do mapa principal vem do kit pintado à mão, nas mesmas posições (nature-remaster.ts),
+  // e os prédios e adereços da cidade vêm do kit novo, no mesmo layout (tunnel#100). Lápides e cristais
+  // das regiões são os da natureza; da cidade fica só o pilar dos Ermos (para não duplicar).
+  let objects = world.objects;
   if (REMASTER && !world.kits) {
+    for (const [name, mesh] of await loadNatureKit(scene)) protos.set(name, mesh);
     for (const [kind, mesh] of await loadTownProtos(scene)) {
       protos.get(kind)?.setEnabled(false);
       protos.set(kind, mesh);
     }
+    objects = [
+      ...remapNature(objects),
+      ...natureExtras(world),
+      ...townExtras(),
+      ...regionProps(world).filter((o) => o.k === "town_pillar"),
+    ];
   }
 
   // Agrupa as posições por tipo e cria um buffer de matrizes para cada um.
@@ -83,7 +92,7 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
   // O lago fica na beira leste do mapa: o que a geração pôs em cima dele (montanhas da borda) some.
   const field = terrain();
   const lake = field.lake;
-  for (const o of [...world.objects, ...extras]) {
+  for (const o of objects) {
     if (REMASTER && o.k === "well") continue; // a fonte do remaster ocupa o lugar do poço
     if (lake && field.lakeU(o.x, o.z) < 1.5 && heightAt(o.x, o.z) < lake.level + 0.45) continue;
     let list = byKind.get(o.k);
