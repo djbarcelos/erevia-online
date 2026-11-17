@@ -14,15 +14,17 @@ import {
 import { loadNatureKit, natureExtras, remapNature } from "./nature-remaster";
 import { addRemasterPlaza } from "./plaza-remaster";
 import { REMASTER } from "./remaster";
+import { regionProps, townExtras } from "./town-layout";
+import { loadTownProtos } from "./town-remaster";
 import { monolithProtos } from "./teleport-stone";
 import { heightAt, terrain } from "./terrain";
 import { setWindKind, type WindKind } from "./wind";
 import type { WorldData } from "./world-data";
 
 /** Tipos que projetam sombra (grama, arbustos e adereços pequenos não, para economizar). */
-const CASTS_SHADOW = /^(tree_|rock_3|rock_1_[hk]|rock_2_f|rock_l|cliff|monolith|tavern|church|blacksmith|market|home_|well|windmill|tower_|wall_)/;
+const CASTS_SHADOW = /^(tree_|rock_3|rock_1_[hk]|rock_2_f|rock_l|cliff|monolith|tavern|church|blacksmith|market|home_|well|windmill|tower_|wall_|town_)/;
 /** Tipos que recebem sombra (construções e muralhas ficam mais "assentadas" no chão). */
-const RECEIVES_SHADOW = /^(tavern|church|blacksmith|market|home_|windmill|tower_|wall_|well|monolith)/;
+const RECEIVES_SHADOW = /^(tavern|church|blacksmith|market|home_|windmill|tower_|wall_|well|monolith|town_)/;
 /** Árvores ficam translúcidas quando tapam o jogador ou o alvo. */
 const FADES = /^tree_/;
 
@@ -67,11 +69,22 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
     for (const [kind, mesh] of monolithProtos(scene)) protos.set(kind, mesh);
   }
 
-  // Remaster: a natureza do mapa principal vem do kit pintado à mão, nas mesmas posições (nature-remaster.ts).
+  // Remaster: a natureza do mapa principal vem do kit pintado à mão, nas mesmas posições (nature-remaster.ts),
+  // e os prédios e adereços da cidade vêm do kit novo, no mesmo layout (tunnel#100). Lápides e cristais
+  // das regiões são os da natureza; da cidade fica só o pilar dos Ermos (para não duplicar).
   let objects = world.objects;
   if (REMASTER && !world.kits) {
     for (const [name, mesh] of await loadNatureKit(scene)) protos.set(name, mesh);
-    objects = [...remapNature(objects), ...natureExtras(world)];
+    for (const [kind, mesh] of await loadTownProtos(scene)) {
+      protos.get(kind)?.setEnabled(false);
+      protos.set(kind, mesh);
+    }
+    objects = [
+      ...remapNature(objects),
+      ...natureExtras(world),
+      ...townExtras(),
+      ...regionProps(world).filter((o) => o.k === "town_pillar"),
+    ];
   }
 
   // Agrupa as posições por tipo e cria um buffer de matrizes para cada um.

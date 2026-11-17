@@ -13,6 +13,7 @@
 // Uso (dentro de client/):
 //   node scripts/build-remaster-v3.mjs <rig.glb> <merged.glb[,outro.glb]> <walk.glb> <run.glb> <prefixo> <saida.glb>
 //        [--rename=Antigo:Novo,...] [--hand=<osso da mão direita>,<esquerda>]
+//        [--trim=ClipeDoMeshy:inicio_s:fim_s,...]  fica só com o trecho do clipe e o desloca para t=0 (ex.: a investida de 7 s do machado)
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 
@@ -26,6 +27,7 @@ const buffer = root.listBuffers()[0];
 const nodeByName = new Map(root.listNodes().map((n) => [n.getName(), n]));
 
 // Nomes que o Meshy dá aos clipes → nomes do jogo.
+const trims = Object.fromEntries((opt.trim ?? '').split(',').filter(Boolean).map((t) => { const [n, a, b] = t.split(':'); return [n, [+a, +b]]; }));
 const rename = { Idle: 'Idle', Right_Hand_Sword_Slash: 'Attack', Hit_Reaction_1: 'Hit', Sword_Shout: 'Raise', Dead: 'Death', ...Object.fromEntries((opt.rename ?? '').split(',').filter(Boolean).map((p) => p.split(':'))) };
 
 const qmul = (a, b) => [
@@ -53,8 +55,31 @@ async function copyClips(path, namer, keep) {
       const target = nodeByName.get(name);
       if (!target) continue;
       const s = ch.getSampler();
-      const input = doc.createAccessor().setType('SCALAR').setArray(s.getInput().getArray().slice()).setBuffer(buffer);
-      const data = s.getOutput().getArray().slice();
+      let times = s.getInput().getArray().slice();
+      let data = s.getOutput().getArray().slice();
+      const tr = trims[srcClip.getName()];
+      if (tr) {
+        // só as chaves do trecho, com o tempo deslocado; a interpolação cúbica (3 valores por chave) não é usada pelo Meshy
+        const w = data.length / times.length;
+        const idx = [...times].map((t, i) => [t, i]).filter(([t]) => t >= tr[0] - 1e-4 && t <= tr[1] + 1e-4).map(([, i]) => i);
+        if (idx.length < 2) {
+          // canal parado dentro do trecho (poucas chaves): vira duas chaves iguais, no início e no fim
+          const all = [...times];
+          let c = 0;
+          all.forEach((t, i) => { if (t <= tr[0] + 1e-4) c = i; });
+          const v = data.slice(c * w, c * w + w);
+          times = Float32Array.from([0, tr[1] - tr[0]]);
+          data = new Float32Array(2 * w);
+          data.set(v, 0); data.set(v, w);
+        }
+        const nt = idx.length < 2 ? times : new Float32Array(idx.length);
+        if (idx.length >= 2) {
+          const nd = new Float32Array(idx.length * w);
+          idx.forEach((i, k) => { nt[k] = times[i] - tr[0]; nd.set(data.subarray(i * w, i * w + w), k * w); });
+          times = nt; data = nd;
+        }
+      }
+      const input = doc.createAccessor().setType('SCALAR').setArray(times).setBuffer(buffer);
       if (fix && name.endsWith('Hips')) {
         const tp = ch.getTargetPath();
         for (let i = 0; i < data.length; i += tp === 'rotation' ? 4 : 3) {

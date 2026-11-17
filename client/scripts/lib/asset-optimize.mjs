@@ -37,7 +37,30 @@ function simplifiedMesh(doc, mesh, ratio, name, flags) {
     const indices = indicesOf(prim);
     const target = Math.max(3, Math.floor((indices.length * ratio) / 3) * 3);
     // Erro máximo 1 (relativo ao tamanho da malha): o alvo de triângulos manda, não o erro.
-    const [simplified] = MeshoptSimplifier.simplify(indices, positions, 3, target, 1, flags);
+    let [simplified] = MeshoptSimplifier.simplify(indices, positions, 3, target, 1, flags);
+    // Com Prune e erro 1 toda ilha é "pequena": uma malha de pedras (golem) sumia inteira no LOD2, e com erro
+    // pequeno a malha de peças soltas não desce ao alvo. Bisseção (geométrica) do erro para chegar perto do
+    // alvo de triângulos: acima do erro certo some peça demais, abaixo dele sobra triângulo demais.
+    if (flags.includes('Prune') && (simplified.length < target * 0.7 || simplified.length > target * 1.05)) {
+      let lo = 0.001;
+      let hi = 1;
+      let best = simplified;
+      for (let i = 0; i < 12; i++) {
+        const err = Math.sqrt(lo * hi);
+        const [r] = MeshoptSimplifier.simplify(indices, positions, 3, target, err, flags);
+        if (Math.abs(r.length - target) < Math.abs(best.length - target) || best.length === 0) best = r;
+        if (r.length < target * 0.7) hi = err;
+        else if (r.length > target * 1.05) lo = err;
+        else break;
+      }
+      simplified = best;
+    }
+    if (simplified.length > target * 1.2) {
+      // A UV do Meshy tem mil costuras e o simplificador trava (1.400 a 2.400 triângulos no LOD2). A essa
+      // distância (35 m ou mais) vale mais chegar ao orçamento: a versão "sloppy" agrupa por grade e acerta o alvo.
+      const [sloppy] = MeshoptSimplifier.simplifySloppy(indices, positions, 3, null, target, 1);
+      if (sloppy.length >= target * 0.5 && sloppy.length < simplified.length) simplified = sloppy;
+    }
     const next = doc.createPrimitive().setMode(prim.getMode()).setMaterial(prim.getMaterial());
     for (const semantic of prim.listSemantics()) next.setAttribute(semantic, prim.getAttribute(semantic));
     let max = 0;
@@ -55,11 +78,32 @@ function simplifiedMesh(doc, mesh, ratio, name, flags) {
 }
 
 /**
+ * Se o LOD0 passa de `maxTris`, simplifica-o até o limite (a malha do Meshy costuma passar de 2 a 3% do
+ * polycount pedido). Mesmos atributos, só os índices mudam; LockBorder mantém as bordas das peças.
+ * Retorna o total antes e depois.
+ */
+export async function capTriangles(doc, maxTris) {
+  await MeshoptSimplifier.ready;
+  const meshes = doc.getRoot().listNodes().filter((n) => n.getMesh() && !LOD_SUFFIX.test(n.getName()));
+  const count = (m) => m.listPrimitives().reduce((a, p) => a + (p.getIndices()?.getCount() ?? p.getAttribute('POSITION').getCount()) / 3, 0);
+  const before = meshes.reduce((a, n) => a + count(n.getMesh()), 0);
+  if (before <= maxTris) return { before, after: before };
+  for (const node of meshes) {
+    const old = node.getMesh();
+    const next = simplifiedMesh(doc, old, Math.min(1, (maxTris / before) * 0.995), old.getName() || node.getName(), ['LockBorder']);
+    node.setMesh(next);
+    old.dispose();
+  }
+  return { before, after: meshes.reduce((a, n) => a + count(n.getMesh()), 0) };
+}
+
+/**
  * Gera LOD1 e LOD2 (nós `<nome>_LOD1` e `<nome>_LOD2`, irmãos do LOD0 e com o mesmo esqueleto)
  * nas proporções do guia para a categoria. Não mexe em quem já tem LOD vindo do Blender.
  * Retorna { generated: n de nós criados, skipped: motivo | null }.
  */
-export async function generateLods(doc, category, { skip = () => false, prune = false } = {}) {
+export async function generateLods(doc, category, { skip = () => false, prune = false, noLod2 = null } = {}) {
+  // noLod2: nós (por nome) que não ganham LOD2 (o elmo separável de 220 triângulos, que a 35 m já não se vê).
   // prune: também descarta as ilhas pequenas (malhas de IA com peças soltas não descem do piso de ~1.100 triângulos sem isso).
   const flags = prune ? ['LockBorder', 'Prune'] : ['LockBorder'];
   const ratios = BUDGET[category].ratios;
@@ -71,7 +115,7 @@ export async function generateLods(doc, category, { skip = () => false, prune = 
     const mesh = node.getMesh();
     if (!mesh || skip(node)) continue;
     ratios.forEach((ratio, i) => {
-      if (!ratio) return;
+      if (!ratio || (i === 1 && noLod2?.test(node.getName()))) return;
       const lodNode = doc
         .createNode(`${node.getName()}_LOD${i + 1}`)
         .setMesh(simplifiedMesh(doc, mesh, ratio, `${mesh.getName() || node.getName()}_LOD${i + 1}`, flags))
