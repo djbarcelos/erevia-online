@@ -16,9 +16,6 @@
     "anims-special.glb": {
       "categoria": "animacao"
     },
-    "barbarian_b.glb": {
-      "categoria": "personagem"
-    },
     "barbarian.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -30,6 +27,12 @@
           "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
         }
       }
+    },
+    "barbarian_b.glb": {
+      "categoria": "personagem"
+    },
+    "bone_lord_b.glb": {
+      "categoria": "chefe"
     },
     "env-forest.glb": {
       "categoria": "cenario",
@@ -45,16 +48,13 @@
         }
       }
     },
-    "knight_b.glb": {
-      "categoria": "personagem"
-    },
     "knight.glb": {
       "categoria": "personagem",
       "variantes": [
         "^Head_"
       ]
     },
-    "mage_b.glb": {
+    "knight_b.glb": {
       "categoria": "personagem"
     },
     "mage.glb": {
@@ -62,6 +62,9 @@
       "variantes": [
         "^Head_"
       ]
+    },
+    "mage_b.glb": {
+      "categoria": "personagem"
     },
     "npc_merchant.glb": {
       "categoria": "personagem"
@@ -75,6 +78,9 @@
         }
       }
     },
+    "ozrhal_b.glb": {
+      "categoria": "chefe"
+    },
     "plaza_BannerPost_b.glb": {
       "categoria": "cenario"
     },
@@ -87,14 +93,14 @@
     "props/loot_sack.glb": {
       "categoria": "cenario"
     },
-    "rogue_b.glb": {
-      "categoria": "personagem"
-    },
     "rogue.glb": {
       "categoria": "personagem",
       "variantes": [
         "^Head_"
       ]
+    },
+    "rogue_b.glb": {
+      "categoria": "personagem"
     },
     "skeleton_mage.glb": {
       "categoria": "monstro",
@@ -109,6 +115,9 @@
         }
       }
     },
+    "skeleton_mage_b.glb": {
+      "categoria": "monstro"
+    },
     "skeleton_minion.glb": {
       "categoria": "monstro",
       "excecoes": {
@@ -121,6 +130,9 @@
           "motivo": "KayKit legado, substituído na #98"
         }
       }
+    },
+    "skeleton_minion_b.glb": {
+      "categoria": "monstro"
     },
     "skeleton_rogue.glb": {
       "categoria": "monstro",
@@ -135,7 +147,7 @@
         }
       }
     },
-    "skeleton_warrior_b.glb": {
+    "skeleton_rogue_b.glb": {
       "categoria": "monstro"
     },
     "skeleton_warrior.glb": {
@@ -151,25 +163,97 @@
         }
       }
     },
+    "skeleton_warrior_b.glb": {
+      "categoria": "monstro"
+    },
+    "stone_golem_b.glb": {
+      "categoria": "monstro"
+    },
+    "town_bench_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_blacksmith_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_cart_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_church_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_crystal_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_gate_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_home_a_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_home_b_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_lamp_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_market_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_pillar_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_sign_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_stall_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_tavern_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_tomb_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_tower_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_wall_b.glb": {
+      "categoria": "cenario"
+    },
     "weapons/axe_1handed.glb": {
       "categoria": "arma"
     },
     "weapons/axe_2handed.glb": {
       "categoria": "arma"
     },
+    "weapons/axe_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/axe_high_b.glb": {
+      "categoria": "arma"
+    },
     "weapons/dagger.glb": {
+      "categoria": "arma"
+    },
+    "weapons/dagger_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_b.glb": {
       "categoria": "arma"
     },
     "weapons/shield_badge_color.glb": {
       "categoria": "arma"
     },
+    "weapons/shield_high_b.glb": {
+      "categoria": "arma"
+    },
     "weapons/shield_round_barbarian.glb": {
       "categoria": "arma"
     },
-    "weapons/shield_spikes_color.glb": {
+    "weapons/shield_spikes.glb": {
       "categoria": "arma"
     },
-    "weapons/shield_spikes.glb": {
+    "weapons/shield_spikes_color.glb": {
       "categoria": "arma"
     },
     "weapons/shield_square.glb": {
@@ -196,16 +280,31 @@
     "weapons/staff.glb": {
       "categoria": "arma"
     },
-    "weapons/sword_1handed.glb": {
+    "weapons/staff_b.glb": {
       "categoria": "arma"
     },
-    "weapons/sword_2handed_color.glb": {
+    "weapons/staff_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_1handed.glb": {
       "categoria": "arma"
     },
     "weapons/sword_2handed.glb": {
       "categoria": "arma"
     },
+    "weapons/sword_2handed_color.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_high_b.glb": {
+      "categoria": "arma"
+    },
     "weapons/wand.glb": {
+      "categoria": "arma"
+    },
+    "weapons/wand_b.glb": {
       "categoria": "arma"
     }
   }

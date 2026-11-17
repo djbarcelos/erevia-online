@@ -38,6 +38,23 @@ function simplifiedMesh(doc, mesh, ratio, name, flags) {
     const target = Math.max(3, Math.floor((indices.length * ratio) / 3) * 3);
     // Erro máximo 1 (relativo ao tamanho da malha): o alvo de triângulos manda, não o erro.
     let [simplified] = MeshoptSimplifier.simplify(indices, positions, 3, target, 1, flags);
+    // Com Prune e erro 1 toda ilha é "pequena": uma malha de pedras (golem) sumia inteira no LOD2, e com erro
+    // pequeno a malha de peças soltas não desce ao alvo. Bisseção (geométrica) do erro para chegar perto do
+    // alvo de triângulos: acima do erro certo some peça demais, abaixo dele sobra triângulo demais.
+    if (flags.includes('Prune') && (simplified.length < target * 0.7 || simplified.length > target * 1.05)) {
+      let lo = 0.001;
+      let hi = 1;
+      let best = simplified;
+      for (let i = 0; i < 12; i++) {
+        const err = Math.sqrt(lo * hi);
+        const [r] = MeshoptSimplifier.simplify(indices, positions, 3, target, err, flags);
+        if (Math.abs(r.length - target) < Math.abs(best.length - target) || best.length === 0) best = r;
+        if (r.length < target * 0.7) hi = err;
+        else if (r.length > target * 1.05) lo = err;
+        else break;
+      }
+      simplified = best;
+    }
     if (simplified.length > target * 1.2) {
       // A UV do Meshy tem mil costuras e o simplificador trava (1.400 a 2.400 triângulos no LOD2). A essa
       // distância (35 m ou mais) vale mais chegar ao orçamento: a versão "sloppy" agrupa por grade e acerta o alvo.
@@ -58,6 +75,26 @@ function simplifiedMesh(doc, mesh, ratio, name, flags) {
     lod.addPrimitive(next);
   }
   return lod;
+}
+
+/**
+ * Se o LOD0 passa de `maxTris`, simplifica-o até o limite (a malha do Meshy costuma passar de 2 a 3% do
+ * polycount pedido). Mesmos atributos, só os índices mudam; LockBorder mantém as bordas das peças.
+ * Retorna o total antes e depois.
+ */
+export async function capTriangles(doc, maxTris) {
+  await MeshoptSimplifier.ready;
+  const meshes = doc.getRoot().listNodes().filter((n) => n.getMesh() && !LOD_SUFFIX.test(n.getName()));
+  const count = (m) => m.listPrimitives().reduce((a, p) => a + (p.getIndices()?.getCount() ?? p.getAttribute('POSITION').getCount()) / 3, 0);
+  const before = meshes.reduce((a, n) => a + count(n.getMesh()), 0);
+  if (before <= maxTris) return { before, after: before };
+  for (const node of meshes) {
+    const old = node.getMesh();
+    const next = simplifiedMesh(doc, old, Math.min(1, (maxTris / before) * 0.995), old.getName() || node.getName(), ['LockBorder']);
+    node.setMesh(next);
+    old.dispose();
+  }
+  return { before, after: meshes.reduce((a, n) => a + count(n.getMesh()), 0) };
 }
 
 /**

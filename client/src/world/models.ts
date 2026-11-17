@@ -24,7 +24,7 @@ import {
 import { reportClientError } from "../net/errors";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, REMASTER, REMASTER_FILES, REMASTER_MASKS } from "./remaster";
+import { lodFor, REMASTER, REMASTER_FILES, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS } from "./remaster";
 import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
 
 /**
@@ -139,10 +139,31 @@ const REMASTER_SETS: Record<string, AnimSet> = {
   mage: heroSet("MB_", { skill: "MB_Skill", buff: "MB_Skill" }),
   rogue: heroSet("RB_", { skill: "RB_Skill" }),
   skeleton_warrior: { idle: "SW_Idle", walk: "SW_Walk", run: "SW_Run", attack: "SW_Attack", skill: "SW_Attack", buff: "SW_Raise", hit: "SW_Hit", death: "SW_Death" },
+  // Bestiário (tunnel#98): ver docs/arte/remaster-monstros.md para a escolha de cada ação.
+  skeleton_minion: { idle: "MN_Idle", walk: "MN_Walk", run: "MN_Run", attack: "MN_Attack", skill: "MN_Attack", buff: "MN_Idle", hit: "MN_Hit", death: "MN_Death" },
+  skeleton_rogue: { idle: "RG_Idle", walk: "RG_Walk", run: "RG_Run", attack: "RG_Attack", skill: "RG_Skill", buff: "RG_Idle", hit: "RG_Hit", death: "RG_Death" },
+  skeleton_mage: { idle: "MG_Idle", walk: "MG_Walk", run: "MG_Run", attack: "MG_Attack", skill: "MG_Cast", buff: "MG_Cast", hit: "MG_Hit", death: "MG_Death" },
+  stone_golem: { idle: "GL_Idle", walk: "GL_Walk", run: "GL_Run", attack: "GL_Attack", skill: "GL_Slam", buff: "GL_Roar", hit: "GL_Hit", death: "GL_Death" },
+  bone_lord: { idle: "BL_Idle", walk: "BL_Walk", run: "BL_Run", attack: "BL_Attack", skill: "BL_Slam", buff: "BL_Raise", hit: "BL_Hit", death: "BL_Death" },
+  ozrhal: { idle: "OZ_Idle", walk: "OZ_Walk", run: "OZ_Run", attack: "OZ_Attack", skill: "OZ_Stomp", buff: "OZ_Roar", hit: "OZ_Hit", death: "OZ_Death" },
 };
 /** O golpe encosta quando a mão termina o movimento rápido (quadro 16 de 30, medido na velocidade da mão). */
 CLIP_IMPACT.SW_Attack = 16 / 30;
 CLIP_IMPACT.KB_Skill = 16 / 30;
+// Bestiário: o quadro de impacto de cada golpe, medido na velocidade das mãos (tools/art/remaster-monstros/speeds.py).
+CLIP_IMPACT.MN_Attack = 0.6;
+CLIP_IMPACT.RG_Attack = 0.53;
+CLIP_IMPACT.RG_Skill = 0.5;
+CLIP_IMPACT.MG_Attack = 0.47;
+CLIP_IMPACT.MG_Cast = 1.3;
+CLIP_IMPACT.GL_Attack = 1.23;
+CLIP_IMPACT.GL_Slam = 1.3;
+CLIP_IMPACT.GL_Roar = 1.7;
+CLIP_IMPACT.BL_Attack = 0.8;
+CLIP_IMPACT.BL_Slam = 1.3;
+CLIP_IMPACT.OZ_Attack = 0.47;
+CLIP_IMPACT.OZ_Stomp = 1.0;
+CLIP_IMPACT.OZ_Roar = 0.8;
 // Heróis novos: o fim do movimento rápido da mão, medido no Blender (tools/art/remaster-herois/impact.py).
 CLIP_IMPACT.BB_Attack = 34 / 30;
 CLIP_IMPACT.KB_Attack = 33 / 30; // corte em arco (Charged Slash); a estocada de antes virou KB_Skill
@@ -221,6 +242,9 @@ const MONSTER_WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
   skeleton_warrior: { "handslot.r": "skeleton_axe", "handslot.l": "skeleton_shield_large_a" },
   skeleton_rogue: { "handslot.r": "skeleton_blade", "handslot.l": "skeleton_blade" },
   skeleton_mage: { "handslot.r": "skeleton_staff" },
+  // Só no remaster (remasterModelOf): os chefes com silhueta própria.
+  bone_lord: { "handslot.r": "skeleton_blade", "handslot.l": "skeleton_shield_large_a" },
+  ozrhal: { "handslot.r": "skeleton_staff" },
 };
 
 export interface CharacterInstance {
@@ -254,6 +278,9 @@ interface ModelAssets {
   /** Máscara de repintura do remaster (R pano, G pele): a base é KTX2 e não dá para ler os pixels. */
   mask: Texture | null;
 }
+
+/** Escala extra das armas do remaster que dividem o arquivo com outra (REMASTER_WEAPONS). */
+const weaponScale = new Map<AssetContainer, number>();
 
 export class CharacterModels {
   private constructor(
@@ -400,11 +427,21 @@ export class CharacterModels {
 
     const allWeapons = { ...WEAPONS, ...MONSTER_WEAPONS };
     const weaponFiles = [...new Set([...Object.values(allWeapons).flatMap((w) => Object.values(w)), ...ITEM_WEAPONS])];
-    const modelIds = [...Object.keys(WEAPONS), ...MONSTER_MODELS];
+    // stone_golem e os chefes só têm arquivo no remaster; sem ele o golem é o de código e os chefes reaproveitam os esqueletos.
+    const modelIds = [...Object.keys(WEAPONS), ...MONSTER_MODELS, ...(REMASTER ? ["stone_golem", ...REMASTER_ONLY] : [])];
 
     const [animContainers, weaponList, bodies] = await Promise.all([
       Promise.all(ANIM_FILES.map(load)),
-      Promise.all(weaponFiles.map((w) => tryLoad(`weapons/${w}.glb`).then((c) => [w, c] as const))),
+      // ?remaster=1: a arma nova no lugar (e o KayKit de sempre se o arquivo faltar).
+      Promise.all(
+        weaponFiles.map(async (w) => {
+          const rw = REMASTER ? REMASTER_WEAPONS[w] : undefined;
+          // Um container por nome (as escalas diferem entre quem divide o arquivo).
+          const c = rw ? await tryLoad(`weapons/${rw.file}.glb`) : null;
+          if (c && rw?.scale) weaponScale.set(c, rw.scale);
+          return [w, c ?? (await tryLoad(`weapons/${w}.glb`))] as const;
+        }),
+      ),
       Promise.all(
         modelIds.map(async (id) => {
           // ?remaster=1: o arquivo do estilo B, se existir; senão, o KayKit de sempre.
@@ -432,7 +469,7 @@ export class CharacterModels {
       for (const m of body.meshes) if (m.name.startsWith("Head_")) heads.set(m.name.slice(5), m);
       const maskFile = remaster ? REMASTER_MASKS[id] : undefined;
       const mask = maskFile ? new Texture(`${BASE}${maskFile}`, scene, true, false) : null;
-      models.set(id, { body, weapons, scale: measureScale(body, id), heads, remaster, mask });
+      models.set(id, { body, weapons, scale: measureScale(body, id, remaster ? REMASTER_HEIGHTS[id] : undefined), heads, remaster, mask });
     }
 
     // Os grupos de animação servem de molde; não tocam sozinhos.
@@ -487,7 +524,7 @@ export class CharacterModels {
    */
   instantiate(model: string, id: string, weapons?: Partial<Record<Slot, string | null>>, look?: BodyLook): CharacterInstance | null {
     // Golem: modelado e animado em código (sem arquivo glTF).
-    if (model === GOLEM_MODEL) return createGolem(this.scene, id);
+    if (model === GOLEM_MODEL && !this.models.get(model)?.remaster) return createGolem(this.scene, id);
     const assets = this.models.get(model);
     const set = assets?.remaster ? REMASTER_SETS[model] : ANIM_SETS[model];
     if (!assets || !set) return null;
@@ -553,6 +590,8 @@ export class CharacterModels {
           new Vector3(use.pos[0] * mirror, use.pos[1], use.pos[2]).rotateByQuaternionToRef(SLOT_INV, child.position);
           if (grip.scale) child.scaling.scaleInPlace(grip.scale);
         }
+        const ws = weaponScale.get(container);
+        if (ws) child.scaling.scaleInPlace(ws);
         nodes.push(child);
         const glow = glowKey(grade, enchant);
         if (glow) {
@@ -757,7 +796,7 @@ function asNode(gltfRoot: TransformNode): TransformNode {
 }
 
 /** Escala que deixa o modelo com TARGET_HEIGHT de altura (com a cabeça da própria classe). */
-function measureScale(container: AssetContainer, model: string): number {
+function measureScale(container: AssetContainer, model: string, height = TARGET_HEIGHT): number {
   let minY = Infinity;
   let maxY = -Infinity;
   for (const m of container.meshes) {
@@ -769,5 +808,5 @@ function measureScale(container: AssetContainer, model: string): number {
     maxY = Math.max(maxY, b.maximumWorld.y);
   }
   const h = maxY - minY;
-  return h > 0.1 && Number.isFinite(h) ? TARGET_HEIGHT / h : 1;
+  return h > 0.1 && Number.isFinite(h) ? height / h : 1;
 }
