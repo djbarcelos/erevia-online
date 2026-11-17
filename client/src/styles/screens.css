@@ -39,6 +39,16 @@
 
 .logo-crest {
   display: none;
+  width: 54px;
+  height: 54px;
+  transform: rotate(45deg);
+  border: 2px solid var(--gold);
+  display: grid;
+  place-items: center;
+  box-shadow:
+    0 0 24px rgba(214, 180, 110, 0.45),
+    inset 0 0 14px rgba(214, 180, 110, 0.35);
+  margin: 0 0 14px 6px;
 }
 
 .logo-crest span {
@@ -52,43 +62,17 @@
   margin: 0;
   font-family: var(--font-title);
   font-weight: 700;
-  font-size: clamp(3rem, 8.4vw, 7rem);
-  letter-spacing: 0.12em;
-  line-height: 1;
-  background: linear-gradient(180deg, var(--gold-glow) 0%, var(--gold-hi) 30%, var(--gold) 60%, var(--gold-deep) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 3px 0 var(--gold-shadow)) drop-shadow(0 6px 16px rgba(0, 0, 0, 0.9));
-}
-
-/* Sobretítulo: filete dourado e o nome da região */
-.logo-over {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 0 0 6px;
-  font-family: var(--font-title);
-  font-weight: 500;
-  font-size: clamp(0.72rem, 1.4vw, 0.95rem);
-  letter-spacing: 0.42em;
-  text-transform: uppercase;
-  color: var(--gold-hi);
-}
-
-.logo-over::before {
-  content: "";
-  width: 44px;
-  height: 1px;
-  background: var(--gold);
-  box-shadow: 0 0 8px var(--gold);
+  font-size: clamp(3rem, 8vw, 5.6rem);
+  letter-spacing: 0.1em;
+  line-height: 0.9;
+  color: #f2ead8;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.85);
 }
 
 .logo-tag {
-  margin: 4px 0 0;
-  font-size: clamp(0.95rem, 1.6vw, 1.15rem);
-  letter-spacing: 0.04em;
-  color: var(--muted);
+  margin: 0;
+  font-size: clamp(1rem, 1.6vw, 1.2rem);
+  color: #c4bcad;
 }
 
 .login-card {
@@ -1290,370 +1274,266 @@
   min-height: 1.2em;
 }
 
-/* ======================= PRIVACIDADE, TERMOS E CONTA ======================= */
+/* ======================= ARTE DE FUNDO (redesign "Vigília") ======================= */
 
-.legal-link {
-  color: var(--muted);
-  text-decoration: underline;
-  text-decoration-color: var(--line-strong);
-  text-underline-offset: 3px;
+#overlay[data-kind="login"],
+#overlay[data-kind="chars"],
+#overlay[data-kind="loading"] {
+  background-color: #07080c;
+  background-size: cover;
+  background-position: 60% 50%;
 }
+#overlay[data-kind="login"] { background-image: url("/art/login.jpg"); }
+#overlay[data-kind="chars"] { background-image: url("/art/personagens.jpg"); background-position: center; }
+#overlay[data-kind="loading"] { background-image: url("/art/carregamento.jpg"); background-position: center; }
 
-.legal-link:hover,
-.legal-link:focus-visible {
-  color: var(--gold-hi);
-  text-decoration-color: var(--gold);
-}
-
-.login-legal {
-  margin: 0;
-  line-height: 1.5;
-  text-align: center;
-}
-
-.login-foot .legal-link {
-  color: var(--dim);
-}
-
-/* Só fora do celular (lá a área .account some e os links ficam na janela da conta). */
-@media (min-width: 768px) and (min-height: 521px) {
-  .char-top .account {
-    display: inline-flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 4px 12px;
-  }
-}
-
-.account-legal {
-  display: inline-flex;
-  gap: 12px;
-}
-
-.account-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  padding: calc(16px + var(--safe-t)) 16px calc(16px + var(--safe-b));
-  background: rgba(5, 4, 8, 0.7);
-  overflow-y: auto;
-  animation: account-fade 0.18s var(--ease);
-}
-
-@keyframes account-fade {
-  from {
-    opacity: 0;
-  }
-}
-
-.account-dialog {
-  width: min(460px, 100%);
-  padding: 24px 22px;
-  display: grid;
-  gap: 12px;
-}
-
-.account-dialog > .title {
-  font-size: 1.3rem;
-}
-
-.account-dialog p {
-  margin: 0;
-  line-height: 1.5;
-}
-
-.account-x {
+#overlay[data-kind="login"]::before,
+#overlay[data-kind="loading"]::before,
+#overlay[data-kind="chars"]::before {
+  content: "";
   position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 1;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+#overlay[data-kind="login"]::before {
+  background:
+    linear-gradient(0deg, rgba(7, 8, 12, 0.9), rgba(7, 8, 12, 0) 36%),
+    linear-gradient(90deg, rgba(7, 8, 12, 0.9) 0%, rgba(7, 8, 12, 0.9) 26%, rgba(7, 8, 12, 0.42) 54%, rgba(7, 8, 12, 0.06) 78%);
+}
+#overlay[data-kind="loading"]::before {
+  background: linear-gradient(0deg, rgba(7, 8, 12, 0.96) 0%, rgba(7, 8, 12, 0.7) 28%, rgba(7, 8, 12, 0.1) 60%);
+}
+#overlay[data-kind="chars"]::before {
+  background: radial-gradient(42% 60% at 50% 58%, rgba(7, 8, 12, 0.05) 0%, rgba(7, 8, 12, 0.62) 70%, rgba(7, 8, 12, 0.9) 100%);
 }
 
-.account-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-}
-
-.account-danger {
-  display: grid;
-  gap: 10px;
-  margin-top: 6px;
-  padding: 14px;
-  border: 1px solid rgba(255, 107, 91, 0.35);
-  border-radius: var(--radius);
-  background: rgba(106, 36, 32, 0.16);
-}
-
-.account-danger .title {
-  color: var(--bad);
-  font-size: 1rem;
-}
-
-.account-confirm {
-  font-family: var(--font-title);
-  letter-spacing: 0.2em;
-}
-
-.account-error:empty {
+/* Seleção de personagens (redesign): lista à esquerda, ficha e botão à direita. */
+.char-screen[data-mode="select"] .nameplate,
+.char-screen[data-mode="select"] .stage-hint {
   display: none;
 }
 
-/* Celular: a área da conta vira só o ícone (os links ficam na janela da conta). */
-@media (max-width: 767px), (max-height: 520px) {
-  .btn-account span {
-    display: none;
-  }
-
-  .btn-account {
-    width: var(--h);
-    padding: 0;
-  }
+.char-screen[data-mode="select"] .char-panel.left {
+  top: 84px;
+  left: 32px;
+  width: 300px;
+  bottom: 32px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
 }
 
-/* Entrada no mundo: barra de progresso com etapas */
-.load-bar {
-  width: min(320px, 70vw);
-  height: 6px;
-  background: var(--line);
+.char-screen[data-mode="select"] .roster-slot {
+  height: 76px;
+  background: rgba(9, 10, 16, 0.66);
+  border-color: rgba(236, 230, 218, 0.1);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.char-screen[data-mode="select"] .roster-slot[aria-pressed="true"] {
+  background: rgba(214, 180, 110, 0.14);
+  border-color: rgba(214, 180, 110, 0.6);
+  box-shadow: none;
+}
+
+.char-screen[data-mode="select"] .roster-info b {
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 1.15rem;
+}
+
+.char-foot.select-foot {
+  left: auto;
+  right: 32px;
+  top: 84px;
+  bottom: 32px;
+  transform: none;
+  width: 328px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  padding: 0;
+  background: none;
+  border: 0;
+  backdrop-filter: none;
+}
+
+.sc-card {
+  padding: 22px;
+  display: grid;
+  gap: 6px;
+  background: rgba(9, 10, 16, 0.74);
+}
+
+.sc-class {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cc);
+}
+
+.sc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cc);
+}
+
+.sc-name {
+  margin: 0;
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 2.9rem;
+  line-height: 1;
+  color: #f2ead8;
+}
+
+.sc-role {
+  color: #c4bcad;
+  font-size: 0.95rem;
+}
+
+.sc-level {
+  margin-top: 12px;
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #f2ead8;
+}
+
+.sc-bars {
+  margin-top: 14px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(236, 230, 218, 0.09);
+  display: grid;
+  grid-template-columns: 86px 1fr 28px;
+  gap: 8px 10px;
+  align-items: center;
+  font-size: 0.82rem;
+}
+
+.sc-bars .cb-name {
+  color: #b3ab9c;
+}
+
+.sc-bars .cb-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(236, 230, 218, 0.1);
   overflow: hidden;
 }
 
-.load-fill {
-  height: 100%;
-  width: 0;
-  background: var(--gold);
-  transition: width 0.25s ease;
-}
-
-.load-steps {
-  display: flex;
-  gap: 8px;
-  width: min(580px, 88vw);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.8rem;
-  color: var(--dim);
-}
-
-.load-steps li {
-  flex: 1;
-  display: grid;
-  gap: 8px;
-  justify-items: center;
-}
-
-.load-steps li i {
+.sc-bars .cb-bar i {
   display: block;
+  height: 100%;
+  width: var(--v);
+  background: var(--cc);
+}
+
+.sc-bars .cb-val {
+  text-align: right;
+  font-family: var(--font-cond);
+  font-weight: 600;
+  color: #d8d1c3;
+}
+
+.select-foot .btn-play {
+  --h: 58px;
   width: 100%;
-  height: 10px;
-  border: 1px solid var(--line-strong);
-  background: rgba(15, 14, 22, 0.8);
-  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+  font-family: var(--font-cond);
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+  box-shadow: 0 10px 30px rgba(214, 180, 110, 0.22);
 }
 
-.load-steps li span {
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.load-steps .done {
-  color: var(--gold);
-}
-
-.load-steps .done i {
-  background: var(--gold-grad);
-  border-color: var(--gold-glow);
-}
-
-.load-steps .now {
-  color: var(--text);
-}
-
-.load-steps .now i {
-  background: linear-gradient(90deg, var(--gold-deep) 0 45%, rgba(15, 14, 22, 0.8) 45%);
-  border-color: var(--gold);
-}
-
-.load-bar[hidden],
-.load-steps[hidden] {
-  display: none;
-}
-
-/* Detalhes do personagem escolhido (lado direito da seleção) */
-.detail-panel {
-  --cc: var(--gold);
-  gap: 14px;
-}
-
-.dt-head {
-  display: grid;
-  gap: 2px;
-}
-
-.dt-name {
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: 1.5rem;
-  letter-spacing: 0.06em;
-  color: var(--text);
-  overflow-wrap: anywhere;
-}
-
-.dt-class {
-  font-size: 0.95rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--cc) 65%, #fff);
-}
-
-.dt-level {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 10px 0;
-  border-block: 1px solid var(--line);
-}
-
-.dt-level small {
-  font-size: 0.72rem;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--dim);
-}
-
-.dt-level b {
-  font-family: var(--font-title);
-  font-size: 2.8rem;
-  line-height: 1;
-  color: var(--gold-hi);
-  text-shadow: 0 2px 0 var(--gold-shadow);
-}
-
-.dt-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.dt-cell {
-  display: grid;
-  gap: 2px;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  background: rgba(15, 14, 22, 0.5);
-}
-
-.dt-cell b {
-  font-weight: 500;
-  font-size: 0.95rem;
-  color: var(--text);
-}
-
-.dt-swatch {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--c, var(--gold));
-  box-shadow: 0 0 0 2px var(--bg-1), 0 0 0 3px var(--line-strong);
-}
-
-@media (max-width: 767px), (max-height: 520px) {
-  .detail-panel {
-    display: none !important;
+@media (max-width: 900px) {
+  .char-foot.select-foot {
+    top: auto;
+    left: 16px;
+    right: 16px;
+    width: auto;
+    bottom: 16px;
+  }
+  .sc-card {
+    display: none;
   }
 }
 
-/* Profundidade de campo: o fundo (cidade, montanhas e céu) fica levemente desfocado atrás do pedestal. */
-#overlay:has(.entry-content.chars) .backdrop {
-  filter: blur(2px);
-  transform: scale(1.02);
+/* Login (redesign): botões largos, card sem moldura, novidades no canto. */
+.login-card.frame {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+  max-width: 372px;
 }
 
-/* ---------- Carregamento ---------- */
-.entry-content.loading {
-  display: block;
+.login-card .card-title {
+  display: none;
+}
+
+.btn-social {
+  height: 52px;
+  border-radius: 6px;
+  font-family: var(--font-cond);
+  font-size: 1.1rem;
+  box-shadow: none;
+}
+
+.btn-social.google {
+  background: #ece6da;
+  color: #0c0e15;
+  border-color: #ece6da;
+}
+
+.btn-social.discord {
+  background: rgba(236, 230, 218, 0.07);
+  border: 1px solid rgba(236, 230, 218, 0.22);
+  color: #ece6da;
+}
+
+.login-news.frame {
+  align-self: end;
+  background: rgba(9, 10, 16, 0.74);
+}
+
+.login-news .title {
+  font-size: 1.6rem;
+}
+
+.news-tag {
+  font-family: var(--font-cond);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: none;
+  border: 0;
   padding: 0;
 }
 
+/* Carregamento (redesign): marca no canto, conteúdo embaixo à esquerda. */
+.entry-content.loading {
+  place-items: end start;
+  padding: 0 88px 88px;
+}
+
 .entry-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14vh 16px 12vh;
-  text-align: center;
+  justify-items: start;
 }
 
-.load-dest {
-  display: grid;
-  gap: 8px;
-  justify-items: center;
-}
-
-.load-over {
-  font-family: var(--font-title);
-  font-size: clamp(0.75rem, 1.6vw, 0.95rem);
-  letter-spacing: 0.42em;
-  text-transform: uppercase;
-  color: var(--gold-hi);
-}
-
-.load-place {
-  margin: 0;
-  font-family: var(--font-title);
-  font-weight: 700;
-  font-size: clamp(2.2rem, 7vw, 4.4rem);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  line-height: 1.05;
-  background: linear-gradient(180deg, var(--gold-glow), var(--gold) 60%, var(--gold-deep));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 3px 0 var(--gold-shadow)) drop-shadow(0 6px 16px rgba(0, 0, 0, 0.9));
-}
-
-.load-mid {
-  display: grid;
-  justify-items: center;
-  gap: 16px;
-  width: 100%;
-}
-
-.load-mid .logo-word {
-  font-size: clamp(1.4rem, 3vw, 2rem);
-  letter-spacing: 0.3em;
-  opacity: 0.7;
-}
-
-.load-label {
-  margin: 0;
-  font-size: 0.95rem;
-  color: var(--muted);
-}
-
-.load-tip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: min(560px, 90vw);
-  margin: 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-  font-size: 0.95rem;
-  line-height: 1.4;
-  color: var(--muted);
-  text-align: left;
-}
-
-.load-tip-icon {
-  flex: none;
-  color: var(--gold);
+.entry-loading .logo-word {
+  position: fixed;
+  left: 56px;
+  top: 36px;
+  font-size: 1.7rem;
 }
