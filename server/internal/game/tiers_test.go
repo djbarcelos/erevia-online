@@ -45,7 +45,7 @@ func TestEveryTierHasWeaponsSetsAndJewels(t *testing.T) {
 					case GradeEpic:
 						epic++
 					}
-					if d.WeaponType != weaponTypeOf(c) || d.Model == "" {
+					if !CanWield(c, "", d.WeaponType) || d.Model == "" {
 						t.Errorf("%s: arma sem tipo ou modelo", d.ID)
 					}
 				}

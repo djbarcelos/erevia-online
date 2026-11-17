@@ -340,7 +340,17 @@ const KIND_LABEL: Partial<Record<ItemKind, string>> = {
   [ItemKind.RING]: "Anel",
 };
 
-const WEAPON_LABEL: Record<string, string> = { sword: "Espada", axe: "Machado", staff: "Cajado", daggers: "Adagas" };
+const WEAPON_LABEL: Record<string, string> = {
+  sword: "Espada",
+  axe: "Machado",
+  axe2h: "Machado de Duas Mãos",
+  staff: "Cajado",
+  wand: "Varinha",
+  daggers: "Adagas",
+  bow: "Arco",
+  crossbow: "Besta",
+  crossbow2h: "Besta Pesada",
+};
 
 export interface TipContext {
   myClass: string;

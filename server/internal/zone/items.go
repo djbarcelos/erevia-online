@@ -95,13 +95,13 @@ func (z *Zone) moveItem(p *entity, fromPlace, fromSlot, toPlace, toSlot int) {
 			return
 		}
 		def := inv.bag[fromSlot].def
-		why = inv.equipTo(fromSlot, toSlot, p.pl.class, p.level)
+		why = inv.equipTo(fromSlot, toSlot, p.pl.class, p.pl.spec, p.level)
 		gear = why == ""
 		if gear {
 			defer z.warnAboveLevel(p, def)
 		}
 	case fromPlace == placeEquip && toPlace == placeBag:
-		why = inv.unequip(fromSlot, toSlot, p.pl.class, p.level)
+		why = inv.unequip(fromSlot, toSlot, p.pl.class, p.pl.spec, p.level)
 		gear = why == ""
 	case fromPlace == placeEquip && toPlace == placeEquip:
 		why = inv.moveInEquip(fromSlot, toSlot)
@@ -125,7 +125,7 @@ func (z *Zone) useItem(p *entity, place, slot int) {
 	}
 	inv := &p.pl.inv
 	if place == placeEquip {
-		if why := inv.unequip(slot, -1, p.pl.class, p.level); why != "" {
+		if why := inv.unequip(slot, -1, p.pl.class, p.pl.spec, p.level); why != "" {
 			if why != "?" {
 				z.system(p, why)
 			}
@@ -140,7 +140,7 @@ func (z *Zone) useItem(p *entity, place, slot int) {
 	def := inv.bag[slot].def
 	switch {
 	case def.Equippable():
-		if why := inv.equipFromBag(slot, p.pl.class, p.level); why != "" {
+		if why := inv.equipFromBag(slot, p.pl.class, p.pl.spec, p.level); why != "" {
 			if why != "?" {
 				z.system(p, why)
 			}
@@ -266,7 +266,7 @@ func itemInfoPB(d *game.ItemDef) *pb.ItemInfo {
 		Id: d.ID, Name: d.Name, Kind: pb.ItemKind(d.Kind), Grade: uint32(d.Grade), Slot: int32(d.Slot()),
 		Classes: d.Classes, ReqLevel: uint32(d.ReqLevel),
 		Bonus:      itemBonusPB(d.Bonus),
-		WeaponType: d.WeaponType,
+		WeaponType: d.WeaponType, Hands: uint32(d.Hands()),
 		Stack:      uint32(min(d.Stack, game.MaxStack)), Price: uint32(d.Price), SellPrice: uint32(d.SellPrice()),
 		Icon: d.Icon, Description: d.Description, CooldownGroup: uint32(d.Cooldown),
 		HealHp: uint32(d.HealHP), HealMp: uint32(d.HealMP), Model: d.Model, OffModel: d.OffModel,
@@ -323,3 +323,16 @@ var itemCatalog = func() []*pb.ItemInfo {
 	}
 	return out
 }()
+
+// weaponCatalog: os tipos de arma do jogo (Welcome.weapons), em ordem estável.
+func weaponCatalog() []*pb.WeaponInfo {
+	var out []*pb.WeaponInfo
+	for _, t := range game.WeaponTypes() {
+		w := game.Weapons[t]
+		out = append(out, &pb.WeaponInfo{
+			Type: w.Type, Name: w.Name, Range: float32(w.Range), Interval: float32(w.Interval), Magic: w.Magic,
+			Hands: uint32(w.Hands), Dual: w.Dual, Anim: w.Anim, Projectile: w.Projectile,
+		})
+	}
+	return out
+}

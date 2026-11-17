@@ -37,6 +37,8 @@ type SpecDef struct {
 	Description string
 	Color       string // "#rrggbb": título sob o nome, quadro do alvo e ramo na árvore
 	Bonus       Attrs  // bônus passivo de atributos
+	// Armas e mãos secundárias da especialização; vazio = as da classe.
+	Weapons, Offhands []string
 }
 
 // BonusText: "+12 Constituição" ou "+6 Força e +6 Constituição".

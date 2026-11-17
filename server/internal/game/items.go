@@ -80,7 +80,8 @@ var kindSlots = map[ItemKind][]int{
 	KindRing:     {SlotRing1, SlotRing2},
 }
 
-// Tipos de arma (a passiva Esgrima vale com espadas).
+// Tipos de arma (a passiva Esgrima vale com espadas). Os demais (varinha, machado de duas
+// mãos, arco, bestas) e a tabela de números ficam em weapons.go.
 const (
 	WeaponSword   = "sword"
 	WeaponAxe     = "axe"
@@ -190,21 +191,9 @@ func (d *ItemDef) UsableBy(class string) bool {
 	return false
 }
 
-func weapon(id, name, class string, g Grade, lvl int, bonus Stats, price int64, model, off, desc string) *ItemDef {
-	return &ItemDef{ID: id, Name: name, Kind: KindWeapon, Grade: g, Classes: []string{class}, WeaponType: weaponTypeOf(class),
+func weapon(wt, id, name, class string, g Grade, lvl int, bonus Stats, price int64, model, off, desc string) *ItemDef {
+	return &ItemDef{ID: id, Name: name, Kind: KindWeapon, Grade: g, Classes: []string{class}, WeaponType: wt,
 		ReqLevel: lvl, Bonus: bonus, Stack: 1, Price: price, Model: model, OffModel: off, Icon: iconFor(class), Description: desc}
-}
-
-func weaponTypeOf(class string) string {
-	switch class {
-	case "barbarian":
-		return WeaponAxe
-	case "mage":
-		return WeaponStaff
-	case "rogue":
-		return WeaponDaggers
-	}
-	return WeaponSword
 }
 
 func iconFor(class string) string {
@@ -253,46 +242,44 @@ func potion(id, name string, group int, hp, mp float64, price int64, icon, desc 
 	return d
 }
 
-var shieldClasses = []string{"knight", "barbarian"}
-
 // Items é o catálogo do jogo, por id.
 var Items = func() map[string]*ItemDef {
 	list := []*ItemDef{
 		// Cavaleiro: espadas.
-		weapon("sword_common", "Espada de Treino", "knight", GradeCommon, 1, Stats{PAtk: 6}, 100, "sword_1handed", "",
+		weapon(WeaponSword, "sword_common", "Espada de Treino", "knight", GradeCommon, 1, Stats{PAtk: 6}, 100, "sword_1handed", "",
 			"Lâmina simples, mas equilibrada."),
-		weapon("sword_good", "Espada de Aço", "knight", GradeGood, 6, Stats{PAtk: 14}, 1200, "sword_1handed", "",
+		weapon(WeaponSword, "sword_good", "Espada de Aço", "knight", GradeGood, 6, Stats{PAtk: 14}, 1200, "sword_1handed", "",
 			"Aço temperado pelo ferreiro da cidade."),
-		weapon("sword_rare", "Lâmina do Vigia", "knight", GradeRare, 13, Stats{PAtk: 24, MaxHP: 30}, 4000, "sword_2handed", "",
+		weapon(WeaponSword, "sword_rare", "Lâmina do Vigia", "knight", GradeRare, 13, Stats{PAtk: 24, MaxHP: 30}, 4000, "sword_2handed", "",
 			"Arma dos antigos guardiões da muralha."),
-		weapon("sword_epic", "Lâmina da Aurora", "knight", GradeEpic, 18, Stats{PAtk: 36, MaxHP: 60, Crit: 0.03}, 12000, "sword_2handed_color", "",
+		weapon(WeaponSword, "sword_epic", "Lâmina da Aurora", "knight", GradeEpic, 18, Stats{PAtk: 36, MaxHP: 60, Crit: 0.03}, 12000, "sword_2handed_color", "",
 			"Dizem que brilha mais forte perto dos mortos-vivos."),
 		// Bárbaro: machados.
-		weapon("axe_common", "Machado de Lenhador", "barbarian", GradeCommon, 1, Stats{PAtk: 7}, 100, "axe_1handed", "",
+		weapon(WeaponAxe, "axe_common", "Machado de Lenhador", "barbarian", GradeCommon, 1, Stats{PAtk: 7}, 100, "axe_1handed", "",
 			"Serve para lenha e para ossos."),
-		weapon("axe_good", "Machado de Guerra", "barbarian", GradeGood, 6, Stats{PAtk: 16}, 1200, "axe_1handed", "",
+		weapon(WeaponAxe, "axe_good", "Machado de Guerra", "barbarian", GradeGood, 6, Stats{PAtk: 16}, 1200, "axe_1handed", "",
 			"Lâmina larga e cabo reforçado."),
-		weapon("axe_rare", "Machado Rachador", "barbarian", GradeRare, 13, Stats{PAtk: 27, Crit: 0.02}, 4000, "axe_2handed", "",
+		weapon(WeaponAxe, "axe_rare", "Machado Rachador", "barbarian", GradeRare, 13, Stats{PAtk: 27, Crit: 0.02}, 4000, "axe_2handed", "",
 			"Pesado o bastante para partir um escudo."),
-		weapon("axe_epic", "Fúria do Norte", "barbarian", GradeEpic, 18, Stats{PAtk: 40, Crit: 0.04}, 12000, "axe_2handed", "",
+		weapon(WeaponAxe, "axe_epic", "Fúria do Norte", "barbarian", GradeEpic, 18, Stats{PAtk: 40, Crit: 0.04}, 12000, "axe_2handed", "",
 			"Forjado no gelo, temperado em sangue."),
 		// Mago: cajados.
-		weapon("staff_common", "Cajado de Aprendiz", "mage", GradeCommon, 1, Stats{MAtk: 8}, 100, "staff", "",
+		weapon(WeaponStaff, "staff_common", "Cajado de Aprendiz", "mage", GradeCommon, 1, Stats{MAtk: 8}, 100, "staff", "",
 			"Madeira comum com uma pedra que zumbe."),
-		weapon("staff_good", "Cajado de Carvalho", "mage", GradeGood, 6, Stats{MAtk: 17, MaxMP: 20}, 1200, "staff", "",
+		weapon(WeaponStaff, "staff_good", "Cajado de Carvalho", "mage", GradeGood, 6, Stats{MAtk: 17, MaxMP: 20}, 1200, "staff", "",
 			"Carvalho antigo, bom condutor de magia."),
-		weapon("staff_rare", "Varinha Rúnica", "mage", GradeRare, 13, Stats{MAtk: 28, MaxMP: 50}, 4000, "wand", "",
+		weapon(WeaponWand, "staff_rare", "Varinha Rúnica", "mage", GradeRare, 13, Stats{MAtk: 28, MaxMP: 50}, 4000, "wand", "",
 			"Runas gravadas que guardam o eco de feitiços."),
-		weapon("staff_epic", "Cetro do Abismo", "mage", GradeEpic, 18, Stats{MAtk: 42, MaxMP: 90, Crit: 0.03}, 12000, "staff", "",
+		weapon(WeaponStaff, "staff_epic", "Cetro do Abismo", "mage", GradeEpic, 18, Stats{MAtk: 42, MaxMP: 90, Crit: 0.03}, 12000, "staff", "",
 			"Arrancado do salão do Senhor dos Ossos."),
 		// Ladino: pares de adagas.
-		weapon("daggers_common", "Adagas Gêmeas", "rogue", GradeCommon, 1, Stats{PAtk: 5}, 100, "dagger", "dagger",
+		weapon(WeaponDaggers, "daggers_common", "Adagas Gêmeas", "rogue", GradeCommon, 1, Stats{PAtk: 5}, 100, "dagger", "dagger",
 			"Um par de lâminas curtas e rápidas."),
-		weapon("daggers_good", "Adagas de Aço", "rogue", GradeGood, 6, Stats{PAtk: 12, Crit: 0.02}, 1200, "dagger", "dagger",
+		weapon(WeaponDaggers, "daggers_good", "Adagas de Aço", "rogue", GradeGood, 6, Stats{PAtk: 12, Crit: 0.02}, 1200, "dagger", "dagger",
 			"Afiadas a ponto de cortar o vento."),
-		weapon("daggers_rare", "Presas Sombrias", "rogue", GradeRare, 13, Stats{PAtk: 21, Crit: 0.04}, 4000, "dagger", "dagger",
+		weapon(WeaponDaggers, "daggers_rare", "Presas Sombrias", "rogue", GradeRare, 13, Stats{PAtk: 21, Crit: 0.04}, 4000, "dagger", "dagger",
 			"Não refletem a luz."),
-		weapon("daggers_epic", "Presas do Crepúsculo", "rogue", GradeEpic, 18, Stats{PAtk: 32, Crit: 0.06}, 12000, "dagger", "dagger",
+		weapon(WeaponDaggers, "daggers_epic", "Presas do Crepúsculo", "rogue", GradeEpic, 18, Stats{PAtk: 32, Crit: 0.06}, 12000, "dagger", "dagger",
 			"Ninguém viu o golpe; só o resultado."),
 
 		// Escudos (Cavaleiro e Bárbaro).
@@ -327,17 +314,17 @@ var Items = func() map[string]*ItemDef {
 			"", "helmet", "Os olhos vazios ainda parecem vigiar."),
 
 		// Armas e escudo que só mudam o visual (opções da criação de personagem).
-		weapon("blade_common", "Lâmina Curva", "knight", GradeCommon, 1, Stats{PAtk: 6}, 100, "skeleton_blade", "",
+		weapon(WeaponSword, "blade_common", "Lâmina Curva", "knight", GradeCommon, 1, Stats{PAtk: 6}, 100, "skeleton_blade", "",
 			"Curva e leve: corta mais do que perfura."),
-		weapon("axe_jagged_common", "Machado Serrilhado", "barbarian", GradeCommon, 1, Stats{PAtk: 7}, 100, "skeleton_axe", "",
+		weapon(WeaponAxe, "axe_jagged_common", "Machado Serrilhado", "barbarian", GradeCommon, 1, Stats{PAtk: 7}, 100, "skeleton_axe", "",
 			"Os dentes da lâmina prendem e rasgam."),
-		weapon("wand_common", "Varinha de Aprendiz", "mage", GradeCommon, 1, Stats{MAtk: 8}, 100, "wand", "",
+		weapon(WeaponWand, "wand_common", "Varinha de Aprendiz", "mage", GradeCommon, 1, Stats{MAtk: 8}, 100, "wand", "",
 			"Curta e precisa, boa para quem está começando."),
-		weapon("staff_dark_common", "Cajado Sombrio", "mage", GradeCommon, 1, Stats{MAtk: 8}, 100, "skeleton_staff", "",
+		weapon(WeaponStaff, "staff_dark_common", "Cajado Sombrio", "mage", GradeCommon, 1, Stats{MAtk: 8}, 100, "skeleton_staff", "",
 			"Madeira escura que parece beber a luz."),
-		weapon("blades_common", "Lâminas Curvas", "rogue", GradeCommon, 1, Stats{PAtk: 5}, 100, "skeleton_blade", "skeleton_blade",
+		weapon(WeaponDaggers, "blades_common", "Lâminas Curvas", "rogue", GradeCommon, 1, Stats{PAtk: 5}, 100, "skeleton_blade", "skeleton_blade",
 			"Duas lâminas curvas, rápidas no corte."),
-		weapon("daggers_mixed_common", "Adaga e Lâmina", "rogue", GradeCommon, 1, Stats{PAtk: 5}, 100, "dagger", "skeleton_blade",
+		weapon(WeaponDaggers, "daggers_mixed_common", "Adaga e Lâmina", "rogue", GradeCommon, 1, Stats{PAtk: 5}, 100, "dagger", "skeleton_blade",
 			"Uma para aparar, outra para cortar."),
 		gear("shield_tower", "Escudo Pesado", KindShield, shieldClasses, GradeCommon, 1, Stats{PDef: 8, Evasion: -3}, 90,
 			"skeleton_shield_large_a", "shield", "Grande e pesado: segura tudo, menos a pressa."),
@@ -407,13 +394,13 @@ var Items = func() map[string]*ItemDef {
 			"", "ring", "Quem usa o selo dá ordens aos mortos. Ou acha que dá."),
 
 		// Lendários: só o raid boss (Ozrhal) deixa cair.
-		weapon("sword_legend", "Lâmina do Rei Ossário", "knight", GradeLegendary, 20, Stats{PAtk: 44, MaxHP: 90, Crit: 0.04}, 30000, "sword_2handed_color", "",
+		weapon(WeaponSword, "sword_legend", "Lâmina do Rei Ossário", "knight", GradeLegendary, 20, Stats{PAtk: 44, MaxHP: 90, Crit: 0.04}, 30000, "sword_2handed_color", "",
 			"Fria ao toque. Os mortos recuam quando ela é erguida."),
-		weapon("axe_legend", "Machado do Rei Ossário", "barbarian", GradeLegendary, 20, Stats{PAtk: 49, Crit: 0.05, CritDamage: 0.15}, 30000, "axe_2handed", "",
+		weapon(WeaponAxe, "axe_legend", "Machado do Rei Ossário", "barbarian", GradeLegendary, 20, Stats{PAtk: 49, Crit: 0.05, CritDamage: 0.15}, 30000, "axe_2handed", "",
 			"Cada golpe ecoa como um sino de cripta."),
-		weapon("staff_legend", "Cetro do Rei Ossário", "mage", GradeLegendary, 20, Stats{MAtk: 51, MaxMP: 120, Crit: 0.04, CastSpeed: 0.05}, 30000, "staff", "",
+		weapon(WeaponStaff, "staff_legend", "Cetro do Rei Ossário", "mage", GradeLegendary, 20, Stats{MAtk: 51, MaxMP: 120, Crit: 0.04, CastSpeed: 0.05}, 30000, "staff", "",
 			"O cetro de Ozrhal. As runas ainda sussurram ordens."),
-		weapon("daggers_legend", "Garras do Rei Ossário", "rogue", GradeLegendary, 20, Stats{PAtk: 39, Crit: 0.08, CritDamage: 0.1}, 30000, "dagger", "dagger",
+		weapon(WeaponDaggers, "daggers_legend", "Garras do Rei Ossário", "rogue", GradeLegendary, 20, Stats{PAtk: 39, Crit: 0.08, CritDamage: 0.1}, 30000, "dagger", "dagger",
 			"Feitas dos dedos do próprio rei. Não pergunte como."),
 		gear("ring_legend", "Anel do Rei Ossário", KindRing, nil, GradeLegendary, 20, Stats{MDef: 15, Crit: 0.04, CritDamage: 0.25, PAtk: 7, MAtk: 7}, 26000,
 			"", "ring", "Pesa mais do que deveria."),
