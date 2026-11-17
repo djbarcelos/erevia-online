@@ -28,6 +28,9 @@
         }
       }
     },
+    "bone_lord_b.glb": {
+      "categoria": "chefe"
+    },
     "env-forest.glb": {
       "categoria": "cenario",
       "porPeca": true
@@ -69,6 +72,9 @@
         }
       }
     },
+    "ozrhal_b.glb": {
+      "categoria": "chefe"
+    },
     "plaza_BannerPost_b.glb": {
       "categoria": "cenario"
     },
@@ -87,6 +93,9 @@
         "^Head_"
       ]
     },
+    "skeleton_mage_b.glb": {
+      "categoria": "monstro"
+    },
     "skeleton_mage.glb": {
       "categoria": "monstro",
       "excecoes": {
@@ -100,6 +109,15 @@
         }
       }
     },
+    "skeleton_minion_b.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "lod2": {
+          "max": 967,
+          "motivo": "malha do Meshy em cascas soltas: o simplify trava perto desse piso (o limite é 500); só vale além de 35 m"
+        }
+      }
+    },
     "skeleton_minion.glb": {
       "categoria": "monstro",
       "excecoes": {
@@ -110,6 +128,15 @@
         "materials": {
           "max": 2,
           "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "skeleton_rogue_b.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "lod2": {
+          "max": 824,
+          "motivo": "malha do Meshy em cascas soltas: o simplify trava perto desse piso (o limite é 500); só vale além de 35 m"
         }
       }
     },
@@ -139,6 +166,15 @@
         "materials": {
           "max": 2,
           "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "stone_golem_b.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "lod2": {
+          "max": 608,
+          "motivo": "malha do Meshy em cascas soltas: o simplify trava perto desse piso (o limite é 500); só vale além de 35 m"
         }
       }
     },

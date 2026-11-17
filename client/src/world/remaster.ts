@@ -13,6 +13,37 @@ export const REMASTER = new URLSearchParams(location.search).get("remaster") ===
 export const REMASTER_FILES: Record<string, string> = {
   knight: "knight_b",
   skeleton_warrior: "skeleton_warrior_b",
+  // Bestiário (tunnel#98).
+  skeleton_minion: "skeleton_minion_b",
+  skeleton_rogue: "skeleton_rogue_b",
+  skeleton_mage: "skeleton_mage_b",
+  stone_golem: "stone_golem_b",
+  // Chefes com silhueta própria: não são modelos do servidor, ver remasterModelOf.
+  bone_lord: "bone_lord_b",
+  ozrhal: "ozrhal_b",
+};
+
+/** Modelos que só existem no remaster (sem arquivo do estilo antigo para cair de volta). */
+export const REMASTER_ONLY = ["bone_lord", "ozrhal"];
+
+/**
+ * Modelo do estilo B para uma entidade: os dois chefes que no servidor usam o esqueleto guerreiro
+ * (Senhor dos Ossos) e o esqueleto mago (Ozrhal) ganham silhueta própria. O servidor não muda: o
+ * Guarda Ossário e os outros guerreiros/magos comuns não são chefes.
+ */
+export function remasterModelOf(model: string, boss: boolean): string {
+  if (!REMASTER || !boss) return model;
+  if (model === "skeleton_warrior") return "bone_lord";
+  if (model === "skeleton_mage") return "ozrhal";
+  return model;
+}
+
+/** Altura (m) em que o modelo do remaster é normalizado antes da escala da entidade (padrão: 1,8). */
+export const REMASTER_HEIGHTS: Record<string, number> = {
+  stone_golem: 2.65, // a altura do golem em código (GOLEM_BODY), antes da escala 1,25 do servidor
+  skeleton_minion: 1.5, // o lacaio é baixo e de crânio grande: lê menor que o guerreiro de longe
+  skeleton_rogue: 1.75,
+  skeleton_mage: 2.0, // com o chapéu pontudo
 };
 
 /** Modelo do jogo → máscara de repintura (PNG ao lado do GLB; ver scripts/make-remaster-mask.mjs). */
