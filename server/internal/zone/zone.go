@@ -122,6 +122,8 @@ type JoinInfo struct {
 	Reputation game.ReputationState
 	// Bestiário: abates por monstro e famílias completas (bestiary.go).
 	Bestiary game.BestiaryState
+	// Pedras de Teleporte descobertas e a última cidade (teleport.go).
+	Discovered game.DiscoveryState
 	// Vitalidade: o estoque, a última saída e o maior nível da conta (vitality.go).
 	Vitality game.VitalityState
 	// Classes: subclasse (subclass.go). Class é a principal (a do corpo); XP, Attrs, Ranks,
@@ -162,6 +164,7 @@ type SavedState struct {
 	Contracts  game.ContractState
 	Reputation game.ReputationState
 	Bestiary   game.BestiaryState
+	Discovered game.DiscoveryState
 	Vitality     int64 // XP bônus da vitalidade (vitality.go)
 	Classes      game.ClassSet // subclasse: todas as classes, com a ativa atualizada
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
@@ -238,6 +241,7 @@ type frame struct {
 }
 
 type Zone struct {
+	stoneIdx []int // as pedras de teleporte desta zona (índices em allStones; teleport.go)
 	cfg      Config
 	log      *slog.Logger
 	events   chan event
@@ -362,6 +366,7 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 	if !cfg.NoTown {
 		z.spawnNPCs()
 	}
+	z.spawnMapStones()
 	z.spawnGates()
 	z.loadClans(cfg.Clans)
 	z.loadEvents(cfg.Events)
@@ -575,6 +580,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		info.Contracts, info.Reputation = st.Contracts, st.Reputation
 		aucOps = st.Auction
 		info.Bestiary = st.Bestiary
+		info.Discovered = st.Discovered
 		info.Vitality.Stored, info.Vitality.LastSeen = st.Vitality, r.at
 		delete(z.recent, info.ID)
 	}
@@ -618,6 +624,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 			ach:     loadAchievements(info.Achievements, info.Title),
 			mastery: loadMastery(info.Mastery),
 			bst:     loadBestiary(info.Bestiary),
+			disc:    loadDiscovery(info.Discovered),
 			hop:     hopState{arrived: info.hop != nil},
 		},
 	}
@@ -687,6 +694,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.masteryOnJoin(p)
 	z.subclassOnJoin(p)
 	z.contractsOnJoin(p)
+	z.sendStonesKnown(p)
 	z.vitalityOnJoin(p, info.Vitality, info.hop != nil)
 	z.eventsOnJoin(p)
 	z.adminOpsOnJoin(p)
@@ -934,6 +942,7 @@ func (z *Zone) step(e *entity, dt float64) {
 	}
 	if e.pl != nil {
 		z.updateChannel(e)
+		z.updateDiscovery(e)
 	}
 	z.regen(e, dt)
 	z.runAction(e)
@@ -1014,7 +1023,7 @@ func (z *Zone) savedState(p *entity) SavedState {
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
 		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
 		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
-		Mastery: p.pl.mastery.save(), Bestiary: p.pl.bst.state(), Auction: z.auctionSave(p), Zone: z.mapID(),
+		Mastery: p.pl.mastery.save(), Bestiary: p.pl.bst.state(), Discovered: p.pl.disc.state(), Auction: z.auctionSave(p), Zone: z.mapID(),
 		Classes: classSnapshot(p),
 	}
 	s.Contracts, s.Reputation = p.pl.contracts.save()

@@ -36,7 +36,7 @@ const (
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
 		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
-		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, contracts, reputation, bestiary, xp_curve, zone, classes"
+		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, contracts, reputation, bestiary, xp_curve, zone, classes, discovered"
 	// activeClassSQL: a classe ativa de c (a subclasse em uso; characters.class é a
 	// principal, a do corpo). Ranking, clã e amigos mostram a ativa, com o nível dela.
 	activeClassSQL = "coalesce(nullif(c.classes->>'active', ''), c.class)"
@@ -97,6 +97,8 @@ type Character struct {
 	Spec string `json:"spec"`
 	// Bestiário: abates por monstro e famílias completas (migração 00031).
 	Bestiary game.BestiaryState `json:"-"`
+	// Pedras de Teleporte descobertas e a última cidade visitada (migração 00036).
+	Discovered game.DiscoveryState `json:"-"`
 	// Maestria (nível máximo): barra, bônus diário e pontos de cada nó.
 	Mastery game.MasteryState `json:"-"`
 	Zone    string            `json:"-"` // mapa onde está (id; "starter" = o principal)
@@ -167,7 +169,9 @@ type CharacterState struct {
 	Reputation game.ReputationState
 	// Bestiário (mesma linha, mesma transação).
 	Bestiary game.BestiaryState
-	Zone     string // mapa onde está ("" = não muda)
+	// Descobertas de pedras (mesma linha, mesma transação).
+	Discovered game.DiscoveryState
+	Zone       string // mapa onde está ("" = não muda)
 	// Classes: a progressão de cada classe e a ativa (Main vazio = não mexe na coluna).
 	Classes game.ClassSet
 	// Storage (opcional): o armazém da conta mudou e vai junto, na mesma transação.
@@ -576,6 +580,10 @@ func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) 
 			if err != nil {
 				return err
 			}
+			discovered, err := json.Marshal(c.Discovered)
+			if err != nil {
+				return err
+			}
 			var classes []byte // nil = NULL: fica o que está no banco
 			if c.Classes.Main != "" {
 				if classes, err = json.Marshal(c.Classes); err != nil {
@@ -591,13 +599,14 @@ func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) 
 				achievements = $27, title = $28, spec = $29, mastery = $30, mastery_level = $31,
 				contracts = $32, reputation = $33, bestiary = $34,
 				zone = COALESCE(NULLIF($35::text, ''), zone),
-				classes = coalesce($36::jsonb, classes)
+				classes = coalesce($36::jsonb, classes),
+				discovered = $37
 				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
 				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq,
 				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar,
 				max(c.Karma, 0), max(c.PKs, 0), max(c.PvPKills, 0),
 				c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit, c.Appearance.Head, c.Appearance.HideHat, quests,
-				achievements, c.Title, c.Spec, mastery, max(c.Mastery.Points, 0), contracts, reputation, bestiary, c.Zone, classes)
+				achievements, c.Title, c.Spec, mastery, max(c.Mastery.Points, 0), contracts, reputation, bestiary, c.Zone, classes, discovered)
 		}
 		br := tx.SendBatch(ctx, batch)
 		var ids, vits []int64
@@ -696,15 +705,20 @@ func nullIfFull(v int) *int {
 func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var c Character
 	var x, z float32
-	var ranks, hotbar, quests, achievements, mastery, contracts, reputation, bestiary, classes []byte
+	var ranks, hotbar, quests, achievements, mastery, contracts, reputation, bestiary, classes, discovered []byte
 	var a [6]int16
 	var skin, hair, outfit int16
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
 		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
 		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat, &quests,
-		&achievements, &c.Title, &c.Spec, &mastery, &contracts, &reputation, &bestiary, &c.xpCurve, &c.Zone, &classes)
+		&achievements, &c.Title, &c.Spec, &mastery, &contracts, &reputation, &bestiary, &c.xpCurve, &c.Zone, &classes, &discovered)
 	if err != nil {
 		return c, err
+	}
+	if len(discovered) > 0 {
+		if err := json.Unmarshal(discovered, &c.Discovered); err != nil {
+			return c, fmt.Errorf("discovered: %w", err)
+		}
 	}
 	if len(classes) > 0 {
 		if err := json.Unmarshal(classes, &c.Classes); err != nil {

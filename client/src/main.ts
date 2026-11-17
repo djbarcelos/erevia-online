@@ -885,6 +885,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     hud.element,
   );
+  // Destinos de teleporte já descobertos a pé (StonesKnown); a balsa do Brejo vale sempre.
+  const knownStones = new Set<number>();
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma, discount: () => mastery?.teleportDiscount ?? 0 }, hud.element);
   const specWin = new SpecWindow(
     store,
@@ -1023,7 +1025,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           name: entities.info(n.id)?.name ?? "",
           x: root?.position.x ?? 0,
           z: root?.position.z ?? 0,
-          dests: n.dests.map((d) => ({ id: d.id, name: d.name, x: d.x, z: d.z, price: d.price })),
+          dests: n.dests.filter((d) => knownStones.has(d.id)).map((d) => ({ id: d.id, name: d.name, x: d.x, z: d.z, price: d.price })),
         };
       })
       .filter((s) => entities.rootOf(s.npcId));
@@ -1991,6 +1993,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         }
         case "vitality":
           hud.setVitality(msg.msg.value);
+          break;
+        case "stonesKnown":
+          knownStones.clear();
+          for (const id of msg.msg.value.ids) knownStones.add(id);
+          teleportWin.setKnown(knownStones);
           break;
         case "masteryTree":
           masteryTree = msg.msg.value;

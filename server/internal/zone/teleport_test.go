@@ -235,6 +235,12 @@ func TestBrejoStoneAndFerry(t *testing.T) {
 	}
 	// Posto: a pedra da cidade leva (180 moedas).
 	r, _ := named(z, 3, "Viajante2", "knight", town.pos.X+1, town.pos.Z)
+	r.pl.inv.gold = 200
+	teleportReq(z, r, town, posto)
+	if r.pl.channel != nil {
+		t.Fatal("o Posto só vale depois de descoberto a pé")
+	}
+	learnStones(r, "posto")
 	r.pl.inv.gold = 100
 	teleportReq(z, r, town, posto)
 	if r.pl.channel != nil {

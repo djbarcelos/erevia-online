@@ -546,6 +546,7 @@ message ServerMessage {
     VitalityState vitality = 65; // vitalidade e recuperação (ao entrar e quando mudam)
     SubclassState subclass = 67; // Subclasse: as classes do personagem e a ativa (janela do Guardião das Sendas)
     NpcDialog npc_dialog = 45; // a janela de conversa do NPC (resposta ao NpcTalk)
+    StonesKnown stones_known = 48; // pedras de teleporte descobertas (ao entrar e quando descobre uma)
   }
 }
 
@@ -973,6 +974,13 @@ message TeleportDest {
   float x = 3;
   float z = 4;
   uint32 price = 5;
+  string region = 6; // região da pedra (o que a janela mostra de uma pedra ainda não descoberta)
+}
+
+// Os destinos de teleporte que o jogador já descobriu a pé (ids de TeleportDest; a balsa
+// do Brejo vale sempre). Vai ao entrar e a cada pedra descoberta.
+message StonesKnown {
+  repeated uint32 ids = 1;
 }
 
 enum NpcRole {

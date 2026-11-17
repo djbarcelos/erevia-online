@@ -477,6 +477,23 @@
   background: radial-gradient(circle at 50% 40%, rgba(110, 180, 255, 0.35), rgba(20, 30, 60, 0.6));
 }
 
+/* Pedra ainda não descoberta: cinza, sem botão */
+.tp-row.unknown {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+.tp-row.unknown .tp-icon {
+  color: #9aa0a6;
+  background: rgba(60, 60, 60, 0.6);
+}
+
+.tp-region {
+  display: block;
+  color: #9fb0c4;
+  font-size: 0.7rem;
+}
+
 .tp-note {
   margin: 4px 12px;
   color: var(--bad, #ff6b5b);

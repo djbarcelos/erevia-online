@@ -140,16 +140,21 @@ func (z *Zone) useGate(id, npcID uint32) {
 		z.system(p, fmt.Sprintf("Você está em combate: espere %d s para atravessar o portão.", left))
 		return
 	}
+	z.crossZone(p, dest, Vec2{X: g.ArriveX, Z: g.ArriveZ}, "gate")
+}
+
+// crossZone tira o jogador desta zona e o entrega à zona dest, no ponto at (o portão e as
+// pedras de teleporte de outro mapa). kind é o evento de telemetria.
+func (z *Zone) crossZone(p *entity, dest *Zone, at Vec2, kind string) {
 	z.cancelChannel(p, "")
 	z.dropInvites(p.id)
 	z.endEmote(p)
 	p.clearAction()
 	p.stopMoving()
-	at := Vec2{X: g.ArriveX, Z: g.ArriveZ}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_ZoneChange{ZoneChange: &pb.ZoneChange{
 		Map: dest.mapID(), Title: dest.mapTitle(), X: float32(at.X), Z: float32(at.Z),
 	}}})
-	z.track(p, "gate", dest.mapID(), int64(p.level), map[string]any{"from": z.mapID()})
+	z.track(p, kind, dest.mapID(), int64(p.level), map[string]any{"from": z.mapID()})
 	p.pl.hop.out = &hopOut{dest: dest, at: at}
 	z.removePlayer(p.id) // grava e entrega (handOff)
 }
@@ -181,7 +186,7 @@ func (z *Zone) handOff(p *entity, st *SavedState) bool {
 		GM:         pl.gm, MutedUntil: pl.mutedUntil, UserAgent: pl.userAgent,
 		Quests: pl.quests.state(), Achievements: pl.ach.state(), Title: pl.ach.title,
 		Spec: pl.spec, Mastery: pl.mastery.save(), Peer: pl.peer,
-		Bestiary: pl.bst.state(),
+		Bestiary: pl.bst.state(), Discovered: pl.disc.state(),
 		hop: &hopIn{from: z.mapID(), seq: st.Seq, joinedAt: pl.joinedAt, cooldowns: z.savedCooldowns[p.id],
 			auction: slices.Clone(st.Auction)},
 		// O estado é o da memória agora (já com o que o portal mudou enquanto ele estava
