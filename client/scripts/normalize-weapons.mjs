@@ -1,7 +1,7 @@
 // Põe cada GLB do Meshy na convenção das armas KayKit (docs/arte/remaster-estaticos.md): eixo Y para
 // a ponta, cabo na origem (X e Z no cabo, o fundo do cabo no mesmo Y do KayKit), machados com a
 // lâmina para -X, escudos centrados em XY com a face para +Z. Grava a transformação direto nos vértices.
-// Uso (dentro de client/): node ../scripts/normalize-weapons.mjs <saida-dir>
+// Uso (dentro de client/): node scripts/normalize-weapons.mjs <saida-dir> [regex dos nomes]
 import { NodeIO } from '@gltf-transform/core';
 import { simplify } from '@gltf-transform/functions';
 import { MeshoptSimplifier } from 'meshoptimizer';
@@ -28,9 +28,20 @@ const CFG = {
   dagger: { ymin: -0.225, len: 1.206, kind: 'weapon' },          // dagger
   shield: { diam: 0.882, zback: -0.145, kind: 'shield' },        // shield_round_barbarian
   shield_high: { diam: 1.19, zback: -0.145, kind: 'shield' },    // shield_square (altura 1,19)
+  // Parte 2 (grau 3 = forma rara, e a forma alta da varinha e da adaga): comprimentos entre a comum e a alta.
+  sword_rare: { ymin: -0.366, len: 2.0, kind: 'weapon' },
+  axe_rare: { ymin: -0.273, len: 1.45, kind: 'axe' },
+  staff_rare: { ymin: -0.9, len: 2.13, kind: 'weapon' },
+  wand_rare: { ymin: -0.266, len: 0.966, kind: 'weapon' },
+  wand_high: { ymin: -0.266, len: 1.1, kind: 'weapon' },
+  dagger_rare: { ymin: -0.225, len: 1.206, kind: 'weapon' },
+  dagger_high: { ymin: -0.225, len: 1.35, kind: 'weapon' },
+  shield_rare: { diam: 1.0, zback: -0.145, kind: 'shield' },
 };
 const io = new NodeIO();
+const only = new RegExp(process.argv[3] ?? '.');
 for (const [name, c] of Object.entries(CFG)) {
+  if (!only.test(name)) continue;
   const dir = `${root}/image-to-3d-${ids[name]}`;
   const doc = await io.read(`${dir}/glb-model.glb`);
   const prims = [];

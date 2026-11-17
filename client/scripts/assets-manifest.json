@@ -328,7 +328,16 @@
     "weapons/axe_high_b.glb": {
       "categoria": "arma"
     },
+    "weapons/axe_rare_b.glb": {
+      "categoria": "arma"
+    },
     "weapons/dagger_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/dagger_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/dagger_rare_b.glb": {
       "categoria": "arma"
     },
     "weapons/dagger.glb": {
@@ -341,6 +350,9 @@
       "categoria": "arma"
     },
     "weapons/shield_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_rare_b.glb": {
       "categoria": "arma"
     },
     "weapons/shield_round_barbarian.glb": {
@@ -379,6 +391,9 @@
     "weapons/staff_high_b.glb": {
       "categoria": "arma"
     },
+    "weapons/staff_rare_b.glb": {
+      "categoria": "arma"
+    },
     "weapons/staff.glb": {
       "categoria": "arma"
     },
@@ -397,7 +412,16 @@
     "weapons/sword_high_b.glb": {
       "categoria": "arma"
     },
+    "weapons/sword_rare_b.glb": {
+      "categoria": "arma"
+    },
     "weapons/wand_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/wand_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/wand_rare_b.glb": {
       "categoria": "arma"
     },
     "weapons/wand.glb": {

@@ -18,3 +18,18 @@ for (const [, name, file, scale] of entries) {
     if (scale) assert.ok(Number(scale) > 0.5 && Number(scale) < 1.5);
   });
 }
+
+// Parte 2: as formas por raridade (WEAPON_FILE_LEN) existem, cada família tem comum, rara e alta, e o grau 3 e o 4 escolhem arquivos diferentes.
+const lens = [...src.matchAll(/(\w+_b): ([\d.]+)/g)].filter((m) => m[1] !== 'file').map((m) => m[1]);
+const forms = new Set(lens.filter((f) => /^(sword|axe|staff|wand|dagger|shield)(_rare|_high)?_b$/.test(f)));
+
+test('cada família tem a forma comum, a rara e a alta', () => {
+  for (const fam of ['sword', 'axe', 'staff', 'wand', 'dagger', 'shield']) {
+    for (const suffix of ['', '_rare', '_high']) assert.ok(forms.has(`${fam}${suffix}_b`), `${fam}${suffix}_b falta no mapa`);
+  }
+});
+for (const f of forms) {
+  test(`forma ${f} existe e é diferente das outras`, () => {
+    assert.ok(existsSync(resolve(root, `public/models/weapons/${f}.glb`)), `${f}.glb não existe`);
+  });
+}
