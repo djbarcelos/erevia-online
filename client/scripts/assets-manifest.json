@@ -81,6 +81,9 @@
         }
       }
     },
+    "frog_b.glb": {
+      "categoria": "monstro"
+    },
     "knight_b.glb": {
       "categoria": "personagem"
     },
@@ -295,6 +298,12 @@
         }
       }
     },
+    "slime_b.glb": {
+      "categoria": "monstro"
+    },
+    "spider_b.glb": {
+      "categoria": "monstro"
+    },
     "stone_golem_b.glb": {
       "categoria": "monstro"
     },
@@ -471,6 +480,9 @@
     },
     "weapons/wand.glb": {
       "categoria": "arma"
+    },
+    "wolf_b.glb": {
+      "categoria": "monstro"
     }
   }
 }

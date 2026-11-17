@@ -265,8 +265,8 @@ var Monsters = map[string]*MonsterDef{
 		NoGear: true},
 
 	// ---- Brejo de Lamagris (tunnel#139, 14–20) ----
-	// Os modelos "brejeiro", "frog_b" e "slime_b" são das famílias de monstro (tunnel#135); enquanto o
-	// arquivo de cada um não existe, o cliente usa um modelo reserva (client/src/world/remaster.ts, MODEL_FALLBACK).
+	// Os modelos "frog" e "slime" são das famílias de monstro (tunnel#135) e "brejeiro" é do Brejo (tunnel#139). Antes do
+	// remaster padrão, o cliente usa um modelo reserva (client/src/world/remaster.ts, MODEL_FALLBACK).
 	//
 	// Brejeiros (homens-lagarto): neutros de dia, agressivos à noite, quando os afogados os deixam em pânico.
 	// Lanceiro: a matilha é o acampamento (o spawn): bater em um puxa os 4.
@@ -281,20 +281,20 @@ var Monsters = map[string]*MonsterDef{
 			Delay: 1.2, Cooldown: 12, First: 4, Mult: 0.8, Effect: &EffectDef{Kind: EffectBlind, Duration: 2, Value: 0.5}}}},
 	// Sapo-Boi: bruto que prende com a língua (linha de 8 m, 1 s de aviso). É o único bruto do Brejo: entra nas
 	// contas de caça do 14 ao 20 (a curva do Guerreiro Esqueleto, com uns 14% a mais de vida e um pouco menos de ataque).
-	"sapo_boi": {ID: "sapo_boi", Name: "Sapo-Boi", Model: "frog_b",
+	"sapo_boi": {ID: "sapo_boi", Name: "Sapo-Boi", Model: "frog",
 		HP: 80, HPLvl: 25, Atk: 7, AtkLv: 1.7, Def: 12, DefLv: 3.0, Range: 2.4, Interval: 1.6, Speed: 3.8, Aggressive: true, XPBase: 17, Scale: 1.25, BodyRadius: 0.8,
 		GoldChance: 0.7, GoldMin: 2.5, GoldMax: 4.5, Loot: lootToad,
 		Abilities: []AbilityDef{{ID: "sapo_lingua", Shape: ShapeLine, Target: AimCurrent, Length: 8, Width: 1.6,
 			Delay: 1.0, Cooldown: 8, First: 3, Mult: 1.1, Effect: &EffectDef{Kind: EffectRoot, Duration: 1.5}}}},
 	// Lodo Vivo: ao morrer vira 2 Lodinhos (30% da vida); o golpe dá lentidão de 20% por 3 s.
-	"lodo_vivo": {ID: "lodo_vivo", Name: "Lodo Vivo", Model: "slime_b", Tint: "#6b7d3e",
+	"lodo_vivo": {ID: "lodo_vivo", Name: "Lodo Vivo", Model: "slime", Tint: "#a8794f",
 		HP: 70, HPLvl: 20, Atk: 8, AtkLv: 1.9, Def: 8, DefLv: 2.4, Range: 2, Interval: 1.6, Speed: 3.2, Aggressive: true, XPBase: 17, Scale: 1.2, BodyRadius: 0.7,
 		Archetype: ArchSplitter, Arch: ArchParams{SplitInto: "lodo_menor"}, BestiaryExtra: true,
 		GoldChance: 0.6, GoldMin: 2, GoldMax: 4, Loot: lootMud,
 		Abilities: []AbilityDef{{ID: "lodo_golpe", Shape: ShapeCircle, Target: AimCurrent, Radius: 2,
 			Delay: 1.0, Cooldown: 5, First: 2, Mult: 1.2, Effect: &EffectDef{Kind: EffectSlow, Duration: 3, Value: 0.2}}}},
 	// Lodinho (30% da vida do Lodo Vivo, e as invocações da Mãe-Lodo e da Velha Escamosa): não renasce e não deixa saque.
-	"lodo_menor": {ID: "lodo_menor", Name: "Lodinho", Model: "slime_b", Tint: "#6b7d3e",
+	"lodo_menor": {ID: "lodo_menor", Name: "Lodinho", Model: "slime", Tint: "#a8794f",
 		HP: 24, HPLvl: 7, Atk: 5, AtkLv: 1.2, Def: 6, DefLv: 1.6, Range: 1.8, Interval: 1.6, Speed: 3.6, Aggressive: true, XPBase: 4, Scale: 0.7, BodyRadius: 0.4,
 		NoGear: true},
 	// Afogado: sai da água quando você chega a 4,5 m (o 1º golpe dói 50% a mais) e agarra por 1,5 s. Só à noite,
@@ -306,7 +306,7 @@ var Monsters = map[string]*MonsterDef{
 			Delay: 1.0, Cooldown: 10, First: 5, Mult: 1.0, Effect: &EffectDef{Kind: EffectRoot, Duration: 1.5}}}},
 	// Mãe-Lodo (chefe de campo, nível 21): no meio da lagoa de Vau Velho. Golfada em cone (lentidão de 30%), Maré de
 	// Lama (4 círculos em quem está na luta, com veneno) e Lodinhos a cada 25 s (até 3 vivos).
-	"mae_lodo": {ID: "mae_lodo", Name: "Mãe-Lodo", Model: "slime_b", Tint: "#5b5a3a",
+	"mae_lodo": {ID: "mae_lodo", Name: "Mãe-Lodo", Model: "slime", Tint: "#6f8a4a",
 		HP: 520, HPLvl: 78, Atk: 16, AtkLv: 3.2, Def: 22, DefLv: 4, Range: 3.2, Interval: 2.0, Speed: 3.2, Aggressive: true, XPBase: 125, Scale: 2.8, BodyRadius: 1.6, Boss: true,
 		Archetype: ArchSummoner, Arch: ArchParams{Summon: "lodo_menor", SummonCount: 3, SummonMax: 3, SummonCD: 25, SummonFirst: 12},
 		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootMother,
