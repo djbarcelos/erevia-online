@@ -90,7 +90,8 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
     registerWaterPlugin();
     registerCloudsPlugin();
   }
-  const field = LEGACY_RENDER ? buildHeightField(world, false) : buildHeightField(world, true, !engine.isWebGPU);
+  // Masmorra: o chão é plano (as colinas são do mundo aberto).
+  const field = LEGACY_RENDER || world.indoor ? buildHeightField(world, false) : buildHeightField(world, true, !engine.isWebGPU);
   setTerrain(field);
   const scene = new Scene(engine);
   // O Babylon faz picking a cada movimento do mouse contra todas as malhas clicáveis; o jogo

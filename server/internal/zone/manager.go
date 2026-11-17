@@ -44,6 +44,7 @@ type Manager struct {
 	ctx context.Context // o do Run: as entregas do portão desistem quando o processo para
 
 	hops   atomic.Int64 // travessias de portão desde a partida
+	inst   instanceHost // cópias das masmorras (instance.go)
 	lookup ZoneLookup   // mapa gravado no banco (portal: personagem offline)
 }
 
@@ -96,6 +97,7 @@ func (m *Manager) Run(ctx context.Context) {
 	wg.Add(1)
 	go func() { defer wg.Done(); m.watchBus(ctx) }()
 	wg.Wait()
+	m.inst.wg.Wait() // as cópias das masmorras salvam todo mundo e param junto
 }
 
 func (m *Manager) runCtx() context.Context {
@@ -146,10 +148,13 @@ func (m *Manager) checkBus() {
 //     principal, na praça.
 func (m *Manager) Join(ctx context.Context, info JoinInfo) *Zone {
 	z := m.route(ctx, info.ID)
+	if z != nil && z.isClosed() && !m.bus.online(info.ID) {
+		z = nil // a cópia da masmorra fechou (ou está fechando) enquanto ele estava fora
+	}
 	if z == nil {
 		if z = m.Zone(info.Zone); z == nil {
 			z = m.Home()
-			info.X, info.Z = 0, 0 // a posição gravada era de outro mapa
+			info.X, info.Z = m.homeSpot(info.Zone) // a posição gravada era de outro mapa (ou de uma cópia)
 		}
 	}
 	if rp, ok := info.Peer.(routedPeer); ok {
@@ -224,7 +229,7 @@ func (m *Manager) ZoneOf(id uint32) string {
 func (m *Manager) Status(ctx context.Context) (AdminStatus, error) {
 	var out AdminStatus
 	var errs []error
-	for _, z := range m.zones {
+	for _, z := range m.AllZones() {
 		s, err := z.Status(ctx)
 		if err != nil {
 			errs = append(errs, err)
@@ -237,7 +242,7 @@ func (m *Manager) Status(ctx context.Context) (AdminStatus, error) {
 
 // AccountDeleted avisa todas as zonas (o personagem pode estar em qualquer uma).
 func (m *Manager) AccountDeleted(ctx context.Context, d AccountGone) {
-	for _, z := range m.zones {
+	for _, z := range m.AllZones() {
 		z.AccountDeleted(ctx, d)
 	}
 }

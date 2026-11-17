@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Erevia — Entrar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;family=Barlow:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#07080c}
+a{color:#e2c482}a:hover{color:#f6e6bd}
+input::placeholder{color:#7f7a70}
+</style>
+</helmet>
+<div style="width: 1280px; height: 720px; position: relative; overflow: hidden; background: #07080c; font-family: Barlow, system-ui, sans-serif; color: #ece6da;">
+  <img src="/_blob/67d4fa5a48a608797bf65869acf01620" alt="" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 60% 50%;">
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7,8,12,{{scrim}}) 0%, rgba(7,8,12,{{scrim}}) 26%, rgba(7,8,12,0.42) 54%, rgba(7,8,12,0.06) 78%);"></div>
+  <div aria-hidden="true" style="position: absolute; left: 0; right: 0; bottom: 0; height: 260px; background: linear-gradient(0deg, rgba(7,8,12,0.9), rgba(7,8,12,0));"></div>
+
+  <main style="position: absolute; left: 88px; top: 0; bottom: 0; width: 372px; display: flex; flex-direction: column; justify-content: center; gap: 36px;">
+    <header style="display: flex; flex-direction: column; gap: 14px;">
+      <span style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; color: #d6b46e;">MMORPG no navegador · PC e celular</span>
+      <h1 style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 700; font-size: 104px; line-height: 0.86; letter-spacing: 0.1em; color: #f2ead8;">EREVIA</h1>
+      <p style="margin: 0; font-size: 19px; line-height: 28px; color: #c4bcad;">As terras partidas esperam por você.</p>
+    </header>
+
+    <section aria-label="Entrar" style="display: flex; flex-direction: column; gap: 12px;">
+      <a href="Personagens.dc.html" style="height: 52px; box-sizing: border-box; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; border-radius: 6px; background: #ece6da; color: #0c0e15; text-decoration: none; font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 18px;">
+        <span>Continuar com Google</span>
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </a>
+      <a href="Personagens.dc.html" style="height: 52px; box-sizing: border-box; padding: 0 18px; display: flex; align-items: center; justify-content: space-between; border-radius: 6px; background: rgba(236,230,218,0.07); border: 1px solid rgba(236,230,218,0.22); color: #ece6da; text-decoration: none; font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 18px;">
+        <span>Continuar com Discord</span>
+        <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      </a>
+
+      <div style="display: flex; align-items: center; gap: 12px; margin: 8px 0 2px; color: #948d80; font-size: 13px;">
+        <span aria-hidden="true" style="flex: 1; height: 1px; background: rgba(236,230,218,0.14);"></span>
+        <span>ou, só no servidor local</span>
+        <span aria-hidden="true" style="flex: 1; height: 1px; background: rgba(236,230,218,0.14);"></span>
+      </div>
+      <form style="display: flex; flex-direction: column; gap: 8px; margin: 0;">
+        <label for="dev-user" style="font-size: 14px; color: #c4bcad;">Login de desenvolvimento</label>
+        <div style="display: flex; gap: 8px;">
+          <input id="dev-user" type="text" placeholder="Nome de usuário" autocomplete="off" style="flex: 1; min-width: 0; height: 48px; box-sizing: border-box; padding: 0 14px; border-radius: 6px; border: 1px solid rgba(236,230,218,0.18); background: rgba(7,8,12,0.66); color: #ece6da; font: 16px Barlow, sans-serif; outline: none;">
+          <button type="button" style="height: 48px; padding: 0 22px; border: 0; border-radius: 6px; background: #d6b46e; color: #17130b; font: 600 17px 'Barlow Semi Condensed', sans-serif; cursor: pointer;">Entrar</button>
+        </div>
+        <span style="font-size: 13px; color: #948d80;">De 3 a 16 letras ou números.</span>
+      </form>
+    </section>
+
+    <p style="margin: 0; font-size: 13px; line-height: 20px; color: #948d80;">Ao entrar, você concorda com os <a href="#">termos</a> e com a <a href="#">privacidade</a>.</p>
+  </main>
+
+  <aside aria-label="Novidades" style="position: absolute; right: 56px; bottom: 56px; width: 344px; box-sizing: border-box; padding: 20px 22px 8px; border-radius: 8px; background: rgba(9,10,16,0.74); border: 1px solid rgba(236,230,218,0.11); backdrop-filter: blur(14px); display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 6px;">
+      <h2 style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 700; font-size: 26px; color: #f2ead8;">Novidades</h2>
+      <a href="#" style="font-size: 14px;">Ver todas</a>
+    </div>
+    <article style="display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid rgba(236,230,218,0.1);">
+      <time style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #d6b46e;">17 nov</time>
+      <h3 style="margin: 0; font-weight: 500; font-size: 16px; line-height: 22px; color: #ece6da;">O visual novo de Erevia chegou para todo mundo</h3>
+    </article>
+    <article style="display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid rgba(236,230,218,0.1);">
+      <time style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #d6b46e;">16 nov</time>
+      <h3 style="margin: 0; font-weight: 500; font-size: 16px; line-height: 22px; color: #ece6da;">O mundo ganha relevo e vida</h3>
+    </article>
+    <article style="display: flex; flex-direction: column; gap: 4px; padding: 12px 0; border-top: 1px solid rgba(236,230,218,0.1);">
+      <time style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #d6b46e;">16 nov</time>
+      <h3 style="margin: 0; font-weight: 500; font-size: 16px; line-height: 22px; color: #ece6da;">Missões por região, graus de equipamento e monstros com papel</h3>
+    </article>
+  </aside>
+
+  <footer style="position: absolute; left: 88px; bottom: 26px; display: flex; gap: 18px; font-size: 12px; color: #8a8478;">
+    <span>Versão de 17 nov 2026</span>
+    <span>Modelos 3D: KayKit (CC0) e Erevia</span>
+    <span>© 2026 Erevia</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"scrim":{"editor":"range","default":0.9,"min":0.5,"max":1,"step":0.02},"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { scrim: this.props.scrim ?? 0.9 };
+  }
+}
+</script>
+</body>
+</html>

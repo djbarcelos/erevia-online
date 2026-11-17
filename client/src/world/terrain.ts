@@ -493,6 +493,7 @@ export function regionSplat(world: WorldData, x: number, z: number): Splat {
  */
 export function splatAt(f: HeightField, x: number, z: number): Splat {
   const world = f.world;
+  if (world?.indoor) return [0, 0, 1, 0]; // masmorra: só a camada de pedra (a pintura do chão faz o resto)
   const w: Splat = world ? [...regionSplat(world, x, z)] as Splat : [1, 0, 0, 0];
   // Manchas: onde o ruído é alto, mais grama; onde é baixo, mais terra.
   const p = noise2(x / 9, z / 9, 7) * 0.6 + noise2(x / 3.2, z / 3.2, 8) * 0.4;

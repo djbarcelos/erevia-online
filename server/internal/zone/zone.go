@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -46,7 +47,7 @@ type Config struct {
 	World          *world.World     // obstáculos e caminhos (nil = campo aberto)
 	Clans          []ClanData       // clãs salvos (carregados na partida)
 	Bosses         []BossData       // renascimento dos raid bosses (carregado na partida)
-	DevCommands    bool             // comandos de teste no chat (/raid); só com DEV_LOGIN
+	DevCommands    bool             // comandos de teste no chat (/raid, /catacumbas); só com DEV_LOGIN
 	Clock          func() time.Time // relógio do ciclo dia/noite (nil = time.Now)
 	Version        string           // versão do servidor (vai nos relatos de /bug)
 	// Eventos (events.go e invasion.go).
@@ -63,6 +64,10 @@ type Config struct {
 	// NoRares: sem monstros raros (rares.go). Eles são do mapa principal: a área de cada um
 	// está nas coordenadas dele e a hora da próxima aparição é uma linha só no banco.
 	NoRares bool
+	// Masmorras (instance.go): as ligadas neste processo (a porta aparece no mapa principal) e,
+	// na cópia de uma delas, o id da cópia ("catacumbas#3"; "" = não é cópia).
+	Dungeons []string
+	Instance string
 }
 
 func DefaultConfig() Config {
@@ -165,8 +170,8 @@ type SavedState struct {
 	Reputation game.ReputationState
 	Bestiary   game.BestiaryState
 	Discovered game.DiscoveryState
-	Vitality     int64 // XP bônus da vitalidade (vitality.go)
-	Classes      game.ClassSet // subclasse: todas as classes, com a ativa atualizada
+	Vitality   int64         // XP bônus da vitalidade (vitality.go)
+	Classes    game.ClassSet // subclasse: todas as classes, com a ativa atualizada
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
 	// Auction: operações da casa de leilões ainda sem confirmação do banco (vão na mesma
@@ -323,6 +328,9 @@ type Zone struct {
 	rares   rareWorld    // monstros raros (rares.go)
 
 	mgr *Manager // zonas do processo e barramento (nil = zona sozinha, como nos testes)
+
+	dg     *dungeonRun // vida da cópia de uma masmorra (nil = zona comum; instance.go)
+	closed atomic.Bool // a cópia fechou: o login não pode mais ir para ela
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -665,7 +673,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Entities:     entities,
 		Skills:       skills,
 		SafeRadius:   float32(z.cfg.SafeRadius),
-		Zones:        mapZones(z.cfg.Spawns),
+		Zones:        mapZones(z.mapZoneSpawns()),
 		ServerTimeMs: z.cfg.Clock().UnixMilli(),
 		DayCycleMs:   uint32(game.DayCycle.Milliseconds()),
 		SkillCatalog: skillCatalog(),
@@ -781,7 +789,7 @@ func (z *Zone) onChat(e chatEvent) {
 
 	to := strings.TrimSpace(e.to)
 	if to == "" { // todas as zonas (bus.go)
-		z.broadcastAll(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
+		z.broadcastGeneral(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
 			Channel: pb.ChatChannel_CHAT_CHANNEL_GENERAL, FromId: p.id, FromName: p.name, Text: text,
 		}}})
 		return
@@ -896,6 +904,7 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysParties, z.syncParties)
 		z.runSystem(sysLeaveTown, z.checkLeaveTown)
 		z.runSystem(sysVisits, z.checkVisits) // lugares das missões (GoalVisit)
+		z.runSystem(sysInstance, z.updateInstance)
 		z.runSystem(sysTrades, z.checkTrades)
 		z.runSystem(sysXP2, z.updateXP2)
 		z.runSystem(sysXPTally, z.flushXPTallies)

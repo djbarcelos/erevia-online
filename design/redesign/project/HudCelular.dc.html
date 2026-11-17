@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Erevia — HUD no celular</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;family=Barlow:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#07080c}
+</style>
+</helmet>
+<div style="width: 844px; height: 390px; position: relative; overflow: hidden; background: #07080c; font-family: Barlow, system-ui, sans-serif; color: #ece6da;">
+  <img src="/_blob/8dc7ffa008e3011103d6f44e806ddeaf" alt="" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;">
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: radial-gradient(120% 120% at 50% 45%, rgba(7,8,12,0) 55%, rgba(7,8,12,0.5) 100%);"></div>
+
+  <div aria-hidden="true" style="position: absolute; left: 447px; top: 180px; width: 34px; height: 14px; border-radius: 50%; border: 2px solid rgba(224,83,63,0.9); box-shadow: 0 0 10px rgba(224,83,63,0.55);"></div>
+  <div style="position: absolute; left: 468px; top: 123px; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; white-space: nowrap;"><span style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 11px; color: #ff9f8f; text-shadow: 0 1px 2px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.85);">Esqueleto Guerreiro <span style="font-weight: 500; color: #e8c9c2;">Nv 9</span></span><span style="width: 54px; height: 5px; border-radius: 3px; background: rgba(0,0,0,0.7); box-shadow: 0 0 0 1px rgba(0,0,0,0.6); overflow: hidden;"><span style="display: block; width: 38%; height: 100%; background: #d2493c;"></span></span></div>
+  <span aria-hidden="true" style="position: absolute; left: 498px; top: 107px; transform: translate(-50%, -100%); font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 700; font-size: 16px; color: #ffe08a; -webkit-text-stroke: 1px rgba(40,20,0,0.9); text-shadow: 0 2px 4px rgba(0,0,0,0.8); pointer-events: none;">148</span>
+  <div style="position: absolute; left: 308px; top: 147px; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; white-space: nowrap;"><span style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 11px; color: #ff9f8f; text-shadow: 0 1px 2px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.85);">Esqueleto Guerreiro <span style="font-weight: 500; color: #e8c9c2;">Nv 8</span></span></div>
+  <div style="position: absolute; left: 341px; top: 273px; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; white-space: nowrap;"><span style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 11px; color: #8fc1ff; text-shadow: 0 1px 2px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.85);">Tarn</span></div>
+
+  <section aria-label="Você" style="position: absolute; left: 44px; top: 12px; width: 214px; box-sizing: border-box; padding: 6px 10px 6px 6px; display: flex; gap: 9px; align-items: center; border-radius: 8px; background: rgba(9,10,16,0.74); border: 1px solid rgba(236,230,218,0.12);">
+    <div style="position: relative; width: 42px; height: 42px; flex: none;">
+      <img src="/_blob/326e8f98faffa6e1f59229e60b8aaa3f" alt="" style="width: 42px; height: 42px; border-radius: 6px; object-fit: cover; border: 1px solid rgba(214,180,110,0.6); box-sizing: border-box; background: #1a1d29;">
+      <span style="position: absolute; left: -5px; bottom: -5px; min-width: 20px; height: 20px; box-sizing: border-box; padding: 0 4px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: #0c0e15; border: 1px solid #d6b46e; font: 700 11px 'Barlow Semi Condensed', sans-serif; color: #f0d79a;">11</span>
+    </div>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
+      <span style="font: 600 14px 'Barlow Semi Condensed', sans-serif; color: #f2ead8; line-height: 1;">Aldric</span>
+      <div role="meter" aria-label="Vida" aria-valuenow="812" aria-valuemin="0" aria-valuemax="1040" style="position: relative; height: 12px; border-radius: 3px; background: rgba(0,0,0,0.55); overflow: hidden;">
+        <div style="width: 78%; height: 100%; background: #b3342a;"></div>
+        <span style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 600 10px 'Barlow Semi Condensed', sans-serif; color: #fff;">812 / 1040</span>
+      </div>
+      <div role="meter" aria-label="Mana" aria-valuenow="214" aria-valuemin="0" aria-valuemax="300" style="height: 6px; border-radius: 3px; background: rgba(0,0,0,0.55); overflow: hidden;">
+        <div style="width: 71%; height: 100%; background: #2c63c4;"></div>
+      </div>
+    </div>
+  </section>
+
+  <ul aria-label="Grupo" style="position: absolute; left: 44px; top: 74px; margin: 0; padding: 0; list-style: none; display: flex; gap: 8px;">
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 3px;">
+      <img src="/_blob/57f25f39165cefe3b014d988f489595e" alt="Tarn, líder do grupo" style="width: 34px; height: 34px; border-radius: 6px; object-fit: cover; background: #1a1d29; border: 1px solid rgba(214,180,110,0.55); box-sizing: border-box;">
+      <span style="width: 34px; height: 4px; border-radius: 2px; background: rgba(0,0,0,0.6); overflow: hidden;"><span style="display: block; width: 64%; height: 100%; background: #b3342a;"></span></span>
+    </li>
+    <li style="display: flex; flex-direction: column; align-items: center; gap: 3px;">
+      <img src="/_blob/aa2937ae2f06297e14ff24be9cb4b3c1" alt="Ilsa" style="width: 34px; height: 34px; border-radius: 6px; object-fit: cover; background: #1a1d29; border: 1px solid rgba(236,230,218,0.18); box-sizing: border-box;">
+      <span style="width: 34px; height: 4px; border-radius: 2px; background: rgba(0,0,0,0.6); overflow: hidden;"><span style="display: block; width: 100%; height: 100%; background: #b3342a;"></span></span>
+    </li>
+  </ul>
+
+  <button type="button" style="position: absolute; left: 44px; top: 128px; height: 44px; box-sizing: border-box; padding: 0 6px 0 12px; display: flex; align-items: center; gap: 10px; border-radius: 8px; background: rgba(9,10,16,0.72); border: 1px solid rgba(236,230,218,0.12); color: inherit; font: inherit; cursor: pointer;">
+    <span style="display: flex; flex-direction: column; align-items: flex-start; gap: 1px;">
+      <span style="font: 600 13px 'Barlow Semi Condensed', sans-serif; color: #f2ead8;">O estandarte caído</span>
+      <span style="font-size: 12px; color: #b3ab9c;">Esqueletos Guerreiros <b style="color: #f0d79a; font-weight: 600;">5/8</b></span>
+    </span>
+    <span style="height: 30px; padding: 0 9px; display: flex; align-items: center; border-radius: 6px; border: 1px solid rgba(214,180,110,0.7); background: rgba(214,180,110,0.14); color: #f0d79a; font: 700 12px 'Barlow Semi Condensed', sans-serif; letter-spacing: 0.08em;">IR</span>
+  </button>
+
+  <section aria-label="Alvo" style="position: absolute; left: 50%; top: 12px; transform: translateX(-50%); width: 210px; box-sizing: border-box; padding: 7px 10px; border-radius: 8px; background: rgba(9,10,16,0.74); border: 1px solid rgba(210,80,60,0.45); display: flex; flex-direction: column; gap: 5px;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+      <span style="font: 600 13px 'Barlow Semi Condensed', sans-serif; color: #ffb4a6;">Esqueleto Guerreiro</span>
+      <span style="font: 600 12px 'Barlow Semi Condensed', sans-serif; color: #b3ab9c;">Nv 9</span>
+    </div>
+    <div role="meter" aria-label="Vida do alvo" aria-valuenow="38" aria-valuemin="0" aria-valuemax="100" style="height: 8px; border-radius: 3px; background: rgba(0,0,0,0.55); overflow: hidden;"><div style="width: 38%; height: 100%; background: #b3342a;"></div></div>
+  </section>
+
+  <div style="position: absolute; right: 44px; top: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+    <div style="position: relative; width: 92px; height: 92px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(9,10,16,0.82), 0 0 0 4px rgba(214,180,110,0.55);">
+      <img src="/_blob/66df72dc079e0a38c930dbe95b0d9af3" alt="Mapa da região ao redor" style="width: 92px; height: 92px; border-radius: 50%; object-fit: cover; display: block; filter: saturate(0.85) brightness(0.92);">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" style="position: absolute; left: 39px; top: 39px;"><path d="M12 3l6.5 16-6.5-4-6.5 4z" fill="#f0d79a" stroke="#17130b" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span aria-hidden="true" style="position: absolute; left: 20px; top: 16px; width: 8px; height: 8px; border-radius: 50%; background: #d6b46e; box-shadow: 0 0 0 3px rgba(214,180,110,0.3);"></span>
+    </div>
+    <span style="font: 600 12px 'Barlow Semi Condensed', sans-serif; color: #ece6da; text-shadow: 0 1px 4px #000; white-space: nowrap;">Campos dos Ossos · 15:20</span>
+  </div>
+  <button type="button" aria-label="Menu" style="position: absolute; right: 148px; top: 12px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(9,10,16,0.72); border: 1px solid rgba(236,230,218,0.12); color: #ece6da; cursor: pointer;">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16 M4 12h16 M4 17h16"/></svg>
+    <span style="position: absolute; right: -3px; top: -3px; width: 10px; height: 10px; border-radius: 50%; background: #d6b46e; border: 2px solid #0c0e15;"></span>
+  </button>
+  <button type="button" aria-label="Bate-papo" style="position: absolute; right: 200px; top: 12px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: rgba(9,10,16,0.72); border: 1px solid rgba(236,230,218,0.12); color: #ece6da; cursor: pointer;">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9.5L4 20z"/></svg>
+  </button>
+
+  <div aria-hidden="true" style="position: absolute; left: 56px; bottom: 26px; width: 124px; height: 124px; border-radius: 50%; background: rgba(9,10,16,0.32); border: 1px solid rgba(236,230,218,0.22); box-shadow: inset 0 0 24px rgba(0,0,0,0.35);">
+    <span aria-hidden="true" style="position: absolute; left: 44px; top: 30px; width: 52px; height: 52px; border-radius: 50%; background: rgba(236,230,218,0.2); border: 1px solid rgba(236,230,218,0.45); box-shadow: 0 4px 12px rgba(0,0,0,0.4);"></span>
+  </div>
+
+  <sc-for list="{{skills}}" as="s" hint-placeholder-count="4">
+    <button type="button" aria-label="{{s.label}}" style="{{s.style}}">
+      <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="{{s.ink}}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="{{s.d}}"/></svg>
+      <sc-if value="{{s.cd}}" hint-placeholder-val="{{ false }}">
+        <span style="{{s.cdStyle}}">{{s.cdText}}</span>
+      </sc-if>
+    </button>
+  </sc-for>
+  <button type="button" aria-label="Atacar" style="position: absolute; left: 700px; top: 256px; width: 80px; height: 80px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: radial-gradient(100% 100% at 35% 25%, #4a3a1c 0%, #17130b 80%); border: 2px solid rgba(214,180,110,0.8); box-shadow: 0 6px 18px rgba(0,0,0,0.5); color: #f0d79a; cursor: pointer;">
+    <svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 4.5L9 15 M15 4.5h4.5V9 M6.5 12.5l5 5 M4.5 19.5l3.5-3.5"/></svg>
+  </button>
+  <button type="button" aria-label="Poção de Vida, 5" style="position: absolute; left: 558px; top: 320px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: radial-gradient(120% 120% at 30% 22%, #d24a3a 0%, #3a0c0c 78%); border: 1px solid rgba(236,230,218,0.25); color: #ffe0da; cursor: pointer;">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5h4 M10.5 3.5V8L6.3 14.5A4.3 4.3 0 0 0 10 21h4a4.3 4.3 0 0 0 3.7-6.5L13.5 8V3.5 M7.6 14h8.8"/></svg>
+    <span style="position: absolute; right: -2px; bottom: -3px; font: 700 12px 'Barlow Semi Condensed', sans-serif; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000;">5</span>
+  </button>
+  <button type="button" aria-label="Trocar de alvo" style="position: absolute; left: 610px; top: 320px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(9,10,16,0.72); border: 1px solid rgba(236,230,218,0.22); color: #ece6da; cursor: pointer;">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M12 2.5v4 M12 17.5v4 M2.5 12h4 M17.5 12h4"/></svg>
+  </button>
+  <button type="button" aria-label="Caça automática" style="position: absolute; left: 490px; top: 320px; width: 60px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 22px; background: rgba(9,10,16,0.72); border: 1px solid rgba(214,180,110,0.6); color: #f0d79a; font: 700 11px 'Barlow Semi Condensed', sans-serif; letter-spacing: 0.08em; cursor: pointer;">
+    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1 M19.5 12a7.5 7.5 0 0 1-13 5.1 M17.5 3.5v3.5H14 M6.5 20.5V17H10"/></svg>AUTO
+  </button>
+
+  <div role="meter" aria-label="Experiência: 62%" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" style="position: absolute; left: 44px; right: 44px; bottom: 8px; height: 3px; border-radius: 2px; background: rgba(0,0,0,0.6); overflow: hidden;">
+    <div style="width: 62.4%; height: 100%; background: #d6b46e;"></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":844,"height":390}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const S = [
+      { label: 'Golpe de Escudo', d: 'M10 4l6 2.5V11c0 3.8-2.5 6.8-6 8.5C6.5 17.8 4 14.8 4 11V6.5z M18.5 9l2.5-1 M18.5 12.5h3 M18.5 16l2.5 1', c: ['#1f2840', '#7d8fb0', '#dfe8ff'], x: 640, y: 287 },
+      { label: 'Corte Giratório', d: 'M5 15a7.5 7.5 0 0 0 14 0 M19 9A7.5 7.5 0 0 0 5 9 M5 4v5h5 M19 20v-5h-5', c: ['#3e2a08', '#d0a040', '#fff2c4'], x: 656, y: 241, cd: 0.6, cdText: '4' },
+      { label: 'Investida', d: 'M3.5 12h11 M11 6.5l5.5 5.5-5.5 5.5 M19.5 5.5v13', c: ['#3a1e08', '#c48a3a', '#ffe0a8'], x: 707, y: 201 },
+      { label: 'Fortaleza', d: 'M5 20.5V8h3V5h2.5v3h3V5H16v3h3v12.5z M10 20.5v-4a2 2 0 0 1 4 0v4', c: ['#14243a', '#5e8fe0', '#dcebff'], x: 772, y: 201, cd: 0.85, cdText: '18' },
+    ];
+    const skills = S.map((s) => ({
+      ...s, ink: s.c[2], cd: !!s.cd, cdText: s.cdText || '',
+      style: 'position: absolute; left: ' + (s.x - 26) + 'px; top: ' + (s.y - 26) + 'px; width: 52px; height: 52px; padding: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 50%; cursor: pointer; border: 1px solid rgba(236,230,218,0.28); box-shadow: 0 4px 12px rgba(0,0,0,0.45); background: radial-gradient(120% 120% at 30% 22%, ' + s.c[1] + ' 0%, ' + s.c[0] + ' 78%);',
+      cdStyle: s.cd ? 'position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: 700 16px \'Barlow Semi Condensed\', sans-serif; color: #fff; text-shadow: 0 1px 3px #000; background: conic-gradient(rgba(7,8,12,0) 0 ' + Math.round((1 - s.cd) * 100) + '%, rgba(7,8,12,0.72) ' + Math.round((1 - s.cd) * 100) + '% 100%);' : '',
+    }));
+    return { skills };
+  }
+}
+</script>
+</body>
+</html>

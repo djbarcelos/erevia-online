@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Erevia — Carregando o Vale das Pedras Vivas</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;family=Barlow:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#07080c}
+@keyframes erv-pulse{0%,100%{opacity:.45}50%{opacity:1}}
+</style>
+</helmet>
+<div style="width: 1280px; height: 720px; position: relative; overflow: hidden; background: #07080c; font-family: Barlow, system-ui, sans-serif; color: #ece6da;">
+  <img src="/_blob/db714b4c81db2bc27a8caff629e7d64f" alt="" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;">
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: linear-gradient(0deg, rgba(7,8,12,0.96) 0%, rgba(7,8,12,0.78) 24%, rgba(7,8,12,0.1) 52%, rgba(7,8,12,0) 70%);"></div>
+  <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 120px; background: linear-gradient(180deg, rgba(7,8,12,0.55), rgba(7,8,12,0));"></div>
+
+  <span style="position: absolute; left: 56px; top: 40px; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 700; font-size: 26px; letter-spacing: 0.12em; color: #f2ead8;">EREVIA</span>
+
+  <section style="position: absolute; left: 88px; bottom: 80px; width: 600px; display: flex; flex-direction: column; gap: 14px;">
+    <span style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: #f0a640;">Indo para · níveis 20 a 30</span>
+    <h1 style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 700; font-size: 68px; line-height: 0.95; color: #f2ead8;">Vale das Pedras Vivas</h1>
+    <p style="margin: 0; max-width: 520px; font-size: 18px; line-height: 27px; color: #c4bcad; text-wrap: pretty;">Os monólitos são nós da rede de runas dos Ilvarin, e os golens guardam a rede. Agora ela afrouxou, e as pedras andam.</p>
+    <div style="display: flex; align-items: center; gap: 14px; margin-top: 10px; padding: 12px 16px; border-radius: 6px; background: rgba(9,10,16,0.7); border: 1px solid rgba(236,230,218,0.11); align-self: flex-start;">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f0a640" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h11a2 2 0 0 1 2 2v1h-4 M16 7v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1h10 M7 4a2 2 0 0 0-2 2v11 M9 9h4 M9 13h4"/></svg>
+      <span style="display: flex; flex-direction: column; gap: 2px;">
+        <span style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 15px; color: #ece6da;">Pedra que anda</span>
+        <span style="font-size: 14px; color: #b3ab9c;">Derrotar Golens de Pedra · 0/12 · com Maelis, no acampamento ao norte</span>
+      </span>
+    </div>
+  </section>
+
+  <section aria-label="Progresso do carregamento" style="position: absolute; right: 88px; bottom: 88px; width: 360px; display: flex; flex-direction: column; gap: 14px;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between;">
+      <span style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 16px; color: #ece6da;">{{current}}</span>
+      <span style="font-family: 'Barlow Semi Condensed', sans-serif; font-weight: 600; font-size: 16px; color: #d6b46e; font-variant-numeric: tabular-nums;">{{pct}}</span>
+    </div>
+    <div role="progressbar" aria-label="Entrando no mundo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{pctNum}}" style="height: 4px; border-radius: 2px; background: rgba(236,230,218,0.14); overflow: hidden;">
+      <div style="height: 100%; width: {{pct}}; background: #d6b46e; border-radius: 2px;"></div>
+    </div>
+    <ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="4">
+        <li style="{{s.style}}">
+          <sc-if value="{{s.done}}" hint-placeholder-val="{{ false }}">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7bd88f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+          </sc-if>
+          <sc-if value="{{s.now}}" hint-placeholder-val="{{ false }}">
+            <span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: #d6b46e; animation: erv-pulse 1.2s ease-in-out infinite;"></span>
+          </sc-if>
+          <span>{{s.name}}</span>
+        </li>
+      </sc-for>
+    </ol>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"stage":{"editor":"int","default":1,"min":0,"max":4},"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const stage = Math.max(0, Math.min(4, this.props.stage ?? 1));
+    const names = ['Mapa', 'Cenário', 'Personagens', 'Preparando…'];
+    const pctNum = Math.round((stage / names.length) * 100 + (stage < names.length ? 12 : 0));
+    const steps = names.map((name, i) => {
+      const done = i < stage;
+      const now = i === stage;
+      return {
+        name, done, now,
+        style: 'display: flex; align-items: center; gap: 6px; font-family: \'Barlow Semi Condensed\', sans-serif; font-weight: 500; font-size: 14px; color: ' + (done ? '#b3ab9c' : now ? '#ece6da' : '#8a8478') + ';',
+      };
+    });
+    return { steps, pctNum, pct: Math.min(100, pctNum) + '%', current: stage < names.length ? names[stage] : 'Pronto' };
+  }
+}
+</script>
+</body>
+</html>

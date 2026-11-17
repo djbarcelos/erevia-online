@@ -82,9 +82,10 @@ export async function loadBiomes(...dirs) {
  * devolve dados no build), byte a byte igual ao gerador de antes dos biomas: serve ao teste
  * de que o formato novo descreve o mesmo mapa, enquanto o cliente aceitar os dois.
  */
-export async function buildWorld({ biomes, legacy = false } = {}) {
+export async function buildWorld({ biomes, legacy = false, sizes = {} } = {}) {
   biomes ??= await loadBiomes();
-  const SIZES = { ...JSON.parse(readFileSync(resolve(here, '../src/world/kit-sizes.json'), 'utf8')), ...CLIENT_ITEMS };
+  // `sizes`: o tamanho das peças de um kit próprio (as masmorras, build-dungeons.mjs).
+  const SIZES = { ...JSON.parse(readFileSync(resolve(here, '../src/world/kit-sizes.json'), 'utf8')), ...CLIENT_ITEMS, ...sizes };
 
   const objects = []; // { k, x, z, r, s: [sx, sy, sz] }
   const colliders = []; // { x, z, r }

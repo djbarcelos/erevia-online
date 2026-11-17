@@ -84,6 +84,11 @@ jobs:
           node scripts/build-world.mjs
           sha256sum public/world.json ../server/internal/world/world.json
           git diff --exit-code --stat -- public/world.json ../server/internal/world/world.json
+      # O mesmo para as masmorras (scripts/dungeons/): o mapa do cliente e do servidor sai do gerador.
+      - name: mapas das masmorras iguais aos gerados
+        run: |
+          node scripts/build-dungeons.mjs
+          git diff --exit-code --stat -- public/worlds ../server/internal/world/maps
       - run: npm run build
 
   e2e:

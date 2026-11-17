@@ -815,6 +815,17 @@ Os **kobolds** (os "Tocos") adoram o brilho do cristal e se mudaram para lá. O 
 | **D4 Necrópole do Rei Ossário** | 30 | sob a Cripta Esquecida; pede as **5 Pedras-Selo** (uma vez, por missão) | 3 salas e o trono, ~35 min, para 6 jogadores | **Ozrhal Desperto**: a versão difícil, de grupo, com as fases do raid comprimidas e uma 4ª fase (o selo se rompe, e o chão some em setores) | reaproveita o raid (`zone/raid.go`) |
 | **D5 Forja Primeva** | 38–40 | Coração de Brasa | 3 salas, ~30 min | **Os Fundidores**: 3 mini-chefes e a coroa refundida | Coração de Brasa |
 
+**D1 entregue (T14, #140).** O que existe, para as outras masmorras copiarem:
+- **Instância = uma `Zone` por cópia** (`zone/instance.go`). O gerente cria a cópia quando o líder do grupo (ou quem está sozinho, como grupo de 1) usa a **Porta das Catacumbas**, um portão ao lado da igreja (`GateDef.Dungeon`). Os outros membros entram pela mesma porta até 2 min depois; quem já entrou volta enquanto a cópia existir. A cópia fecha 5 min depois de ficar vazia ou aos 45 min (aviso aos 40 min), e quem estiver lá sai na porta da igreja. Até 24 cópias ao mesmo tempo no processo.
+- **Isolamento:** monstros, AOI, saque e chat local são da cópia (é outra zona). O chat geral não entra nem sai (`broadcastGeneral`); grupo, chat de grupo e sussurro cruzam, como entre as outras zonas.
+- **Mapa gerado por um bioma de masmorra** (`client/scripts/dungeons/catacumbas.mjs`, rodado por `build-dungeons.mjs` sobre o motor do mundo): 2 andares de 15 × 15 células de 4 m, 8 salas por andar, escadas (`GateDef.Stairs`, o jogador muda de andar sem sair da zona) e a sala do chefe de 20 × 20 m. O mesmo `catacumbas.json` leva ao servidor a colisão, a entrada, as escadas e o lugar de cada monstro (`world.Dungeon`).
+- **Monstros:** 28 esqueletos do remaster com papel (Ossada em matilha, Guarda de escudo, Acólito atirador e Coveiro emboscador, `game/catacumbas.go`), do 12 ao 16, mais o chefe e as 4 ossadas que ele chama (33 no máximo, abaixo do teto de 40). Não renascem (`DungeonNoRespawn`).
+- **Abade Ulric:** chefe de campo de masmorra (`FieldBossDef.Instance`: nasce com a cópia, sem janela, sem renascimento salvo, sem túmulo). F1 Responso (anel de 3 a 9 m), F2 aos 60% Ossuário (4 ossadas e 2 círculos sorteados), F3 aos 25% Vela Final (marca que segue um jogador) e fúria. É o esqueleto mago em escala 2 com cor.
+- **Baú diário:** quem lutou (dano, ou vivo a até 60 m) abre o **Baú do Abade** ao matar o chefe: moedas, poções, essência, pergaminhos e uma peça do grau D da sua classe. O dia (de Brasília) fica em `QuestState.Chests` (`characters.quests`, sem migração). No mesmo dia, só a XP e o saque comum.
+- **Telemetria:** `game_events` kind `dungeon` por cópia (`ref` = a masmorra, `amount` = duração em segundos, `extra`: mortes, jogadores, se o chefe caiu e em quanto tempo, baús abertos e o motivo do fim), mais `dungeon_chest` e `dungeon_stairs` por jogador.
+- **Arte:** o kit é o **KayKit Dungeon Remastered** (CC0, do mesmo autor e da mesma escala dos esqueletos; peças modulares de 4 m, 1 textura), com o atlas regradado em tom frio (`build-dungeon-kit.mjs`). Parede de 2,2 m (a masmorra não tem teto), chão pintado de pedra, luz fixa de noite fechada. Licença em `client/public/models/CREDITS.md`.
+- **Liga e desliga:** ligada por padrão; `EREVIA_DUNGEONS=off` tira a porta.
+
 ---
 
 ## 9. Roadmap em fases
