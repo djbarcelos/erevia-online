@@ -64,3 +64,30 @@ export const LOD_DISTANCES = [20, 35];
 export function lodFor(distSq: number): number {
   return distSq > LOD_DISTANCES[1] ** 2 ? 2 : distSq > LOD_DISTANCES[0] ** 2 ? 1 : 0;
 }
+
+/**
+ * Armas e escudos do remaster (tunnel#97): modelo do jogo (nome do KayKit) → arquivo novo em weapons/ e
+ * escala sobre ele. Cada arquivo novo já vem na convenção do KayKit (cabo na origem, ponta em +Y, machado com a
+ * lâmina para -X, escudo com a face para +Z); a escala só acomoda os modelos que dividem a mesma forma
+ * (por exemplo as espadas dos esqueletos, um pouco menores). Forma própria por família: comum (`*_b`) e alta
+ * (`*_high_b`); a raridade intermediária se lê pelo brilho do material.
+ */
+export const REMASTER_WEAPONS: Record<string, { file: string; scale?: number }> = {
+  sword_1handed: { file: "sword_b" },
+  sword_2handed: { file: "sword_high_b" },
+  sword_2handed_color: { file: "sword_high_b" },
+  skeleton_blade: { file: "sword_b", scale: 0.84 },
+  axe_1handed: { file: "axe_b" },
+  axe_2handed: { file: "axe_high_b" },
+  skeleton_axe: { file: "axe_b" },
+  staff: { file: "staff_b" },
+  skeleton_staff: { file: "staff_high_b" },
+  wand: { file: "wand_b" },
+  dagger: { file: "dagger_b" },
+  shield_round_barbarian: { file: "shield_b" },
+  shield_spikes: { file: "shield_b", scale: 1.1 },
+  shield_spikes_color: { file: "shield_b", scale: 1.1 },
+  shield_badge_color: { file: "shield_high_b", scale: 0.86 },
+  shield_square: { file: "shield_high_b" },
+  skeleton_shield_large_a: { file: "shield_b", scale: 1.25 },
+};
