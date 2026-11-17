@@ -26,6 +26,7 @@ import {
   type Scene,
   type UniformBuffer,
 } from "@babylonjs/core";
+import { REMASTER } from "./remaster";
 import { bakeSplat, normalAt, type HeightField } from "./terrain";
 
 /** Lado de uma célula da malha (m): as colinas têm 46 m ou mais de comprimento de onda. */
@@ -34,6 +35,11 @@ const CELL = 3;
 const SPLAT_CELL = 2;
 /** Metros que cada camada cobre antes de repetir: grama, terra, pedra e cascalho. */
 const TILE_M = [2.6, 3.4, 4.2, 2.2];
+
+/** Remaster (?remaster=1): metros por repetição das texturas pintadas à mão (maiores, para a repetição não aparecer). */
+const TILE_M_PAINTED = [5.2, 5.2, 6.5, 3.6];
+/** Arquivos das camadas pintadas (public/terrain, feitos por scripts/make-seamless.mjs): grama, terra, pedra, cascalho. */
+const PAINTED_FILES = ["grass", "dirt", "stone", "gravel"];
 
 const NAME = "TerrainSplat";
 
@@ -95,6 +101,14 @@ const LAYERS: LayerStyle[] = [
     specks: [["#b9b09a", 700, 1.5, 4.2, 0.9], ["#7d7565", 700, 1.5, 4.2, 0.9], ["#d0c9b6", 260, 1, 2.6, 0.8], ["#5f5a4e", 200, 1.2, 3.4, 0.8]],
   },
 ];
+
+/** Camada pintada à mão (remaster): JPG repetível de 512 px, com mipmaps e anisotropia. */
+function paintedTexture(scene: Scene, i: number): Texture {
+  const tex = new Texture(`/terrain/${PAINTED_FILES[i]}.jpg`, scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+  tex.wrapU = tex.wrapV = Texture.WRAP_ADDRESSMODE;
+  tex.anisotropicFilteringLevel = 4;
+  return tex;
+}
 
 function layerTexture(scene: Scene, i: number): DynamicTexture {
   const S = 256;
@@ -199,7 +213,12 @@ const FRAGMENT_DIFFUSE = `
   // A pintura do chão (cor da região, estradas) segura o tom; as camadas dão o grão.
   vec3 tsMacro = baseColor.rgb;
   float tsL = dot(tsMix, vec3(0.299, 0.587, 0.114));
+  #ifdef TERRAINSPLAT_PAINTED
+  // Texturas pintadas à mão: mandam mais no tom (a pintura da região só tinge) e o brilho delas fica.
+  baseColor.rgb = mix(tsMacro, tsMix * (0.55 + 0.9 * tsMacro), 0.78) * 1.08;
+  #else
   baseColor.rgb = mix(tsMacro, tsMix, 0.5) * mix(1.0, 0.8 + 0.5 * tsL, 0.6);
+  #endif
 }
 #endif
 `;
@@ -210,9 +229,11 @@ class TerrainSplatPlugin extends MaterialPluginBase {
   ext: [number, number, number, number] = [0, 0, 1, 1];
   private _full = true;
   private _on = false;
+  /** Texturas pintadas à mão (remaster). */
+  painted = false;
 
   constructor(material: Material) {
-    super(material, NAME, 250, { TERRAINSPLAT: false, TERRAINSPLAT_FULL: false });
+    super(material, NAME, 250, { TERRAINSPLAT: false, TERRAINSPLAT_FULL: false, TERRAINSPLAT_PAINTED: false });
     this._enable(true);
   }
 
@@ -250,6 +271,7 @@ class TerrainSplatPlugin extends MaterialPluginBase {
   override prepareDefines(defines: MaterialDefines): void {
     defines["TERRAINSPLAT"] = this._on;
     defines["TERRAINSPLAT_FULL"] = this._on && this._full;
+    defines["TERRAINSPLAT_PAINTED"] = this._on && this.painted;
   }
 
   override getUniforms(): { ubo: { name: string; size: number; type: string }[]; fragment: string } {
@@ -281,7 +303,8 @@ uniform vec4 tsTile;
   override bindForSubMesh(ubo: UniformBuffer): void {
     if (!this._on || !this.splat) return;
     ubo.updateFloat4("tsExt", this.ext[0], this.ext[1], this.ext[2], this.ext[3]);
-    ubo.updateFloat4("tsTile", TILE_M[0], TILE_M[1], TILE_M[2], TILE_M[3]);
+    const tile = this.painted ? TILE_M_PAINTED : TILE_M;
+    ubo.updateFloat4("tsTile", tile[0], tile[1], tile[2], tile[3]);
     ubo.setTexture("tsSplat", this.splat);
     ubo.setTexture("tsGrass", this.layers[0]);
     ubo.setTexture("tsDirt", this.layers[1]);
@@ -398,7 +421,8 @@ export function createTerrain(scene: Scene, field: HeightField, macro: BaseTextu
   const plugin = material.pluginManager?.getPlugin(NAME) as TerrainSplatPlugin | undefined;
   if (plugin) {
     plugin.splat = splat;
-    plugin.layers = LAYERS.map((_, i) => layerTexture(scene, i));
+    plugin.painted = REMASTER;
+    plugin.layers = LAYERS.map((_, i) => (REMASTER ? paintedTexture(scene, i) : layerTexture(scene, i)));
     // Mapa de mistura: texel i cobre x = minX + (i + 0.5) * cell; a amostra usa (p - min) / tamanho.
     plugin.ext = [e.minX, e.minZ, 1 / (baked.width * SPLAT_CELL), 1 / (baked.height * SPLAT_CELL)];
     plugin.enabled = true;

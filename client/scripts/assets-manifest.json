@@ -66,6 +66,42 @@
     "mage_b.glb": {
       "categoria": "personagem"
     },
+    "nature_bush_leaf_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_cliff_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_crystal_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_grass_tuft_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_grave_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_rock_l_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_rock_m_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_rock_s_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_tree_dead_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_tree_oak_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_tree_pine_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_tree_vale_b.glb": {
+      "categoria": "cenario"
+    },
     "npc_merchant.glb": {
       "categoria": "personagem"
     },
