@@ -7,14 +7,14 @@
  *   role = papel de animação (idle, walk, run, attack, hit, death, buff...), t = 0..1 do clipe,
  *   grade = grau do item (1-5): escolhe a forma da arma (comum, rara, alta) e o brilho, como no jogo.
  */
-import { ArcRotateCamera, Axis, Quaternion, Color4, Engine, HemisphericLight, DirectionalLight, Scene, TransformNode, Vector3, type AnimationGroup } from "@babylonjs/core";
+import { ArcRotateCamera, Axis, Color3, PBRMaterial, SceneInstrumentation, Quaternion, Color4, Engine, HemisphericLight, DirectionalLight, Scene, TransformNode, Vector3, type AnimationGroup } from "@babylonjs/core";
 import { configureKtx2 } from "../world/assets";
 import { AnimController } from "../world/anim";
 import { CharacterModels, WEAPON_GRIPS, type AnimRole, type CharacterInstance, type Grip } from "../world/models";
 import { setBodyPalettes, type BodyLook } from "../world/body-look";
 import { toArmorGrades, type ArmorGrades } from "../world/armor";
 
-interface Item { model: string; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook; grade?: number; armor?: Partial<ArmorGrades> }
+interface Item { model: string; tint?: string; yaw?: number; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook; grade?: number; armor?: Partial<ArmorGrades> }
 interface Spec { grips?: Record<string, Grip>; radius?: number; cam?: "front" | "side" | "back" | "three"; items: Item[]; gap?: number; height?: number; settle?: number }
 
 configureKtx2();
@@ -54,9 +54,17 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
     spec.items.forEach((it, k) => {
       const inst = models!.instantiate(it.model, `lab${k}`, { "handslot.r": it.right ?? null, "handslot.l": it.left ?? null }, it.look);
       if (!inst) return;
+      if (it.tint) { // variante por cor (Entity.tint): o mesmo cálculo do MonsterVariants
+        const col = Color3.Lerp(Color3.White(), Color3.FromHexString(it.tint), 0.75);
+        for (const mesh of inst.root.getChildMeshes()) {
+          const mat = mesh.material;
+          if (mat instanceof PBRMaterial) { const c = mat.clone(mat.name + it.tint); c.albedoColor = mat.albedoColor.multiply(col); mesh.material = c; }
+        }
+      }
       if (it.armor) inst.setArmor(toArmorGrades(it.armor)); // raridade das peças (tunnel#96)
       if (it.grade) inst.setWeapons(it.right ?? null, it.left ?? null, it.grade, 0);
       inst.root.position.x = (k - (n - 1) / 2) * gap;
+      if (it.yaw) inst.root.rotationQuaternion = Quaternion.FromEulerAngles(0, it.yaw, 0);
       const g: AnimationGroup | undefined = inst.anims.get(it.role ?? "idle");
       if (g) {
         g.start(false, 1, g.from, g.to);
@@ -211,6 +219,57 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
     for (const n of scene.transformNodes) {
       if (n.name === `node0#lab${item}` && n.parent?.name.startsWith(`mixamorig:${parent}`) && n.rotationQuaternion) n.rotationQuaternion = n.rotationQuaternion.multiply(Quaternion.RotationAxis(Axis.Y, (deg * Math.PI) / 180));
     }
+  },
+  /**
+   * Mede n instâncias de um modelo correndo juntas (AnimController de verdade, a 4 m/s) por `seconds` s: draw calls, tempo de
+   * animação e de quadro por quadro (SwiftShader: só a comparação entre rodadas vale), mais o total de ossos e triângulos ativos.
+   */
+  async bench(model: string, n: number, seconds: number, speed = 4): Promise<Record<string, number>> {
+    await ready;
+    await models!.ensure(model);
+    for (const i of live) i.dispose();
+    live = [];
+    const ctls: AnimController[] = [];
+    const cols = Math.ceil(Math.sqrt(n));
+    for (let k = 0; k < n; k++) {
+      const inst = models!.instantiate(model, `labn${k}`);
+      if (!inst) return { error: 1 };
+      inst.root.position.set((k % cols - (cols - 1) / 2) * 2.2, 0, (Math.floor(k / cols) - (cols - 1) / 2) * 2.2);
+      live.push(inst);
+      ctls.push(new AnimController(inst.anims, inst.resetPose, inst.impacts));
+    }
+    cam.target = new Vector3(0, 0.5, 0);
+    cam.alpha = Math.PI / 2; cam.beta = 1.0; cam.radius = cols * 3.2;
+    const inst = new SceneInstrumentation(scene);
+    inst.captureAnimationsTime = true;
+    inst.captureFrameTime = true;
+    const s = { frames: 0, draws: 0, anim: 0, frame: 0, active: 0 };
+    let last = performance.now();
+    const t0 = last;
+    while (performance.now() - t0 < seconds * 1000) {
+      await new Promise((r) => requestAnimationFrame(r));
+      const now = performance.now();
+      for (const c of ctls) c.update((now - last) / 1000, true, 1, true, speed);
+      last = now;
+      if (performance.now() - t0 > 2000) { // os 2 primeiros segundos aquecem
+        s.frames++;
+        s.draws += inst.drawCallsCounter.current;
+        s.anim += inst.animationsTimeCounter.current;
+        s.frame += inst.frameTimeCounter.current;
+        s.active += scene.getActiveMeshes().length;
+      }
+    }
+    // prova de que o corpo se mexe: quanto os ossos da primeira instância variaram entre dois quadros
+    const bones = live[0].root.getDescendants(false).filter((x): x is TransformNode => x instanceof TransformNode);
+    const sig = () => bones.reduce((a, b) => a + (b.rotationQuaternion ? b.rotationQuaternion.x + b.rotationQuaternion.y + b.rotationQuaternion.z : b.rotation.x + b.rotation.y + b.rotation.z), 0);
+    const s0 = sig();
+    await new Promise((r) => setTimeout(r, 180));
+    const moved = Math.abs(sig() - s0);
+    const f = Math.max(1, s.frames);
+    let tris = 0;
+    for (const mesh of scene.getActiveMeshes().data) tris += (mesh as { getTotalIndices?: () => number }).getTotalIndices?.() ?? 0;
+    inst.dispose();
+    return { n, frames: s.frames, drawCalls: Math.round(s.draws / f), animMs: +(s.anim / f).toFixed(2), frameMs: +(s.frame / f).toFixed(2), activeMeshes: Math.round(s.active / f), triangles: Math.round(tris / 3), moved: +moved.toFixed(3), fps: +(s.frames / (seconds - 2)).toFixed(1) };
   },
   models: () => models,
   /** Nós da cena cujo nome casa (depuração das peças anexadas). */

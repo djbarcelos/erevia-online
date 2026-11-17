@@ -11,7 +11,7 @@ import (
 
 func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
 	zones := mapZones(game.DefaultSpawns())
-	var rings, bosses, raids, areas int
+	var rings, bosses, raids, areas, brejo int
 	for _, z := range zones {
 		if z.Area {
 			areas++
@@ -34,6 +34,12 @@ func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
 				if z.Name != "Saqueador Ossudo" || z.Radius > 8 || z.LevelMin != 8 || z.LevelMax != 10 {
 					t.Errorf("área inesperada: %+v", z)
 				}
+			case game.BrejoRegion:
+				// Os grupos do Brejo (tunnel#139): discos de 12 m (6 m o acampamento) dentro do bioma, do 14 ao 20.
+				if z.Radius <= 0 || z.Radius > 12 || z.X < game.BrejoMinX || z.X > game.BrejoMaxX || z.Z < game.BrejoMinZ || z.Z > game.BrejoMaxZ || z.LevelMin < 14 || z.LevelMax > 20 {
+					t.Errorf("área inesperada: %+v", z)
+				}
+				brejo++
 			default:
 				t.Errorf("área inesperada: %+v", z)
 			}
@@ -48,7 +54,7 @@ func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
 		}
 		if z.Fixed {
 			bosses++
-			if !z.Boss || z.Name != "Senhor dos Ossos" || z.Z != -132 {
+			if !z.Boss || (z.Name != "Senhor dos Ossos" || z.Z != -132) && (z.Name != "Mãe-Lodo" || z.X != game.MotherX || z.Z != game.MotherZ) {
 				t.Errorf("chefe inesperado: %+v", z)
 			}
 			continue
@@ -59,9 +65,10 @@ func TestMapZonesMergesRingsAndKeepsBoss(t *testing.T) {
 		}
 	}
 	// 5 spawns em anel, mas só 3 faixas de raio diferentes. Áreas: o Vale, o Fundo do Vale,
-	// os 2 discos da Vigília, os 3 cantos dos Confins e o acampamento dos Saqueadores.
-	if rings != 3 || bosses != 1 || raids != 1 || areas != 8 {
-		t.Fatalf("esperava 3 anéis, 1 chefe, 1 raid e 8 áreas, veio %d, %d, %d e %d", rings, bosses, raids, areas)
+	// os 2 discos da Vigília, os 3 cantos dos Confins e o acampamento dos Saqueadores. O Brejo traz 9 discos (os 7 grupos de 12 m e os 2
+	// acampamentos de 6 m dos Lanceiros, um deles no mesmo lugar de um grupo) e a Mãe-Lodo.
+	if rings != 3 || bosses != 2 || raids != 1 || areas != 8+brejo || brejo != 9 {
+		t.Fatalf("esperava 3 anéis, 2 chefes, 1 raid e 8 áreas + 9 do Brejo, veio %d, %d, %d, %d (%d do Brejo)", rings, bosses, raids, areas, brejo)
 	}
 	if zones[1].Name != "Esqueleto Guerreiro, Esqueleto Ladino, Esqueleto Lançador, Esqueleto Espreitador, Ossada Instável" {
 		t.Errorf("monstros do anel do meio não foram juntados: %q", zones[1].Name)

@@ -57,8 +57,8 @@ func (z *Zone) spawnNPCs() {
 		z.addNPC(n)
 	}
 	z.spawnStones(npcIDBase + uint32(len(townNPCs)))
-	z.spawnKeeper(npcIDBase + uint32(len(townNPCs)+len(teleportStones)))
-	z.spawnMaster(npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1))
+	z.spawnKeeper(npcIDBase + uint32(len(townNPCs)+legacyStones))
+	z.spawnMaster(npcIDBase + uint32(len(townNPCs)+legacyStones+1))
 	z.spawnBoard(boardID) // o Quadro de Contratos (contracts.go)
 	z.spawnAuctioneer(auctioneerID)
 	z.spawnGuardian(guardianID) // o Guardião das Sendas (subclass.go)

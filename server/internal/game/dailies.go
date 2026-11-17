@@ -126,6 +126,16 @@ var dailyQuests = []*QuestDef{
 	daily("d_porta", DailyVenture, 33, 35, "Olhos na porta",
 		"A Guarda manda alguém, todo dia, até a borda da Cripta, para ver se a porta continua fechada. Hoje é você.",
 		visit(spotCrypt, "Chegar à borda da Cripta Esquecida")),
+	// ---- Brejo de Lamagris (no fim, para não mudar o sorteio de ninguém) ----
+	daily("d_juncos", DailyCollect, 14, 22, "Juncos-de-Prata",
+		"O Junco-de-Prata só cresce nas margens do Brejo, e Tomé paga a Guarda por cada feixe: sem ele o Antídoto não sai. Pegue os juncos do saque dos bichos do pântano.",
+		collect("silver_reed", 6, "Pegar Juncos-de-Prata do saque")),
+	daily("d_antidoto", DailyDeliver, 14, 24, "Frascos para o posto",
+		"Tomé gasta Antídoto como água, e o Ferreiro só faz com glândula e junco do Brejo. Faça o seu e leve três frascos ao posto do barqueiro.",
+		deliver("potion_antidote", 3, TalkFerry, "Entregar 3 Antídotos a Tomé")),
+	daily("d_ronda_brejo", DailyVenture, 14, 20, "Ronda do Brejo",
+		"A Guarda quer saber se o cais do posto e a lagoa de Vau Velho seguem de pé. Passe pelo cais do barqueiro e pela lagoa onde só a torre da capela aparece.",
+		visit(spotDock, "Passar pelo Cais do Barqueiro"), visit(spotMother, "Passar pela lagoa de Vau Velho")),
 }
 
 // dailyPool: as diárias da vaga para o nível.

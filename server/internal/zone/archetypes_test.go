@@ -539,7 +539,7 @@ func TestRoleGoesToTheClient(t *testing.T) {
 	}
 }
 
-// Cada arquétipo aparece no mapa principal, poucas vezes e em áreas de nível baixo o bastante
+// Cada arquétipo aparece no mapa principal, poucas vezes (até 14: o Brejo traz 4 acampamentos de matilha, os Afogados da noite e os Lodos) e em áreas de nível baixo o bastante
 // para todo mundo cruzar com ele.
 func TestEveryArchetypeIsInTheWorld(t *testing.T) {
 	z := New(testConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -553,8 +553,8 @@ func TestEveryArchetypeIsInTheWorld(t *testing.T) {
 		}
 	}
 	for a := game.ArchArcher; a <= game.ArchExploder; a++ {
-		if seen[a] == 0 || seen[a] > 6 {
-			t.Errorf("%s: %d no mundo, quero de 1 a 6", a, seen[a])
+		if seen[a] == 0 || seen[a] > 14 {
+			t.Errorf("%s: %d no mundo, quero de 1 a 14", a, seen[a])
 		}
 	}
 	if neutral == 0 {

@@ -94,7 +94,7 @@ func TestHuntRegions(t *testing.T) {
 	cases := map[int][]string{
 		1: {"skeleton_minion"}, 5: {"skeleton_minion"}, 6: {"skeleton_warrior", "skeleton_rogue"},
 		12: {"skeleton_warrior", "skeleton_rogue"}, 13: {"skeleton_mage", "skeleton_warrior"},
-		19: {"skeleton_mage", "skeleton_warrior"}, 20: {"stone_golem"}, 29: {"stone_golem"},
+		14: {"sapo_boi"}, 19: {"sapo_boi"}, 20: {"stone_golem"}, 29: {"stone_golem"},
 		// Do 30 ao 40 (tunnel#149): Fundo do Vale, Vigília Ossária e Confins Partidos.
 		30: {"ancient_golem"}, 32: {"ancient_golem"}, 33: {"ossuary_knight", "ossuary_devotee"},
 		34: {"ossuary_knight", "ossuary_devotee"}, 35: {"broken_reaper", "broken_arcanist"},

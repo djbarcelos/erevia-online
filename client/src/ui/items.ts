@@ -280,6 +280,23 @@ Object.assign(GLYPHS, {
   ring: `<ellipse cx="32" cy="40" rx="15" ry="12" fill="none" stroke="#e2c070" stroke-width="5"/>
     <path d="M25 24 L32 14 L39 24 L32 31 Z" fill="#d04050"/><path d="M29 22 L32 18" stroke="#fff" stroke-width="1.8" ${STROKE}/>`,
 });
+// Brejo de Lamagris (tunnel#139): o Antídoto e os materiais do pântano.
+GLYPHS.potion_antidote = GLYPHS.potion_hp.replace('#e0453a', '#6fcf4a') + `<path d="M31 41 L33 37 L35 41 M33 37 V45" stroke="#e8f8d0" stroke-width="2" ${STROKE}/>`;
+Object.assign(GLYPHS, {
+  brejo_scale: `<path d="M32 10 C46 10 54 20 52 34 C50 46 40 54 32 54 C24 54 14 46 12 34 C10 20 18 10 32 10 Z" fill="#4f7a4a"/>
+    <path d="M32 16 C41 16 47 23 46 33 C45 41 38 47 32 47 C26 47 19 41 18 33 C17 23 23 16 32 16 Z" fill="#7fb06a"/>
+    <path d="M24 28 Q32 22 40 28 M22 36 Q32 30 42 36 M26 43 Q32 39 38 43" stroke="#2f4a2c" stroke-width="2" fill="none" ${STROKE}/>`,
+  brejo_mud: `<path d="M12 46 C10 38 16 32 22 34 C22 24 30 18 38 22 C46 20 54 28 50 36 C56 40 54 50 44 50 H20 C16 50 12 50 12 46 Z" fill="#4a4730"/>
+    <path d="M20 40 C22 34 28 32 32 34" stroke="#7a7650" stroke-width="2.5" fill="none" ${STROKE}/>
+    <circle cx="40" cy="32" r="2.5" fill="#9fe870" opacity=".8"/><circle cx="28" cy="44" r="2" fill="#9fe870" opacity=".6"/>`,
+  brejo_gland: `<path d="M32 12 C46 14 52 28 48 40 C44 52 34 54 28 52 C18 50 12 40 16 28 C18 18 24 12 32 12 Z" fill="#c9c04a"/>
+    <path d="M30 18 C38 18 44 26 42 36 C40 44 34 48 28 46 C22 44 20 36 22 28 C24 22 26 18 30 18 Z" fill="#e8e27a"/>
+    <circle cx="24" cy="26" r="3" fill="#6b7d3e"/><circle cx="38" cy="40" r="3.5" fill="#6b7d3e"/><circle cx="36" cy="26" r="2" fill="#6b7d3e"/>
+    <path d="M30 12 C30 8 34 8 34 12" stroke="#6b7d3e" stroke-width="3" fill="none" ${STROKE}/>`,
+  brejo_reed: `<path d="M20 54 L24 14 M30 54 L32 10 M40 54 L38 16 M48 54 L44 22" stroke="#b8c4cc" stroke-width="3" ${STROKE}/>
+    <path d="M24 12 L24 22 M32 8 L32 20 M38 14 L38 24" stroke="#7a5a3a" stroke-width="5" ${STROKE}/>
+    <path d="M14 54 C22 48 42 48 50 54" stroke="#6b7d3e" stroke-width="3" fill="none" ${STROKE}/>`,
+});
 GLYPHS.potion_hp_big = GLYPHS.potion_hp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;
 GLYPHS.potion_mp_big = GLYPHS.potion_mp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;
 

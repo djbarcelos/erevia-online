@@ -6,8 +6,8 @@ import (
 )
 
 func TestRareDefs(t *testing.T) {
-	if len(Rares) != 4 {
-		t.Fatalf("%d raros; a tabela 5.9 tem 4", len(Rares))
+	if len(Rares) != 5 {
+		t.Fatalf("%d raros; a tabela 5.9 tem 4 e o Brejo mais 1", len(Rares))
 	}
 	points := ExpandSpawns(DefaultSpawns(), rand.New(rand.NewPCG(20261112, 20261112^0x9e3779b97f4a7c15)))
 	for _, r := range Rares {
@@ -63,7 +63,7 @@ func TestRareDefs(t *testing.T) {
 		}
 	}
 	if a := Achievements["rare_hunter"]; a == nil || !a.Each || a.Count != len(Rares) || a.Target != RareIDs() {
-		t.Fatal("Caçador de Raros: os 4 raros, cada um uma vez")
+		t.Fatal("Caçador de Raros: os 5 raros, cada um uma vez")
 	}
 }
 

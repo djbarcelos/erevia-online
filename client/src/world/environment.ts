@@ -94,12 +94,13 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
 
   // Agrupa as posições por tipo e cria um buffer de matrizes para cada um.
   const byKind = new Map<string, WorldData["objects"]>();
-  // O lago fica na beira leste do mapa: o que a geração pôs em cima dele (montanhas da borda) some.
+  // A lagoa do Brejo (tunnel#139) está no meio do pântano: árvores, juncos, o cenário de Vau Velho e a ilha ficam na água
+  // (o servidor deixa pisar na rasa). Só as montanhas da borda, se a geração pôs alguma em cima, somem.
   const field = terrain();
   const lake = field.lake;
   for (const o of objects) {
     if (REMASTER && o.k === "well") continue; // a fonte do remaster ocupa o lugar do poço
-    if (lake && field.lakeU(o.x, o.z) < 1.5 && heightAt(o.x, o.z) < lake.level + 0.45) continue;
+    if (lake && /^(mountain|hills)/.test(o.k) && field.lakeU(o.x, o.z) < 1.5 && heightAt(o.x, o.z) < lake.level + 0.45) continue;
     let list = byKind.get(o.k);
     if (!list) byKind.set(o.k, (list = []));
     list.push(o);

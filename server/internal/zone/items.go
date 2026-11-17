@@ -178,6 +178,10 @@ func (z *Zone) drink(p *entity, slot int, def *game.ItemDef) {
 		z.sendItemCooldown(p, def.Cooldown, ready-z.now)
 		return
 	}
+	if def.Cleanse {
+		z.drinkAntidote(p, slot, def, key)
+		return
+	}
 	hpFull := p.hp >= p.stats.MaxHP
 	mpFull := p.mp >= p.stats.MaxMP
 	if (def.HealHP == 0 || hpFull) && (def.HealMP == 0 || mpFull) {
@@ -197,6 +201,30 @@ func (z *Zone) drink(p *entity, slot int, def *game.ItemDef) {
 	p.pl.cooldowns[key] = z.now + game.CooldownSeconds(def.Cooldown)
 	p.pl.statsDirty = true
 	z.sendItemCooldown(p, def.Cooldown, game.CooldownSeconds(def.Cooldown))
+	z.inventoryChanged(p, false)
+}
+
+// drinkAntidote: o Antídoto limpa veneno e peste (os efeitos de dano por segundo que não são
+// fogo). Sem nenhum dos dois, não gasta a poção.
+func (z *Zone) drinkAntidote(p *entity, slot int, def *game.ItemDef, key uint32) {
+	cleaned := false
+	for _, k := range []game.EffectKind{game.EffectPoison, game.EffectPlague} {
+		for p.removeEffect(k) {
+			cleaned = true
+			z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: p.id, Effect: pb.Effect(k)})
+		}
+	}
+	if !cleaned {
+		z.system(p, "Você não está envenenado.")
+		return
+	}
+	p.pl.inv.take(slot, 1)
+	z.trackItem(p, false, def.ID, 1, "use")
+	z.questEvent(p, game.GoalPotion, def.ID)
+	p.pl.cooldowns[key] = z.now + game.CooldownSeconds(def.Cooldown)
+	p.pl.statsDirty = true
+	z.sendItemCooldown(p, def.Cooldown, game.CooldownSeconds(def.Cooldown))
+	z.system(p, "O Antídoto queima por dentro, mas o veneno some.")
 	z.inventoryChanged(p, false)
 }
 

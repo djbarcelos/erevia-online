@@ -139,6 +139,7 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     b.append(el("span", "zc"), el("span", "zn", el("b", null, z.name), el("small", null, z.safe ? "Cidade murada: aqui ninguém ataca." : z.monsters)), el("span", "zl", levelText(z)));
     b.onclick = () => {
       if (z.safe) flyTo(0, 0, 4);
+      else if (z.rect) flyTo((z.rect.minX + z.rect.maxX) / 2, (z.rect.minZ + z.rect.maxZ) / 2, 1.4);
       else if (z.area) flyTo(z.area.x, z.area.z, Math.max(1.2, Math.min(4, 220 / (z.area.r * 3))));
       else if (z.sector) {
         const c = sectorCenter(z);
@@ -368,6 +369,24 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
           ctx.lineWidth = 2;
           ctx.setLineDash([]);
           ctx.stroke();
+          continue;
+        }
+        if (z.rect) {
+          // Bioma retangular (o Brejo, as Terras Mortas): o retângulo do bioma, com o nome no meio.
+          const rx = sx(z.rect.minX);
+          const ry = sy(z.rect.maxZ);
+          const rw = (z.rect.maxX - z.rect.minX) * scale;
+          const rh = (z.rect.maxZ - z.rect.minZ) * scale;
+          ctx.fillStyle = `rgba(${z.rgb},0.1)`;
+          ctx.fillRect(rx, ry, rw, rh);
+          ctx.setLineDash([7, 6]);
+          ctx.lineWidth = 1.4;
+          ctx.strokeStyle = `rgba(${z.rgb},0.6)`;
+          ctx.strokeRect(rx, ry, rw, rh);
+          ctx.setLineDash([]);
+          const fs = clamp(scale * 4.2, 10, 18);
+          label(z.name.toUpperCase(), rx + rw / 2, ry + rh / 2 - fs * 0.6, fs * 0.8, "#f4ead2", 700, "Cinzel, Georgia, serif");
+          label(levelText(z), rx + rw / 2, ry + rh / 2 + fs * 0.55, fs * 0.72, `rgb(${z.rgb})`, 700);
           continue;
         }
         if (z.area) {

@@ -53,6 +53,9 @@ function npcPositions(): Array<[string, number, number]> {
   return found;
 }
 
+/** Só a cidade (e a vizinhança dela): o Brejo e as Terras Mortas reaproveitam a torre, a igreja e as casas do kit, longe da muralha. */
+const inTown = (o: { x: number; z: number }) => Math.hypot(o.x, o.z) < world.wall.apothem + 25;
+
 test("toda peça do kit existe, está no manifesto e substitui um item do world.json", () => {
   const kinds = new Set(world.objects.map((o) => o.k));
   for (const [kind, file] of Object.entries(TOWN_KITS)) {
@@ -67,7 +70,7 @@ test("a pegada dos prédios novos cabe no colisor do servidor (até 1,6x o raio)
   const prédios = ["tavern", "church", "blacksmith", "market", "home_a", "home_b", "tower_a"];
   for (const kind of prédios) {
     const b = await box(TOWN_KITS[kind]);
-    for (const o of world.objects.filter((x) => x.k === kind)) {
+    for (const o of world.objects.filter((x) => x.k === kind && inTown(x))) {
       const col = world.colliders.filter((c) => Math.hypot(c.x - o.x, c.z - o.z) < 0.02).sort((a, b) => b.r - a.r)[0];
       assert.ok(col, `${kind} em (${o.x}, ${o.z}): sem colisor`);
       for (const [cx, cz] of corners(o, b, [])) {
@@ -119,11 +122,11 @@ test("nenhum NPC fica dentro de um prédio novo e os adereços novos não ficam 
 
 test("os torreões de canto ficam nos vértices da muralha, sem repetir as torres grandes", () => {
   const corners = wallCorners(world);
-  const towers = world.objects.filter((o) => o.k === "tower_a").length;
+  const towers = world.objects.filter((o) => o.k === "tower_a" && inTown(o)).length;
   assert.equal(corners.length, world.wall.sides - towers);
   const vertexR = world.wall.apothem / Math.cos(Math.PI / world.wall.sides);
   for (const c of corners) {
     assert.ok(Math.abs(Math.hypot(c.x, c.z) - vertexR) < 0.05, `canto em (${c.x}, ${c.z}) fora do vértice`);
-    for (const t of world.objects.filter((o) => o.k === "tower_a")) assert.ok(Math.hypot(c.x - t.x, c.z - t.z) > 3, "canto em cima de torre");
+    for (const t of world.objects.filter((o) => o.k === "tower_a" && inTown(o))) assert.ok(Math.hypot(c.x - t.x, c.z - t.z) > 3, "canto em cima de torre");
   }
 });
