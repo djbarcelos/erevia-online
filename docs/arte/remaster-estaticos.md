@@ -83,3 +83,70 @@ Saldo no fim: 1.918 (os outros agentes e o Daniel também mexem no saldo). Nenhu
 1. **Adereços (barril, caixote, banco, tocha, carroça, barraca, poço): não feitos.** O teto de 180 créditos acabou nas armas (conceitos e prompts dos adereços estão em `tools/art/remaster-estaticos/prompts.mjs` para uma rodada futura; ~18 créditos cada, 126 no total). Pedidos para subir o teto vieram por mensagem do coordenador, sem confirmação minha do Daniel, e não foram usados.
 2. Rara e épica sem forma própria, varinha e adaga sem forma alta: mais 6 itens de 18 créditos (108).
 3. As armas novas usam textura de 512 px e luz pintada no próprio mapa; a espada é mais fina que a KayKit, vale olhar de perto no jogo.
+
+# Parte 2: forma rara e formas altas da varinha e da adaga (tunnel#97)
+
+Segunda rodada, ainda atrás de `?remaster=1`. Teto: 150 créditos novos (`MESHY_BUDGET=330`, com os 180 da parte 1 no `tasks.jsonl`). Cabem 8 modelos de 18 créditos, então a rodada fez **uma forma rara por família** (6) mais a **forma alta da varinha e da adaga** (2). Todas as famílias ficam com três silhuetas: comum, rara e alta.
+
+## Forma por raridade
+
+O servidor já manda o grau da arma no `weaponGrade` da entidade (`Entity.grade` no cliente; 1 comum, 2 boa, 3 rara, 4 épica, 5 lendária), e `setWeapons` o repassa. A escolha é `remasterWeapon(modelo, grau)` em `remaster.ts`:
+
+| Grau do item | Forma | Brilho de raridade (suave no remaster) |
+|---|---|---|
+| 1 comum, 2 boa | comum (`*_b`) | nenhum |
+| 3 rara | rara (`*_rare_b`) | azul |
+| 4 épica | alta (`*_high_b`) | roxo |
+| 5 lendária | alta (`*_high_b`) | laranja |
+| 0 (monstros, NPCs, criação de personagem) | mapa `REMASTER_WEAPONS` de antes | o do encantamento, se houver |
+
+| Família | Comum | Rara (nova) | Alta | Triângulos (rara / alta nova) |
+|---|---|---|---|---|
+| Espada | reta simples | sabre curvo de aço azulado, guarda prateada em gancho, cabo azul | montante alado | 760 |
+| Machado | uma mão, lâmina lisa | machado barbado com espigão, bandas de latão, cabo azul | machado duplo crescente | 760 |
+| Cajado | madeira retorcida, cristal azul | haste prateada, lua crescente com orbe azul-turquesa | cajado dourado alado, cristal roxo | 755 |
+| Varinha | fina, cristal azul | espiral de madeira escura e prata, cristal facetado turquesa em garras | **nova:** cetro dourado, orbe roxo em coroa de asas | 664 / 760 |
+| Adaga | reta de aço | lâmina ondulada (chama), guarda curva com gema azul | **nova:** lâmina escura com filigrana, guarda alada, gema vermelha | 760 / 758 |
+| Escudo | redondo vermelho e branco | brasão pontudo azul, aro de aço largo, estrela branca | brasão de leão dourado | 759 |
+
+Combinações:
+- O escudo segue o grau da **arma** (o servidor manda um grau só, `weaponGrade`).
+- A **escala** refaz o tamanho que o nome do modelo pede: `sword_2handed` continua maior que `sword_1handed` em qualquer forma (a razão entre os comprimentos de `WEAPON_FILE_LEN`). A pega por arquivo (`WEAPON_GRIPS`) segue o **nome** do modelo e não mudou.
+- Épica e lendária **dividem a silhueta** (a alta); a diferença é só o brilho. Um terceiro modelo para a épica custa mais 6 itens (108 créditos).
+- Os arquivos de forma carregam todos de uma vez com `?remaster=1` (18 arquivos de ~105 KB).
+
+### Brilho mais suave
+
+O brilho de raridade e de encantamento (emissivo) cobria a textura pintada das armas do remaster e escondia a forma (a espada rara virava uma mancha azul). No remaster ele vale 12 % do que valia (`SOFT_GLOW`); sem o parâmetro nada mudou.
+
+## Convenção de encaixe
+
+`client/scripts/normalize-weapons.mjs` ganhou as oito entradas novas (e um filtro por regex dos nomes) com o mesmo método: ponta em +Y, cabo na origem, fundo do cabo no Y do KayKit, escudo com a face para +Z e o verso em z = -0,145. Comprimentos (m): sabre 2,0 (entre a espada de uma e a de duas mãos), machado barbado 1,45, cajado de lua 2,13, varinha rara 0,966, varinha alta 1,1, adaga rara 1,206, adaga alta 1,35, escudo pontudo de altura 1,0. Meshy errou o alvo de 760 triângulos em até 5 % e o normalizador simplificou o que passou de 780. Import: `import-asset.mjs ... arma weapons/<nome>_b --no-lod --resize=512 --etc1s`; `check:assets` verde, 1 material e 512 px em todas, 102 a 110 KB cada.
+
+## Conferência no laboratório
+
+`client/lab.html?remaster=1` ganhou `grade` em cada item (`lab.show({items:[{model, right, left, grade}]})`), que chama `setWeapons` como o jogo. As quatro classes seguraram cada forma (graus 1, 3, 4 e 5) nas pegas de `WEAPON_GRIPS`, sem mudar nenhuma:
+- `formas-espada-machado-parte2.jpg`: cavaleiro com espada de uma mão e escudo redondo, o mesmo com o escudo de brasão, bárbaro com machado e broquel, bárbaro com machado de duas mãos, cavaleiro com montante. Colunas: comum, rara, épica, lendária.
+- `formas-mago-ladino-parte2.jpg`: mago com cajado e com varinha, ladino com duas adagas, nas mesmas quatro colunas.
+- `conceitos-parte2.jpg`: os oito conceitos 2D.
+
+A pega aguentou em todas: cabo na palma, lâmina para a frente, escudo no antebraço. A varinha (a menor das armas) é a que menos se lê de longe em qualquer forma.
+
+## Créditos da parte 2
+
+Conceito 2D (`nano-banana`, 3) e imagem para 3D (`meshy-t2.5`, 15) por item, sem repetir nenhuma task.
+
+| Item | Créditos |
+|---|---|
+| sword_rare, axe_rare, staff_rare, wand_rare, wand_high, dagger_rare, dagger_high | 18 cada (126) |
+| shield_rare | 15 (o conceito veio sem cobrança no registro) |
+| **Total** | **141** (de 150) |
+
+Prompts em `tools/art/remaster-estaticos/prompts-parte2.mjs`. O saldo de conta cai também pelos outros agentes.
+
+## O que ficou em aberto (parte 2)
+
+1. Forma épica própria (hoje a alta vale para a épica e a lendária) em todas as famílias, e a lendária com algo a mais: 12 itens, 216 créditos.
+2. Uma forma boa (grau 2) entre a comum e a rara.
+3. Prints no jogo (com servidor) não foram refeitos; o caminho do grau no jogo é o mesmo do laboratório (`entities.ts` passa `weaponGrade` para `setWeapons`).
+4. Os ícones dos itens continuam SVG desenhados, sem acompanhar a forma nova.

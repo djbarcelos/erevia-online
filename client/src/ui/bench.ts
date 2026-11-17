@@ -1,4 +1,4 @@
-import { SceneInstrumentation, type AbstractEngine, type AbstractMesh, type ArcRotateCamera, type Node, type Scene, type TransformNode } from "@babylonjs/core";
+import { EngineInstrumentation, SceneInstrumentation, type AbstractEngine, type AbstractMesh, type ArcRotateCamera, type Node, type Scene, type TransformNode } from "@babylonjs/core";
 import { EntityKind } from "../gen/erevia/v1/game_pb";
 import type { MapMarker } from "../world/entities";
 import { regionAt, type Region } from "./regions";
@@ -62,6 +62,12 @@ interface Sample {
   fps: number;
   frameMs: number;
   p95Ms: number;
+  /** Pior 1% dos quadros (ms). */
+  p99Ms: number;
+  /** Triângulos desenhados por quadro (inclui sombras e malhas com instâncias). */
+  tris: number;
+  /** Tempo da GPU por quadro (ms, EXT_disjoint_timer_query; 0 se o navegador não oferece). */
+  gpuMs: number;
   cpuMs: number;
   /** Partes do tempo de CPU: desenho da cena, render targets (sombras, brilho), escolha das malhas ativas e animação. */
   renderMs: number;
@@ -89,6 +95,8 @@ export interface BenchResult {
   sceneCensus: CensusRow[];
   /** Entidades por tipo e nome, com as malhas e os nós de cada uma. */
   entities: EntityRow[];
+  /** Texturas carregadas e uma estimativa da memória que ocupam (MB), mais o heap do JS. */
+  memory: { textures: number; textureMB: number; heapMB: number; biggest: { name: string; size: string; mb: number }[] };
 }
 
 interface EntityRow {
@@ -107,6 +115,8 @@ interface CensusRow {
   thin: number;
   skinned: number;
   transformNodes?: number;
+  /** Triângulos do grupo se tudo fosse desenhado (índices / 3 x instâncias), só das malhas ativas. */
+  tris?: number;
 }
 
 /**
@@ -122,7 +132,7 @@ function census(scene: Scene, skip?: Set<Node>): CensusRow[] {
   };
   const row = (g: string) => {
     let r = groups.get(g);
-    if (!r) groups.set(g, (r = { group: g, meshes: 0, enabled: 0, frozen: 0, thin: 0, skinned: 0, transformNodes: 0 }));
+    if (!r) groups.set(g, (r = { group: g, meshes: 0, enabled: 0, frozen: 0, thin: 0, skinned: 0, transformNodes: 0, tris: 0 }));
     return r;
   };
   for (const m of scene.meshes) {
@@ -131,7 +141,9 @@ function census(scene: Scene, skip?: Set<Node>): CensusRow[] {
     r.meshes++;
     if (m.isEnabled()) r.enabled++;
     if (m.isWorldMatrixFrozen) r.frozen++;
-    if ((m as unknown as { thinInstanceCount?: number }).thinInstanceCount) r.thin++;
+    const thinCount = (m as unknown as { thinInstanceCount?: number }).thinInstanceCount ?? 0;
+    if (thinCount) r.thin++;
+    if (m.isEnabled()) r.tris! += (m.getTotalIndices() / 3) * Math.max(thinCount, 1);
     if (m.skeleton) r.skinned++;
   }
   for (const t of scene.transformNodes) if (!skip?.has(t)) row("[nó] " + key(t.name)).transformNodes!++;
@@ -200,12 +212,27 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
   inst.captureRenderTargetsRenderTime = true;
   inst.captureActiveMeshesEvaluationTime = true;
   inst.captureAnimationsTime = true;
+  const gpuInst = new EngineInstrumentation(d.engine);
+  gpuInst.captureGPUFrameTime = true;
   const cam = { alpha: d.camera.alpha, beta: d.camera.beta, radius: d.camera.radius };
   d.camera.alpha = -Math.PI / 2;
   d.camera.beta = 1.0;
   d.camera.radius = 18;
 
-  const points = benchPoints(d.regions, d.bounds);
+  // ?bench=aqui: mede onde o personagem está (região de caça cheia, praça com bots), sem passear a câmera.
+  // Espera window.__ereviaBenchGo (o teste leva o personagem até lá com /tp e liga).
+  const here = new URLSearchParams(location.search).get("bench") === "aqui";
+  let points = benchPoints(d.regions, d.bounds);
+  if (here) {
+    say("Esperando o personagem chegar (window.__ereviaBenchGo)…");
+    for (let i = 0; i < 600 && !(window as unknown as { __ereviaBenchGo?: boolean }).__ereviaBenchGo; i++) await wait(500);
+    let me = { x: 0, z: 0 };
+    d.forEachRoot((e) => {
+      if (e.local) me = { x: e.root.position.x, z: e.root.position.z };
+    });
+    points = [{ region: regionAt(d.regions, me.x, me.z)?.name ?? "Aqui", x: me.x, z: me.z }];
+  }
+  const focusOf = (p: { x: number; z: number }) => (here ? null : p);
   const samples: Sample[] = [];
   const total = points.length * PHASES.length;
   // Volta rápida antes de medir: compila os shaders e carrega o que falta em cada lugar
@@ -214,8 +241,8 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
   for (const ph of PHASES) {
     d.setTime(ph.phase);
     for (const p of points) {
-      d.setFocus(p);
-      await wait(250);
+      d.setFocus(focusOf(p));
+      await wait(here ? 4000 : 250);
     }
   }
   let n = 0;
@@ -224,19 +251,20 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
     for (const p of points) {
       n++;
       say(`Medindo FPS ${n}/${total}: ${p.region}, ${ph.label}…`);
-      d.setFocus(p);
+      d.setFocus(focusOf(p));
       await wait(WARMUP_MS);
-      samples.push({ region: p.region, time: ph.label, x: p.x, z: p.z, ...(await measure(d, inst, p)) });
+      samples.push({ region: p.region, time: ph.label, x: p.x, z: p.z, ...(await measure(d, inst, gpuInst, p)) });
     }
   }
   d.setFocus(null);
   d.setTime(null);
   Object.assign(d.camera, cam);
   inst.dispose();
+  gpuInst.dispose();
 
   const device = deviceInfo(d.engine);
   const table = renderTable(device, samples);
-  const result = { device, samples, table, census: census(d.scene), sceneCensus: census(d.scene, notScenery(d)), entities: entityCensus(d) };
+  const result = { device, samples, table, census: census(d.scene), sceneCensus: census(d.scene, notScenery(d)), entities: entityCensus(d), memory: memoryInfo(d.scene) };
   window.__ereviaBench = { done: true, progress: "pronto", result };
   console.log(table);
 
@@ -274,7 +302,7 @@ function benchPoints(regions: Region[], b: BenchDeps["bounds"]): { region: strin
   return out;
 }
 
-async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number; z: number }) {
+async function measure(d: BenchDeps, inst: SceneInstrumentation, gpuInst: EngineInstrumentation, p: { x: number; z: number }) {
   const dts: number[] = [];
   let cpu = 0;
   let render = 0;
@@ -283,6 +311,9 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
   let anim = 0;
   let draws = 0;
   let active = 0;
+  let tris = 0;
+  let gpuNs = 0;
+  let gpuFrames = 0;
   let frames = 0;
   const start = performance.now();
   await new Promise<void>((done) => {
@@ -295,6 +326,11 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
       anim += inst.animationsTimeCounter.current;
       draws += inst.drawCallsCounter.current;
       active += d.scene.getActiveMeshes().length;
+      tris += d.scene.getActiveIndices() / 3;
+      if (gpuInst.gpuFrameTimeCounter.current > 0) {
+        gpuNs += gpuInst.gpuFrameTimeCounter.current;
+        gpuFrames++;
+      }
       frames++;
       if (performance.now() - start >= sampleMs()) {
         d.scene.onAfterRenderObservable.remove(obs);
@@ -318,6 +354,9 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
     fps: round((frames * 1000) / elapsed, 1),
     frameMs: round(dts.reduce((s, v) => s + v, 0) / Math.max(dts.length, 1), 1),
     p95Ms: round(dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.95))] ?? 0, 1),
+    p99Ms: round(dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.99))] ?? 0, 1),
+    tris: Math.round(tris / f),
+    gpuMs: round(gpuNs / Math.max(gpuFrames, 1) / 1e6, 2),
     cpuMs: round(cpu / f, 1),
     renderMs: round(render / f, 1),
     targetsMs: round(targets / f, 1),
@@ -363,6 +402,28 @@ async function sceneOnly(d: BenchDeps, inst: SceneInstrumentation) {
   }
 }
 
+/**
+ * Memória de GPU das texturas, estimada: KTX2 conta 1 byte por pixel (BC7/ASTC/ETC), o resto 4
+ * (RGBA8), com mipmaps (+33%). Não conta buffers de geometria nem render targets.
+ */
+function memoryInfo(scene: Scene): BenchResult["memory"] {
+  let bytes = 0;
+  let n = 0;
+  const all: { name: string; size: string; mb: number }[] = [];
+  for (const t of scene.textures) {
+    const size = t.getSize();
+    if (!size.width) continue;
+    n++;
+    const url = (t as unknown as { url?: string }).url ?? "";
+    const compressed = /ktx2?$/i.test(url.split("?")[0]) || !!(t.getInternalTexture() as unknown as { _compression?: string } | null)?._compression;
+    const b = size.width * size.height * (compressed ? 1 : 4) * (t.noMipmap ? 1 : 1.33);
+    bytes += b;
+    all.push({ name: (url || t.name).split("/").pop()!.slice(0, 48), size: `${size.width}x${size.height}${compressed ? " ktx2" : ""}`, mb: round(b / 1048576, 1) });
+  }
+  const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0;
+  return { textures: n, textureMB: round(bytes / 1048576, 1), heapMB: round(heap / 1048576, 1), biggest: all.sort((a, b) => b.mb - a.mb).slice(0, 12) };
+}
+
 function deviceInfo(engine: AbstractEngine): Record<string, string | number> {
   const gl = (engine as unknown as { getGlInfo?: () => { renderer: string } }).getGlInfo?.();
   return {
@@ -379,8 +440,8 @@ function deviceInfo(engine: AbstractEngine): Record<string, string | number> {
 function renderTable(device: Record<string, string | number>, samples: Sample[]): string {
   const lines = Object.entries(device).map(([k, v]) => `${k}: ${v}`);
   lines.push("");
-  lines.push("| Região | Hora | FPS | Frame (ms) | p95 (ms) | CPU (ms) | Draws | Malhas ativas / total | Cenário: draws, ativas / total | Jogadores | Monstros |");
-  lines.push("|---|---|---|---|---|---|---|---|---|---|---|");
+  lines.push("| Região | Hora | FPS | Frame (ms) | p95 (ms) | p99 (ms) | CPU (ms) | GPU (ms) | Draws | Triângulos | Malhas ativas / total | Cenário: draws, ativas / total | Jogadores | Monstros |");
+  lines.push("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
   const groups = new Map<string, Sample[]>();
   for (const s of samples) {
     const k = `${s.region}|${s.time}`;
@@ -390,21 +451,22 @@ function renderTable(device: Record<string, string | number>, samples: Sample[])
     const avg = (f: (s: Sample) => number) => round(g.reduce((t, s) => t + f(s), 0) / g.length, 1);
     const max = (f: (s: Sample) => number) => Math.max(...g.map(f));
     lines.push(
-      `| ${g[0].region} | ${g[0].time} | ${avg((s) => s.fps)} | ${avg((s) => s.frameMs)} | ${max((s) => s.p95Ms)} | ` +
-        `${avg((s) => s.cpuMs)} | ${max((s) => s.draws)} | ${max((s) => s.active)} / ${g[0].meshes} | ` +
+      `| ${g[0].region} | ${g[0].time} | ${avg((s) => s.fps)} | ${avg((s) => s.frameMs)} | ${max((s) => s.p95Ms)} | ${max((s) => s.p99Ms)} | ` +
+        `${avg((s) => s.cpuMs)} | ${avg((s) => s.gpuMs)} | ${max((s) => s.draws)} | ${avg((s) => s.tris)} | ${max((s) => s.active)} / ${g[0].meshes} | ` +
         `${max((s) => s.sceneDraws)}, ${max((s) => s.sceneActive)} / ${g[0].sceneMeshes} | ` +
         `${max((s) => s.players)} | ${max((s) => s.monsters)} |`,
     );
   }
   lines.push("");
   lines.push("Onde vai o tempo de CPU (ms por quadro, média):");
-  lines.push("| Região | Hora | CPU | Desenho | Sombras/brilho | Malhas ativas | Animação |");
-  lines.push("|---|---|---|---|---|---|---|");
+  lines.push("| Região | Hora | CPU | Desenho | Sombras/brilho | Malhas ativas | Animação | Resto (lógica, física, interface) |");
+  lines.push("|---|---|---|---|---|---|---|---|");
   for (const g of groups.values()) {
     const avg = (f: (s: Sample) => number) => round(g.reduce((t, s) => t + f(s), 0) / g.length, 1);
     lines.push(
       `| ${g[0].region} | ${g[0].time} | ${avg((s) => s.cpuMs)} | ${avg((s) => s.renderMs)} | ${avg((s) => s.targetsMs)} | ` +
-        `${avg((s) => s.evalMs)} | ${avg((s) => s.animMs)} |`,
+        `${avg((s) => s.evalMs)} | ${avg((s) => s.animMs)} | ` +
+        `${avg((s) => s.cpuMs - s.renderMs - s.targetsMs - s.evalMs - s.animMs)} |`,
     );
   }
   return lines.join("\n");

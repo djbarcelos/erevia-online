@@ -128,6 +128,14 @@ async function download(endpoint, t) {
 async function main() {
   const cmd = pos[0];
   if (cmd === 'balance') { console.log(JSON.stringify(await api('GET', '/v1/balance'))); return; }
+  if (cmd === 'library') {
+    // biblioteca de ações do Meshy (grátis): id e nome, para escolher as ações; grava em assets-src/meshy/library.json
+    const lib = await api('GET', '/v1/animations/library');
+    mkdirSync(OUT, { recursive: true });
+    writeFileSync(resolve(OUT, 'library.json'), JSON.stringify(lib));
+    console.log(`biblioteca: ${(Array.isArray(lib) ? lib : lib.result ?? lib.data ?? []).length} ações`);
+    return;
+  }
   if (cmd === 'spent') { console.log(`gasto registrado: ${spent().total} de ${BUDGET}`); return; }
   if (cmd === 'list-tasks') {
     for (const r of readLog()) console.log(r.ts, r.endpoint, r.id, r.status ?? '', r.est ?? '', r.consumed_credits ?? '', r.name ?? '', r.note ?? '');

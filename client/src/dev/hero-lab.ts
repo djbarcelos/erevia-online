@@ -4,7 +4,8 @@
  * `CharacterModels` do jogo. Os prints dos heróis (docs/arte/remaster-herois/) saem daqui.
  *
  * window.lab.show({ cam: "front"|"side"|"back"|"three", items: [{ model, right, left, role, t, look }] })
- *   role = papel de animação (idle, walk, run, attack, hit, death, buff...), t = 0..1 do clipe.
+ *   role = papel de animação (idle, walk, run, attack, hit, death, buff...), t = 0..1 do clipe,
+ *   grade = grau do item (1-5): escolhe a forma da arma (comum, rara, alta) e o brilho, como no jogo.
  */
 import { ArcRotateCamera, Axis, Quaternion, Color4, Engine, HemisphericLight, DirectionalLight, Scene, TransformNode, Vector3, type AnimationGroup } from "@babylonjs/core";
 import { configureKtx2 } from "../world/assets";
@@ -13,7 +14,7 @@ import { CharacterModels, WEAPON_GRIPS, type AnimRole, type CharacterInstance, t
 import { setBodyPalettes, type BodyLook } from "../world/body-look";
 import { toArmorGrades, type ArmorGrades } from "../world/armor";
 
-interface Item { model: string; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook; armor?: Partial<ArmorGrades> }
+interface Item { model: string; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook; grade?: number; armor?: Partial<ArmorGrades> }
 interface Spec { grips?: Record<string, Grip>; radius?: number; cam?: "front" | "side" | "back" | "three"; items: Item[]; gap?: number; height?: number; settle?: number }
 
 configureKtx2();
@@ -44,6 +45,7 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
 (window as unknown as { lab: unknown }).lab = {
   async show(spec: Spec): Promise<string> {
     await ready;
+    await Promise.all(spec.items.map((i) => models!.ensure(i.model))); // NPCs das outras regiões carregam sob demanda
     Object.assign(WEAPON_GRIPS, spec.grips ?? {});
     for (const i of live) i.dispose();
     live = [];
@@ -53,6 +55,7 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
       const inst = models!.instantiate(it.model, `lab${k}`, { "handslot.r": it.right ?? null, "handslot.l": it.left ?? null }, it.look);
       if (!inst) return;
       if (it.armor) inst.setArmor(toArmorGrades(it.armor)); // raridade das peças (tunnel#96)
+      if (it.grade) inst.setWeapons(it.right ?? null, it.left ?? null, it.grade, 0);
       inst.root.position.x = (k - (n - 1) / 2) * gap;
       const g: AnimationGroup | undefined = inst.anims.get(it.role ?? "idle");
       if (g) {

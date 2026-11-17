@@ -6,12 +6,14 @@ import {
   Matrix,
   Mesh,
   Quaternion,
+  DirectionalLight,
   Scene,
   ShadowGenerator,
   Vector3,
   VertexData,
 } from "@babylonjs/core";
-import { loadNatureKit, natureExtras, remapNature } from "./nature-remaster";
+import { CHUNKS_ON, CHUNK_MIN_TRIS, ShadowCuller, splitByChunk } from "./chunks";
+import { isNatureKind, loadNatureKit, natureExtras, remapNature } from "./nature-remaster";
 import { addRemasterPlaza } from "./plaza-remaster";
 import { REMASTER } from "./remaster";
 import { regionProps, townExtras, wallCorners } from "./town-layout";
@@ -39,6 +41,8 @@ function windKindOf(kind: string): WindKind {
 export interface Environment {
   drawn: number;
   fader: TreeFader;
+  /** Remaster: recortes da natureza que o mapa de sombras enxerga (chamar a cada quadro, depois de mover a luz). */
+  shadowCull: ShadowCuller | null;
 }
 
 /**
@@ -102,6 +106,10 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
   }
 
   const fader = new TreeFader(scene, shadows);
+  // Remaster com ?chunks=1: a natureza vira recortes por célula (chunks.ts), cada um cortado pelo campo de visão e pelo volume da luz.
+  const sun = shadows.getLight();
+  const culler = REMASTER && !world.kits && sun instanceof DirectionalLight ? new ShadowCuller(shadows, sun) : null;
+  const useChunks = CHUNKS_ON && culler !== null;
   const scale = new Vector3();
   const pos = new Vector3();
   const rot = new Quaternion();
@@ -125,27 +133,44 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
     const fades = FADES.test(kind);
     if (fades) fader.addKind(kind, mesh);
 
-    const buf = new Float32Array(list.length * 16);
-    list.forEach((o, i) => {
-      scale.set(o.s[0], o.s[1], o.s[2]);
-      Quaternion.RotationYawPitchRollToRef(o.r, 0, 0, rot);
-      pos.set(o.x, heightAt(o.x, o.z), o.z);
-      Matrix.ComposeToRef(scale, rot, pos, m);
-      m.copyToArray(buf, i * 16);
-      if (fades) fader.addTree(kind, i, o, m);
-    });
-    // Árvores podem ter instâncias escondidas/reveladas: buffer atualizável.
-    mesh.thinInstanceSetBuffer("matrix", buf, 16, !fades);
-    mesh.thinInstanceRefreshBoundingInfo(false);
-    prepareStatic(mesh);
-    if (CASTS_SHADOW.test(kind)) shadows.addShadowCaster(mesh, false);
-    if (RECEIVES_SHADOW.test(kind)) mesh.receiveShadows = true;
+    const chunked = useChunks && isNatureKind(kind) && (mesh.getTotalIndices() / 3) * list.length >= CHUNK_MIN_TRIS;
+    const groups = chunked ? [...splitByChunk(list)] : [["", list] as const];
+    // Cada recorte precisa da própria geometria: o buffer das thin instances entra como buffer de vértices dela
+    // (um clone que divide a geometria com os outros sobrescreveria as matrizes dos vizinhos).
+    for (const [cell, items] of groups) {
+      let target = mesh;
+      if (chunked) {
+        // clone() mantém tudo do molde (material, orientação das faces, cores); a geometria troca por uma cópia.
+        target = mesh.clone(`${mesh.name}@${cell}`, null, true)!;
+        mesh.geometry!.copy(`${mesh.geometry!.id}@${cell}`).applyToMesh(target);
+      }
+      const buf = new Float32Array(items.length * 16);
+      items.forEach((o, i) => {
+        scale.set(o.s[0], o.s[1], o.s[2]);
+        Quaternion.RotationYawPitchRollToRef(o.r, 0, 0, rot);
+        pos.set(o.x, heightAt(o.x, o.z), o.z);
+        Matrix.ComposeToRef(scale, rot, pos, m);
+        m.copyToArray(buf, i * 16);
+        if (fades) fader.addTree(kind, i, o, m, target);
+      });
+      // Árvores podem ter instâncias escondidas/reveladas: buffer atualizável.
+      target.thinInstanceSetBuffer("matrix", buf, 16, !fades);
+      target.thinInstanceRefreshBoundingInfo(false);
+      prepareStatic(target);
+      if (CASTS_SHADOW.test(kind)) {
+        if (chunked) culler!.add(target);
+        else shadows.addShadowCaster(target, false);
+      }
+      if (RECEIVES_SHADOW.test(kind)) target.receiveShadows = true;
+    }
+    // O molde dos recortes não se desenha.
+    if (chunked) mesh.setEnabled(false);
     drawn += list.length;
   }
   // Protótipos não usados no layout ficam invisíveis.
   for (const [kind, mesh] of protos) if (!byKind.has(kind)) mesh.setEnabled(false);
   if (REMASTER) await addRemasterPlaza(scene, shadows);
-  return { drawn, fader };
+  return { drawn, fader, shadowCull: useChunks ? culler : null };
 }
 
 function prepareStatic(mesh: AbstractMesh): void {
@@ -176,6 +201,8 @@ interface KindInfo {
 
 interface Tree {
   kind: KindInfo;
+  /** Malha com as instâncias (o molde, ou o recorte da célula, no remaster) e o índice dentro dela. */
+  mesh: Mesh;
   index: number;
   matrix: Matrix;
   /** Copa como esfera. */
@@ -228,12 +255,12 @@ export class TreeFader {
     return fade;
   }
 
-  addTree(kind: string, index: number, o: WorldData["objects"][number], matrix: Matrix): void {
+  addTree(kind: string, index: number, o: WorldData["objects"][number], matrix: Matrix, mesh?: Mesh): void {
     const info = this.kinds.get(kind)!;
     const h = info.height * o.s[1];
     const w = info.width * Math.max(o.s[0], o.s[2]);
     // Copa: esfera um pouco acima do meio da árvore, sem passar da metade da largura.
-    const tree: Tree = { kind: info, index, matrix: matrix.clone(), cx: o.x, cy: heightAt(o.x, o.z) + h * 0.62, cz: o.z, r: Math.min(w / 2, h * 0.4) };
+    const tree: Tree = { kind: info, mesh: mesh ?? info.proto, index, matrix: matrix.clone(), cx: o.x, cy: heightAt(o.x, o.z) + h * 0.62, cz: o.z, r: Math.min(w / 2, h * 0.4) };
     const key = cellKey(Math.floor(o.x / CELL), Math.floor(o.z / CELL));
     let list = this.grid.get(key);
     if (!list) this.grid.set(key, (list = []));
@@ -251,7 +278,7 @@ export class TreeFader {
     for (const t of this.seen) {
       if (this.faded.has(t)) continue;
       this.faded.set(t, this.takeCopy(t));
-      t.kind.proto.thinInstanceSetMatrixAt(t.index, ZERO, true);
+      t.mesh.thinInstanceSetMatrixAt(t.index, ZERO, true);
     }
 
     const k = 1 - Math.exp(-FADE_RATE * dt);
@@ -264,7 +291,7 @@ export class TreeFader {
 
   /** Voltou ao normal: devolve a árvore ao buffer e a cópia ao estoque. */
   private restore(t: Tree, copy: Mesh): void {
-    t.kind.proto.thinInstanceSetMatrixAt(t.index, t.matrix, true);
+    t.mesh.thinInstanceSetMatrixAt(t.index, t.matrix, true);
     copy.setEnabled(false);
     t.kind.pool.push(copy);
     this.faded.delete(t);

@@ -26,7 +26,7 @@ import { reportClientError } from "../net/errors";
 import { RoleMap } from "./anim";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, REMASTER, REMASTER_FILES, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS } from "./remaster";
+import { lodFor, REMASTER, REMASTER_FILES, REMASTER_LAZY, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS, WEAPON_FORM_FILES, remasterWeapon } from "./remaster";
 import { armorKey, bodyTier, capeFile, helmFile, NO_ARMOR, pauldronFile, TIER_FILES, type ArmorGrades } from "./armor";
 import { ARMOR_ATTACH } from "./armor-attach";
 import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
@@ -170,6 +170,25 @@ const REMASTER_SETS: Record<string, AnimSet> = {
   ozrhal: { idle: "OZ_Idle", walk: "OZ_Walk", run: "OZ_Run", attack: "OZ_Attack", skill: "OZ_Stomp", buff: "OZ_Roar", hit: "OZ_Hit", death: "OZ_Death" },
 };
 /**
+ * NPCs do remaster (docs/arte/remaster-npcs.md): parado próprio, duas pausas (olhar em volta e o gesto do ofício) e o
+ * "cumprimento" (`buff`) que toca quando o jogador abre a conversa ou a loja. NPC não anda nem apanha: os papéis de
+ * combate caem no cumprimento só para o conjunto ficar completo.
+ */
+function npcSet(p: string): AnimSet {
+  return {
+    idle: `${p}Idle`, walk: `${p}Walk`, run: `${p}Run`, attack: `${p}Greet`, skill: `${p}Greet`, buff: `${p}Greet`, hit: `${p}Greet`, death: `${p}Greet`,
+    break1: `${p}Break1`, break2: `${p}Break2`,
+  };
+}
+/** Prefixo dos clipes no arquivo de cada NPC (o adaptador guarda os clipes de todos os modelos num mapa só). */
+export const NPC_CLIP_PREFIX: Record<string, string> = {
+  npc_livia: "LV_", npc_bruno: "BR_", npc_teodoro: "TD_", npc_otto: "OT_", npc_ysolde: "YS_", npc_edrian: "ED_", npc_severino: "SV_",
+  npc_iselda: "IS_", npc_cassio: "CS_", npc_guarda: "GD_", npc_anselmo: "AN_", npc_marga: "MG_", npc_darcio: "DC_", npc_maelis: "ML_",
+  npc_gaspar: "GS_", npc_rovena: "RV_",
+};
+for (const [m, p] of Object.entries(NPC_CLIP_PREFIX)) REMASTER_SETS[m] = npcSet(p);
+
+/**
  * Conjunto de clipes quando o herói segura uma arma de duas mãos (e a esquerda está vazia): parado, andar e
  * correr com as duas mãos juntas na frente do peito (compose-2h-clips.mjs). O bárbaro é o único hoje; sem
  * pausas do parado (os braços ficam presos à arma). null tira o papel do conjunto.
@@ -249,6 +268,10 @@ const WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
   npc_merchant: {},
   npc_smith: { "handslot.r": "axe_1handed" },
 };
+/** Ferramenta na mão dos NPCs do remaster (arquivo da arma): o ferreiro leva o martelo (machado de uma mão). */
+const NPC_WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
+  npc_bruno: { "handslot.r": "axe_1handed" }, // o gesto do ofício é o martelo; sem martelo no jogo, a ferramenta de uma mão de sempre
+};
 /** Todas as armas que os itens podem mostrar na mão. */
 const ITEM_WEAPONS = [
   "sword_1handed", "sword_2handed", "sword_2handed_color", "axe_1handed", "axe_2handed", "staff", "wand", "dagger",
@@ -262,6 +285,9 @@ const GRADE_GLOW: Record<number, Color3> = { 3: new Color3(0.15, 0.35, 0.9), 4: 
 const LEGEND_GLOW = new Color3(0.1, 0.075, 0.02);
 /** Encantamento: +4 a +6 brilha dourado; +7 ou mais, dourado forte e pulsando. */
 const ENCHANT_GLOW = { light: new Color3(0.45, 0.33, 0.08), strong: new Color3(1, 0.72, 0.22) };
+
+/** Fração do brilho de raridade e de encantamento nas armas do remaster. */
+const SOFT_GLOW = 0.12;
 
 /** Qual brilho a arma usa: o do encantamento vence o da raridade. */
 function glowKey(grade: number, enchant: number): string | null {
@@ -318,6 +344,8 @@ interface ModelAssets {
 
 /** Escala extra das armas do remaster que dividem o arquivo com outra (REMASTER_WEAPONS). */
 const weaponScale = new Map<AssetContainer, number>();
+/** Formas por raridade das armas do remaster (WEAPON_FORM_FILES), por arquivo. */
+const weaponForms = new Map<string, AssetContainer>();
 
 export class CharacterModels {
   private constructor(
@@ -541,12 +569,15 @@ export class CharacterModels {
       });
     const tryLoad = (file: string) => load(file).catch(() => null);
 
-    const allWeapons = { ...WEAPONS, ...MONSTER_WEAPONS };
+    const allWeapons = { ...WEAPONS, ...MONSTER_WEAPONS, ...NPC_WEAPONS };
     const weaponFiles = [...new Set([...Object.values(allWeapons).flatMap((w) => Object.values(w)), ...ITEM_WEAPONS])];
     // stone_golem e os chefes só têm arquivo no remaster; sem ele o golem é o de código e os chefes reaproveitam os esqueletos.
-    const modelIds = [...Object.keys(WEAPONS), ...MONSTER_MODELS, ...(REMASTER ? ["stone_golem", ...REMASTER_ONLY] : [])];
+    // Os mais pesados e raros (golem, chefes: ~14 MB) ficam de fora e baixam sob demanda (ensure).
+    const modelIds = [...Object.keys(WEAPONS), ...MONSTER_MODELS, ...(REMASTER ? ["stone_golem", ...REMASTER_ONLY] : [])].filter(
+      (id) => !(REMASTER && REMASTER_LAZY.includes(id)),
+    );
 
-    const [animContainers, weaponList, bodies] = await Promise.all([
+    const [animContainers, weaponList, bodies, formList] = await Promise.all([
       Promise.all(ANIM_FILES.map(load)),
       // ?remaster=1: a arma nova no lugar (e o KayKit de sempre se o arquivo faltar).
       Promise.all(
@@ -565,17 +596,19 @@ export class CharacterModels {
           return [id, rm ?? (await tryLoad(`${id}.glb`)), !!rm] as const;
         }),
       ),
+      // ?remaster=1: as formas por raridade (comum, rara e alta de cada família); o grau do item escolhe uma.
+      Promise.all(WEAPON_FORM_FILES.filter(() => REMASTER).map(async (f) => [f, await tryLoad(`weapons/${f}.glb`)] as const)),
     ]);
+    for (const [f, c] of formList) if (c) weaponForms.set(f, c);
     const weaponByFile = new Map(weaponList);
     // Material de paleta: personagens, monstros e armas com a borda e o degradê mais fortes
     // que o cenário. As cópias (repintura, brilho) herdam o tipo.
-    for (const c of [...bodies.map(([, b]) => b), ...weaponList.map(([, w]) => w)]) {
+    for (const c of [...bodies.map(([, b]) => b), ...weaponList.map(([, w]) => w), ...formList.map(([, w]) => w)]) {
       for (const m of c?.materials ?? []) setPaletteKind(m, "char");
     }
 
     const models = new Map<string, ModelAssets>();
-    for (const [id, body, remaster] of bodies) {
-      if (!body) continue;
+    const register = (id: string, body: AssetContainer, remaster: boolean) => {
       const weapons: ModelAssets["weapons"] = {};
       for (const [slot, file] of Object.entries(allWeapons[id] ?? {}) as [Slot, string][]) {
         const w = weaponByFile.get(file);
@@ -586,7 +619,8 @@ export class CharacterModels {
       const maskFile = remaster ? REMASTER_MASKS[id] : undefined;
       const mask = maskFile ? new Texture(`${BASE}${maskFile}`, scene, true, false) : null;
       models.set(id, { body, weapons, scale: measureScale(body, id, remaster ? REMASTER_HEIGHTS[id] : undefined), heads, remaster, mask });
-    }
+    };
+    for (const [id, body, remaster] of bodies) if (body) register(id, body, remaster);
 
     // Os grupos de animação servem de molde; não tocam sozinhos.
     const templates = new Map<string, AnimationGroup>();
@@ -599,17 +633,71 @@ export class CharacterModels {
     const idle = templates.get("Idle_A");
     const death = templates.get("Death_A");
     if (idle && death) templates.set(SIT_POSE, buildSitPose(idle, death, scene));
-    return new CharacterModels(models, templates, weaponByFile, scene);
+    const result = new CharacterModels(models, templates, weaponByFile, scene);
+    // Corpos sob demanda (REMASTER_LAZY): mesmo caminho dos de sempre.
+    result.lazyLoader = async (id) => {
+      const file = REMASTER_FILES[id];
+      const body = file ? await tryLoad(`${file}.glb`) : null;
+      if (!body) return false;
+      for (const m of body.materials) setPaletteKind(m, "char");
+      register(id, body, true);
+      for (const g of body.animationGroups) {
+        g.stop();
+        templates.set(g.name, g);
+      }
+      return true;
+    };
+    return result;
+  }
+
+  /** Carrega o corpo de ensure(). */
+  private lazyLoader: ((id: string) => Promise<boolean>) | null = null;
+  private lazyLoads = new Map<string, Promise<boolean>>();
+  /** Avisa quando um corpo sob demanda chegou (as entidades que esperavam trocam a cápsula pelo modelo). */
+  onModelReady: ((id: string) => void) | null = null;
+
+  /** O modelo existe no jogo mas ainda não foi baixado (golem e chefes do remaster)? */
+  pending(model: string): boolean {
+    return REMASTER && REMASTER_LAZY.includes(model) && !this.models.has(model);
+  }
+
+  /** Baixa um corpo sob demanda (uma vez só). Resolve true quando está pronto. */
+  ensure(model: string): Promise<boolean> {
+    if (!this.pending(model) || !this.lazyLoader) return Promise.resolve(this.models.has(model));
+    let p = this.lazyLoads.get(model);
+    if (!p) {
+      p = this.lazyLoader(model).then((ok) => {
+        if (ok) this.onModelReady?.(model);
+        return ok;
+      });
+      this.lazyLoads.set(model, p);
+    }
+    return p;
+  }
+
+  /**
+   * Baixa os corpos sob demanda no tempo ocioso, um de cada vez, para o chefe já estar pronto quando o jogador
+   * chegar. Fica de fora com "economizar dados" e em rede lenta (2G/3G): lá só baixam quando aparecem.
+   */
+  prefetchLazy(): void {
+    const c = (navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (c?.saveData || (c?.effectiveType && c.effectiveType !== "4g")) return;
+    void (async () => {
+      for (const id of REMASTER_LAZY) if (this.pending(id)) await this.ensure(id);
+    })();
   }
 
   /** Cópia do material com brilho (uma por material + tipo de brilho; "e2" pulsa). */
-  private glowMaterial(base: Material, glow: string): Material {
-    const key = `${base.uniqueId}:${glow}`;
+  private glowMaterial(base: Material, glow: string, soft = false): Material {
+    const key = `${base.uniqueId}:${glow}${soft ? "s" : ""}`;
     let mat = this.glowMats.get(key);
     if (!mat) {
       mat = base.clone(`${base.name}-${glow}`) ?? base;
-      const c =
-        glow === "e2" ? ENCHANT_GLOW.strong.clone() : glow === "e1" ? ENCHANT_GLOW.light : GRADE_GLOW[Number(glow.slice(1))];
+      // Remaster (soft): as armas têm luz pintada e a forma é o que diz a raridade; o brilho é um toque, não uma mancha.
+      const f = soft ? SOFT_GLOW : 1;
+      const c = (
+        glow === "e2" ? ENCHANT_GLOW.strong.clone() : glow === "e1" ? ENCHANT_GLOW.light : GRADE_GLOW[Number(glow.slice(1))]
+      ).scale(f);
       const target = mat instanceof PBRMaterial || mat instanceof StandardMaterial ? mat : null;
       if (target) target.emissiveColor = c;
       if (glow === "e2" && target) {
@@ -617,7 +705,7 @@ export class CharacterModels {
         const scene = mat.getScene();
         scene.onBeforeRenderObservable.add(() => {
           const k = 0.55 + 0.45 * Math.sin(performance.now() / 260);
-          target.emissiveColor.copyFromFloats(ENCHANT_GLOW.strong.r * k, ENCHANT_GLOW.strong.g * k, ENCHANT_GLOW.strong.b * k);
+          target.emissiveColor.copyFromFloats(ENCHANT_GLOW.strong.r * k * f, ENCHANT_GLOW.strong.g * k * f, ENCHANT_GLOW.strong.b * k * f);
         });
       }
       this.glowMats.set(key, mat);
@@ -689,7 +777,11 @@ export class CharacterModels {
       heldFile.delete(slot);
       const hand = byName.get(slot);
       if (!hand || !container) return;
-      const w = container.instantiateModelsToScene((n) => `${n}#${id}`, false);
+      // Remaster: o grau do item troca a forma (comum, rara ou alta) e a escala que o nome do modelo pede.
+      const name = this.weaponFileOf.get(container) ?? "";
+      const form = assets.remaster && grade > 0 ? remasterWeapon(name, grade) : undefined;
+      const formC = form ? weaponForms.get(form.file) : undefined;
+      const w = (formC ?? container).instantiateModelsToScene((n) => `${n}#${id}`, false);
       const wRoot = w.rootNodes[0] as TransformNode;
       // O __root__ do glTF converte o sistema de coordenadas; dentro do esqueleto isso já foi
       // feito, então prendemos o filho direto e descartamos o __root__ da arma.
@@ -709,13 +801,13 @@ export class CharacterModels {
           new Vector3(use.pos[0] * mirror, use.pos[1], use.pos[2]).rotateByQuaternionToRef(SLOT_INV, child.position);
           if (grip.scale) child.scaling.scaleInPlace(grip.scale);
         }
-        const ws = weaponScale.get(container);
+        const ws = formC ? form?.scale : weaponScale.get(container);
         if (ws) child.scaling.scaleInPlace(ws);
         nodes.push(child);
         const glow = glowKey(grade, enchant);
         if (glow) {
-          for (const m of child.getChildMeshes(false)) if (m.material) m.material = this.glowMaterial(m.material, glow);
-          if (child instanceof AbstractMesh && child.material) child.material = this.glowMaterial(child.material, glow);
+          for (const m of child.getChildMeshes(false)) if (m.material) m.material = this.glowMaterial(m.material, glow, assets.remaster);
+          if (child instanceof AbstractMesh && child.material) child.material = this.glowMaterial(child.material, glow, assets.remaster);
         }
       }
       wRoot.dispose();
