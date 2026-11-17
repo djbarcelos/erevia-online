@@ -1157,6 +1157,9 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 	}
 	if e.obj != nil {
 		out.Title = "Estandarte"
+		if e.obj.title != "" {
+			out.Title = e.obj.title // túmulo do chefe de campo: hora da morte e quem mais bateu
+		}
 	}
 	return out
 }

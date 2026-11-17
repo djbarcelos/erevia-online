@@ -18,6 +18,7 @@ type objectState struct {
 	owner  uint32
 	until  float64
 	banner *game.BannerDef
+	title  string // túmulo do chefe de campo: a dica (fieldboss.go)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -138,6 +139,9 @@ func (z *Zone) updateAuras() {
 			continue
 		}
 		b := o.obj.banner
+		if b == nil {
+			continue // túmulo: só some com o tempo
+		}
 		owner := z.players[o.obj.owner]
 		for _, p := range z.players {
 			if owner != nil && !p.dead && z.allies(owner, p) && dist(p.pos, o.pos) <= b.Radius {

@@ -142,16 +142,17 @@ export class RaidDirector {
   update(): void {
     let bar: Parameters<RaidUi["setBar"]>[0] = null;
     for (const b of this.bosses.values()) {
-      if (!b.raid) continue;
+      const field = !b.raid && b.phaseMarks.length > 0; // chefe de campo: só a barra, sem coroa nem aura
+      if (!b.raid && !field) continue;
       const info = this.entities.info(b.id);
       if (!info || info.dead || !b.alive) {
         this.undecorate(b.id);
         continue;
       }
-      this.decorate(b);
+      if (!field) this.decorate(b);
       const root = this.entities.rootOf(b.id);
       if (root && this.distanceToMe(root.position.x, root.position.z) <= BAR_DISTANCE) {
-        bar = { name: info.name, hp: info.hp, maxHp: info.maxHp, phase: b.phase, enraged: b.enraged, final: b.finalEnrage, fightStartMs: Number(b.fightStartMs) };
+        bar = { name: info.name, hp: info.hp, maxHp: info.maxHp, phase: b.phase, enraged: b.enraged, final: b.finalEnrage, fightStartMs: Number(b.fightStartMs), marks: b.phaseMarks };
       }
     }
     this.ui.setBar(bar);

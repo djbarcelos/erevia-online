@@ -8484,6 +8484,9 @@ type BossStatus struct {
 	Enraged       bool   `protobuf:"varint,11,opt,name=enraged,proto3" json:"enraged,omitempty"`                                 // raid: fúria (abaixo de 20%)
 	FinalEnrage   bool   `protobuf:"varint,12,opt,name=final_enrage,json=finalEnrage,proto3" json:"final_enrage,omitempty"`      // raid: fúria final (luta longa demais)
 	FightStartMs  int64  `protobuf:"varint,13,opt,name=fight_start_ms,json=fightStartMs,proto3" json:"fight_start_ms,omitempty"` // raid: início da luta (0 = parado)
+	// Chefe de campo (tunnel#132): a vida (fração, de 0 a 1) em que cada fase depois da 1 começa.
+	// Vazio no raid: a barra usa as marcas dele (70% e 40%).
+	PhaseMarks    []float32 `protobuf:"fixed32,14,rep,packed,name=phase_marks,json=phaseMarks,proto3" json:"phase_marks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -8607,6 +8610,13 @@ func (x *BossStatus) GetFightStartMs() int64 {
 		return x.FightStartMs
 	}
 	return 0
+}
+
+func (x *BossStatus) GetPhaseMarks() []float32 {
+	if x != nil {
+		return x.PhaseMarks
+	}
+	return nil
 }
 
 // Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro da forma.
@@ -16605,7 +16615,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\bAnnounce\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12+\n" +
-	"\x04kind\x18\x03 \x01(\x0e2\x17.erevia.v1.AnnounceKindR\x04kind\"\xd1\x02\n" +
+	"\x04kind\x18\x03 \x01(\x0e2\x17.erevia.v1.AnnounceKindR\x04kind\"\xf2\x02\n" +
 	"\n" +
 	"BossStatus\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
@@ -16621,7 +16631,9 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	" \x01(\rR\x05phase\x12\x18\n" +
 	"\aenraged\x18\v \x01(\bR\aenraged\x12!\n" +
 	"\ffinal_enrage\x18\f \x01(\bR\vfinalEnrage\x12$\n" +
-	"\x0efight_start_ms\x18\r \x01(\x03R\ffightStartMs\"\xbc\x03\n" +
+	"\x0efight_start_ms\x18\r \x01(\x03R\ffightStartMs\x12\x1f\n" +
+	"\vphase_marks\x18\x0e \x03(\x02R\n" +
+	"phaseMarks\"\xbc\x03\n" +
 	"\tTelegraph\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12,\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x18.erevia.v1.TelegraphKindR\x04kind\x12\f\n" +
