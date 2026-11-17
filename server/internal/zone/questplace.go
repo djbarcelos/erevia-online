@@ -70,7 +70,28 @@ func (z *Zone) deliverPlace(p *entity, s game.QuestStep) (game.QuestPlace, bool)
 	if pl, ok := z.shopPlace(p, game.QuestStep{Goal: game.GoalBuy, Target: s.Target}); ok {
 		return pl, true
 	}
+	if pl, ok := z.craftPlace(p, s.Target); ok { // o que o Ferreiro faz (o Antídoto): onde criar
+		return pl, true
+	}
 	return game.HuntPlace(z.cfg.Spawns, game.LootSources(s.Target), p.level, p.pos.X, p.pos.Z)
+}
+
+// craftPlace: o Ferreiro mais perto, se o item é o resultado de uma receita dele.
+func (z *Zone) craftPlace(p *entity, item string) (game.QuestPlace, bool) {
+	made := false
+	for _, r := range game.RecipeList {
+		if r.Result == item {
+			made = true
+		}
+	}
+	if !made {
+		return game.QuestPlace{}, false
+	}
+	n := z.nearestNPC(p, func(n *entity) bool { return n.npc.crafts })
+	if n == nil {
+		return game.QuestPlace{}, false
+	}
+	return game.QuestPlace{Kind: game.PlaceShop, X: n.pos.X, Z: n.pos.Z, Radius: npcPlaceR, Name: n.name}, true
 }
 
 func nearestGate(pos Vec2) game.QuestPlace {

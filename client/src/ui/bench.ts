@@ -284,6 +284,13 @@ function benchPoints(regions: Region[], b: BenchDeps["bounds"]): { region: strin
   const out: { region: string; x: number; z: number }[] = [];
   const inside = (x: number, z: number) => x > b.minX + 10 && x < b.maxX - 10 && z > b.minZ + 10 && z < b.maxZ - 10;
   for (const r of regions) {
+    if (r.rect) {
+      // Bioma retangular: o Posto (a entrada), o meio e o fundo, em volta da lagoa.
+      const { minX, maxX, minZ, maxZ } = r.rect;
+      const pts: [number, number][] = [[0.1, 0.5], [0.5, 0.2], [0.5, 0.8], [0.85, 0.5]];
+      for (const [u, v] of pts) out.push({ region: r.name, x: Math.round(minX + (maxX - minX) * u), z: Math.round(minZ + (maxZ - minZ) * v) });
+      continue;
+    }
     if (r.area) {
       out.push({ region: r.name, x: r.area.x, z: r.area.z });
       continue;

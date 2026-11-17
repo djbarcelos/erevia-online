@@ -26,7 +26,7 @@ import { reportClientError } from "../net/errors";
 import { RoleMap } from "./anim";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, REMASTER, REMASTER_FILES, REMASTER_LAZY, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS, WEAPON_FORM_FILES, remasterWeapon } from "./remaster";
+import { lodFor, MODEL_FALLBACK, REMASTER, REMASTER_FILES, REMASTER_LAZY, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_NO_PREFETCH, REMASTER_ONLY, REMASTER_WEAPONS, WEAPON_FORM_FILES, remasterWeapon } from "./remaster";
 import { armorKey, bodyTier, capeFile, helmFile, NO_ARMOR, pauldronFile, TIER_FILES, type ArmorGrades } from "./armor";
 import { ARMOR_ATTACH } from "./armor-attach";
 import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
@@ -145,7 +145,11 @@ const FOOT_SPEEDS_KAYKIT: Record<string, { walk?: number; run: number }> = {
 const FOOT_SPEEDS_REMASTER: Record<string, { walk?: number; run: number }> = {
   knight: { walk: 1.36, run: 4.13 }, barbarian: { walk: 1.39, run: 4.23 }, mage: { walk: 1.29, run: 3.79 }, rogue: { walk: 1.41, run: 4.44 },
   skeleton_warrior: { walk: 1.52, run: 4.77 }, skeleton_minion: { walk: 0.92, run: 2.42 }, skeleton_rogue: { walk: 1.42, run: 4.45 },
-  skeleton_mage: { walk: 1.5, run: 4.91 }, stone_golem: { walk: 0.56, run: 5.63 }, bone_lord: { walk: 1.36, run: 4.15 }, ozrhal: { walk: 1.45, run: 4.43 },
+  skeleton_mage: { walk: 1.5, run: 4.91 },
+  brejeiro: { walk: 1.4, run: 4.4 }, // o rig mixamo de 1,8 m, como o ladino (tunnel#139)
+  // Famílias (tunnel#135): medido no Blender, tools/art/familias-monstro/speeds.py. Aranha e lodo correm com uma cópia do andar (clipe com nome próprio: o Babylon guarda um grupo por nome).
+  wolf: { walk: 0.87, run: 1.3 }, spider: { walk: 0.66, run: 0.66 }, slime: { walk: 0.9, run: 0.9 }, frog: { walk: 0.85, run: 1.46 },
+  stone_golem: { walk: 0.56, run: 5.63 }, bone_lord: { walk: 1.36, run: 4.15 }, ozrhal: { walk: 1.45, run: 4.43 },
 };
 
 /** Conjunto de clipes de um herói do remaster: prefixo do arquivo + o clipe de cada papel (docs/arte/remaster-herois.md). */
@@ -166,8 +170,15 @@ const REMASTER_SETS: Record<string, AnimSet> = {
   skeleton_rogue: { idle: "RG_Idle", walk: "RG_Walk", run: "RG_Run", attack: "RG_Attack", skill: "RG_Skill", buff: "RG_Idle", hit: "RG_Hit", death: "RG_Death" },
   skeleton_mage: { idle: "MG_Idle", walk: "MG_Walk", run: "MG_Run", attack: "MG_Attack", skill: "MG_Cast", buff: "MG_Cast", hit: "MG_Hit", death: "MG_Death" },
   stone_golem: { idle: "GL_Idle", walk: "GL_Walk", run: "GL_Run", attack: "GL_Attack", skill: "GL_Slam", buff: "GL_Roar", hit: "GL_Hit", death: "GL_Death" },
+  // Famílias (tunnel#135): ver docs/arte/familias-monstro.md. Sem rugido nem esmagar nos pacotes: o buff cai no parado.
+  wolf: { idle: "WF_Idle", walk: "WF_Walk", run: "WF_Run", attack: "WF_Attack", skill: "WF_Attack", buff: "WF_Idle", hit: "WF_Hit", death: "WF_Death", break1: "WF_Break1", break2: "WF_Break2" },
+  spider: { idle: "SP_Idle", walk: "SP_Walk", run: "SP_Run", attack: "SP_Attack", skill: "SP_Attack", buff: "SP_Idle", hit: "SP_Hit", death: "SP_Death" },
+  slime: { idle: "SL_Idle", walk: "SL_Walk", run: "SL_Run", attack: "SL_Attack", skill: "SL_Attack", buff: "SL_Idle", hit: "SL_Hit", death: "SL_Death" },
+  frog: { idle: "FR_Idle", walk: "FR_Walk", run: "FR_Run", attack: "FR_Attack", skill: "FR_Attack", buff: "FR_Idle", hit: "FR_Hit", death: "FR_Death" },
   bone_lord: { idle: "BL_Idle", walk: "BL_Walk", run: "BL_Run", attack: "BL_Attack", skill: "BL_Slam", buff: "BL_Raise", hit: "BL_Hit", death: "BL_Death" },
   ozrhal: { idle: "OZ_Idle", walk: "OZ_Walk", run: "OZ_Run", attack: "OZ_Attack", skill: "OZ_Stomp", buff: "OZ_Roar", hit: "OZ_Hit", death: "OZ_Death" },
+  // Brejeiro (tunnel#139): as ações do Meshy são Idle, Thrust Slash (a estocada de lança, golpe e habilidade), Hit Reaction 1 e Dead.
+  brejeiro: { idle: "BJ_Idle", walk: "BJ_Walk", run: "BJ_Run", attack: "BJ_Attack", skill: "BJ_Attack", buff: "BJ_Idle", hit: "BJ_Hit", death: "BJ_Death" },
 };
 /**
  * NPCs do remaster (docs/arte/remaster-npcs.md): parado próprio, duas pausas (olhar em volta e o gesto do ofício) e o
@@ -206,8 +217,14 @@ CLIP_IMPACT.KB_Skill = 16 / 30;
 CLIP_IMPACT.MN_Attack = 0.6;
 CLIP_IMPACT.RG_Attack = 0.53;
 CLIP_IMPACT.RG_Skill = 0.5;
+CLIP_IMPACT.BJ_Attack = 0.5; // a estocada do Brejeiro (o mesmo Thrust Slash do ladino)
 CLIP_IMPACT.MG_Attack = 0.47;
 CLIP_IMPACT.MG_Cast = 1.3;
+// Famílias (tunnel#135): fim do movimento rápido do osso que bate, medido no Blender (tools/art/familias-monstro/impact.py).
+CLIP_IMPACT.WF_Attack = 1.08;
+CLIP_IMPACT.SP_Attack = 0.46;
+CLIP_IMPACT.SL_Attack = 0.33;
+CLIP_IMPACT.FR_Attack = 0.46;
 CLIP_IMPACT.GL_Attack = 1.23;
 CLIP_IMPACT.GL_Slam = 1.3;
 CLIP_IMPACT.GL_Roar = 1.7;
@@ -683,7 +700,7 @@ export class CharacterModels {
     const c = (navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
     if (c?.saveData || (c?.effectiveType && c.effectiveType !== "4g")) return;
     void (async () => {
-      for (const id of REMASTER_LAZY) if (this.pending(id)) await this.ensure(id);
+      for (const id of REMASTER_LAZY) if (!REMASTER_NO_PREFETCH.includes(id) && this.pending(id)) await this.ensure(id);
     })();
   }
 
@@ -727,6 +744,7 @@ export class CharacterModels {
    * `weapons` troca o que vai em cada mão (null = mão vazia); sem ele, usa as armas padrão.
    */
   instantiate(model: string, id: string, weapons?: Partial<Record<Slot, string | null>>, look?: BodyLook): CharacterInstance | null {
+    if (!this.models.has(model) && MODEL_FALLBACK[model]) model = MODEL_FALLBACK[model]; // família ainda sem arquivo (remaster.ts)
     // Golem: modelado e animado em código (sem arquivo glTF).
     if (model === GOLEM_MODEL && !this.models.get(model)?.remaster) return createGolem(this.scene, id);
     const assets = this.models.get(model);

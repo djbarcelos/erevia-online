@@ -82,7 +82,7 @@ func TestEveryQuestStepHasThePlaceOfItsGoal(t *testing.T) {
 			if k == pb.QuestPlaceKind_QUEST_PLACE_KIND_NONE {
 				continue
 			}
-			if info.Radius <= 0 || info.PlaceName == "" || math.Abs(float64(info.X)) > 150 || info.Z > 150 || info.Z < -330 {
+			if info.Radius <= 0 || info.PlaceName == "" || info.X < -150 || info.X > 330 || info.Z > 150 || info.Z < -330 {
 				t.Errorf("%s step %d: bad place %+v", id, i, info)
 			}
 			if done := z.stepInfo(p, s, s.Count); done.Place != pb.QuestPlaceKind_QUEST_PLACE_KIND_NONE {

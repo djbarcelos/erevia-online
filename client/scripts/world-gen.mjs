@@ -26,6 +26,12 @@ const CLIENT_ITEMS = {
   monolith: [1.1, 2.6, 1.1, 0],
   monolith_broken: [1.1, 1.4, 1.1, 0],
   monolith_fallen: [2.6, 0.9, 1.1, 0],
+  // Peças do Brejo e das Terras Mortas (tunnel#139): as do Meshy (nature-map.json) e as lápides. Tamanho real, em metros.
+  grave: [0.9, 1.1, 0.4, 0],
+  reeds: [1.6, 1.9, 1.6, 0],
+  fallen_log: [4.2, 1.1, 1.2, 0],
+  boat: [3.6, 1.1, 1.4, 0],
+  ferryman_hut: [5.5, 5, 5.5, 0],
 };
 
 // ---------- PRNG determinístico ----------

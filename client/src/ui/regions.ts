@@ -26,7 +26,21 @@ export interface Region {
    * a0 (0–360) a a1 > a0 (passa de 360 quando o setor cruza o 0°).
    */
   sector?: { a0: number; a1: number };
+  /** Bioma inteiro, um retângulo do mapa (o Brejo e a extensão das Terras Mortas): vale antes das áreas e dos anéis. */
+  rect?: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
+
+/**
+ * Regiões que são um bioma retangular: o servidor só manda os discos de caça (as áreas), mas o Brejo de Lamagris
+ * e a extensão das Terras Mortas (tunnel#139) são do tamanho do bioma, com a cor, a névoa e a música próprias.
+ * Os limites são os de scripts/biomes/brejo.mjs e terras-mortas.mjs (e de game/brejo.go).
+ */
+export const RECT_REGIONS: Region[] = [
+  { name: "Brejo de Lamagris", monsters: "", rMin: 0, rMax: 0, levelMin: 14, levelMax: 20, safe: false, rgb: "230,90,70",
+    rect: { minX: 150, maxX: 330, minZ: -150, maxZ: 60 } },
+  { name: "Terras Mortas", monsters: "", rMin: 0, rMax: 0, levelMin: 24, levelMax: 28, safe: false, rgb: "200,90,220",
+    rect: { minX: 150, maxX: 270, minZ: 60, maxZ: 150 } },
+];
 
 export interface BossPoint {
   name: string;
@@ -56,6 +70,11 @@ function tierRgb(levelMax: number): string {
 export function buildRegions(zones: MapZone[], safeRadius: number, mapTitle = ""): { regions: Region[]; bosses: BossPoint[] } {
   const isSector = (z: MapZone) => !z.fixed && !z.area && z.angleMax > z.angleMin;
   const rings = zones.filter((z) => !z.fixed && !z.area && !isSector(z)).sort((a, b) => a.rMin - b.rMin);
+  // O mapa principal tem os biomas retangulares; os monstros do Brejo vêm das áreas dele (o servidor manda a região).
+  const rects = mapTitle ? [] : RECT_REGIONS.map((r) => ({
+    ...r,
+    monsters: [...new Set(zones.filter((z) => z.area && z.region === r.name).flatMap((z) => z.name.split(", ")))].join(", "),
+  }));
   const regions: Region[] = [
     { name: mapTitle ? "Praça" : "Cidade", monsters: "", rMin: 0, rMax: safeRadius, levelMin: 0, levelMax: 0, safe: true, rgb: "120,190,255" },
     ...rings.map((z, i) => ({
@@ -81,7 +100,7 @@ export function buildRegions(zones: MapZone[], safeRadius: number, mapTitle = ""
       sector: { a0: z.angleMin, a1: z.angleMax },
     })),
     ...zones
-      .filter((z) => z.area)
+      .filter((z) => z.area && !rects.some((r) => r.name === z.region)) // os discos do Brejo valem pelo retângulo dele
       .map((z) => ({
         name: z.region || z.name,
         monsters: z.name,
@@ -93,6 +112,7 @@ export function buildRegions(zones: MapZone[], safeRadius: number, mapTitle = ""
         rgb: tierRgb(z.levelMax),
         area: { x: z.x, z: z.z, r: z.radius },
       })),
+    ...rects,
     // Covil do raid boss: uma região própria (aparece no minimapa ao entrar).
     ...zones
       .filter((z) => z.fixed && z.raid)
@@ -144,6 +164,8 @@ export function sectorCenter(g: Region): { x: number; z: number } {
  * ponto do que a cidade (ex.: a transição floresta → vale); senão o último anel.
  */
 export function regionAt(regions: Region[], x: number, z: number): Region {
+  const rect = regions.find((g) => g.rect && x >= g.rect.minX && x <= g.rect.maxX && z >= g.rect.minZ && z <= g.rect.maxZ);
+  if (rect) return rect;
   const areas = regions.filter((g) => g.area);
   const dist = (g: Region) => Math.hypot(x - g.area!.x, z - g.area!.z);
   // Áreas dentro de áreas (o Fundo do Vale no Vale): vale a menor que contém o ponto de
@@ -154,7 +176,7 @@ export function regionAt(regions: Region[], x: number, z: number): Region {
   if (inArea) return inArea;
   const sector = regions.find((g) => inSector(g, x, z));
   if (sector) return sector;
-  const rings = regions.filter((g) => !g.area && !g.sector);
+  const rings = regions.filter((g) => !g.area && !g.sector && !g.rect);
   const r = Math.hypot(x, z);
   const ring = rings.find((g) => r >= g.rMin && r < g.rMax);
   if (ring) return ring;

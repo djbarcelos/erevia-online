@@ -109,12 +109,12 @@ Premissa: 25 s por abate. Gerada por `game.ProgressionMarkdown`.
 | 11 → 12 | 158.000 | Esqueleto Guerreiro, Esqueleto Ladino | 742 | 47.400 | 150 | 63 | 5,0 |
 | 12 → 13 | 200.000 | Esqueleto Guerreiro, Esqueleto Ladino | 853 | 60.000 | 165 | 69 | 6,1 |
 | 13 → 14 | 265.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.030 | 79.500 | 181 | 75 | 7,4 |
-| 14 → 15 | 328.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.160 | 98.400 | 199 | 83 | 8,8 |
-| 15 → 16 | 403.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.295 | 120.900 | 218 | 91 | 10,3 |
-| 16 → 17 | 491.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.436 | 147.300 | 240 | 100 | 12,0 |
-| 17 → 18 | 594.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.582 | 178.200 | 263 | 110 | 13,8 |
-| 18 → 19 | 715.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.733 | 214.500 | 289 | 120 | 15,8 |
-| 19 → 20 | 857.000 | Esqueleto Mago, Esqueleto Guerreiro | 1.890 | 257.100 | 318 | 133 | 18,0 |
+| 14 → 15 | 328.000 | Sapo-Boi | 1.159 | 98.400 | 199 | 83 | 8,8 |
+| 15 → 16 | 403.000 | Sapo-Boi | 1.295 | 120.900 | 218 | 91 | 10,3 |
+| 16 → 17 | 491.000 | Sapo-Boi | 1.436 | 147.300 | 240 | 100 | 12,0 |
+| 17 → 18 | 594.000 | Sapo-Boi | 1.582 | 178.200 | 263 | 110 | 13,8 |
+| 18 → 19 | 715.000 | Sapo-Boi | 1.733 | 214.500 | 289 | 120 | 15,8 |
+| 19 → 20 | 857.000 | Sapo-Boi | 1.890 | 257.100 | 318 | 133 | 18,0 |
 | 20 → 21 | 2.620.000 | Golem de Pedra | 4.827 | 786.000 | 380 | 158 | 20,6 |
 | 21 → 22 | 3.080.000 | Golem de Pedra | 5.219 | 924.000 | 414 | 173 | 23,5 |
 | 22 → 23 | 3.620.000 | Golem de Pedra | 5.623 | 1.086.000 | 451 | 188 | 26,6 |

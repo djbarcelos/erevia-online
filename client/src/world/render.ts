@@ -129,9 +129,13 @@ const LOOKS: Record<string, Look> = {
   "Ermos Partidos": { shade: "#3d2a2a", accent: "#d8873a", sat: -6, shadowTint: 45, lightTint: 38, exposure: 0, fog: 1.1, fogTint: 0.35, fogValue: 0.95 },
   "Vale das Pedras Vivas": { shade: "#2c3440", accent: "#f0a640", sat: -8, shadowTint: 55, lightTint: 22, exposure: -15, fog: 1.2, fogTint: 0.4, fogValue: 0.9 },
   [RAID_LAIR.name]: { shade: "#14121c", accent: "#8a5cff", sat: -22, shadowTint: 65, lightTint: 30, exposure: -40, fog: 1.6, fogTint: 0.6, fogValue: 0.5 },
+  // Brejo de Lamagris (tunnel#139): lodo e musgo, névoa verde-escura e densa, destaque de fungo.
+  "Brejo de Lamagris": { shade: "#24302a", accent: "#9fe870", sat: -4, shadowTint: 55, lightTint: 14, exposure: -12, fog: 1.55, fogTint: 0.55, fogValue: 0.85 },
+  // Terras Mortas (extensão): cinza-osso, sombra quase preta e roxa, névoa baixa e densa.
+  "Terras Mortas": { shade: "#1b1a24", accent: "#8a5cff", sat: -20, shadowTint: 60, lightTint: 26, exposure: -22, fog: 1.45, fogTint: 0.5, fogValue: 0.8 },
 };
 /** Anéis de fora que o guia ainda não cobre: usam o visual mais próximo. */
-const LOOK_ALIASES: Record<string, string> = { "Terras Mortas": "Ermos Partidos", Confins: "Ermos Partidos" };
+const LOOK_ALIASES: Record<string, string> = { Confins: "Ermos Partidos" };
 const DEFAULT_LOOK = "Arredores";
 
 /** Hora do dia: sombra azul-violeta à noite (guia 3.1), luz dourada no nascer e no pôr do sol. */

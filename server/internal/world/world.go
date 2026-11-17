@@ -19,7 +19,7 @@ const AgentRadius = 0.4
 
 const (
 	cellSize     = 1.0    // metros por célula da grade de caminhos
-	maxExpanded  = 120000 // o mapa vai até o Vale das Pedras Vivas: caminhos longos
+	maxExpanded  = 260000 // o mapa vai do Vale das Pedras Vivas ao Brejo (480 × 480 m): caminhos longos
 	sampleStep   = 0.5    // passo da checagem de linha reta (m)
 	bucketSize   = 4.0    // balde espacial para a checagem exata de colisão
 	cellClearPad = 0.3    // folga extra ao marcar células bloqueadas (caminhos não raspam)

@@ -48,7 +48,7 @@ import { clearResume, readResume, reconnect, type Resume } from "./net/resume";
 import { Chat } from "./ui/chat";
 import { bugFromChat, noteServerMessage, openBugDialog, type BugDeps } from "./ui/bug-report";
 import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
-import { EntityManager } from "./world/entities";
+import { EntityManager, FERRY_TITLE } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
 import { runBench, setupShots, wantBench, wantShots } from "./ui/bench";
@@ -1294,7 +1294,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         regions,
         bosses,
         stones: welcome.npcs
-          .filter((n) => n.role === NpcRole.TELEPORT)
+          .filter((n) => n.role === NpcRole.TELEPORT && entities.info(n.id)?.title !== FERRY_TITLE) // o barco do Brejo não é pedra
           .map((n) => ({ id: n.id, name: entities.info(n.id)?.name ?? "", x: entities.rootOf(n.id)?.position.x ?? 0, z: entities.rootOf(n.id)?.position.z ?? 0 })),
         nameOf: (id) => entities.info(id)?.name ?? "",
         quests: hud.quests,
