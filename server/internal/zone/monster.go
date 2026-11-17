@@ -68,8 +68,8 @@ func (z *Zone) spawnMonsters() {
 			},
 		}
 		m.hp = m.stats.MaxHP
-		if sp.Monster.Raid {
-			z.initRaid(m) // pode começar morto (renascimento salvo no banco)
+		if sp.Monster.Raid || sp.Monster.FieldBoss != nil {
+			z.initRaid(m) // raid boss e chefe de campo: pode começar morto (renascimento salvo no banco)
 		}
 		if !sp.When.Active(z.night) {
 			m.dead, m.hp = true, 0 // do outro período: começa fora do mundo

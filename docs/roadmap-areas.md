@@ -256,7 +256,7 @@ Hoje a IA é uma só. A proposta é um campo `Archetype` em `MonsterDef`, mais p
 - **2–5 s no raid**, como hoje.
 - **Dano do aviso: 25–40% do dano recebido na luta.** Lição do WildStar: se o auto-ataque faz quase todo o dano, desviar parece inútil.
 
-**Chefe de campo genérico (T5).** O modelo é o Lineage 2 e o Ragnarok, aproveitando o `raidState`:
+**Chefe de campo genérico (T5, entregue na #132).** `MonsterDef.FieldBoss` (`game/fieldboss.go`) usa o estado do raid (`zone/raid.go`, `zone/boss.go`, `zone/fieldboss.go`): o renascimento (minutos, `world_bosses`, sem migração nova), as fases por vida, o aviso de 5 min na zona, a XP e o saque por dano (reserva de 15 s, como o abate comum) e o túmulo de 10 min (objeto `tomb`, dica no título). Mãe-Lodo e Senhor dos Ossos (#138) já usam. O modelo é o Lineage 2 e o Ragnarok, aproveitando o `raidState`:
 - renasce num mínimo fixo mais uma janela aleatória (de 60 a 180 min, conforme a área), e o mapa mostra a janela, não o minuto (como `setWindow` já faz);
 - fases por vida, em dados;
 - a XP e o saque são divididos por dano (como o raid);

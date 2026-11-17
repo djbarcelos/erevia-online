@@ -172,6 +172,8 @@ const MODEL_BODY: Record<string, { radius: number; width: number; height: number
 
 /** Modelo das Pedras de Teleporte (desenhadas aqui, sem arquivo 3D). */
 export const STONE_MODEL = "teleport_stone";
+/** Túmulo do chefe de campo (objeto do servidor, 10 min no corpo): lápide com a dica no nome. */
+export const TOMB_MODEL = "tomb";
 /** Modelo do barco de Tomé (Brejo de Lamagris): o clique do barco é um poste com lanterna e sino; o bote é cenário (world.json, `boat`). */
 export const FERRY_MODEL = "ferry_boat";
 /** A função (título) dos NPCs do barco, igual à do servidor (zone/teleport.go): o mapa não os lista como pedra. */
@@ -521,7 +523,7 @@ export class EntityManager {
     // braços/pernas entram e saem do cursor.
     const isObject = e.kind === EntityKind.OBJECT;
     const body = MODEL_BODY[e.model];
-    if (!isObject) {
+    if (!isObject || e.model === TOMB_MODEL) {
       // Monstros grandes (golem) ganham uma área do tamanho do corpo, senão o clique
       // passa pelos ombros e braços sem selecionar.
       this.picks.addEntity(e.id, root, ((body?.width ?? 1.2) * scale) / 2, (body?.height ?? 2.1) * scale);
@@ -629,6 +631,10 @@ export class EntityManager {
     this.refreshName(v);
     this.refreshHpBar(v);
 
+    if (e.model === TOMB_MODEL) {
+      this.buildTomb(v);
+      return;
+    }
     if (isObject) {
       this.buildBanner(v);
       return;
@@ -645,6 +651,44 @@ export class EntityManager {
     if (!v.model3d) v.capsule = this.createCapsule(v);
     if (v.dead) this.showDead(v, true);
     else if (fade && e.kind === EntityKind.MONSTER) this.fadeIn(v);
+  }
+
+  /** Túmulo clicável: nome em cima e a dica (hora da morte e quem mais bateu) na linha de baixo. */
+  tomb(id: number): { name: string; title: string } | null {
+    const v = this.views.get(id);
+    return v?.model === TOMB_MODEL ? { name: v.name, title: v.title } : null;
+  }
+
+  /** Lápide de pedra sobre um montinho de terra, com uma luz fria apagando devagar. */
+  private buildTomb(v: View): void {
+    const mound = MeshBuilder.CreateSphere(`tmound${v.id}`, { diameterX: 1.7, diameterY: 0.5, diameterZ: 2.4, segments: 8 }, this.scene);
+    mound.parent = v.visual;
+    mound.position.y = 0.05;
+    mound.material = this.material("#4d4033");
+    const slab = MeshBuilder.CreateBox(`tslab${v.id}`, { width: 0.95, height: 1.25, depth: 0.22 }, this.scene);
+    slab.parent = v.visual;
+    slab.position.set(0, 0.7, -0.75);
+    slab.material = this.material("#8a8f96");
+    const cap = MeshBuilder.CreateCylinder(`tcap${v.id}`, { height: 0.22, diameter: 0.95, tessellation: 14 }, this.scene);
+    cap.parent = v.visual;
+    cap.rotation.x = Math.PI / 2;
+    cap.position.set(0, 1.32, -0.75);
+    cap.material = this.material("#8a8f96");
+    const cross = MeshBuilder.CreateBox(`tcross${v.id}`, { width: 0.1, height: 0.5, depth: 0.05 }, this.scene);
+    cross.parent = v.visual;
+    cross.position.set(0, 0.85, -0.87);
+    cross.material = this.material("#3a3d42");
+    const bar = MeshBuilder.CreateBox(`tbar${v.id}`, { width: 0.34, height: 0.1, depth: 0.05 }, this.scene);
+    bar.parent = v.visual;
+    bar.position.set(0, 0.95, -0.87);
+    bar.material = this.material("#3a3d42");
+    for (const m of [mound, slab, cap, cross, bar]) m.isPickable = false;
+    v.meshes = [mound, slab, cap];
+    v.head.position.y = 1.9;
+    v.nameText.color = "#d8d2c0";
+    v.clanText.text = v.title; // a dica fica sempre à vista, abaixo do nome
+    v.clanText.color = "#b9b29c";
+    v.clanText.isVisible = !!v.title;
   }
 
   /** Pedra de Teleporte: monólito com runas acesas e núcleo de luz (ver teleport-stone.ts). */

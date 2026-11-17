@@ -250,6 +250,18 @@ func (b *bossSaves) last() (BossData, bool) {
 	return b.list[len(b.list)-1], true
 }
 
+// lastOf: o último renascimento salvo do chefe id.
+func (b *bossSaves) lastOf(id string) (BossData, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for i := len(b.list) - 1; i >= 0; i-- {
+		if b.list[i].ID == id {
+			return b.list[i], true
+		}
+	}
+	return BossData{}, false
+}
+
 func TestAdminBossRespawn(t *testing.T) {
 	now := time.Now()
 	killed := now.Add(-time.Hour)
@@ -262,13 +274,14 @@ func TestAdminBossRespawn(t *testing.T) {
 	z.SetBossBackend(saves)
 	var raid, lord *entity
 	for _, m := range z.monsters {
-		if m.mon.raid != nil {
+		if m.mon.def.Raid {
 			raid = m
 		} else {
-			lord = m
+			lord = m // o Senhor dos Ossos também é de renascimento salvo (chefe de campo)
 		}
 	}
-	lord.dead, lord.hp, lord.mon.respawnAt = true, 0, z.now+3600
+	lord.dead, lord.hp = true, 0
+	lord.mon.raid.spawnAt = now.Add(time.Hour)
 	peer := join(z, 1, "Ana")
 	runZone(t, z)
 	ctx := context.Background()
@@ -308,7 +321,7 @@ func TestAdminBossRespawn(t *testing.T) {
 	// O raid fica salvo como "renasce agora": um reinício não o esconde de novo.
 	deadline = time.Now().Add(2 * time.Second)
 	for {
-		if b, ok := saves.last(); ok && b.ID == "ozrhal" && !b.RespawnAt.After(time.Now()) {
+		if b, ok := saves.lastOf("ozrhal"); ok && !b.RespawnAt.After(time.Now()) {
 			break
 		}
 		if time.Now().After(deadline) {

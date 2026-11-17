@@ -1418,6 +1418,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     },
     onEntity: (id, force) => {
       if (id === welcome.yourId) return;
+      const tomb = entities.tomb(id);
+      if (tomb) {
+        chat.system(`${tomb.name}: ${tomb.title}.`); // clicar no túmulo só lê a dica
+        return;
+      }
       questGo.onPlayerControl();
       selectTarget(id);
       if (entities.isNpc(id)) {

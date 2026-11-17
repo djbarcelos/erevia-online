@@ -221,7 +221,7 @@ func TestAbilityCancelledWhenMonsterResets(t *testing.T) {
 	}
 }
 
-func TestBoneLordDonutSparesWhoHugsIt(t *testing.T) {
+func TestBoneLordSpinHitsWhoHugsItAndSparesTheFar(t *testing.T) {
 	z := newCombatZone(fixed("bone_lord", 22, 60, 0))
 	m := z.onlyMonster()
 	hug, hugPeer := joinAt(z, 1, "knight", m.pos.X+1.5, m.pos.Z, 0)
@@ -232,17 +232,17 @@ func TestBoneLordDonutSparesWhoHugsIt(t *testing.T) {
 	}
 	m.mon.hate[hug.id] = 10
 	m.mon.hate[ranged.id] = 1
-	ring := m.mon.def.Abilities[0]
-	z.tickFor(ring.First + 0.1)
+	spin := m.mon.def.Abilities[0]
+	z.tickFor(spin.First + 0.1)
 	tg := z.pendingFrom(m)
-	if tg == nil || tg.shape != game.ShapeDonut {
-		t.Fatal("the bone lord raises the ring")
+	if tg == nil || tg.shape != game.ShapeCircle {
+		t.Fatal("the bone lord raises the spin")
 	}
 	hug.teleportTo(Vec2{X: m.pos.X + 1.5, Z: m.pos.Z})
 	z.untilLastTick(tg)
 	z.tickFor(0.05)
-	if abilityHits(hugPeer, hug) != 0 || abilityHits(rangedPeer, ranged) != 1 {
-		t.Fatalf("donut: hug=%d ranged=%d", abilityHits(hugPeer, hug), abilityHits(rangedPeer, ranged))
+	if abilityHits(hugPeer, hug) != 1 || abilityHits(rangedPeer, ranged) != 0 {
+		t.Fatalf("spin: hug=%d ranged=%d", abilityHits(hugPeer, hug), abilityHits(rangedPeer, ranged))
 	}
 }
 

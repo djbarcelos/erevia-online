@@ -34,7 +34,10 @@ type MonsterDef struct {
 	Abilities []AbilityDef
 	// Raid boss: covil com coleira própria, fases e habilidades (zone/raid.go), recompensa
 	// dividida por dano e renascimento longo salvo no banco.
-	Raid        bool
+	Raid bool
+	// Chefe de campo (fieldboss.go): renascimento em minutos com janela, fases por vida,
+	// saque e XP por dano e túmulo. Não combina com Raid.
+	FieldBoss   *FieldBossDef
 	Immune      []EffectKind // efeitos que não pegam (raid: atordoar, enraizar…)
 	LeashRadius float64      // distância máxima do ponto de origem (0 = a padrão da zona)
 	// Renascimento do raid em segundos de relógio, sorteado entre os dois.
@@ -156,10 +159,20 @@ var Monsters = map[string]*MonsterDef{
 	"bone_lord": {ID: "bone_lord", Name: "Senhor dos Ossos", Model: "skeleton_warrior",
 		HP: 400, HPLvl: 60, Atk: 14, AtkLv: 3, Def: 20, DefLv: 4, Range: 2.8, Interval: 1.8, Speed: 4, Aggressive: true, XPBase: 120, Scale: 1.6, Boss: true,
 		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootBossLord,
-		// Anel de ossos: quem está colado nele escapa; quem bate de longe precisa entrar ou
-		// sair. ~25% do dano da luta (6,7 golpes de 1,8 s + 2,2 a cada 12 s).
-		Abilities: []AbilityDef{{ID: "bone_ring", Shape: ShapeDonut, Target: AimSelf, Inner: 3.5, Radius: 9,
-			Delay: 2, Cooldown: 12, First: 5, Mult: 2.2}}},
+		// Chefe de campo com 3 fases (tunnel#138, roadmap 5.9), janela de 30 a 45 min.
+		// F1: Golpe Giratório, círculo de 4 m em volta dele (2 s de aviso: quem está colado
+		// sai). F2 (60%): chama 3 Guerreiros Esqueleto. F3 (25%): Marcha dos Mortos, linha de
+		// 12 m (1,5 s), e fúria. Cada golpe avisado vale ~25% do dano da luta.
+		FieldBoss: &FieldBossDef{RespawnMin: 30, RespawnMax: 45, Place: "na estrada sul", Phases: []FieldPhase{
+			{AtHP: 0.60, Say: "Senhor dos Ossos: \"Levantem, meus soldados!\"", Summon: "skeleton_warrior", SummonCount: 3},
+			{AtHP: 0.25, Say: "Senhor dos Ossos: \"A marcha dos mortos não para!\"", Enrage: true},
+		}},
+		Abilities: []AbilityDef{
+			{ID: "bone_spin", Shape: ShapeCircle, Target: AimSelf, Radius: 4,
+				Delay: 2, Cooldown: 10, First: 4, Mult: 1.8},
+			{ID: "bone_march", Shape: ShapeLine, Target: AimSelf, Length: 12, Width: 2.4, MinPhase: 3,
+				Delay: 1.5, Cooldown: 9, First: 3, Mult: 1.6},
+		}},
 	// Raid boss da Cripta Esquecida: um lich gigante. Imune a controle (menos provocar),
 	// preso ao covil e com habilidades por fase (zone/raid.go).
 	"ozrhal": {ID: "ozrhal", Name: "Ozrhal, o Rei Ossário", Model: "skeleton_mage",
@@ -308,13 +321,20 @@ var Monsters = map[string]*MonsterDef{
 	// Lama (4 círculos em quem está na luta, com veneno) e Lodinhos a cada 25 s (até 3 vivos).
 	"mae_lodo": {ID: "mae_lodo", Name: "Mãe-Lodo", Model: "slime", Tint: "#6f8a4a",
 		HP: 520, HPLvl: 78, Atk: 16, AtkLv: 3.2, Def: 22, DefLv: 4, Range: 3.2, Interval: 2.0, Speed: 3.2, Aggressive: true, XPBase: 125, Scale: 2.8, BodyRadius: 1.6, Boss: true,
-		Archetype: ArchSummoner, Arch: ArchParams{Summon: "lodo_menor", SummonCount: 3, SummonMax: 3, SummonCD: 25, SummonFirst: 12},
 		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootMother,
+		// Chefe de campo com 3 fases (janela de 60 a 90 min). F1: Golfada. F2 (66%): ela se
+		// divide em 3 Lodinhos; os que não morrerem em 30 s voltam e a curam em 20% (o DPS
+		// medido por um relógio). F3 (33%): a Maré de Lama.
+		FieldBoss: &FieldBossDef{RespawnMin: 60, RespawnMax: 90, Place: "na lagoa de Vau Velho", Phases: []FieldPhase{
+			{AtHP: 0.66, Say: "A Mãe-Lodo se parte em Lodinhos: matem-nos em 30 s ou eles voltam a curá-la!",
+				Summon: "lodo_menor", SummonCount: 3, ReturnAfter: 30, ReturnHeal: 0.20},
+			{AtHP: 0.33, Say: "A Maré de Lama sobe: saiam dos círculos!"},
+		}},
 		Abilities: []AbilityDef{
 			{ID: "mae_golfada", Shape: ShapeCone, Target: AimSelf, Radius: 7, Arc: 60,
 				Delay: 1.5, Cooldown: 9, First: 4, Mult: 1.6, Effect: &EffectDef{Kind: EffectSlow, Duration: 4, Value: 0.3}},
-			{ID: "mae_mare", Shape: ShapeCircle, Target: AimRandom, Count: 4, Radius: 3,
-				Delay: 1.8, Cooldown: 16, First: 8, Mult: 1.3, Effect: &EffectDef{Kind: EffectPoison, Duration: 6, Value: 12}},
+			{ID: "mae_mare", Shape: ShapeCircle, Target: AimRandom, Count: 4, Radius: 3, MinPhase: 3,
+				Delay: 1.8, Cooldown: 16, First: 4, Mult: 1.3, Effect: &EffectDef{Kind: EffectPoison, Duration: 6, Value: 12}},
 		}},
 }
 

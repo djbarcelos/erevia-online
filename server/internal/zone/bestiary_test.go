@@ -52,6 +52,7 @@ func (f *fakePeer) lastBestiaryEntry(id string) *pb.BestiaryEntry {
 func killAgain(z *Zone, p, m *entity) {
 	m.dead, m.hp = false, m.stats.MaxHP
 	m.mon.hate = map[uint32]float64{p.id: 10}
+	z.raidCredit(m, p, 10) // chefe de campo: o abate é pelo dano (raid.go); nos outros, não faz nada
 	z.kill(m, p)
 	z.tickFor(0.1)
 }

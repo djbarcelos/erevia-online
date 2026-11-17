@@ -1,11 +1,10 @@
 package zone
 
 import (
-	"context"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
-	"sort"
 	"time"
 
 	"erevia/server/internal/game"
@@ -45,28 +44,6 @@ const (
 	RaidHitMark = game.HitRaidMark
 )
 
-// BossData é o renascimento de um raid boss salvo no banco.
-type BossData struct {
-	ID        string    // id da def (ex.: "ozrhal")
-	RespawnAt time.Time // quando renasce (passado = vivo)
-	KilledAt  time.Time
-	TopName   string // quem mais causou dano na última morte
-}
-
-// BossBackend grava o renascimento (implementado com o store).
-type BossBackend interface {
-	SaveBoss(ctx context.Context, b BossData) error
-}
-
-// SetBossBackend liga o banco dos chefes (antes de Run). Sem ele (testes), nada é salvo.
-func (z *Zone) SetBossBackend(b BossBackend) { z.bossBackend = b }
-
-// raidKey agrupa o dano: grupo, clã (quem está sem grupo) ou jogador sozinho.
-type raidKey struct {
-	kind byte // 'p' grupo, 'c' clã, 's' sozinho
-	id   int64
-}
-
 type raidState struct {
 	phase               int
 	fighting            bool
@@ -86,6 +63,10 @@ type raidState struct {
 	lastStatusEnraged   bool
 	lastStatusFinal     bool
 	lastStatusFighting  bool
+	// Chefe de campo (fieldboss.go): a volta das invocações que curam e o túmulo.
+	retAt, retHeal float64
+	retCount       int
+	tomb           uint32
 }
 
 func newRaidState() *raidState {
@@ -106,7 +87,7 @@ func (r *raidState) clock(id string) *float64 {
 }
 
 // initRaid prepara o estado do raid boss e aplica o renascimento salvo.
-func (z *Zone) initRaid(m *entity) {
+func (z *Zone) initRaid(m *entity) { // também do chefe de campo (fieldboss.go)
 	r := newRaidState()
 	m.mon.raid = r
 	for _, b := range z.cfg.Bosses {
@@ -120,28 +101,6 @@ func (z *Zone) initRaid(m *entity) {
 			z.setWindow(m, b.KilledAt, b.RespawnAt)
 		}
 	}
-}
-
-// setWindow: a janela de renascimento mostrada no mapa (sem o minuto exato).
-func (z *Zone) setWindow(m *entity, killed, spawn time.Time) {
-	def := m.mon.def
-	if killed.IsZero() || def.RespawnMax <= 0 {
-		m.mon.windowStart, m.mon.windowEnd = spawn, spawn
-		return
-	}
-	m.mon.windowStart = killed.Add(time.Duration(def.RespawnMin * float64(time.Second)))
-	m.mon.windowEnd = killed.Add(time.Duration(def.RespawnMax * float64(time.Second)))
-}
-
-// leashOf: distância máxima do ponto de origem antes de desistir.
-func leashOf(m *entity) float64 {
-	if m.mon.leash > 0 {
-		return m.mon.leash
-	}
-	if r := m.mon.def.LeashRadius; r > 0 {
-		return r
-	}
-	return leashRange
 }
 
 // thinkRaid roda dentro do think, depois de esquecer quem morreu ou fugiu. Devolve true
@@ -158,6 +117,12 @@ func (z *Zone) thinkRaid(m *entity) bool {
 	if len(m.mon.hate) == 0 || z.now-r.lastHit > raidIdleReset {
 		z.resetMonster(m)
 		return true
+	}
+	if m.mon.def.FieldBoss != nil {
+		z.fieldPhases(m) // chefe de campo: fases por dados, sem fúria final
+		z.thinkAbilities(m)
+		z.raidStatusIfChanged(m)
+		return false
 	}
 	z.raidPhases(m)
 	z.thinkAbilities(m)
@@ -177,7 +142,9 @@ func (z *Zone) raidEngage(m *entity) {
 	r.fightStart, r.lastHit = z.now, z.now
 	r.fightWall = z.cfg.Clock()
 	z.startAbilities(m)
-	z.raidSay(m, fmt.Sprintf("%s se ergue do trono!", m.name))
+	if m.mon.def.FieldBoss == nil {
+		z.raidSay(m, fmt.Sprintf("%s se ergue do trono!", m.name))
+	}
 	z.raidStatusIfChanged(m)
 }
 
@@ -213,38 +180,6 @@ func (z *Zone) summon(m *entity, n int) {
 	m.mon.raid.summons = append(m.mon.raid.summons, z.summonAround(m, def, max(1, m.level-5), n, 4)...)
 }
 
-// summonAround chama n monstros def no nível level, num anel de raio radius em volta de m
-// (o chefe do raid, o invocador e o que divide). São invocações: não renascem, somem ao
-// morrer e voltam para a casa de m. Já chegam bravos com quem m odeia; o Spawn vai pela AOI.
-func (z *Zone) summonAround(m *entity, def *game.MonsterDef, level, n int, radius float64) []uint32 {
-	ids := make([]uint32, 0, n)
-	for i := range n {
-		a := 2 * math.Pi * float64(i) / float64(n)
-		spot := z.freeSpot(Vec2{X: m.pos.X + radius*math.Cos(a), Z: m.pos.Z + radius*math.Sin(a)})
-		z.summonSeq++
-		id := summonIDBase + z.summonSeq
-		g := &entity{
-			id: id, kind: pb.EntityKind_ENTITY_KIND_MONSTER,
-			name: def.Name, model: def.Model, level: level, scale: def.Scale,
-			pos: spot, dest: spot,
-			stats: game.MonsterStats(def, level),
-			mon: &monsterState{
-				def: def, spawn: game.SpawnPoint{Monster: def, Level: level, X: spot.X, Z: spot.Z},
-				home: m.mon.home, hate: map[uint32]float64{}, summon: true,
-			},
-		}
-		g.hp = g.stats.MaxHP
-		g.sentHP, g.sentMaxHP = g.hpInt(), g.maxHPInt()
-		for pid, v := range m.mon.hate {
-			g.mon.hate[pid] = v
-		}
-		z.monsters[id] = g
-		ids = append(ids, id)
-		z.aoiDirty = true
-	}
-	return ids
-}
-
 // dismissSummons tira as invocações do chefe do mundo.
 func (z *Zone) dismissSummons(m *entity) {
 	for _, id := range m.mon.raid.summons {
@@ -255,19 +190,11 @@ func (z *Zone) dismissSummons(m *entity) {
 	m.mon.raid.summons = nil
 }
 
-// removeMonster apaga um monstro de vez (invocações).
-func (z *Zone) removeMonster(g *entity) {
-	delete(z.monsters, g.id) // Despawn pela AOI
-	g.gone = true
-	z.aoiDirty = true
-	z.forgetTarget(g.id)
-}
-
 // raidReset: o chefe desistiu da luta. Volta à fase 1, sem fúria, sem invocações e sem a
 // contagem de dano (o resetMonster leva de volta ao trono, onde a vida enche).
 func (z *Zone) raidReset(m *entity) {
 	r := m.mon.raid
-	if r.fighting {
+	if r.fighting && m.mon.def.FieldBoss == nil {
 		z.raidSay(m, fmt.Sprintf("%s voltou ao trono.", m.name))
 	}
 	z.raidClear(m)
@@ -281,6 +208,7 @@ func (z *Zone) raidClear(m *entity) {
 	r.phase, r.fighting, r.fightStart, r.lastHit = 1, false, 0, 0
 	r.fightWall = time.Time{}
 	r.enraged, r.final = false, false
+	r.retAt, r.retHeal, r.retCount = 0, 0, 0
 	clear(r.damage)
 	clear(r.byPlayer)
 	clear(r.names)
@@ -300,79 +228,6 @@ func (z *Zone) raidCredit(m, src *entity, amount float64) {
 	r.names[k] = name
 	r.byPlayer[src.id] += amount
 	r.total += amount
-}
-
-func (z *Zone) raidKeyOf(p *entity) (raidKey, string) {
-	switch {
-	case p.pl.party != nil:
-		return raidKey{kind: 'p', id: int64(p.pl.party.id)}, "grupo de " + z.leaderName(p)
-	case p.pl.clan != nil:
-		return raidKey{kind: 'c', id: p.pl.clan.id}, "clã " + p.pl.clan.name
-	}
-	return raidKey{kind: 's', id: int64(p.id)}, p.name
-}
-
-// leaderName: o nome do líder do grupo de p (ou o de p, se o líder não está aqui).
-func (z *Zone) leaderName(p *entity) string {
-	if l := z.players[p.pl.party.leader]; l != nil {
-		return l.name
-	}
-	return p.name
-}
-
-type raidPool struct {
-	key    raidKey
-	damage float64
-}
-
-// raidPools: as pontuações em ordem de dano (empate: a menor chave).
-func (r *raidState) pools() []raidPool {
-	out := make([]raidPool, 0, len(r.damage))
-	for k, v := range r.damage {
-		out = append(out, raidPool{k, v})
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].damage != out[j].damage {
-			return out[i].damage > out[j].damage
-		}
-		if out[i].key.kind != out[j].key.kind {
-			return out[i].key.kind < out[j].key.kind
-		}
-		return out[i].key.id < out[j].key.id
-	})
-	return out
-}
-
-// poolMembers: quem está online numa pontuação (grupo, clã ou o próprio jogador).
-func (z *Zone) poolMembers(k raidKey) []*entity {
-	switch k.kind {
-	case 'p':
-		if pt := z.parties[uint32(k.id)]; pt != nil {
-			return z.partyMembers(pt)
-		}
-	case 'c':
-		var out []*entity
-		for _, id := range z.sortedPlayerIDs() {
-			if p := z.players[id]; p.pl.clan != nil && p.pl.clan.id == k.id {
-				out = append(out, p)
-			}
-		}
-		return out
-	case 's':
-		if p := z.players[uint32(k.id)]; p != nil {
-			return []*entity{p}
-		}
-	}
-	return nil
-}
-
-func (z *Zone) sortedPlayerIDs() []uint32 {
-	ids := make([]uint32, 0, len(z.players))
-	for id := range z.players {
-		ids = append(ids, id)
-	}
-	slices.Sort(ids)
-	return ids
 }
 
 // raidKilled: XP por dano, saque reservado para quem mais causou dano, anúncio e
@@ -417,25 +272,33 @@ func (z *Zone) raidKilled(m *entity) {
 		}
 		z.shareMonsterXPScaled(m, takers, share)
 	}
-	// Conquista: todo mundo que causou dano e ainda está aqui participou.
-	for id := range r.byPlayer {
+	// Conquista: todo mundo que causou dano e ainda está aqui participou. O chefe de campo
+	// só abre o Bestiário (a conquista e o contrato de raid são do raid).
+	for _, id := range slices.Sorted(maps.Keys(r.byPlayer)) {
 		if p := z.players[id]; p != nil {
-			z.achEvent(p, game.AchRaid, ms.def.ID)
-			z.contractRaid(p, ms.def.ID)
-			z.bestiaryKill(p, m) // Bestiário: 1 abate abre a entrada do raid boss
+			if ms.def.Raid {
+				z.achEvent(p, game.AchRaid, ms.def.ID)
+				z.contractRaid(p, ms.def.ID)
+			}
+			z.bestiaryKill(p, m) // Bestiário: 1 abate abre a entrada do chefe
 		}
 	}
 
+	title := "Raid boss derrotado"
+	if ms.def.FieldBoss != nil {
+		title = "Chefe derrotado"
+	}
 	text := fmt.Sprintf("%s foi derrotado!", m.name)
 	if topName != "" {
 		text += " Maior dano: " + topName + "."
 	}
-	z.afterFlush(func() { z.announce(pb.AnnounceKind_ANNOUNCE_KIND_BOSS_DEFEAT, "Raid boss derrotado", text) })
+	z.afterFlush(func() { z.announce(pb.AnnounceKind_ANNOUNCE_KIND_BOSS_DEFEAT, title, text) })
 
 	z.raidClear(m)
 	wall := z.cfg.Clock()
 	def := ms.def
-	delay := def.RespawnMin + z.rng.Float64()*(def.RespawnMax-def.RespawnMin)
+	lo, hi := respawnSeconds(def)
+	delay := lo + z.rng.Float64()*(hi-lo)
 	r.killedAt = wall
 	r.spawnAt = wall.Add(time.Duration(delay * float64(time.Second)))
 	r.warned = false
@@ -444,39 +307,24 @@ func (z *Zone) raidKilled(m *entity) {
 	ms.corpseEnd = z.now + corpseSeconds*2
 	z.saveBoss(BossData{ID: def.ID, RespawnAt: r.spawnAt, KilledAt: wall, TopName: topName})
 	z.log.Info("raid boss killed", "boss", def.ID, "top", topName, "respawn_at", r.spawnAt)
+	if def.FieldBoss != nil {
+		z.spawnTomb(m, wall, topName)
+	}
 	z.bossChanged(m)
 }
 
-// dropRaidLoot: o saque cai espalhado em volta do corpo, reservado por 60 s.
-func (z *Zone) dropRaidLoot(m *entity, owner uint32, clanID int64) {
-	drops := game.RollLoot(m.mon.def, m.level, z.rng)
-	added := &pb.GroundItemsAdded{}
-	for _, d := range drops {
-		a := z.rng.Float64() * 2 * math.Pi
-		r := 0.8 + z.rng.Float64()*(raidLootSpread-0.8)
-		pos := Vec2{X: m.pos.X + r*math.Cos(a), Z: m.pos.Z + r*math.Sin(a)}
-		if !z.walkable(pos) {
-			pos = m.pos
-		}
-		if g := z.placeItem(pos, d.Item, d.Count, 0, owner, raidReserve); g != nil {
-			g.clan = clanID
-			added.Items = append(added.Items, z.groundPB(g))
-		}
-	}
-	if len(added.Items) > 0 {
-		z.afterFlush(func() {
-			z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_GroundAdded{GroundAdded: added}}, 0)
-		})
-	}
-}
-
-// updateDeadRaid: aviso 10 min antes e renascimento na hora marcada (relógio).
+// updateDeadRaid: aviso antes (10 min no raid, 5 no chefe de campo) e renascimento na hora
+// marcada (relógio).
 func (z *Zone) updateDeadRaid(m *entity) {
 	r := m.mon.raid
 	if !m.mon.hidden || r.spawnAt.IsZero() {
 		return
 	}
 	wall := z.cfg.Clock()
+	if f := m.mon.def.FieldBoss; f != nil {
+		z.updateDeadField(m, f, wall)
+		return
+	}
 	if !r.warned && !wall.Before(r.spawnAt.Add(-raidWarnBefore)) && wall.Before(r.spawnAt) {
 		r.warned = true
 		z.announce(pb.AnnounceKind_ANNOUNCE_KIND_BOSS_SOON, "O chão treme…",
@@ -493,11 +341,6 @@ func (z *Zone) updateDeadRaid(m *entity) {
 	z.bossChanged(m)
 }
 
-// announce: banner e linha dourada para o servidor inteiro.
-func (z *Zone) announce(kind pb.AnnounceKind, title, text string) {
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Announce{Announce: &pb.Announce{Kind: kind, Title: title, Text: text}}}, 0)
-}
-
 // raidSay: aviso do sistema para quem está perto do chefe.
 func (z *Zone) raidSay(m *entity, text string) {
 	for _, id := range z.sortedPlayerIDs() {
@@ -509,48 +352,6 @@ func (z *Zone) raidSay(m *entity, text string) {
 
 // ---------- Estado dos chefes (mapa e barra do raid) ----------
 
-func (z *Zone) bossStatusPB(m *entity) *pb.BossStatus {
-	def := m.mon.def
-	out := &pb.BossStatus{
-		Id: m.id, Name: def.Name, Level: uint32(m.level),
-		X: float32(m.mon.home.X), Z: float32(m.mon.home.Z),
-		Raid: def.Raid, Alive: !m.dead,
-	}
-	if m.dead && !m.mon.windowStart.IsZero() {
-		out.WindowStartMs, out.WindowEndMs = m.mon.windowStart.UnixMilli(), m.mon.windowEnd.UnixMilli()
-	}
-	if r := m.mon.raid; r != nil && !m.dead {
-		out.Phase = uint32(r.phase)
-		out.Enraged, out.FinalEnrage = r.enraged, r.final
-		if r.fighting {
-			out.FightStartMs = r.fightWall.UnixMilli()
-		}
-	}
-	return out
-}
-
-// bossList: todos os chefes fixos (para o Welcome), em ordem de id.
-func (z *Zone) bossList() []*pb.BossStatus {
-	var out []*pb.BossStatus
-	for _, m := range z.monsters {
-		if m.mon.def.Boss && !m.mon.summon {
-			out = append(out, z.bossStatusPB(m))
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Id < out[j].Id })
-	return out
-}
-
-func (z *Zone) bossChanged(m *entity) {
-	if !m.mon.def.Boss || m.mon.summon {
-		return
-	}
-	if r := m.mon.raid; r != nil {
-		r.lastStatusPhase, r.lastStatusEnraged, r.lastStatusFinal, r.lastStatusFighting = r.phase, r.enraged, r.final, r.fighting
-	}
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_BossStatus{BossStatus: z.bossStatusPB(m)}}, 0)
-}
-
 // raidStatusIfChanged envia o estado só quando a fase, a fúria ou a luta mudaram.
 func (z *Zone) raidStatusIfChanged(m *entity) {
 	r := m.mon.raid
@@ -560,44 +361,6 @@ func (z *Zone) raidStatusIfChanged(m *entity) {
 }
 
 // ---------- Banco ----------
-
-// saveBoss entrega o renascimento ao worker sem bloquear a zona.
-func (z *Zone) saveBoss(b BossData) {
-	select {
-	case z.bossJobs <- b:
-	default:
-		z.log.Error("boss save queue full", "boss", b.ID)
-	}
-}
-
-// runBossWorker grava os renascimentos em ordem, tentando de novo se o banco falhar.
-func (z *Zone) runBossWorker(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case b := <-z.bossJobs:
-			if z.bossBackend == nil {
-				continue
-			}
-			for attempt := 1; attempt <= 3; attempt++ {
-				cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				err := z.bossBackend.SaveBoss(cctx, b)
-				cancel()
-				if err == nil {
-					break
-				}
-				z.log.Error("save boss", "err", err, "boss", b.ID, "attempt", attempt)
-				z.ReportDBError("boss_save", err)
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(time.Duration(attempt) * time.Second):
-				}
-			}
-		}
-	}
-}
 
 // ---------- Comandos de teste (só com DEV_LOGIN, nunca em produção) ----------
 

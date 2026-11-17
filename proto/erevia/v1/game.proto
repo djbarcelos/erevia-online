@@ -792,6 +792,9 @@ message BossStatus {
   bool enraged = 11; // raid: fúria (abaixo de 20%)
   bool final_enrage = 12; // raid: fúria final (luta longa demais)
   int64 fight_start_ms = 13; // raid: início da luta (0 = parado)
+  // Chefe de campo (tunnel#132): a vida (fração, de 0 a 1) em que cada fase depois da 1 começa.
+  // Vazio no raid: a barra usa as marcas dele (70% e 40%).
+  repeated float phase_marks = 14;
 }
 
 enum TelegraphKind {
