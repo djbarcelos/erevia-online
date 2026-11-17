@@ -279,7 +279,7 @@ func (z *Zone) checkItems(p *entity, deep bool) {
 		if s.empty() {
 			continue
 		}
-		if why := canEquip(s.def, i, p.pl.class, p.level); why != "" {
+		if why := canEquip(s.def, i, p.pl.class, p.pl.spec, p.level); why != "" {
 			var fix func()
 			if free := inv.firstFree(); free >= 0 { // volta para a bolsa (não some nada)
 				fix = func() {

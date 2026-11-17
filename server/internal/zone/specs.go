@@ -37,6 +37,7 @@ func specCatalog() []*pb.SpecInfo {
 		out = append(out, &pb.SpecInfo{
 			Id: s.ID, Class: s.Class, Name: s.Name, Description: s.Description, Color: s.Color,
 			Bonus: attrsPB(s.Bonus), BonusText: s.BonusText(),
+			Weapons: s.Weapons, Offhands: s.Offhands,
 		})
 	}
 	return out

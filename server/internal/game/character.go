@@ -14,12 +14,13 @@ const (
 )
 
 // CharacterStats: classe no nível → atributos (base da classe + pontos + bônus da
-// especialização) → equipamento (gear: a soma dos bônus, ver AddItemBonus) → passivas →
+// especialização; alcance, intervalo e "mágico" vêm da arma) → equipamento (gear: a soma dos bônus, ver AddItemBonus) → passivas →
 // regeneração (com a Mente Clara por cima). weaponType é o tipo da arma equipada ("" =
 // nenhuma; a Esgrima só vale com espada).
 func CharacterStats(class, spec string, level int, spent Attrs, gear Stats, ranks map[uint32]int, weaponType string) Stats {
 	total := ClassBaseAttrs[class].Add(spent).Add(SpecBonus(class, spec))
 	s := ClassStats(class, level)
+	s = ApplyWeapon(s, weaponType) // antes dos atributos: a Destreza escala o intervalo
 	s = ApplyAttrs(s, class, level, total)
 	s = s.AddBonus(gear)
 	s = ApplyPassives(s, ranks, weaponType)
