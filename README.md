@@ -632,6 +632,7 @@ SELECT kind, key, sent_at, suppressed, pos, info FROM alert_state WHERE kind <> 
 ```
 
 ## Pipeline de arte (remaster)
+**O remaster é o visual padrão do jogo** (heróis, monstros, chefes, NPCs, armas e armaduras por raridade, cidade, natureza, chão e animações). `?remaster=0` desliga, para comparar e depurar (jogo de antes, com modelos KayKit). `?render=antigo` é outro eixo: desliga só o render novo (tons, gradação, vento, água, nuvens, relevo do chão), com a arte que estiver ativa; `?remaster=0&render=antigo` reproduz o jogo de antes das duas mudanças. O e2e e o CI testam o remaster, porque é o que o jogador recebe.
 Ferramentas open source: **Blender**, **blender-mcp** (o Claude Code controla o Blender, com `DISABLE_TELEMETRY=true`) e a skill **blender-image-to-3d** (referência → asset pronto para jogo). A regra de todo asset novo é o [guia de arte](docs/guia-de-arte.md).
 
 1. **Folhas de referência:** `/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/art/reference_sheets.py -- docs/arte`

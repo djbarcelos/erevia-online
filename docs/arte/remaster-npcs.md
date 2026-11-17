@@ -1,5 +1,7 @@
 # Remaster: os NPCs no estilo novo
 
+> **Atualização (2026-11-17):** o remaster agora é o visual padrão do jogo. Onde este documento diz "atrás de `?remaster=1`" ou "com `?remaster=1`", leia "no padrão"; `?remaster=0` desliga, para comparar ("sem remaster"). `?render=antigo` é independente: troca só o render (tons, vento, água, nuvens, relevo), não a arte.
+
 Os 16 NPCs com identidade do Erevia refeitos pelo **mesmo fluxo do Meshy** da v3 e dos heróis (`docs/arte/remaster-v3.md`, `docs/arte/remaster-herois.md`): conceito 2D, imagem para 3D com topologia inteligente, rig `mixamo`, ações da biblioteca. Tudo atrás de `?remaster=1`; sem o parâmetro nada muda. O servidor não mudou (nem protocolo, nem migração).
 
 Como olhar: `/?remaster=1`, na praça (`/tp 0 0`). Chegue perto de um NPC e clique: ele se vira para você, faz o gesto de cumprimento e a janela dele abre.

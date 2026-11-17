@@ -1,5 +1,7 @@
 # Remaster: as 4 classes de herói no estilo novo (tunnel#94)
 
+> **Atualização (2026-11-17):** o remaster agora é o visual padrão do jogo. Onde este documento diz "atrás de `?remaster=1`" ou "com `?remaster=1`", leia "no padrão"; `?remaster=0` desliga, para comparar ("sem remaster"). `?render=antigo` é independente: troca só o render (tons, vento, água, nuvens, relevo), não a arte.
+
 Sequência da v3 (`docs/arte/remaster-v3.md`): cavaleiro, bárbaro, mago e ladino pelo **mesmo fluxo do Meshy** (conceito 2D, imagem para 3D com topologia inteligente, rig `mixamo`, ações da biblioteca), com o conjunto completo de animações. Tudo atrás de `?remaster=1`; sem o parâmetro nada muda.
 
 Como olhar: `/?remaster=1`, criar um personagem de cada classe (ou a tela de personagens e o Barbeiro) e usar `/acenar`, `/dancar`, `/sentar`.

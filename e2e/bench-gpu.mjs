@@ -4,7 +4,7 @@
  * ?bench=1 completo em cada variante pedida. Sem janela (headless), a placa de alto desempenho.
  *
  *   node bench-gpu.mjs --base http://localhost:8097 --out ../.bench/antes \
- *       "base:" "rm:remaster=1" "rm-baixa:remaster=1&quality=baixa"
+ *       "base:remaster=0" "rm:" "rm-baixa:remaster=1&quality=baixa"
  *
  * Cada variante é "nome:query" (a query vai depois de ?bench=1&). Opções:
  *   --capped   mantém o limite de 60 FPS do vsync (padrão: sem limite, para ver a folga)
@@ -16,7 +16,7 @@
  *              (a máquina de desenvolvimento é rápida demais: o FPS fica preso na CPU do navegador e esconde o custo)
  *   --tp X,Z   (com bench=aqui) leva o personagem até lá com /tp antes de medir: região de caça cheia.
  *              Precisa de --db <banco> para dar GM e nível 45 ao personagem (docker exec erevia-postgres-1 psql).
- *              Variante de exemplo: "ossos:bench=aqui&remaster=1" (sem ?bench=1 na frente quando a query já tem bench=)
+ *              Variante de exemplo: "ossos:bench=aqui" (sem ?bench=1 na frente quando a query já tem bench=)
  *   --width/--height/--dpr   tamanho da janela (padrão 1280x720 @1; 1920x1080 @2 aperta a GPU)
  * Escreve <out>/<nome>.json (o resultado do bench + renderer + nvidia-smi) e <out>/<nome>.md.
  */

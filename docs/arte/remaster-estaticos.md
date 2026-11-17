@@ -1,5 +1,7 @@
 # Remaster: armas e escudos no estilo novo (tunnel#97)
 
+> **Atualização (2026-11-17):** o remaster agora é o visual padrão do jogo. Onde este documento diz "atrás de `?remaster=1`" ou "com `?remaster=1`", leia "no padrão"; `?remaster=0` desliga, para comparar ("sem remaster"). `?render=antigo` é independente: troca só o render (tons, vento, água, nuvens, relevo), não a arte.
+
 Armas e escudos pintados à mão pelo Meshy (conceito 2D, imagem para 3D com topologia inteligente), atrás de `?remaster=1`. Sem o parâmetro nada muda. Os adereços da cidade **não entraram** (ver "O que ficou em aberto").
 
 ## O que entrou

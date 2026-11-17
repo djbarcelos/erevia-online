@@ -1,5 +1,5 @@
 /**
- * Praça do remaster (tunnel#93, ?remaster=1): a fonte no lugar do poço (mesma pegada, r = 1,7 m),
+ * Praça do remaster (tunnel#93, remaster, o padrão): a fonte no lugar do poço (mesma pegada, r = 1,7 m),
  * o piso em rosa dos ventos em volta dela e quatro postes com estandarte nas diagonais, de frente
  * para o centro. Peças do kit `plaza_*_b.glb` (Blender, estilo B). Os prédios continuam os atuais.
  */

@@ -3,7 +3,7 @@
  * quadro jogável (a tela de carregamento some), com o cache vazio e a rede simulada pelo CDP.
  *
  *   node bench-download.mjs --base http://localhost:8097 --out ../.bench/downloads.json \
- *       "base:" "rm:remaster=1"          # variantes "nome:query"
+ *       "base:remaster=0" "rm:"          # variantes "nome:query"
  *   perfis de rede: --net sem,4g,3g      # padrão: sem,4g,3g
  */
 import { chromium } from "@playwright/test";

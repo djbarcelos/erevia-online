@@ -1,5 +1,5 @@
 /**
- * Laboratório de heróis (ferramenta de arte, não faz parte do jogo): abre `lab.html?remaster=1` no `vite dev`
+ * Laboratório de heróis (ferramenta de arte, não faz parte do jogo): abre `lab.html` no `vite dev`
  * e mostra personagens com armas e poses congeladas, de frente, de lado ou de costas, usando o mesmo
  * `CharacterModels` do jogo. Os prints dos heróis (docs/arte/remaster-herois/) saem daqui.
  *

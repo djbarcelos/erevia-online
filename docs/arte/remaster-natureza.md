@@ -1,5 +1,7 @@
 # Remaster: natureza e texturas do chão (estilo pintado à mão)
 
+> **Atualização (2026-11-17):** o remaster agora é o visual padrão do jogo. Onde este documento diz "atrás de `?remaster=1`" ou "com `?remaster=1`", leia "no padrão"; `?remaster=0` desliga, para comparar ("sem remaster"). `?render=antigo` é independente: troca só o render (tons, vento, água, nuvens, relevo), não a arte.
+
 Segue a v3 (`docs/arte/remaster-v3.md`): peças estáticas pelo **Meshy** (conceito 2D, imagem para 3D com Smart Topology), tudo atrás de `?remaster=1`. Sem o parâmetro nada muda (nem a linha de base do bench). Com ele:
 
 - árvores, arbustos, mato, pedras e montanhas do mapa principal usam o kit novo, **nas mesmas posições geradas** (`world.json` não muda);

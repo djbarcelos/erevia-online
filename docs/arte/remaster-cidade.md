@@ -1,5 +1,7 @@
 # Remaster: a cidade de Vel'Aran no estilo novo (tunnel#100)
 
+> **Atualização (2026-11-17):** o remaster agora é o visual padrão do jogo. Onde este documento diz "atrás de `?remaster=1`" ou "com `?remaster=1`", leia "no padrão"; `?remaster=0` desliga, para comparar ("sem remaster"). `?render=antigo` é independente: troca só o render (tons, vento, água, nuvens, relevo), não a arte.
+
 Os prédios, a muralha, o portão, a torre e os adereços da cidade foram refeitos pelo **Meshy** (conceito 2D, imagem para 3D com topologia inteligente), no estilo pintado à mão da v3 (`docs/arte/remaster-v3.md`). Tudo atrás de `?remaster=1`: sem o parâmetro nada muda. O layout, a colisão e os NPCs são os de sempre: **o servidor e o world.json não mudaram**.
 
 Como olhar: `/` e `/?remaster=1`, no mesmo ponto (`/tp 2 7` é a praça, `/tp 28 0` o portão leste), de dia e de noite.

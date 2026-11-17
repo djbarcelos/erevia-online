@@ -1,5 +1,5 @@
 /**
- * Cidade de Vel'Aran no estilo novo (tunnel#100, ?remaster=1): prédios e adereços gerados pelo
+ * Cidade de Vel'Aran no estilo novo (tunnel#100, remaster, o padrão): prédios e adereços gerados pelo
  * Meshy no lugar das peças do kit KayKit, no MESMO layout do world.json (mesma pegada, mesma
  * orientação, mesmo colisor no servidor). Cada peça é um GLB próprio (`town_<peça>_b.glb`, 1
  * material, sem LOD: são thin instances, que dividem uma malha só) e a escala do world.json já
@@ -13,7 +13,7 @@ const BASE = "/models/";
 
 /**
  * AO por vértice (COLOR_0) das peças, desligado por padrão: nos prints de dia ele assenta as bases dos
- * prédios, mas de noite só escurece (docs/arte/remaster-cidade.md). `?remaster=1&ao=1` liga, para comparar.
+ * prédios, mas de noite só escurece (docs/arte/remaster-cidade.md). `?ao=1` liga, para comparar.
  */
 const VERTEX_AO = new URLSearchParams(location.search).get("ao") === "1";
 
