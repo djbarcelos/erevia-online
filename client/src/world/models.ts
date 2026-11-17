@@ -8,6 +8,7 @@ import {
   Effect,
   LoadAssetContainerAsync,
   Material,
+  Matrix,
   Mesh,
   Node,
   Observer,
@@ -22,6 +23,7 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import { reportClientError } from "../net/errors";
+import { RoleMap } from "./anim";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
 import { lodFor, REMASTER, REMASTER_FILES, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS } from "./remaster";
@@ -147,6 +149,17 @@ const REMASTER_SETS: Record<string, AnimSet> = {
   bone_lord: { idle: "BL_Idle", walk: "BL_Walk", run: "BL_Run", attack: "BL_Attack", skill: "BL_Slam", buff: "BL_Raise", hit: "BL_Hit", death: "BL_Death" },
   ozrhal: { idle: "OZ_Idle", walk: "OZ_Walk", run: "OZ_Run", attack: "OZ_Attack", skill: "OZ_Stomp", buff: "OZ_Roar", hit: "OZ_Hit", death: "OZ_Death" },
 };
+/**
+ * Conjunto de clipes quando o herói segura uma arma de duas mãos (e a esquerda está vazia): parado, andar e
+ * correr com as duas mãos juntas na frente do peito (compose-2h-clips.mjs). O bárbaro é o único hoje; sem
+ * pausas do parado (os braços ficam presos à arma). null tira o papel do conjunto.
+ */
+const REMASTER_2H: Record<string, Partial<Record<AnimRole, string | null>>> = {
+  barbarian: { idle: "BB_2_Idle", walk: "BB_2_Walk", run: "BB_2_Run", break1: null, break2: null },
+};
+/** Armas de duas mãos dos heróis do remaster: o cabo passa pelas duas mãos (aimTwoHand). */
+const TWO_HANDED = new Set(["sword_2handed", "sword_2handed_color", "axe_2handed"]);
+
 /** O golpe encosta quando a mão termina o movimento rápido (quadro 16 de 30, medido na velocidade da mão). */
 CLIP_IMPACT.SW_Attack = 16 / 30;
 CLIP_IMPACT.KB_Skill = 16 / 30;
@@ -565,9 +578,12 @@ export class CharacterModels {
 
     // Armas presas nos encaixes das mãos (trocadas quando o equipamento muda).
     const held = new Map<Slot, TransformNode[]>();
+    /** Arquivo da arma em cada mão (para saber se é de duas mãos). */
+    const heldFile = new Map<Slot, string>();
     const attach = (slot: Slot, container: AssetContainer | null | undefined, grade: number, enchant = 0) => {
       for (const n of held.get(slot) ?? []) n.dispose(false, false);
       held.delete(slot);
+      heldFile.delete(slot);
       const hand = byName.get(slot);
       if (!hand || !container) return;
       const w = container.instantiateModelsToScene((n) => `${n}#${id}`, false);
@@ -601,6 +617,7 @@ export class CharacterModels {
       }
       wRoot.dispose();
       held.set(slot, nodes);
+      heldFile.set(slot, this.weaponFileOf.get(container) ?? "");
     };
     for (const [slot, container] of Object.entries(handItems) as [Slot, AssetContainer][]) attach(slot, container, 0);
 
@@ -671,19 +688,56 @@ export class CharacterModels {
     else if (head.mesh) applyLook(ORIGINAL_LOOK);
 
     // Animações (só as do conjunto do modelo), reaplicadas pelo nome dos ossos.
-    const anims = new Map<AnimRole, AnimationGroup>();
+    const anims = new RoleMap();
     const cloned = new Map<string, AnimationGroup>();
-    for (const [role, animName] of Object.entries(set) as [AnimRole, string][]) {
+    const impacts: Partial<Record<AnimRole, number>> = {};
+    const groupFor = (animName: string): AnimationGroup | null => {
       let g = cloned.get(animName);
       if (!g) {
         const tpl = this.animTemplates.get(animName);
-        if (!tpl) continue;
+        if (!tpl) return null;
         g = tpl.clone(`${animName}#${id}`, (target: Node) => byName.get(target.name) ?? null);
         g.stop();
         cloned.set(animName, g);
       }
-      anims.set(role, g);
-    }
+      return g;
+    };
+    /** Monta os papéis do conjunto normal ou do de duas mãos (o AnimController é avisado pelo RoleMap). */
+    const applySet = (two: boolean) => {
+      const over = two && assets.remaster ? REMASTER_2H[model] : undefined;
+      anims.clear();
+      for (const k of Object.keys(impacts)) delete impacts[k as AnimRole];
+      for (const [role, base] of Object.entries(set) as [AnimRole, string][]) {
+        const name = over && role in over ? over[role] : base;
+        const g = name ? groupFor(name) : null;
+        if (!name || !g) continue;
+        anims.set(role, g);
+        if (CLIP_IMPACT[name] !== undefined) impacts[role] = CLIP_IMPACT[name];
+      }
+      anims.onChange?.();
+    };
+    applySet(false);
+    let twoMode = false;
+    let twoWeapon: TransformNode | null = null;
+    /** Arma de duas mãos na direita e a esquerda vazia: usa o conjunto de duas mãos e o cabo passa pelas duas mãos. */
+    const refreshTwoHand = () => {
+      const r = heldFile.get("handslot.r");
+      const two = !!assets.remaster && !!r && TWO_HANDED.has(r) && !heldFile.has("handslot.l") && !!REMASTER_2H[model];
+      twoWeapon = two ? (held.get("handslot.r")?.[0] ?? null) : null;
+      if (two !== twoMode) {
+        twoMode = two;
+        applySet(two);
+      }
+    };
+    refreshTwoHand();
+    const handR = byName.get("handslot.r") as TransformNode | undefined;
+    const handL = byName.get("handslot.l") as TransformNode | undefined;
+    const aimObs =
+      assets.remaster && handR && handL
+        ? gltfRoot.getScene().onAfterAnimationsObservable.add(() => {
+            if (!disposed && twoWeapon) aimTwoHand(handR, handL, twoWeapon);
+          })
+        : null;
 
     // Pose de descanso de tudo que alguma animação mexe (antes de qualquer animação tocar).
     const rest: { node: TransformNode; pos: Vector3; rot: Quaternion | null; scale: Vector3 }[] = [];
@@ -695,11 +749,6 @@ export class CharacterModels {
         seen.add(node);
         rest.push({ node, pos: node.position.clone(), rot: node.rotationQuaternion?.clone() ?? null, scale: node.scaling.clone() });
       }
-    }
-
-    const impacts: Partial<Record<AnimRole, number>> = {};
-    for (const [role, animName] of Object.entries(set) as [AnimRole, string][]) {
-      if (CLIP_IMPACT[animName] !== undefined) impacts[role] = CLIP_IMPACT[animName];
     }
 
     return {
@@ -716,6 +765,7 @@ export class CharacterModels {
       setWeapons: (right, left, grade = 0, enchant = 0) => {
         attach("handslot.r", right ? this.weaponFiles.get(right) : null, grade, enchant);
         attach("handslot.l", left ? this.weaponFiles.get(left) : null, grade, enchant);
+        refreshTwoHand();
       },
       setLook: (l) => {
         if (!disposed) applyLook(l);
@@ -723,6 +773,7 @@ export class CharacterModels {
       meshes: () => root.getChildMeshes(false),
       dispose: () => {
         disposed = true;
+        aimObs?.remove();
         unwatchLod();
         if (painted) this.releasePaint(model, painted);
         painted = null;
@@ -734,6 +785,53 @@ export class CharacterModels {
       },
     };
   }
+}
+
+/**
+ * Arma de duas mãos: o cabo passa pelas duas mãos. Depois das animações, a arma (filha da mão direita) gira
+ * para ficar na linha que vai da mão esquerda à direita, com a esquerda perto do pé do cabo; o giro em torno
+ * do cabo vem da pega calibrada (WEAPON_GRIPS), então só a direção do cabo muda.
+ */
+function aimTwoHand(handR: TransformNode, handL: TransformNode, weapon: TransformNode): void {
+  const chain = (n: TransformNode): TransformNode[] => {
+    const out: TransformNode[] = [];
+    for (let p: Node | null = n; p; p = p.parent) if (p instanceof TransformNode) out.unshift(p);
+    return out;
+  };
+  for (const n of [...chain(handR), ...chain(handL), ...chain(weapon)]) n.computeWorldMatrix(true);
+  const pr = handR.getAbsolutePosition();
+  const pl = handL.getAbsolutePosition();
+  const along = pr.subtract(pl);
+  const dist = along.length();
+  if (dist < 0.04) return;
+  const w = weapon.getWorldMatrix();
+  const xAxis = new Vector3(w.m[0], w.m[1], w.m[2]);
+  const yCur = new Vector3(w.m[4], w.m[5], w.m[6]);
+  const zAxis = new Vector3(w.m[8], w.m[9], w.m[10]);
+  const unit = yCur.length();
+  const t = along.scale(1 / dist);
+  const y = yCur.normalizeToNew();
+  if (Vector3.Dot(t, y) < 0) t.scaleInPlace(-1); // a lâmina continua para o lado em que a pega a pôs
+  const x = xAxis.subtract(t.scale(Vector3.Dot(xAxis, t))).normalize();
+  // mesma "mão" (reflexão do glTF) da matriz atual
+  const handed = Vector3.Dot(Vector3.Cross(xAxis, yCur), zAxis) < 0 ? -1 : 1;
+  const z = Vector3.Cross(x, t).scale(handed);
+  // a mão esquerda segura o cabo 0,2 unidades abaixo do ponto da direita
+  const origin = pl.add(t.scale(0.2 * unit));
+  const m = Matrix.FromValues(
+    x.x * unit, x.y * unit, x.z * unit, 0,
+    t.x * unit, t.y * unit, t.z * unit, 0,
+    z.x * unit, z.y * unit, z.z * unit, 0,
+    origin.x, origin.y, origin.z, 1,
+  );
+  const parent = weapon.parent instanceof TransformNode ? weapon.parent.getWorldMatrix() : Matrix.Identity();
+  const local = m.multiply(parent.clone().invert());
+  const scale = new Vector3();
+  const rot = new Quaternion();
+  const pos = new Vector3();
+  if (!local.decompose(scale, rot, pos)) return;
+  weapon.position.copyFrom(pos);
+  weapon.rotationQuaternion = rot;
 }
 
 /**
