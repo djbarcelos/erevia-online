@@ -1981,3 +1981,126 @@ section.party {
   width: 0;
   background: linear-gradient(90deg, #5fa8ff, #bfe3ff);
 }
+
+/* ======================= REDESIGN "VIGÍLIA": o jogo é a estrela, a interface sai da frente ======================= */
+
+.hud-me,
+.hud-target,
+.channel-bar {
+  background: rgba(9, 10, 16, 0.74);
+  border: 1px solid rgba(236, 230, 218, 0.12);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.hud-target {
+  border-color: rgba(210, 80, 60, 0.45);
+}
+
+.hud-target.boss {
+  border-color: rgba(180, 108, 255, 0.6);
+}
+
+.me-name,
+.t-name b,
+.mm-zone {
+  font-family: var(--font-cond);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.me-crest {
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  border: 1px solid rgba(214, 180, 110, 0.6);
+  box-shadow: none;
+  background: #1a1d29;
+}
+
+.me-level {
+  background: #0c0e15;
+  border: 1px solid var(--gold);
+  color: var(--gold-hi);
+  font-family: var(--font-cond);
+}
+
+.hud-me .pbar,
+.hud-target .pbar {
+  border-radius: 3px;
+}
+
+/* Minimapa: anel fino dourado em vez do aro grosso. */
+.mm-frame {
+  padding: 3px;
+  background: rgba(9, 10, 16, 0.82);
+  box-shadow:
+    0 0 0 1px rgba(214, 180, 110, 0.55),
+    0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.mm-zone {
+  color: var(--text);
+  text-shadow: 0 1px 4px #000;
+}
+
+/* Missões e grupo: cartão translúcido, título condensado. */
+.quests,
+section.party {
+  background: rgba(9, 10, 16, 0.6);
+  border: 1px solid rgba(236, 230, 218, 0.1);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.side-head {
+  font-family: var(--font-cond);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.1em;
+}
+
+.quest b {
+  font-family: var(--font-cond);
+  color: var(--text);
+}
+
+.m-crest {
+  border-radius: 6px;
+}
+
+/* Barra de skills e botão de caça: tinta-noite, ouro só no estado ativo. */
+.hotbar {
+  background: rgba(9, 10, 16, 0.72);
+  border: 1px solid rgba(236, 230, 218, 0.12);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.hb-key {
+  font-family: var(--font-cond);
+}
+
+.auto-btn {
+  background: rgba(9, 10, 16, 0.72);
+  border: 1px solid rgba(214, 180, 110, 0.6);
+  border-radius: 8px;
+  color: var(--gold-hi);
+  font-family: var(--font-cond);
+}
+
+.auto-btn[aria-pressed="true"],
+.act-auto[aria-pressed="true"] {
+  background: var(--gold);
+  color: #17130b;
+}
+
+.menu-btn {
+  background: rgba(9, 10, 16, 0.72);
+  border-color: rgba(236, 230, 218, 0.12);
+  border-radius: 8px;
+}
+
+.hud-xp {
+  background: rgba(0, 0, 0, 0.6);
+}
