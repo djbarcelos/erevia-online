@@ -17,6 +17,10 @@ export const TOWN_KITS: Record<string, string> = {
   wall_straight_gate: "town_gate_b.glb",
   tent: "town_stall_b.glb",
   wheelbarrow: "town_cart_b.glb",
+  barrel: "town_barrel_b.glb",
+  crate_a_big: "town_crate_b.glb",
+  crate_long_a: "town_crate_b.glb",
+  flag_blue: "town_banner_b.glb",
 };
 
 /** Adereços novos, sem item no kit antigo: tipo → arquivo (a escala é 1: o GLB já está em metros). */
@@ -24,6 +28,7 @@ export const EXTRA_FILES: Record<string, string> = {
   town_bench: "town_bench_b.glb",
   town_lamp: "town_lamp_b.glb",
   town_sign: "town_sign_b.glb",
+  town_corner: "town_corner_b.glb",
   town_tomb: "town_tomb_b.glb",
   town_crystal: "town_crystal_b.glb",
   town_pillar: "town_pillar_b.glb",
@@ -107,6 +112,28 @@ export function regionProps(world: Pick<WorldData, "colliders" | "roads">): Worl
       out.push({ k: p.kind, x, z, r: rand() * Math.PI * 2, s: [s, s, s] });
       placed++;
     }
+  }
+  return out;
+}
+
+/** Adereços pequenos do kit antigo, sem colisão: ficam fora da conferência de "NPC dentro de parede". */
+export const SMALL_PROPS = new Set(["tent", "wheelbarrow", "barrel", "crate_a_big", "crate_long_a", "flag_blue"]);
+
+/**
+ * Trechos de canto da muralha: um torreão pequeno em cada vértice entre dois trechos (menos onde já há
+ * uma torre grande), que esconde a emenda e os postes das pontas dos trechos. Só visual.
+ */
+export function wallCorners(world: Pick<WorldData, "wall" | "objects">): WorldData["objects"] {
+  const { apothem, sides } = world.wall;
+  const vertexR = apothem / Math.cos(Math.PI / sides);
+  const towers = world.objects.filter((o) => o.k === "tower_a");
+  const out: WorldData["objects"] = [];
+  for (let i = 0; i < sides; i++) {
+    const a = ((i + 0.5) / sides) * Math.PI * 2;
+    const x = Math.round(Math.cos(a) * vertexR * 100) / 100;
+    const z = Math.round(Math.sin(a) * vertexR * 100) / 100;
+    if (towers.some((t) => Math.hypot(t.x - x, t.z - z) < 3)) continue;
+    out.push({ k: "town_corner", x, z, r: Math.atan2(-x, -z) + Math.PI, s: [1, 1, 1] });
   }
   return out;
 }
