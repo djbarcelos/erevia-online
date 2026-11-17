@@ -91,6 +91,8 @@ export class AnimController {
   /** Pausas do parado ("idle breaks": olhar em volta, alongar, gesto): tocam de vez em quando, com tempo e fase próprios. */
   private breaks!: AnimationGroup[];
   private resetHooked = false;
+  /** Tempo (s) que os clipes ficaram pausados desde a última vez que animaram. */
+  private asleepFor = 0;
   /** Escala do corpo (monstros grandes dão passos maiores): multiplica as velocidades naturais dos clipes. */
   private bodyScale = 1;
   /** Só para medir o "antes" (?legacymove=1): velocidade do clipe pela constante antiga e mistura mais lenta. */
@@ -377,6 +379,22 @@ export class AnimController {
   }
 
   /** Voltou para a cena: retoma os grupos e toca o que ficou pendente. */
+  /**
+   * Quem acordou depois de `seconds` parado (fora da tela, ou longe e animado a 15 Hz) retoma o passo na fase certa:
+   * os clipes de locomoção avançam o tempo que ficaram pausados, senão o pé tocaria devagar e deslizaria.
+   */
+  private catchUp(seconds: number): void {
+    if (seconds <= 0) return;
+    for (const g of [this.anims.get("idle"), this.anims.get("run"), this.anims.get("walk"), this.breakGroup]) {
+      const a = g?.animatables[0];
+      if (!g || !a || !g.isPlaying) continue;
+      const span = g.to - g.from;
+      if (span <= 0) continue;
+      const moved = (a.masterFrame - g.from + seconds * fps(g) * g.speedRatio) % span;
+      g.goToFrame(g.from + (moved < 0 ? moved + span : moved));
+    }
+  }
+
   private wake(): void {
     if (this.resetOnWake) {
       this.resetOnWake = false;
@@ -384,6 +402,8 @@ export class AnimController {
     }
     for (const g of this.paused) g.restart(); // grupo parado nesse meio-tempo não volta
     this.paused.length = 0;
+    this.catchUp(this.asleepFor);
+    this.asleepFor = 0;
     const d = this.deferred;
     if (!d) return;
     this.deferred = null;
@@ -431,7 +451,10 @@ export class AnimController {
       if (this.stopLeft > 0) return;
       this.resume();
     }
-    if (!active) return;
+    if (!active) {
+      this.asleepFor += dt;
+      return;
+    }
     const k = 1 - Math.exp(-(this.legacy ? 10 : BLEND_RATE) * dt);
     this.runWeight += ((moving && !this.holding ? 1 : 0) - this.runWeight) * k;
     // Devagar (monstros, lentidão): clipe de andar, senão o personagem "corre" em câmera lenta.

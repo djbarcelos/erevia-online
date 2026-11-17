@@ -74,6 +74,9 @@ const RUN_ANIM_SPEED = 5;
 const LABEL_DISTANCE = 30;
 /** Além desta distância da câmera (ou fora da tela) o personagem congela a animação. */
 const ANIM_DISTANCE = 50;
+/** Quem anda continua animado (a 15 Hz) até esta distância: parado em pose de parado, o monstro que vem de longe deslizava. */
+const ANIM_FAR_DISTANCE = 90;
+const ANIM_FAR_STEP = 1 / 15;
 /** Só personagens até esta distância do jogador projetam sombra. */
 const SHADOW_DISTANCE = 35;
 const BONE_COLOR = "#d9d2c0";
@@ -223,6 +226,8 @@ interface View extends EntityInfo {
   pz: number;
   vis: number;
   walking: boolean;
+  /** Tempo (s) desde a última vez que a animação rodou, para animar a 15 Hz quem anda longe (ANIM_FAR_DISTANCE). */
+  animAcc: number;
   /** Posição do servidor, extrapolada localmente em direção ao destino. */
   server: { x: number; z: number };
   target: { x: number; z: number };
@@ -595,7 +600,7 @@ export class EntityManager {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
       model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
       weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, cls: e.activeClass || e.model, baseColor, clanText, titleText, pkRing: null,
-      px: e.x, pz: e.z, vis: 0, walking: false,
+      px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
@@ -1570,8 +1575,16 @@ export class EntityManager {
         // LOD de animação: quem está fora da tela ou longe não tem os ossos recalculados.
         let active = always;
         if (!active) {
-          const near = !cam || Vector3.DistanceSquared(cam, pos) < ANIM_DISTANCE * ANIM_DISTANCE;
-          active = near && (!planes || (v.bounds ? v.bounds.isInFrustum(planes) : v.meshes.some((m) => m.isInFrustum(planes))));
+          const d2 = cam ? Vector3.DistanceSquared(cam, pos) : 0;
+          const near = d2 < ANIM_DISTANCE * ANIM_DISTANCE;
+          const far = !near && v.walking && d2 < ANIM_FAR_DISTANCE * ANIM_FAR_DISTANCE;
+          active = (near || far) && (!planes || (v.bounds ? v.bounds.isInFrustum(planes) : v.meshes.some((m) => m.isInFrustum(planes))));
+          // Entre 50 e 90 m anda a 15 Hz: o tempo parado é recuperado ao acordar (AnimController.catchUp).
+          if (active && far) {
+            v.animAcc += dt;
+            if (v.animAcc < ANIM_FAR_STEP) active = false;
+            else v.animAcc = 0;
+          }
         }
         // Andar acaba com o emote na hora (o aviso do servidor chega depois).
         if (moving && v.anim.emoting) v.anim.endEmote();
