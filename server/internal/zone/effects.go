@@ -149,11 +149,10 @@ func (z *Zone) updateAuras() {
 		}
 	}
 	for _, k := range z.players {
-		r := k.pl.rank(game.SkillCourage)
-		if r < 1 || k.dead {
+		v := k.pl.passives.Of(game.PassiveCourage)
+		if v <= 0 || k.dead {
 			continue
 		}
-		v := game.Skills[game.SkillCourage].PValue.At(r)
 		for _, p := range z.players {
 			if !p.dead && z.allies(k, p) && dist(p.pos, k.pos) <= game.CourageRadius {
 				z.applyAura(k, p, game.EffectCourage, v)
@@ -222,7 +221,7 @@ func (z *Zone) spreadPlague(dead *entity) {
 	if src == nil {
 		return
 	}
-	def := &game.EffectDef{Kind: game.EffectPlague, Duration: game.Skills[game.SkillPlague].OnTarget.Duration.At(1), Value: ef.value}
+	def := &game.EffectDef{Kind: game.EffectPlague, Duration: ef.duration, Value: ef.value}
 	for _, m := range z.monsters {
 		if m != dead && !m.dead && !m.mon.unseen() && dist(m.pos, dead.pos)-m.bodyRadius() <= game.PlagueSpread {
 			z.applyEffect(src, m, def)

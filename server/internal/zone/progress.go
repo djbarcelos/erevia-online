@@ -69,6 +69,7 @@ func (z *Zone) computeStats(p *entity, spent game.Attrs) game.Stats {
 
 // refreshStats recalcula os atributos (nível, pontos, equipamento ou passivas mudaram).
 func (z *Zone) refreshStats(p *entity) {
+	p.pl.passives = game.PassiveTotals(p.pl.ranks)
 	p.stats = z.computeStats(p, p.pl.attrs)
 	p.hp = math.Min(p.hp, p.stats.MaxHP)
 	p.mp = math.Min(p.mp, p.stats.MaxMP)
@@ -204,7 +205,7 @@ func validHotbarEntry(p *entity, e string) bool {
 			return false
 		}
 		s := game.Skills[uint32(id)]
-		return s != nil && s.Class == p.pl.class && (s.Spec == "" || s.Spec == p.pl.spec) && !s.IsPassive() && p.pl.rank(s.ID) > 0
+		return game.SkillAvailable(s, p.pl.class, p.pl.spec) && !s.IsPassive() && p.pl.rank(s.ID) > 0
 	case strings.HasPrefix(e, "item:"):
 		d := game.Items[e[5:]]
 		return d != nil && (d.HealHP > 0 || d.HealMP > 0)
@@ -252,7 +253,7 @@ func loadProgress(class, spec string, level int, attrs game.Attrs, ranks map[uin
 	}
 	clean := map[uint32]int{}
 	for id, r := range ranks {
-		if s := game.Skills[id]; s != nil && s.Class == class && (s.Spec == "" || s.Spec == spec) && r > 0 {
+		if s := game.Skills[id]; game.SkillAvailable(s, class, spec) && r > 0 {
 			clean[id] = min(r, s.MaxRank)
 		}
 	}
