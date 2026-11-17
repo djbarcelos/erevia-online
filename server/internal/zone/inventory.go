@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"erevia/server/internal/game"
+	"erevia/server/internal/pb"
 )
 
 // Lugares de um item (iguais aos do protocolo).
@@ -344,6 +345,21 @@ func (inv *inventory) weaponEnchant() int {
 		return w.enchant
 	}
 	return 0
+}
+
+// armorLook: a raridade de cada peça de armadura equipada (o visual do corpo que os outros veem; nil = nada).
+func (inv *inventory) armorLook() *pb.ArmorLook {
+	g := func(slot int) uint32 {
+		if it := inv.equip[slot]; !it.empty() {
+			return uint32(it.def.Grade)
+		}
+		return 0
+	}
+	a := &pb.ArmorLook{Chest: g(game.SlotArmor), Helm: g(game.SlotHelmet), Cape: g(game.SlotCape), Legs: g(game.SlotLegs), Hands: g(game.SlotHands), Feet: g(game.SlotFeet)}
+	if a.Chest|a.Helm|a.Cape|a.Legs|a.Hands|a.Feet == 0 {
+		return nil
+	}
+	return a
 }
 
 // look é o que os outros veem: modelos das armas e a raridade da principal.

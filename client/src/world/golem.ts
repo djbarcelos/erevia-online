@@ -631,6 +631,7 @@ export function createGolem(scene: Scene, id: string): CharacterInstance {
     impacts: { attack: 18 / FPS, skill: 22 / FPS, buff: 14 / FPS },
     resetPose,
     setWeapons: () => {},
+    setArmor: () => {},
     setLook: () => {},
     meshes: () => all,
     dispose: () => {

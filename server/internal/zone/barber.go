@@ -28,7 +28,8 @@ func appearancePB(p *entity) *pb.ServerMessage {
 	w, o, g := p.pl.inv.look()
 	return &pb.ServerMessage{Msg: &pb.ServerMessage_Appearance{Appearance: &pb.Appearance{
 		Id: p.id, Weapon: w, Offhand: o, WeaponGrade: uint32(g), WeaponEnchant: uint32(p.pl.inv.weaponEnchant()),
-		Look: lookPB(p.pl.look),
+		Look:  lookPB(p.pl.look),
+		Armor: p.pl.inv.armorLook(),
 	}}}
 }
 

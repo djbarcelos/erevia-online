@@ -134,6 +134,10 @@ if mode == "angles":
 else:
     # clips = todos os clipes (7 quadros); range:<clipe>:<ini s>:<fim s>:<n> = um trecho de um clipe com n quadros
     sel = [(a, 7, None) for a in actions]
+    # only:<sufixo,sufixo>: só os clipes cujo nome termina num dos sufixos (ex.: only:Idle,Break1,Break2,Greet)
+    if mode.startswith("only:"):
+        keep = mode[5:].split(",")
+        sel = [(a, 7, None) for a in actions if a.name.split("_")[-1] in keep]
     if mode.startswith("range:"):
         _, cname, t0, t1, cn = mode.split(":")
         sel = [(a, int(cn), (float(t0) * 30, float(t1) * 30)) for a in actions if a.name == cname]

@@ -930,6 +930,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     if (d <= SHOP_OPEN_DIST) {
       pendingShop = 0;
       gameAudio.ui("open");
+      entities.greetNpc(id); // NPC do remaster: vira e cumprimenta
       const npc = npcInfo.get(id);
       shop.close();
       teleportWin.close();

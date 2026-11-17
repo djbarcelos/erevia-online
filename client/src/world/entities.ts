@@ -36,6 +36,7 @@ import {
 import { gameAudio } from "../audio";
 import { AnimController } from "./anim";
 import { updateMotion } from "./motion";
+import { toArmorGrades, type ArmorGrades } from "./armor";
 import { toBodyLook, type BodyLook } from "./body-look";
 import type { Fx, FxBody, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
@@ -49,7 +50,7 @@ import { settings } from "../ui/kit";
 import { skillFxColors } from "../ui/skill-themes";
 import type { EntityProbe } from "../net/invariants";
 import { FIGHT_MS, type HuntCandidate } from "./huntrules";
-import { remasterModelOf } from "./remaster";
+import { remasterModelOf, remasterNpcModel } from "./remaster";
 import { ARCH, neutralNow } from "./roles";
 import { groundClearance, heightAt, terrain } from "./terrain";
 
@@ -204,6 +205,8 @@ interface View extends EntityInfo {
   offhand: string;
   grade: number;
   weaponEnchant: number;
+  /** Jogadores: raridade das peças de armadura (remaster: o corpo, as ombreiras, a capa e o elmo seguem). */
+  armor: ArmorGrades;
   /** Jogadores: cor do emblema (nome e anel no chão). */
   emblem: string;
   /** Visual do corpo (heróis: jogadores e o barbeiro). */
@@ -258,6 +261,8 @@ interface View extends EntityInfo {
   lastLand: number;
   /** Para onde virar (golpes): gira suave até lá; null = segue o movimento. */
   faceYaw: number | null;
+  /** NPC do remaster que cumprimentou: até quando fica virado para o jogador (performance.now(); 0 = parado como sempre). */
+  greetUntil: number;
   /** Monstros: último golpe entre ele e você (performance.now(); a auto-caça vê quem briga). */
   fightAt: number;
   /** Encaixe da mão da arma (rastro do golpe); undefined = ainda não procurado. */
@@ -454,11 +459,13 @@ export class EntityManager {
     v.offhand = a.offhand;
     v.grade = a.weaponGrade;
     v.weaponEnchant = a.weaponEnchant;
+    v.armor = toArmorGrades(a.armor);
     if (a.look) v.look = toBodyLook(a.look);
     if (!v.model3d) return;
     v.model3d.setLook(v.look);
     this.setShadow(v, false); // as malhas mudam; a sombra volta no próximo quadro
     v.model3d.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
+    v.model3d.setArmor(v.armor);
     v.meshes = v.model3d.meshes();
     this.notPickable(v.meshes);
     this.fixBounds(v); // a cabeça nova é outra malha
@@ -601,14 +608,14 @@ export class EntityManager {
 
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
-      model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
+      model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, armor: toArmorGrades(e.armor), emblem, look: toBodyLook(e.look),
       weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, cls: e.activeClass || e.model, baseColor, clanText, titleText, pkRing: null,
       px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
-      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, fightAt: 0, hand: undefined,
+      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, greetUntil: 0, fightAt: 0, hand: undefined,
       bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
     };
     this.views.set(e.id, v);
@@ -1486,6 +1493,21 @@ export class EntityManager {
     this.refreshHpBar(v);
   }
 
+  /**
+   * O jogador abriu a conversa ou a loja de um NPC do remaster: ele se vira para o jogador e faz o gesto de
+   * cumprimento (clipe `buff`); alguns segundos depois volta a olhar para a praça. NPC de outro estilo: nada muda.
+   */
+  greetNpc(id: number): void {
+    const v = this.views.get(id);
+    if (v?.kind !== EntityKind.NPC || !v.anim || !remasterNpcModel(v.name)) return;
+    const me = this.localPosition();
+    if (me) {
+      v.faceYaw = Math.atan2(me.x - v.root.position.x, me.z - v.root.position.z);
+      v.greetUntil = performance.now() + 6000;
+    }
+    v.anim.play("buff");
+  }
+
   /** Emote de um jogador: acenar toca uma vez; sentar e dançar ficam até ele andar ou atacar. */
   emote(id: number, kind: EmoteKind): void {
     const v = this.views.get(id);
@@ -1560,6 +1582,10 @@ export class EntityManager {
       const steering = dist > 0.05 && !v.dead;
       const moving = this.legacyMove ? steering : v.walking;
       if (v.id === this.localId) this.footsteps(v, moving, dt);
+      if (v.greetUntil && performance.now() > v.greetUntil) {
+        v.greetUntil = 0;
+        v.faceYaw = Math.atan2(-pos.x, -pos.z); // de volta para o centro da praça
+      }
       if (steering) {
         v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
         v.faceYaw = null;
@@ -1777,17 +1803,24 @@ export class EntityManager {
     if (v.model3d || !this.models) return;
     // ?remaster=1: os chefes com silhueta própria (Senhor dos Ossos, Ozrhal) têm modelo à parte.
     const bossModel = v.boss ? remasterModelOf(v.model, true) : v.model;
-    // Remaster: golem e chefes baixam sob demanda; até chegar a entidade fica como cápsula (não o esqueleto de outro).
-    for (const m of new Set([bossModel, v.model])) {
-      if (!this.models.pending(m)) continue;
+    // ?remaster=1: NPC com modelo próprio (pelo nome; o servidor manda um herói).
+    const npcModel = v.kind === EntityKind.NPC ? remasterNpcModel(v.name) : null;
+    // Remaster: golem, chefes e NPCs baixam sob demanda; até chegar a entidade fica como cápsula (não o modelo de outro).
+    for (const m of new Set([npcModel, bossModel, v.model])) {
+      if (!m || !this.models.pending(m)) continue;
       void this.models.ensure(m);
       return;
     }
+    // O visual do servidor (pele, cabelo, roupa) é de herói: só vale nos modelos de NPC que têm máscara de repintura.
     const inst =
+      (npcModel && this.models.has(npcModel) ? this.models.instantiate(npcModel, String(v.id), undefined, npcModel === "npc_guarda" ? v.look : undefined) : null) ??
       (bossModel !== v.model ? this.models.instantiate(bossModel, String(v.id), undefined, v.look) : null) ??
       this.models.instantiate(v.model, String(v.id), undefined, v.look);
     if (!inst) return;
-    if (v.kind === EntityKind.PLAYER) inst.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
+    if (v.kind === EntityKind.PLAYER) {
+      inst.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
+      inst.setArmor(v.armor);
+    }
     inst.root.parent = v.visual;
     inst.root.scaling.scaleInPlace(v.scale);
     const meshes = inst.meshes();

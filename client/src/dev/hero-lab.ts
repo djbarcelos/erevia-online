@@ -4,16 +4,18 @@
  * `CharacterModels` do jogo. Os prints dos heróis (docs/arte/remaster-herois/) saem daqui.
  *
  * window.lab.show({ cam: "front"|"side"|"back"|"three", items: [{ model, right, left, role, t, look }] })
- *   role = papel de animação (idle, walk, run, attack, hit, death, buff...), t = 0..1 do clipe.
+ *   role = papel de animação (idle, walk, run, attack, hit, death, buff...), t = 0..1 do clipe,
+ *   grade = grau do item (1-5): escolhe a forma da arma (comum, rara, alta) e o brilho, como no jogo.
  */
-import { ArcRotateCamera, Color4, Engine, HemisphericLight, DirectionalLight, Scene, TransformNode, Vector3, type AnimationGroup } from "@babylonjs/core";
+import { ArcRotateCamera, Axis, Quaternion, Color4, Engine, HemisphericLight, DirectionalLight, Scene, TransformNode, Vector3, type AnimationGroup } from "@babylonjs/core";
 import { configureKtx2 } from "../world/assets";
 import { AnimController } from "../world/anim";
 import { CharacterModels, WEAPON_GRIPS, type AnimRole, type CharacterInstance, type Grip } from "../world/models";
 import { setBodyPalettes, type BodyLook } from "../world/body-look";
+import { toArmorGrades, type ArmorGrades } from "../world/armor";
 
-interface Item { model: string; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook }
-interface Spec { grips?: Record<string, Grip>; radius?: number; cam?: "front" | "side" | "back" | "three"; items: Item[]; gap?: number; height?: number }
+interface Item { model: string; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook; grade?: number; armor?: Partial<ArmorGrades> }
+interface Spec { grips?: Record<string, Grip>; radius?: number; cam?: "front" | "side" | "back" | "three"; items: Item[]; gap?: number; height?: number; settle?: number }
 
 configureKtx2();
 // Paletas de mentira (o laboratório não tem servidor): 1-3 em cada eixo.
@@ -43,6 +45,7 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
 (window as unknown as { lab: unknown }).lab = {
   async show(spec: Spec): Promise<string> {
     await ready;
+    await Promise.all(spec.items.map((i) => models!.ensure(i.model))); // NPCs das outras regiões carregam sob demanda
     Object.assign(WEAPON_GRIPS, spec.grips ?? {});
     for (const i of live) i.dispose();
     live = [];
@@ -51,6 +54,8 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
     spec.items.forEach((it, k) => {
       const inst = models!.instantiate(it.model, `lab${k}`, { "handslot.r": it.right ?? null, "handslot.l": it.left ?? null }, it.look);
       if (!inst) return;
+      if (it.armor) inst.setArmor(toArmorGrades(it.armor)); // raridade das peças (tunnel#96)
+      if (it.grade) inst.setWeapons(it.right ?? null, it.left ?? null, it.grade, 0);
       inst.root.position.x = (k - (n - 1) / 2) * gap;
       const g: AnimationGroup | undefined = inst.anims.get(it.role ?? "idle");
       if (g) {
@@ -66,7 +71,7 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
     cam.alpha = alpha; cam.beta = 1.45;
     cam.radius = spec.radius ?? Math.max(3.2, n * gap * 0.8 + 1.5);
     for (let f = 0; f < 6; f++) await new Promise((r) => requestAnimationFrame(r));
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, spec.settle ?? 1500)); // texturas e peças de armadura carregam sob demanda
     return live.map((i) => (i.root as TransformNode).name).join(",");
   },
   /** Toca o parado de verdade (AnimController com as pausas) e diz quando cada pausa começou, por até `seconds` s. */
@@ -201,6 +206,14 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
     g.dispose();
     return { seconds: Math.round(((g.to - g.from) / fps) * 100) / 100, speed: n ? Math.round((sum / n) * 100) / 100 : 0 };
   },
+  /** Gira as peças presas nos ossos (depuração: orientação de peças novas). */
+  turnPieces(item: number, deg: number, parent = "Head"): void {
+    for (const n of scene.transformNodes) {
+      if (n.name === `node0#lab${item}` && n.parent?.name.startsWith(`mixamorig:${parent}`) && n.rotationQuaternion) n.rotationQuaternion = n.rotationQuaternion.multiply(Quaternion.RotationAxis(Axis.Y, (deg * Math.PI) / 180));
+    }
+  },
   models: () => models,
+  /** Nós da cena cujo nome casa (depuração das peças anexadas). */
+  find: (re: string) => scene.transformNodes.concat(scene.meshes as never[]).filter((n) => new RegExp(re).test(n.name)).map((n) => ({ name: n.name, parent: n.parent?.name, on: n.isEnabled(), pos: (n as TransformNode).position?.asArray(), sc: (n as TransformNode).scaling?.asArray(), rq: (n as TransformNode).rotationQuaternion?.asArray() })),
   cam: () => ({ a: cam.alpha, b: cam.beta, r: cam.radius, p: cam.position.asArray() }),
 };

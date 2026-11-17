@@ -5,7 +5,7 @@
 // Uso (dentro de client/):
 //   node scripts/import-asset.mjs <arquivo.glb> <categoria> [nome] [--check] [--force]
 //        [--no-lod] [--lod-prune] [--no-lod2=<regex>] [--no-ktx2] [--etc1s] [--resize=<px>] [--max-tris=<n>] [--variantes=<regex>]
-//   categorias: personagem, arma, monstro, chefe, cenario
+//   categorias: personagem, arma, armadura, monstro, chefe, cenario
 //   ex.: node scripts/import-asset.mjs ~/arte/CH_Knight/exports/CH_Knight.glb personagem knight_b
 //
 // Faz: tira duplicatas e nós sem uso, reamostra animações e junta primitivas de malhas sem
@@ -17,7 +17,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { EXTMeshoptCompression, KHRTextureBasisu } from '@gltf-transform/extensions';
 import { dedup, join as joinMeshes, prune, resample } from '@gltf-transform/functions';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { BUDGET, evaluate, measure } from './lib/asset-budget.mjs';
 import { capTriangles, compressTextures, generateLods, resizeTextures } from './lib/asset-optimize.mjs';
 
@@ -27,7 +27,7 @@ const flags = new Set(process.argv.slice(2).filter((a) => a.startsWith('--')));
 const variants = process.argv.slice(2).filter((a) => a.startsWith('--variantes=')).map((a) => a.slice(12));
 const [input, category, name = basename(args[0] ?? '', '.glb')] = args;
 if (!input || !BUDGET[category]) {
-  console.error('Uso: node scripts/import-asset.mjs <arquivo.glb> <personagem|arma|monstro|chefe|cenario> [nome] [--check] [--force] [--no-lod] [--no-ktx2] [--etc1s] [--variantes=regex]');
+  console.error('Uso: node scripts/import-asset.mjs <arquivo.glb> <personagem|arma|armadura|monstro|chefe|cenario> [nome] [--check] [--force] [--no-lod] [--no-ktx2] [--etc1s] [--variantes=regex]');
   process.exit(2);
 }
 // Destino e manifesto podem ser trocados por variável de ambiente (os testes usam uma pasta temporária).
@@ -77,6 +77,7 @@ if (!flags.has('--no-ktx2') && doc.getRoot().listTextures().length) {
 }
 
 mkdirSync(out, { recursive: true });
+mkdirSync(dirname(join(out, `${name}.glb`)), { recursive: true });
 const dest = join(out, `${name}.glb`);
 await io.write(dest, doc);
 console.log(`  → ${dest} (${(statSync(dest).size / 1024).toFixed(1)} KB)`);

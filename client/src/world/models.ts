@@ -26,7 +26,9 @@ import { reportClientError } from "../net/errors";
 import { RoleMap } from "./anim";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, REMASTER, REMASTER_FILES, REMASTER_LAZY, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS } from "./remaster";
+import { lodFor, REMASTER, REMASTER_FILES, REMASTER_LAZY, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS, WEAPON_FORM_FILES, remasterWeapon } from "./remaster";
+import { armorKey, bodyTier, capeFile, helmFile, NO_ARMOR, pauldronFile, TIER_FILES, type ArmorGrades } from "./armor";
+import { ARMOR_ATTACH } from "./armor-attach";
 import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
 
 /**
@@ -168,6 +170,25 @@ const REMASTER_SETS: Record<string, AnimSet> = {
   ozrhal: { idle: "OZ_Idle", walk: "OZ_Walk", run: "OZ_Run", attack: "OZ_Attack", skill: "OZ_Stomp", buff: "OZ_Roar", hit: "OZ_Hit", death: "OZ_Death" },
 };
 /**
+ * NPCs do remaster (docs/arte/remaster-npcs.md): parado próprio, duas pausas (olhar em volta e o gesto do ofício) e o
+ * "cumprimento" (`buff`) que toca quando o jogador abre a conversa ou a loja. NPC não anda nem apanha: os papéis de
+ * combate caem no cumprimento só para o conjunto ficar completo.
+ */
+function npcSet(p: string): AnimSet {
+  return {
+    idle: `${p}Idle`, walk: `${p}Walk`, run: `${p}Run`, attack: `${p}Greet`, skill: `${p}Greet`, buff: `${p}Greet`, hit: `${p}Greet`, death: `${p}Greet`,
+    break1: `${p}Break1`, break2: `${p}Break2`,
+  };
+}
+/** Prefixo dos clipes no arquivo de cada NPC (o adaptador guarda os clipes de todos os modelos num mapa só). */
+export const NPC_CLIP_PREFIX: Record<string, string> = {
+  npc_livia: "LV_", npc_bruno: "BR_", npc_teodoro: "TD_", npc_otto: "OT_", npc_ysolde: "YS_", npc_edrian: "ED_", npc_severino: "SV_",
+  npc_iselda: "IS_", npc_cassio: "CS_", npc_guarda: "GD_", npc_anselmo: "AN_", npc_marga: "MG_", npc_darcio: "DC_", npc_maelis: "ML_",
+  npc_gaspar: "GS_", npc_rovena: "RV_",
+};
+for (const [m, p] of Object.entries(NPC_CLIP_PREFIX)) REMASTER_SETS[m] = npcSet(p);
+
+/**
  * Conjunto de clipes quando o herói segura uma arma de duas mãos (e a esquerda está vazia): parado, andar e
  * correr com as duas mãos juntas na frente do peito (compose-2h-clips.mjs). O bárbaro é o único hoje; sem
  * pausas do parado (os braços ficam presos à arma). null tira o papel do conjunto.
@@ -247,6 +268,10 @@ const WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
   npc_merchant: {},
   npc_smith: { "handslot.r": "axe_1handed" },
 };
+/** Ferramenta na mão dos NPCs do remaster (arquivo da arma): o ferreiro leva o martelo (machado de uma mão). */
+const NPC_WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
+  npc_bruno: { "handslot.r": "axe_1handed" }, // o gesto do ofício é o martelo; sem martelo no jogo, a ferramenta de uma mão de sempre
+};
 /** Todas as armas que os itens podem mostrar na mão. */
 const ITEM_WEAPONS = [
   "sword_1handed", "sword_2handed", "sword_2handed_color", "axe_1handed", "axe_2handed", "staff", "wand", "dagger",
@@ -256,8 +281,13 @@ const ITEM_WEAPONS = [
 ];
 /** Brilho das armas raras (3) e épicas (4). */
 const GRADE_GLOW: Record<number, Color3> = { 3: new Color3(0.15, 0.35, 0.9), 4: new Color3(0.6, 0.2, 0.95), 5: new Color3(1, 0.5, 0.1) };
+/** Brilho sutil do corpo lendário (somado à luz; pulsa de leve). */
+const LEGEND_GLOW = new Color3(0.1, 0.075, 0.02);
 /** Encantamento: +4 a +6 brilha dourado; +7 ou mais, dourado forte e pulsando. */
 const ENCHANT_GLOW = { light: new Color3(0.45, 0.33, 0.08), strong: new Color3(1, 0.72, 0.22) };
+
+/** Fração do brilho de raridade e de encantamento nas armas do remaster. */
+const SOFT_GLOW = 0.12;
 
 /** Qual brilho a arma usa: o do encantamento vence o da raridade. */
 function glowKey(grade: number, enchant: number): string | null {
@@ -293,6 +323,8 @@ export interface CharacterInstance {
   setWeapons(right: string | null, left: string | null, grade?: number, enchant?: number): void;
   /** Troca o visual do corpo (pele, cabelo, roupa, rosto e chapéu). */
   setLook(look: BodyLook): void;
+  /** Armadura por raridade (remaster): textura do corpo, ombreiras, capa e variante de elmo. Sem efeito fora do remaster. */
+  setArmor(armor: ArmorGrades): void;
   /** Malhas atuais (corpo + armas), para sombra e visibilidade. */
   meshes(): AbstractMesh[];
   dispose(): void;
@@ -312,6 +344,8 @@ interface ModelAssets {
 
 /** Escala extra das armas do remaster que dividem o arquivo com outra (REMASTER_WEAPONS). */
 const weaponScale = new Map<AssetContainer, number>();
+/** Formas por raridade das armas do remaster (WEAPON_FORM_FILES), por arquivo. */
+const weaponForms = new Map<string, AssetContainer>();
 
 export class CharacterModels {
   private constructor(
@@ -325,6 +359,12 @@ export class CharacterModels {
   private glowMats = new Map<string, Material>();
   /** Materiais com a textura repintada, por classe + cores; descartados quando ninguém usa. */
   private paintMats = new Map<string, { mat: Promise<Material | null>; refs: number }>();
+  /** Materiais de corpo por classe e faixa de raridade (textura própria, KTX2 sob demanda). */
+  private tierMats = new Map<string, Promise<Material | null>>();
+  /** "Bom": o mesmo corpo com mais metal; um por material-base. */
+  private goodMats = new Map<number, Material>();
+  /** Peças anexadas (ombreiras, capas, elmos) carregadas sob demanda. */
+  private pieceFiles = new Map<string, Promise<AssetContainer | null>>();
   /** Cópias do remaster com LOD, reavaliadas a cada 250 ms pela distância da câmera. */
   private lodInstances = new Set<{ root: TransformNode; level: number; set: (l: number) => void }>();
   private lodTick: Observer<Scene> | null = null;
@@ -357,19 +397,19 @@ export class CharacterModels {
   }
 
   /** Pega (criando se preciso) o material repintado; devolva com releasePaint. */
-  private acquirePaint(model: string, base: Material, look: BodyLook): Promise<Material | null> {
-    const key = colorKey(model, look);
+  private acquirePaint(model: string, tier: number, base: Material, look: BodyLook): Promise<Material | null> {
+    const key = `${colorKey(model, look)}|t${tier}`;
     let e = this.paintMats.get(key);
     if (!e) {
-      e = { mat: this.paintMaterial(base, model, look), refs: 0 };
+      e = { mat: this.paintMaterial(base, model, look, tier), refs: 0 };
       this.paintMats.set(key, e);
     }
     e.refs++;
     return e.mat;
   }
 
-  private releasePaint(model: string, look: BodyLook): void {
-    const key = colorKey(model, look);
+  private releasePaint(model: string, tier: number, look: BodyLook): void {
+    const key = `${colorKey(model, look)}|t${tier}`;
     const e = this.paintMats.get(key);
     if (!e || --e.refs > 0) return;
     this.paintMats.delete(key);
@@ -386,12 +426,12 @@ export class CharacterModels {
    * que mistura a base com a máscara pequena (R pano, G pele) numa textura nova, desenhada uma vez por
    * combinação de cores. A luz pintada da base é mantida (o brilho do pixel original escala a cor nova).
    */
-  private async tintMaterial(base: Material, src: Texture, mask: Texture, model: string, look: BodyLook, pal: BodyPalettes): Promise<Material | null> {
+  private async tintMaterial(base: Material, src: Texture, mask: Texture, model: string, look: BodyLook, pal: BodyPalettes, tier = 0): Promise<Material | null> {
     await new Promise<void>((ok) => (mask.isReady() ? ok() : mask.onLoadObservable.addOnce(() => ok())));
     const scene = base.getScene();
     Effect.ShadersStore[`${TINT_SHADER}PixelShader`] ??= TINT_FRAGMENT;
     const { width } = src.getSize();
-    const tex = new ProceduralTexture(`${src.name}-${colorKey(model, look)}`, width || 1024, TINT_SHADER, scene, null, true, false);
+    const tex = new ProceduralTexture(`${src.name}-${colorKey(model, look)}-t${tier}`, width || 1024, TINT_SHADER, scene, null, true, false);
     const mid = (s: { top: string; bottom: string } | undefined): Color3 => {
       if (!s) return Color3.White();
       const a = Color3.FromHexString(s.top);
@@ -421,14 +461,87 @@ export class CharacterModels {
     return mat;
   }
 
+  /**
+   * Material do corpo de uma faixa de raridade (2 raro, 3 épico, 4 lendário): cópia do material-base com a textura
+   * KTX2 da faixa (public/models/armor/<classe>_<faixa>.ktx2, mesma UV do corpo). Um por classe e faixa, compartilhado
+   * por todos que vestem aquilo (nenhum draw call a mais). A lendária ganha um brilho dourado que pulsa de leve.
+   */
+  private tierMaterial(model: string, tier: number, base: Material): Promise<Material | null> {
+    const key = `${model}:${tier}`;
+    let p = this.tierMats.get(key);
+    if (!p) {
+      p = (async () => {
+        const tex = new Texture(`${BASE}armor/${model}_${TIER_FILES[tier]}.ktx2`, this.scene, { noMipmap: false, invertY: false, samplingMode: Texture.TRILINEAR_SAMPLINGMODE });
+        const ok = await new Promise<boolean>((done) => {
+          if (tex.isReady()) return done(true);
+          tex.onLoadObservable.addOnce(() => done(true));
+          (tex as Texture & { onErrorObservable?: { addOnce(f: () => void): void } }).onErrorObservable?.addOnce(() => done(false));
+          setTimeout(() => done(false), 15000);
+        });
+        if (!ok) {
+          tex.dispose();
+          return null;
+        }
+        const mat = base.clone(`${base.name}-t${tier}`);
+        if (mat instanceof PBRMaterial) {
+          mat.albedoTexture = tex;
+          if (tier === 4) {
+            mat.emissiveColor = LEGEND_GLOW.clone();
+            this.scene.onBeforeRenderObservable.add(() => {
+              const k = 0.6 + 0.4 * Math.sin(performance.now() / 700);
+              mat.emissiveColor.copyFromFloats(LEGEND_GLOW.r * k, LEGEND_GLOW.g * k, LEGEND_GLOW.b * k);
+            });
+          }
+        } else if (mat instanceof StandardMaterial) mat.diffuseTexture = tex;
+        return mat;
+      })();
+      this.tierMats.set(key, p);
+    }
+    return p;
+  }
+
+  /** "Bom": a mesma textura mais clara e lisa, com um fio de aço azulado (um material por base). */
+  private goodMaterial(base: Material): Material {
+    let m = this.goodMats.get(base.uniqueId);
+    if (!m) {
+      m = base.clone(`${base.name}-good`) ?? base;
+      if (m instanceof PBRMaterial) {
+        // Sem mapa de ambiente a cena não reflete, então o "metal" é lido por cor: mais claro, frio e liso.
+        m.albedoColor = new Color3(1.2, 1.2, 1.3);
+        m.roughness = 0.45;
+        m.emissiveColor = new Color3(0.03, 0.04, 0.06);
+      }
+      this.goodMats.set(base.uniqueId, m);
+    }
+    return m;
+  }
+
+  private pieceContainer(file: string): Promise<AssetContainer | null> {
+    let p = this.pieceFiles.get(file);
+    if (!p) {
+      p = LoadAssetContainerAsync(`${BASE}armor/${file}.glb`, this.scene).then(
+        (c) => {
+          for (const m of c.materials) setPaletteKind(m, "char");
+          return c;
+        },
+        (err: unknown) => {
+          reportClientError("model", `peça de armadura não carregou: ${file}`, { file, error: String((err as Error)?.message ?? err) }, err);
+          return null;
+        },
+      );
+      this.pieceFiles.set(file, p);
+    }
+    return p;
+  }
+
   /** Cópia do material com as faixas de pele, cabelo e roupa repintadas. */
-  private async paintMaterial(base: Material, model: string, look: BodyLook): Promise<Material | null> {
+  private async paintMaterial(base: Material, model: string, look: BodyLook, tier = 0): Promise<Material | null> {
     const pal = await bodyPalettes();
     const src = base instanceof PBRMaterial ? base.albedoTexture : base instanceof StandardMaterial ? base.diffuseTexture : null;
     if (!pal || !(src instanceof Texture)) return null;
     await new Promise<void>((ok) => (src.isReady() ? ok() : src.onLoadObservable.addOnce(() => ok())));
     const mask = this.models.get(model)?.mask;
-    if (REMASTER && mask) return this.tintMaterial(base, src, mask, model, look, pal);
+    if (REMASTER && mask) return this.tintMaterial(base, src, mask, model, look, pal, tier);
     const { width, height } = src.getSize();
     const pixels = await src.readPixels()?.catch(() => null);
     if (!pixels || !width) return null;
@@ -456,7 +569,7 @@ export class CharacterModels {
       });
     const tryLoad = (file: string) => load(file).catch(() => null);
 
-    const allWeapons = { ...WEAPONS, ...MONSTER_WEAPONS };
+    const allWeapons = { ...WEAPONS, ...MONSTER_WEAPONS, ...NPC_WEAPONS };
     const weaponFiles = [...new Set([...Object.values(allWeapons).flatMap((w) => Object.values(w)), ...ITEM_WEAPONS])];
     // stone_golem e os chefes só têm arquivo no remaster; sem ele o golem é o de código e os chefes reaproveitam os esqueletos.
     // Os mais pesados e raros (golem, chefes: ~14 MB) ficam de fora e baixam sob demanda (ensure).
@@ -464,7 +577,7 @@ export class CharacterModels {
       (id) => !(REMASTER && REMASTER_LAZY.includes(id)),
     );
 
-    const [animContainers, weaponList, bodies] = await Promise.all([
+    const [animContainers, weaponList, bodies, formList] = await Promise.all([
       Promise.all(ANIM_FILES.map(load)),
       // ?remaster=1: a arma nova no lugar (e o KayKit de sempre se o arquivo faltar).
       Promise.all(
@@ -483,11 +596,14 @@ export class CharacterModels {
           return [id, rm ?? (await tryLoad(`${id}.glb`)), !!rm] as const;
         }),
       ),
+      // ?remaster=1: as formas por raridade (comum, rara e alta de cada família); o grau do item escolhe uma.
+      Promise.all(WEAPON_FORM_FILES.filter(() => REMASTER).map(async (f) => [f, await tryLoad(`weapons/${f}.glb`)] as const)),
     ]);
+    for (const [f, c] of formList) if (c) weaponForms.set(f, c);
     const weaponByFile = new Map(weaponList);
     // Material de paleta: personagens, monstros e armas com a borda e o degradê mais fortes
     // que o cenário. As cópias (repintura, brilho) herdam o tipo.
-    for (const c of [...bodies.map(([, b]) => b), ...weaponList.map(([, w]) => w)]) {
+    for (const c of [...bodies.map(([, b]) => b), ...weaponList.map(([, w]) => w), ...formList.map(([, w]) => w)]) {
       for (const m of c?.materials ?? []) setPaletteKind(m, "char");
     }
 
@@ -572,13 +688,16 @@ export class CharacterModels {
   }
 
   /** Cópia do material com brilho (uma por material + tipo de brilho; "e2" pulsa). */
-  private glowMaterial(base: Material, glow: string): Material {
-    const key = `${base.uniqueId}:${glow}`;
+  private glowMaterial(base: Material, glow: string, soft = false): Material {
+    const key = `${base.uniqueId}:${glow}${soft ? "s" : ""}`;
     let mat = this.glowMats.get(key);
     if (!mat) {
       mat = base.clone(`${base.name}-${glow}`) ?? base;
-      const c =
-        glow === "e2" ? ENCHANT_GLOW.strong.clone() : glow === "e1" ? ENCHANT_GLOW.light : GRADE_GLOW[Number(glow.slice(1))];
+      // Remaster (soft): as armas têm luz pintada e a forma é o que diz a raridade; o brilho é um toque, não uma mancha.
+      const f = soft ? SOFT_GLOW : 1;
+      const c = (
+        glow === "e2" ? ENCHANT_GLOW.strong.clone() : glow === "e1" ? ENCHANT_GLOW.light : GRADE_GLOW[Number(glow.slice(1))]
+      ).scale(f);
       const target = mat instanceof PBRMaterial || mat instanceof StandardMaterial ? mat : null;
       if (target) target.emissiveColor = c;
       if (glow === "e2" && target) {
@@ -586,7 +705,7 @@ export class CharacterModels {
         const scene = mat.getScene();
         scene.onBeforeRenderObservable.add(() => {
           const k = 0.55 + 0.45 * Math.sin(performance.now() / 260);
-          target.emissiveColor.copyFromFloats(ENCHANT_GLOW.strong.r * k, ENCHANT_GLOW.strong.g * k, ENCHANT_GLOW.strong.b * k);
+          target.emissiveColor.copyFromFloats(ENCHANT_GLOW.strong.r * k * f, ENCHANT_GLOW.strong.g * k * f, ENCHANT_GLOW.strong.b * k * f);
         });
       }
       this.glowMats.set(key, mat);
@@ -658,7 +777,11 @@ export class CharacterModels {
       heldFile.delete(slot);
       const hand = byName.get(slot);
       if (!hand || !container) return;
-      const w = container.instantiateModelsToScene((n) => `${n}#${id}`, false);
+      // Remaster: o grau do item troca a forma (comum, rara ou alta) e a escala que o nome do modelo pede.
+      const name = this.weaponFileOf.get(container) ?? "";
+      const form = assets.remaster && grade > 0 ? remasterWeapon(name, grade) : undefined;
+      const formC = form ? weaponForms.get(form.file) : undefined;
+      const w = (formC ?? container).instantiateModelsToScene((n) => `${n}#${id}`, false);
       const wRoot = w.rootNodes[0] as TransformNode;
       // O __root__ do glTF converte o sistema de coordenadas; dentro do esqueleto isso já foi
       // feito, então prendemos o filho direto e descartamos o __root__ da arma.
@@ -678,13 +801,13 @@ export class CharacterModels {
           new Vector3(use.pos[0] * mirror, use.pos[1], use.pos[2]).rotateByQuaternionToRef(SLOT_INV, child.position);
           if (grip.scale) child.scaling.scaleInPlace(grip.scale);
         }
-        const ws = weaponScale.get(container);
+        const ws = formC ? form?.scale : weaponScale.get(container);
         if (ws) child.scaling.scaleInPlace(ws);
         nodes.push(child);
         const glow = glowKey(grade, enchant);
         if (glow) {
-          for (const m of child.getChildMeshes(false)) if (m.material) m.material = this.glowMaterial(m.material, glow);
-          if (child instanceof AbstractMesh && child.material) child.material = this.glowMaterial(child.material, glow);
+          for (const m of child.getChildMeshes(false)) if (m.material) m.material = this.glowMaterial(m.material, glow, assets.remaster);
+          if (child instanceof AbstractMesh && child.material) child.material = this.glowMaterial(child.material, glow, assets.remaster);
         }
       }
       wRoot.dispose();
@@ -700,6 +823,8 @@ export class CharacterModels {
     // LOD (remaster): nós com sufixo _LOD1/_LOD2; o elmo ("Hat", "Hat_LOD1"...) some com hideHat.
     let lodLevel = 0;
     let hatHidden = false;
+    let helmOverride = false; // elmo/chapéu de raridade no lugar do Hat do corpo
+    let onVis: () => void = () => {};
     const lodNodes = assets.remaster
       ? bodyMeshes.map((m) => {
           const base = m.name.split("#")[0].replace(/\.\d+$/, "");
@@ -707,7 +832,8 @@ export class CharacterModels {
         })
       : [];
     const refreshVis = () => {
-      for (const n of lodNodes) n.m.setEnabled(n.lod === lodLevel && !(n.hat && hatHidden));
+      for (const n of lodNodes) n.m.setEnabled(n.lod === lodLevel && !(n.hat && (hatHidden || helmOverride)));
+      onVis();
     };
     refreshVis();
     const unwatchLod = assets.remaster
@@ -718,8 +844,15 @@ export class CharacterModels {
     const isHatMesh = (m: AbstractMesh) => /^Hat(_LODd)?(.d+)?$/.test(m.name.split("#")[0]);
     const paintable = () => bodyMeshes.filter((m) => !isHatMesh(m));
     const baseMat = bodyMeshes.find((m) => m !== head.mesh && !isHatMesh(m))?.material ?? bodyMeshes[0]?.material ?? null;
-    let painted: BodyLook | null = null; // cores em uso (material repintado)
+    let painted: { look: BodyLook; tier: number } | null = null; // cores em uso (material repintado)
     let disposed = false;
+    // Armadura por raridade (remaster): material do corpo da faixa e peças anexadas.
+    let tierMat: Material | null = null;
+    let tierId = 0;
+    let lookNow: BodyLook = ORIGINAL_LOOK;
+    let armorNow: ArmorGrades = NO_ARMOR;
+    let armorApplied = "";
+    const pieces = new Map<string, { file: string; nodes: TransformNode[] }>();
     /** Troca a cabeça (Barbeiro, criação): a nova é copiada do arquivo e a velha, descartada. */
     const swapHead = (want: string) => {
       const src = assets.heads.get(want);
@@ -745,14 +878,23 @@ export class CharacterModels {
         hatHidden = l.hideHat;
         refreshVis();
       } else if (hat instanceof TransformNode) hat.setEnabled(!l.hideHat);
-      if (!baseMat || (painted && colorKey(model, painted) === colorKey(model, l))) return;
-      if (painted) this.releasePaint(model, painted);
+      lookNow = l;
+      refreshMaterial();
+    };
+    /** O material do corpo: a faixa de raridade (ou o base) e, por cima, as cores do Barbeiro. */
+    const refreshMaterial = () => {
+      const base = tierMat ?? baseMat;
+      if (!base) return;
+      const l = lookNow;
+      if (painted && painted.tier === tierId && colorKey(model, painted.look) === colorKey(model, l)) return;
+      if (painted) this.releasePaint(model, painted.tier, painted.look);
       painted = null;
-      for (const m of paintable()) m.material = baseMat;
+      for (const m of paintable()) m.material = base;
       if (!needsRepaint(l)) return;
-      painted = l;
-      void this.acquirePaint(model, baseMat, l).then((mat) => {
-        if (!mat || disposed || painted !== l) return;
+      const mine = { look: l, tier: tierId };
+      painted = mine;
+      void this.acquirePaint(model, tierId, base, l).then((mat) => {
+        if (!mat || disposed || painted !== mine) return;
         for (const m of paintable()) m.material = mat;
       });
     };
@@ -812,6 +954,70 @@ export class CharacterModels {
           })
         : null;
 
+    // ---- Armadura por raridade (remaster): peças presas nos ossos pelas posições de armor-attach.ts ----
+    const pieceVisible = (kind: string, node: TransformNode) => {
+      const lod1 = /_LOD1$/.test(node.name.split("#")[0]);
+      const hasLod1 = (pieces.get(kind)?.nodes ?? []).some((n) => /_LOD1$/.test(n.name.split("#")[0]));
+      const want = hasLod1 && lodLevel >= 1 ? lod1 : !lod1;
+      return want && !(kind === "helm" && hatHidden);
+    };
+    onVis = () => {
+      for (const [kind, p] of pieces) for (const n of p.nodes) n.setEnabled(pieceVisible(kind, n));
+    };
+    const setPiece = (kind: string, file: string | null) => {
+      const cur = pieces.get(kind);
+      if ((cur?.file ?? null) === file) return;
+      for (const n of cur?.nodes ?? []) n.dispose(false, false);
+      pieces.delete(kind);
+      if (!file) return;
+      const at = ARMOR_ATTACH[model]?.[file];
+      const bone = at ? byName.get(at.bone) : undefined;
+      if (!at || !bone) return;
+      const entry = { file, nodes: [] as TransformNode[] };
+      pieces.set(kind, entry);
+      void this.pieceContainer(file).then((c) => {
+        if (!c || disposed || pieces.get(kind) !== entry) return;
+        const w = c.instantiateModelsToScene((n) => `${n}#${id}`, false);
+        const wRoot = w.rootNodes[0] as TransformNode;
+        for (const child of wRoot.getChildren() as TransformNode[]) {
+          child.parent = bone as TransformNode;
+          child.position.set(at.pos[0], at.pos[1], at.pos[2]);
+          child.rotationQuaternion = new Quaternion(at.rot[0], at.rot[1], at.rot[2], at.rot[3]);
+          child.scaling.setAll(at.scale);
+          entry.nodes.push(child);
+        }
+        wRoot.dispose();
+        onVis();
+      });
+    };
+    const setArmor = (a: ArmorGrades) => {
+      if (!assets.remaster || disposed) return;
+      const key = armorKey(model, a);
+      if (key === armorApplied) return;
+      armorApplied = key;
+      armorNow = a;
+      setPiece("shoulder", pauldronFile(a));
+      setPiece("cape", capeFile(a));
+      const helm = helmFile(model, a);
+      helmOverride = !!helm;
+      setPiece("helm", helm);
+      refreshVis();
+      if (!baseMat) return;
+      const tier = bodyTier(a);
+      if (tier <= 1) {
+        tierMat = tier === 1 ? this.goodMaterial(baseMat) : null;
+        tierId = tier;
+        refreshMaterial();
+      } else {
+        void this.tierMaterial(model, tier, baseMat).then((m) => {
+          if (!m || disposed || bodyTier(armorNow) !== tier) return;
+          tierMat = m;
+          tierId = tier;
+          refreshMaterial();
+        });
+      }
+    };
+
     // Pose de descanso de tudo que alguma animação mexe (antes de qualquer animação tocar).
     const rest: { node: TransformNode; pos: Vector3; rot: Quaternion | null; scale: Vector3 }[] = [];
     const seen = new Set<TransformNode>();
@@ -843,13 +1049,16 @@ export class CharacterModels {
       setLook: (l) => {
         if (!disposed) applyLook(l);
       },
+      setArmor,
       meshes: () => root.getChildMeshes(false),
       dispose: () => {
         disposed = true;
         aimObs?.remove();
         unwatchLod();
-        if (painted) this.releasePaint(model, painted);
+        if (painted) this.releasePaint(model, painted.tier, painted.look);
         painted = null;
+        for (const p of pieces.values()) for (const n of p.nodes) n.dispose(false, false);
+        pieces.clear();
         for (const a of cloned.values()) a.dispose();
         for (const s of entries.skeletons) s.dispose();
         // Nunca descartar materiais/texturas aqui: são compartilhados por todas as cópias

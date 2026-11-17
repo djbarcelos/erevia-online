@@ -1191,6 +1191,18 @@ message Appearance {
   uint32 weapon_grade = 4;
   uint32 weapon_enchant = 5;
   BodyLook look = 6;
+  ArmorLook armor = 7; // raridade das peças de armadura (remaster: muda o visual do corpo)
+}
+
+// Visual da armadura (tunnel#96): a raridade (Grade 1 a 5; 0 = peça vazia) de cada peça equipada. O cliente
+// escolhe o material do corpo pelo peito e liga elmo, capa e ombreiras pela raridade da peça.
+message ArmorLook {
+  uint32 chest = 1;
+  uint32 helm = 2;
+  uint32 cape = 3;
+  uint32 legs = 4;
+  uint32 hands = 5;
+  uint32 feet = 6;
 }
 
 // ---------- Tipos ----------
@@ -1370,6 +1382,7 @@ message Entity {
   string spec = 26; // jogadores: especialização (SpecInfo.id; "" = nenhuma)
   string tint = 27; // monstros: cor da variante (#rrggbb; "" = a do modelo)
   string active_class = 28; // jogadores: classe ativa (subclasse; "" = a do modelo, a principal)
+  ArmorLook armor = 29; // jogadores: raridade das peças de armadura equipadas
   bool rare = 40; // monstro raro (named): nome dourado e selo no quadro do alvo
   MonsterRole role = 41; // monstros: papel na luta e se é neutro (ausente = bruto)
 }

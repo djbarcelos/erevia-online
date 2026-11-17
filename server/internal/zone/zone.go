@@ -1133,6 +1133,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		out.Weapon, out.Offhand, out.WeaponGrade = w, o, uint32(g)
 		out.Emblem = e.pl.emblem
 		out.Look = lookPB(e.pl.look)
+		out.Armor = e.pl.inv.armorLook()
 		out.WeaponEnchant = uint32(e.pl.inv.weaponEnchant())
 		out.PvpState = z.pvpState(e)
 		out.ClanName = z.clanName(e)
