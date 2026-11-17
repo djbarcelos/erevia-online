@@ -261,6 +261,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   loadEnvironment(world.scene, worldData, world.shadows)
     .then((e) => {
       env = e;
+      performance.mark("erevia:cenario");
       console.info(`cenário: ${e.drawn} objetos`);
     })
     .catch((err) => {
@@ -272,7 +273,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   configureKtx2();
   // Modelos 3D carregam em segundo plano; até lá, cápsulas coloridas.
   CharacterModels.load(world.scene)
-    .then((models) => entities.setModels(models))
+    .then((models) => {
+      entities.setModels(models);
+      performance.mark("erevia:modelos");
+      // Remaster: o golem e os chefes (14 MB) baixam depois, no tempo ocioso e só em rede boa.
+      window.setTimeout(() => models.prefetchLazy(), 20_000);
+    })
     .catch((err) => console.warn("modelos 3D indisponíveis, usando cápsulas", err));
 
   // ---------- Estado do jogador ----------
@@ -1470,6 +1476,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       }
     }
     dayNight.update(clock.phase(), focus);
+    // Remaster: o mapa de sombras só recebe os recortes da natureza que a luz enxerga (depois de mover o sol).
+    env?.shadowCull?.update();
     // Árvores que tapam o jogador ou o alvo ficam translúcidas. Na medição de FPS, as que tapam
     // o ponto medido: a linha da câmera até o jogador, lá longe, apagaria árvores ao acaso
     // (o lugar em que o jogador nasce na praça muda), e o número de malhas deixaria de ser fixo.

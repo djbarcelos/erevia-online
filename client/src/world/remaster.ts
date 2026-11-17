@@ -20,9 +20,6 @@ export const REMASTER_NPC_BY_NAME: Record<string, string> = {
   Dárcio: "npc_darcio", Maelis: "npc_maelis", Gaspar: "npc_gaspar", Bertrand: "npc_guarda", Rovena: "npc_rovena",
 };
 
-/** NPCs da praça: carregam junto com os heróis (os das outras regiões, sob demanda). */
-export const REMASTER_NPC_EAGER = ["npc_livia", "npc_bruno", "npc_teodoro", "npc_otto", "npc_ysolde", "npc_edrian", "npc_severino", "npc_iselda", "npc_cassio"];
-
 /** Modelo do remaster de um NPC pelo nome (null = sem remaster ou NPC sem modelo próprio). */
 export function remasterNpcModel(name: string): string | null {
   return REMASTER ? (REMASTER_NPC_BY_NAME[name] ?? null) : null;
@@ -46,6 +43,18 @@ export const REMASTER_FILES: Record<string, string> = {
   // NPCs (REMASTER_NPC_BY_NAME): o arquivo é <modelo>_b; o servidor não conhece estes modelos.
   ...Object.fromEntries(Object.values(REMASTER_NPC_BY_NAME).map((m) => [m, `${m}_b`])),
 };
+
+/**
+ * Corpos que não baixam com os outros: o golem (só no Vale) e os dois chefes (cada um num covil) pesam ~14 MB de
+ * 31 e quase ninguém os vê no primeiro minuto. Baixam quando um aparece (ou no tempo ocioso, em rede boa), e a
+ * entidade fica como cápsula até chegar. Ver CharacterModels.ensure.
+ */
+export const REMASTER_LAZY = [
+  "stone_golem", "bone_lord", "ozrhal",
+  // NPCs (REMASTER_NPC_BY_NAME): a praça primeiro (a entidade os pede ao aparecer; o prefetch cobre o resto).
+  "npc_livia", "npc_bruno", "npc_teodoro", "npc_otto", "npc_ysolde", "npc_edrian", "npc_severino", "npc_iselda", "npc_cassio",
+  "npc_guarda", "npc_anselmo", "npc_marga", "npc_darcio", "npc_maelis", "npc_gaspar", "npc_rovena",
+];
 
 /** Modelos que só existem no remaster (sem arquivo do estilo antigo para cair de volta). */
 export const REMASTER_ONLY = ["bone_lord", "ozrhal"];

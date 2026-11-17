@@ -105,12 +105,12 @@ Imagem para 3D com Smart Topology a **5.000 triângulos** (o herói usa 7.000: o
 
 Todos com 30 ossos (28 + os encaixes `handslot.r/.l`), 1 material e 1 malha por LOD. Para comparar, o `npc_merchant` do KayKit tem 7.185 triângulos e o `npc_smith` 8.900, sem LOD: os novos são mais leves de perto e têm LOD.
 
-**Peso do download.** Os 9 da praça (1024 px) carregam junto com o jogo: 16,8 MB a mais em `?remaster=1`. Os 7 contadores de história, que ficam longe da cidade, **carregam sob demanda** (`CharacterModels.ensure`, na primeira vez que o NPC aparece; até lá o NPC aparece com o modelo de sempre) e com a textura em 512 px (~1 MB cada, em vez de 1,9). O ETC1S cortaria cada modelo da praça a ~0,6 MB, com perda nos detalhes pintados: ver em aberto.
+**Peso do download.** Nenhum NPC entra no carregamento inicial: os 16 estão em `REMASTER_LAZY` (junto com o golem e os chefes, o mesmo mecanismo `CharacterModels.ensure`/`prefetchLazy` da revisão de FPS). Cada NPC baixa quando aparece (a entidade fica como cápsula até chegar) e o prefetch no tempo ocioso busca o resto, a praça primeiro. Os 9 da praça têm textura de 1024 px (~1,9 MB cada, 16,8 MB no total, mas fora da tela de entrada) e os 7 contadores 512 px (~1 MB).
 
 ## Integração (o que mudou no código)
 
-- `client/src/world/remaster.ts`: `REMASTER_NPC_BY_NAME` (nome do NPC → modelo), `REMASTER_NPC_EAGER` (os da praça), `remasterNpcModel(nome)` (só responde com `?remaster=1`), as alturas em `REMASTER_HEIGHTS` e a máscara do guarda em `REMASTER_MASKS`.
-- `client/src/world/models.ts` (só a parte de NPC): `npcSet`/`NPC_CLIP_PREFIX` (conjunto de clipes), `NPC_WEAPONS` (a ferramenta do ferreiro) e `CharacterModels.ensure(modelo)` (carga sob demanda; os da praça entram no `load`).
+- `client/src/world/remaster.ts`: `REMASTER_NPC_BY_NAME` (nome do NPC → modelo), `remasterNpcModel(nome)` (só responde com `?remaster=1`), as alturas em `REMASTER_HEIGHTS` e a máscara do guarda em `REMASTER_MASKS`.
+- `client/src/world/models.ts` (só a parte de NPC): `npcSet`/`NPC_CLIP_PREFIX` (conjunto de clipes), `NPC_WEAPONS` (a ferramenta do ferreiro) e a entrada dos NPCs em `REMASTER_LAZY` (carga sob demanda pelo `ensure` da revisão de FPS; `register` cuida de máscara, altura e ferramenta).
 - `client/src/world/entities.ts`: `attachModel` troca o modelo do NPC pelo do remaster e passa o visual do servidor só ao guarda; `greetNpc(id)` (vira e cumprimenta) e a volta a olhar a praça.
 - `client/src/main.ts`: `openShop` chama `entities.greetNpc(id)` ao abrir a conversa ou a loja.
 - `client/src/dev/hero-lab.ts`: o laboratório espera `ensure` dos modelos pedidos (para os prints dos NPCs sob demanda).
@@ -144,7 +144,7 @@ Como o orçamento deu para os 16 modelos próprios, só o guarda (Bertrand) usa 
 
 ## O que ficou em aberto
 
-1. **Peso da praça** (16,8 MB carregados com o jogo): ETC1S nos 9 da praça, ou carregar depois os que estão fora da vista. Medir antes.
+1. **Peso da praça** (16,8 MB, sob demanda): ETC1S nos 9 da praça, ou carregar depois os que estão fora da vista. Medir antes.
 2. **Martelo do Bruno**: a ação é um salto com batida e a ferramenta é o machado do jogo; um martelo de ferreiro (arma nova) e uma ação "malhar" pagariam o gesto de verdade.
 3. **FPS de GPU real** continua sem medida (SwiftShader); os 16 NPCs somam 84 mil triângulos no LOD0, mas só os de perto (20 m) ficam em LOD0 e na praça são 9.
 4. **Rosto do Barbeiro**: o `look` do servidor não muda os NPCs (só o guarda); quem muda o visual no Barbeiro é o jogador.

@@ -238,7 +238,7 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 | `make proto` | Regera o código Go/TS depois de mudar `proto/erevia/v1/game.proto` |
 | `make build` | Binário do servidor e build do cliente |
 | `make docker` | Imagem de produção (a mesma que a Railway usa) |
-| `cd server && go run ./cmd/loadbot -bots 100 -duration 2m` | Teste de carga: bots que entram pelo login de dev (servidor local com `DEV_LOGIN=true`), andam, caçam e falam; imprime banda e ping a cada 10 s. O servidor registra o custo do tick no log a cada 30 s ("tick stats") |
+| `cd server && go run ./cmd/loadbot -bots 100 -duration 2m` (com `-plaza 12` os bots só passeiam pela praça, sem caçar: serve para medir o FPS do cliente com muita gente à vista) | Teste de carga: bots que entram pelo login de dev (servidor local com `DEV_LOGIN=true`), andam, caçam e falam; imprime banda e ping a cada 10 s. O servidor registra o custo do tick no log a cada 30 s ("tick stats") |
 | `cd server && go run ./cmd/loadbot -chaos -bots 50 -duration 10m -seed 317 -db $DATABASE_URL` | Teste de caos (ver [Teste de caos](#teste-de-caos)): ações válidas e inválidas de todo o protocolo, quedas no meio de tudo e conferência da economia; sai com código ≠ 0 se algo quebrou |
 | `cd server && go run ./cmd/balance` | Simulador de balanceamento: por classe, caminho e nível, com o equipamento típico +0 e +3, o dano por segundo, o tempo para matar e para morrer, a XP por hora e o tempo até o 30, com as fórmulas do pacote `game` (`-csv` para planilha, `-noite`). O orçamento de poder roda no `go test` (`internal/balance`); a leitura de hoje está em [docs/balanceamento-2026-11.md](docs/balanceamento-2026-11.md) |
 

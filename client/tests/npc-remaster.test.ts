@@ -28,7 +28,7 @@ test("cada NPC do mapa tem nome no servidor, arquivo no manifesto, altura e pref
     assert.ok(R.REMASTER_HEIGHTS[model] > 1.3 && R.REMASTER_HEIGHTS[model] < 2.2, `altura de ${model}`);
     assert.match(modelsSrc, new RegExp(`${model}: "[A-Z]{2}_"`), `prefixo de clipes de ${model}`);
   }
-  for (const m of R.REMASTER_NPC_EAGER) assert.ok(models.includes(m), `${m} (praça) não está no mapa`);
+  for (const m of models) assert.ok(R.REMASTER_LAZY.includes(m), `${m} não está na lista sob demanda`);
   assert.equal(R.REMASTER_MASKS.npc_guarda, "npc_guarda_b.mask.png");
   assert.ok(existsSync(join(MODELS, "npc_guarda_b.mask.png")));
 });

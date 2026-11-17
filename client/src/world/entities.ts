@@ -474,6 +474,9 @@ export class EntityManager {
   /** Quando os modelos 3D terminam de carregar: troca as cápsulas pelos modelos. */
   setModels(models: CharacterModels): void {
     this.models = models;
+    models.onModelReady = () => {
+      for (const v of this.views.values()) if (v.kind !== EntityKind.OBJECT) this.attachModel(v);
+    };
     for (const v of this.views.values()) if (v.kind !== EntityKind.OBJECT) this.attachModel(v);
   }
 
@@ -1795,12 +1798,13 @@ export class EntityManager {
     if (v.model3d || !this.models) return;
     // ?remaster=1: os chefes com silhueta própria (Senhor dos Ossos, Ozrhal) têm modelo à parte.
     const bossModel = v.boss ? remasterModelOf(v.model, true) : v.model;
-    // ?remaster=1: NPC com modelo próprio (pelo nome; o servidor manda um herói). Carrega sob demanda e entra quando chegar.
+    // ?remaster=1: NPC com modelo próprio (pelo nome; o servidor manda um herói).
     const npcModel = v.kind === EntityKind.NPC ? remasterNpcModel(v.name) : null;
-    if (npcModel && !this.models.has(npcModel)) {
-      void this.models.ensure(npcModel).then((ok) => {
-        if (ok && this.views.get(v.id) === v && !v.model3d) this.attachModel(v);
-      });
+    // Remaster: golem, chefes e NPCs baixam sob demanda; até chegar a entidade fica como cápsula (não o modelo de outro).
+    for (const m of new Set([npcModel, bossModel, v.model])) {
+      if (!m || !this.models.pending(m)) continue;
+      void this.models.ensure(m);
+      return;
     }
     // O visual do servidor (pele, cabelo, roupa) é de herói: só vale nos modelos de NPC que têm máscara de repintura.
     const inst =
