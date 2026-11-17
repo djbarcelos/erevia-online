@@ -1,4 +1,5 @@
 import type { AnimationGroup, Node } from "@babylonjs/core";
+import { stepRatios } from "./motion";
 import type { AnimRole } from "./models";
 
 /**
@@ -7,10 +8,16 @@ import type { AnimRole } from "./models";
  */
 export class RoleMap extends Map<AnimRole, AnimationGroup> {
   onChange: (() => void) | null = null;
+  /**
+   * Velocidade natural dos clipes de andar e correr (m/s do mundo, com a escala do modelo): a que o pé de apoio
+   * percorre para trás em relação ao quadril. O clipe toca a `velocidade real / natural` para o pé não deslizar.
+   * Sem isto (golem de código), vale a regra antiga (RUN_ANIM_SPEED).
+   */
+  footSpeeds: { walk?: number; run: number } | undefined;
 }
 
 /** Velocidade das transições de peso da locomoção (1/s). */
-const BLEND_RATE = 10;
+const BLEND_RATE = 14;
 /** Entrada de uma ação (1/s): ~95% em 0,15 s. */
 const ACTION_IN_RATE = 20;
 /** Saída de uma ação que terminou ou foi trocada (s), em curva suave (começa e termina devagar). */
@@ -84,6 +91,12 @@ export class AnimController {
   /** Pausas do parado ("idle breaks": olhar em volta, alongar, gesto): tocam de vez em quando, com tempo e fase próprios. */
   private breaks!: AnimationGroup[];
   private resetHooked = false;
+  /** Tempo (s) que os clipes ficaram pausados desde a última vez que animaram. */
+  private asleepFor = 0;
+  /** Escala do corpo (monstros grandes dão passos maiores): multiplica as velocidades naturais dos clipes. */
+  private bodyScale = 1;
+  /** Só para medir o "antes" (?legacymove=1): velocidade do clipe pela constante antiga e mistura mais lenta. */
+  legacy = false;
   private breakGroup: AnimationGroup | null = null;
   private breakW = 0;
   private breakTimer = 0;
@@ -102,6 +115,23 @@ export class AnimController {
   }
 
   /** O conjunto de clipes mudou: para tudo o que tocava e recomeça com os clipes novos (parado, andar e correr). */
+  setBodyScale(s: number): void {
+    this.bodyScale = s > 0 ? s : 1;
+  }
+
+  /** Pesos e velocidades dos clipes de locomoção (para medir o deslize nos testes no navegador). */
+  debug(): { idle: number; run: number; walk: number; runRatio: number; walkRatio: number; action: number; runNat: number } {
+    return {
+      idle: this.anims.get("idle")?.weight ?? 0,
+      run: this.anims.get("run")?.weight ?? 0,
+      walk: this.anims.get("walk")?.weight ?? 0,
+      runRatio: this.anims.get("run")?.speedRatio ?? 0,
+      walkRatio: this.anims.get("walk")?.speedRatio ?? 0,
+      action: this.actionWeight,
+      runNat: this.anims instanceof RoleMap && this.anims.footSpeeds ? this.anims.footSpeeds.run * this.bodyScale : 0,
+    };
+  }
+
   private rebind(): void {
     for (const g of this.groups) g.stop();
     for (const f of this.fading) f.g.stop();
@@ -349,6 +379,22 @@ export class AnimController {
   }
 
   /** Voltou para a cena: retoma os grupos e toca o que ficou pendente. */
+  /**
+   * Quem acordou depois de `seconds` parado (fora da tela, ou longe e animado a 15 Hz) retoma o passo na fase certa:
+   * os clipes de locomoção avançam o tempo que ficaram pausados, senão o pé tocaria devagar e deslizaria.
+   */
+  private catchUp(seconds: number): void {
+    if (seconds <= 0) return;
+    for (const g of [this.anims.get("idle"), this.anims.get("run"), this.anims.get("walk"), this.breakGroup]) {
+      const a = g?.animatables[0];
+      if (!g || !a || !g.isPlaying) continue;
+      const span = g.to - g.from;
+      if (span <= 0) continue;
+      const moved = (a.masterFrame - g.from + seconds * fps(g) * g.speedRatio) % span;
+      g.goToFrame(g.from + (moved < 0 ? moved + span : moved));
+    }
+  }
+
   private wake(): void {
     if (this.resetOnWake) {
       this.resetOnWake = false;
@@ -356,6 +402,8 @@ export class AnimController {
     }
     for (const g of this.paused) g.restart(); // grupo parado nesse meio-tempo não volta
     this.paused.length = 0;
+    this.catchUp(this.asleepFor);
+    this.asleepFor = 0;
     const d = this.deferred;
     if (!d) return;
     this.deferred = null;
@@ -378,8 +426,20 @@ export class AnimController {
    * na última pose até voltar (ver sleep/wake).
    */
   update(dt: number, moving: boolean, runSpeedRatio: number, active = true, speed = Infinity): void {
-    this.runRatio = runSpeedRatio;
-    this.walkRatio = Math.min(1.5, Math.max(0.5, speed / WALK_ANIM_SPEED));
+    const fs = this.anims instanceof RoleMap && !this.legacy ? this.anims.footSpeeds : undefined;
+    let walkTarget = speed < WALK_BELOW ? 1 : 0;
+    if (fs) {
+      // Pé no chão: o clipe toca na velocidade em que o personagem anda de verdade (speed = velocidade desenhada).
+      const runNat = fs.run * this.bodyScale;
+      const walkNat = (fs.walk ?? 0) * this.bodyScale;
+      const r = stepRatios(speed, runNat, walkNat);
+      this.runRatio = r.run;
+      this.walkRatio = r.walkRatio;
+      walkTarget = r.walk ? 1 : 0;
+    } else {
+      this.runRatio = runSpeedRatio;
+      this.walkRatio = Math.min(1.5, Math.max(0.5, speed / WALK_ANIM_SPEED));
+    }
     if (active !== this.active) {
       this.active = active;
       if (active) this.wake();
@@ -391,11 +451,14 @@ export class AnimController {
       if (this.stopLeft > 0) return;
       this.resume();
     }
-    if (!active) return;
-    const k = 1 - Math.exp(-BLEND_RATE * dt);
+    if (!active) {
+      this.asleepFor += dt;
+      return;
+    }
+    const k = 1 - Math.exp(-(this.legacy ? 10 : BLEND_RATE) * dt);
     this.runWeight += ((moving && !this.holding ? 1 : 0) - this.runWeight) * k;
     // Devagar (monstros, lentidão): clipe de andar, senão o personagem "corre" em câmera lenta.
-    this.walkMix += ((speed < WALK_BELOW ? 1 : 0) - this.walkMix) * k;
+    this.walkMix += (walkTarget - this.walkMix) * k;
     // A ação chega ao fim no próximo quadro: para ali (velocidade 0, ainda na mistura). Em
     // loop o Babylon voltaria ao primeiro quadro, e o corpo pularia para o começo do golpe.
     const a = this.action;
@@ -472,7 +535,7 @@ export class AnimController {
     const walkW = walk ? this.walkMix : 0;
     if (run) {
       run.weight = snap(loco * this.runWeight * (1 - walkW));
-      run.speedRatio = runSpeedRatio;
+      run.speedRatio = this.runRatio;
     }
     if (walk) {
       walk.weight = snap(loco * this.runWeight * walkW);
@@ -486,6 +549,7 @@ export class AnimController {
 /** Velocidade (m/s) abaixo da qual o personagem anda em vez de correr, e a que o clipe de andar casa com o chão. */
 const WALK_BELOW = 3.4;
 const WALK_ANIM_SPEED = 1.9;
+
 /** Intervalo (s) entre as pausas do parado. */
 const BREAK_MIN_S = 8;
 const BREAK_MAX_S = 20;

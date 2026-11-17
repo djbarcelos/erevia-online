@@ -6,7 +6,7 @@
  * window.lab.show({ cam: "front"|"side"|"back"|"three", items: [{ model, right, left, role, t, look }] })
  *   role = papel de animação (idle, walk, run, attack, hit, death, buff...), t = 0..1 do clipe.
  */
-import { ArcRotateCamera, Color4, Engine, HemisphericLight, DirectionalLight, Scene, Vector3, type AnimationGroup, type TransformNode } from "@babylonjs/core";
+import { ArcRotateCamera, Color4, Engine, HemisphericLight, DirectionalLight, Scene, TransformNode, Vector3, type AnimationGroup } from "@babylonjs/core";
 import { configureKtx2 } from "../world/assets";
 import { AnimController } from "../world/anim";
 import { CharacterModels, WEAPON_GRIPS, type AnimRole, type CharacterInstance, type Grip } from "../world/models";
@@ -94,6 +94,112 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
       }
     }
     return out;
+  },
+  /**
+   * Velocidade "natural" dos clipes de andar e correr de um modelo, em m/s do mundo (escala do modelo incluída): a
+   * distância que o pé de apoio (o mais baixo) percorre para trás, em relação ao quadril, por segundo. É a velocidade
+   * a que o personagem deve se mover para o pé não deslizar no chão. Também diz quanto o quadril anda no clipe
+   * (root motion), o que deveria ser 0.
+   */
+  async footSpeeds(model: string): Promise<{ role: string; clip: string; seconds: number; speed: number; hipsTravel: number }[]> {
+    await ready;
+    for (const i of live) i.dispose();
+    live = [];
+    const inst = models!.instantiate(model, "labf");
+    if (!inst) return [];
+    live.push(inst);
+    scene.render();
+    const nodes = inst.root.getDescendants(false).filter((n): n is TransformNode => n instanceof TransformNode);
+    const base = (n: TransformNode) => n.name.split("#")[0];
+    const feet = nodes.filter((n) => /foot/i.test(base(n)) && !/toe|handslot/i.test(base(n)));
+    const hips = nodes.find((n) => /hips$/i.test(base(n)));
+    const out: { role: string; clip: string; seconds: number; speed: number; hipsTravel: number }[] = [];
+    if (!hips || feet.length < 2) return out;
+    for (const role of ["walk", "run"] as const) {
+      const g = inst.anims.get(role);
+      if (!g) continue;
+      g.start(false, 1, g.from, g.to);
+      g.pause();
+      const fps = g.targetedAnimations[0]?.animation.framePerSecond || 30;
+      const frames = 48;
+      const rel: { x: number; z: number; y: number }[][] = [];
+      const hp: { x: number; z: number }[] = [];
+      for (let k = 0; k <= frames; k++) {
+        g.goToFrame(g.from + ((g.to - g.from) * k) / frames);
+        for (const n of nodes) n.computeWorldMatrix(true);
+        const h = hips.getAbsolutePosition();
+        hp.push({ x: h.x, z: h.z });
+        rel.push(feet.map((f) => { const p = f.getAbsolutePosition(); return { x: p.x - h.x, z: p.z - h.z, y: p.y }; }));
+      }
+      const dt = (g.to - g.from) / fps / frames;
+      let sum = 0;
+      let n = 0;
+      let minY = Infinity;
+      for (const fr of rel) for (const f of fr) minY = Math.min(minY, f.y);
+      for (let k = 0; k < frames; k++) {
+        // pé de apoio: o mais baixo (e perto do chão) nos dois quadros
+        const i0 = rel[k][0].y <= rel[k][1].y ? 0 : 1;
+        const a = rel[k][i0];
+        const b = rel[k + 1][i0];
+        if (a.y > minY + 0.05 || b.y > minY + 0.05) continue;
+        sum += Math.hypot(b.x - a.x, b.z - a.z) / dt;
+        n++;
+      }
+      out.push({
+        role,
+        clip: g.name.split("#")[0],
+        seconds: Math.round(((g.to - g.from) / fps) * 100) / 100,
+        speed: n ? Math.round((sum / n) * 100) / 100 : 0,
+        hipsTravel: Math.round(Math.hypot(hp[frames].x - hp[0].x, hp[frames].z - hp[0].z) * 100) / 100,
+      });
+    }
+    return out;
+  },
+  /** Nomes dos clipes de andar/correr que existem (os moldes de todos os arquivos). */
+  clipNames: () => [...((models as unknown as { animTemplates: Map<string, AnimationGroup> }).animTemplates.keys())],
+  /** Velocidade natural (m/s) de um clipe qualquer aplicado a um modelo (ver footSpeeds). */
+  async clipSpeed(model: string, clip: string): Promise<{ seconds: number; speed: number } | null> {
+    await ready;
+    for (const i of live) i.dispose();
+    live = [];
+    const inst = models!.instantiate(model, "labc");
+    const tpl = (models as unknown as { animTemplates: Map<string, AnimationGroup> }).animTemplates.get(clip);
+    if (!inst || !tpl) return null;
+    live.push(inst);
+    scene.render();
+    const nodes = inst.root.getDescendants(false).filter((n): n is TransformNode => n instanceof TransformNode);
+    const base = (n: TransformNode) => n.name.split("#")[0];
+    const byName = new Map(nodes.map((n) => [base(n), n]));
+    const g = tpl.clone(`${clip}#c`, (t) => byName.get(t.name.split("#")[0]) ?? null);
+    const feet = nodes.filter((n) => /foot/i.test(base(n)) && !/toe|handslot/i.test(base(n)));
+    const hips = nodes.find((n) => /hips$/i.test(base(n)));
+    if (!hips || feet.length < 2) return null;
+    g.start(false, 1, g.from, g.to);
+    g.pause();
+    const fps = g.targetedAnimations[0]?.animation.framePerSecond || 60;
+    const frames = 48;
+    const rel: { x: number; z: number; y: number }[][] = [];
+    for (let k = 0; k <= frames; k++) {
+      g.goToFrame(g.from + ((g.to - g.from) * k) / frames);
+      for (const n of nodes) n.computeWorldMatrix(true);
+      const h = hips.getAbsolutePosition();
+      rel.push(feet.map((f) => { const p = f.getAbsolutePosition(); return { x: p.x - h.x, z: p.z - h.z, y: p.y }; }));
+    }
+    const dt = (g.to - g.from) / fps / frames;
+    let minY = Infinity;
+    for (const fr of rel) for (const f of fr) minY = Math.min(minY, f.y);
+    let sum = 0;
+    let n = 0;
+    for (let k = 0; k < frames; k++) {
+      const i0 = rel[k][0].y <= rel[k][1].y ? 0 : 1;
+      const a = rel[k][i0];
+      const b = rel[k + 1][i0];
+      if (a.y > minY + 0.05 || b.y > minY + 0.05) continue;
+      sum += Math.hypot(b.x - a.x, b.z - a.z) / dt;
+      n++;
+    }
+    g.dispose();
+    return { seconds: Math.round(((g.to - g.from) / fps) * 100) / 100, speed: n ? Math.round((sum / n) * 100) / 100 : 0 };
   },
   models: () => models,
   cam: () => ({ a: cam.alpha, b: cam.beta, r: cam.radius, p: cam.position.asArray() }),
