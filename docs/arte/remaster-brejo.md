@@ -38,7 +38,7 @@ Conceitos em `tools/art/remaster-brejo/prompts.mjs`; peças estáticas por `clie
 
 ## Bench de contadores
 
-A linha de base (`e2e/bench-baseline.json`) muda porque o mapa mudou: o bench passa por todas as regiões, e agora há duas novas (Brejo, com 4 pontos, e Terras Mortas, com 4), mais o cenário e as entidades delas. As regiões antigas não mudam de contador: o `world.json` delas é o mesmo (conferido pelo teste do gerador), e a única coisa que o cliente faz a mais lá é o filtro de montanhas da borda leste, que só tira objetos. O que vale conferir no diff da base é isso: linhas novas das duas regiões, as antigas iguais.
+A linha de base (`e2e/bench-baseline.json`) foi regerada com `npm run bench:baseline` (passou, 3,5 min no SwiftShader): entram as linhas do Brejo (dia 83 draws, noite 90) e das Terras Mortas (69 e 79), e as malhas ativas passam de 146 para 151 (as 4 peças novas do Brejo e o modelo do Brejeiro, que baixa sob demanda, mais as famílias da #135 vindas no merge). **Nas regiões antigas os draws subiram de 1 a 14** (por exemplo, Campos dos Ossos de 80 para 88 de dia): vêm de o chão passar a ser 480 × 480 m (mais recortes de natureza e água dentro do campo de visão) e do merge das famílias; o `world.json` delas não mudou. FPS de verdade (GPU) das regiões antigas **não foi medido** aqui: só contadores. Vale repetir o roteiro de celular (`docs/roteiro-celular-fps.md`) antes de publicar.
 
 ## O que ficou em aberto
 
