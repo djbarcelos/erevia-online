@@ -15,7 +15,13 @@ import type { WorldData } from "./world-data";
 type Obj = WorldData["objects"][number];
 
 const MODELS = map.models as string[];
+const MODEL_SET = new Set(MODELS);
 const KINDS = map.kinds as unknown as Record<string, { model: string; s: [number, number, number] }>;
+
+/** O tipo é uma das peças da natureza do remaster (as que viram recortes, ver chunks.ts)? */
+export function isNatureKind(kind: string): boolean {
+  return MODEL_SET.has(kind);
+}
 
 /** Zona do Vale (z < isto): árvores de folha viram a árvore prateada do Vale. */
 const VALE_Z = -150;

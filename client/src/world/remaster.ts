@@ -26,6 +26,13 @@ export const REMASTER_FILES: Record<string, string> = {
   ozrhal: "ozrhal_b",
 };
 
+/**
+ * Corpos que não baixam com os outros: o golem (só no Vale) e os dois chefes (cada um num covil) pesam ~14 MB de
+ * 31 e quase ninguém os vê no primeiro minuto. Baixam quando um aparece (ou no tempo ocioso, em rede boa), e a
+ * entidade fica como cápsula até chegar. Ver CharacterModels.ensure.
+ */
+export const REMASTER_LAZY = ["stone_golem", "bone_lord", "ozrhal"];
+
 /** Modelos que só existem no remaster (sem arquivo do estilo antigo para cair de volta). */
 export const REMASTER_ONLY = ["bone_lord", "ozrhal"];
 

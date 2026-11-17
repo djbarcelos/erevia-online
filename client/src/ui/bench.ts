@@ -96,7 +96,7 @@ export interface BenchResult {
   /** Entidades por tipo e nome, com as malhas e os nós de cada uma. */
   entities: EntityRow[];
   /** Texturas carregadas e uma estimativa da memória que ocupam (MB), mais o heap do JS. */
-  memory: { textures: number; textureMB: number; heapMB: number };
+  memory: { textures: number; textureMB: number; heapMB: number; biggest: { name: string; size: string; mb: number }[] };
 }
 
 interface EntityRow {
@@ -115,6 +115,8 @@ interface CensusRow {
   thin: number;
   skinned: number;
   transformNodes?: number;
+  /** Triângulos do grupo se tudo fosse desenhado (índices / 3 x instâncias), só das malhas ativas. */
+  tris?: number;
 }
 
 /**
@@ -130,7 +132,7 @@ function census(scene: Scene, skip?: Set<Node>): CensusRow[] {
   };
   const row = (g: string) => {
     let r = groups.get(g);
-    if (!r) groups.set(g, (r = { group: g, meshes: 0, enabled: 0, frozen: 0, thin: 0, skinned: 0, transformNodes: 0 }));
+    if (!r) groups.set(g, (r = { group: g, meshes: 0, enabled: 0, frozen: 0, thin: 0, skinned: 0, transformNodes: 0, tris: 0 }));
     return r;
   };
   for (const m of scene.meshes) {
@@ -139,7 +141,9 @@ function census(scene: Scene, skip?: Set<Node>): CensusRow[] {
     r.meshes++;
     if (m.isEnabled()) r.enabled++;
     if (m.isWorldMatrixFrozen) r.frozen++;
-    if ((m as unknown as { thinInstanceCount?: number }).thinInstanceCount) r.thin++;
+    const thinCount = (m as unknown as { thinInstanceCount?: number }).thinInstanceCount ?? 0;
+    if (thinCount) r.thin++;
+    if (m.isEnabled()) r.tris! += (m.getTotalIndices() / 3) * Math.max(thinCount, 1);
     if (m.skeleton) r.skinned++;
   }
   for (const t of scene.transformNodes) if (!skip?.has(t)) row("[nó] " + key(t.name)).transformNodes!++;
@@ -215,7 +219,20 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
   d.camera.beta = 1.0;
   d.camera.radius = 18;
 
-  const points = benchPoints(d.regions, d.bounds);
+  // ?bench=aqui: mede onde o personagem está (região de caça cheia, praça com bots), sem passear a câmera.
+  // Espera window.__ereviaBenchGo (o teste leva o personagem até lá com /tp e liga).
+  const here = new URLSearchParams(location.search).get("bench") === "aqui";
+  let points = benchPoints(d.regions, d.bounds);
+  if (here) {
+    say("Esperando o personagem chegar (window.__ereviaBenchGo)…");
+    for (let i = 0; i < 600 && !(window as unknown as { __ereviaBenchGo?: boolean }).__ereviaBenchGo; i++) await wait(500);
+    let me = { x: 0, z: 0 };
+    d.forEachRoot((e) => {
+      if (e.local) me = { x: e.root.position.x, z: e.root.position.z };
+    });
+    points = [{ region: regionAt(d.regions, me.x, me.z)?.name ?? "Aqui", x: me.x, z: me.z }];
+  }
+  const focusOf = (p: { x: number; z: number }) => (here ? null : p);
   const samples: Sample[] = [];
   const total = points.length * PHASES.length;
   // Volta rápida antes de medir: compila os shaders e carrega o que falta em cada lugar
@@ -224,8 +241,8 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
   for (const ph of PHASES) {
     d.setTime(ph.phase);
     for (const p of points) {
-      d.setFocus(p);
-      await wait(250);
+      d.setFocus(focusOf(p));
+      await wait(here ? 4000 : 250);
     }
   }
   let n = 0;
@@ -234,7 +251,7 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
     for (const p of points) {
       n++;
       say(`Medindo FPS ${n}/${total}: ${p.region}, ${ph.label}…`);
-      d.setFocus(p);
+      d.setFocus(focusOf(p));
       await wait(WARMUP_MS);
       samples.push({ region: p.region, time: ph.label, x: p.x, z: p.z, ...(await measure(d, inst, gpuInst, p)) });
     }
@@ -392,16 +409,19 @@ async function sceneOnly(d: BenchDeps, inst: SceneInstrumentation) {
 function memoryInfo(scene: Scene): BenchResult["memory"] {
   let bytes = 0;
   let n = 0;
+  const all: { name: string; size: string; mb: number }[] = [];
   for (const t of scene.textures) {
     const size = t.getSize();
     if (!size.width) continue;
     n++;
     const url = (t as unknown as { url?: string }).url ?? "";
     const compressed = /ktx2?$/i.test(url.split("?")[0]) || !!(t.getInternalTexture() as unknown as { _compression?: string } | null)?._compression;
-    bytes += size.width * size.height * (compressed ? 1 : 4) * (t.noMipmap ? 1 : 1.33);
+    const b = size.width * size.height * (compressed ? 1 : 4) * (t.noMipmap ? 1 : 1.33);
+    bytes += b;
+    all.push({ name: (url || t.name).split("/").pop()!.slice(0, 48), size: `${size.width}x${size.height}${compressed ? " ktx2" : ""}`, mb: round(b / 1048576, 1) });
   }
   const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0;
-  return { textures: n, textureMB: round(bytes / 1048576, 1), heapMB: round(heap / 1048576, 1) };
+  return { textures: n, textureMB: round(bytes / 1048576, 1), heapMB: round(heap / 1048576, 1), biggest: all.sort((a, b) => b.mb - a.mb).slice(0, 12) };
 }
 
 function deviceInfo(engine: AbstractEngine): Record<string, string | number> {

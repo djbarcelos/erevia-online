@@ -458,6 +458,9 @@ export class EntityManager {
   /** Quando os modelos 3D terminam de carregar: troca as cápsulas pelos modelos. */
   setModels(models: CharacterModels): void {
     this.models = models;
+    models.onModelReady = () => {
+      for (const v of this.views.values()) if (v.kind !== EntityKind.OBJECT) this.attachModel(v);
+    };
     for (const v of this.views.values()) if (v.kind !== EntityKind.OBJECT) this.attachModel(v);
   }
 
@@ -1737,6 +1740,12 @@ export class EntityManager {
     if (v.model3d || !this.models) return;
     // ?remaster=1: os chefes com silhueta própria (Senhor dos Ossos, Ozrhal) têm modelo à parte.
     const bossModel = v.boss ? remasterModelOf(v.model, true) : v.model;
+    // Remaster: golem e chefes baixam sob demanda; até chegar a entidade fica como cápsula (não o esqueleto de outro).
+    for (const m of new Set([bossModel, v.model])) {
+      if (!this.models.pending(m)) continue;
+      void this.models.ensure(m);
+      return;
+    }
     const inst =
       (bossModel !== v.model ? this.models.instantiate(bossModel, String(v.id), undefined, v.look) : null) ??
       this.models.instantiate(v.model, String(v.id), undefined, v.look);

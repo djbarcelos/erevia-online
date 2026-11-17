@@ -26,7 +26,7 @@ import { reportClientError } from "../net/errors";
 import { RoleMap } from "./anim";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, REMASTER, REMASTER_FILES, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS } from "./remaster";
+import { lodFor, REMASTER, REMASTER_FILES, REMASTER_LAZY, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS } from "./remaster";
 import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
 
 /**
@@ -441,7 +441,10 @@ export class CharacterModels {
     const allWeapons = { ...WEAPONS, ...MONSTER_WEAPONS };
     const weaponFiles = [...new Set([...Object.values(allWeapons).flatMap((w) => Object.values(w)), ...ITEM_WEAPONS])];
     // stone_golem e os chefes só têm arquivo no remaster; sem ele o golem é o de código e os chefes reaproveitam os esqueletos.
-    const modelIds = [...Object.keys(WEAPONS), ...MONSTER_MODELS, ...(REMASTER ? ["stone_golem", ...REMASTER_ONLY] : [])];
+    // Os mais pesados e raros (golem, chefes: ~14 MB) ficam de fora e baixam sob demanda (ensure).
+    const modelIds = [...Object.keys(WEAPONS), ...MONSTER_MODELS, ...(REMASTER ? ["stone_golem", ...REMASTER_ONLY] : [])].filter(
+      (id) => !(REMASTER && REMASTER_LAZY.includes(id)),
+    );
 
     const [animContainers, weaponList, bodies] = await Promise.all([
       Promise.all(ANIM_FILES.map(load)),
@@ -471,8 +474,7 @@ export class CharacterModels {
     }
 
     const models = new Map<string, ModelAssets>();
-    for (const [id, body, remaster] of bodies) {
-      if (!body) continue;
+    const register = (id: string, body: AssetContainer, remaster: boolean) => {
       const weapons: ModelAssets["weapons"] = {};
       for (const [slot, file] of Object.entries(allWeapons[id] ?? {}) as [Slot, string][]) {
         const w = weaponByFile.get(file);
@@ -483,7 +485,8 @@ export class CharacterModels {
       const maskFile = remaster ? REMASTER_MASKS[id] : undefined;
       const mask = maskFile ? new Texture(`${BASE}${maskFile}`, scene, true, false) : null;
       models.set(id, { body, weapons, scale: measureScale(body, id, remaster ? REMASTER_HEIGHTS[id] : undefined), heads, remaster, mask });
-    }
+    };
+    for (const [id, body, remaster] of bodies) if (body) register(id, body, remaster);
 
     // Os grupos de animação servem de molde; não tocam sozinhos.
     const templates = new Map<string, AnimationGroup>();
@@ -496,7 +499,58 @@ export class CharacterModels {
     const idle = templates.get("Idle_A");
     const death = templates.get("Death_A");
     if (idle && death) templates.set(SIT_POSE, buildSitPose(idle, death, scene));
-    return new CharacterModels(models, templates, weaponByFile, scene);
+    const result = new CharacterModels(models, templates, weaponByFile, scene);
+    // Corpos sob demanda (REMASTER_LAZY): mesmo caminho dos de sempre.
+    result.lazyLoader = async (id) => {
+      const file = REMASTER_FILES[id];
+      const body = file ? await tryLoad(`${file}.glb`) : null;
+      if (!body) return false;
+      for (const m of body.materials) setPaletteKind(m, "char");
+      register(id, body, true);
+      for (const g of body.animationGroups) {
+        g.stop();
+        templates.set(g.name, g);
+      }
+      return true;
+    };
+    return result;
+  }
+
+  /** Carrega o corpo de ensure(). */
+  private lazyLoader: ((id: string) => Promise<boolean>) | null = null;
+  private lazyLoads = new Map<string, Promise<boolean>>();
+  /** Avisa quando um corpo sob demanda chegou (as entidades que esperavam trocam a cápsula pelo modelo). */
+  onModelReady: ((id: string) => void) | null = null;
+
+  /** O modelo existe no jogo mas ainda não foi baixado (golem e chefes do remaster)? */
+  pending(model: string): boolean {
+    return REMASTER && REMASTER_LAZY.includes(model) && !this.models.has(model);
+  }
+
+  /** Baixa um corpo sob demanda (uma vez só). Resolve true quando está pronto. */
+  ensure(model: string): Promise<boolean> {
+    if (!this.pending(model) || !this.lazyLoader) return Promise.resolve(this.models.has(model));
+    let p = this.lazyLoads.get(model);
+    if (!p) {
+      p = this.lazyLoader(model).then((ok) => {
+        if (ok) this.onModelReady?.(model);
+        return ok;
+      });
+      this.lazyLoads.set(model, p);
+    }
+    return p;
+  }
+
+  /**
+   * Baixa os corpos sob demanda no tempo ocioso, um de cada vez, para o chefe já estar pronto quando o jogador
+   * chegar. Fica de fora com "economizar dados" e em rede lenta (2G/3G): lá só baixam quando aparecem.
+   */
+  prefetchLazy(): void {
+    const c = (navigator as unknown as { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (c?.saveData || (c?.effectiveType && c.effectiveType !== "4g")) return;
+    void (async () => {
+      for (const id of REMASTER_LAZY) if (this.pending(id)) await this.ensure(id);
+    })();
   }
 
   /** Cópia do material com brilho (uma por material + tipo de brilho; "e2" pulsa). */

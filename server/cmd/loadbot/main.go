@@ -71,6 +71,7 @@ func main() {
 	dur := flag.Duration("duration", time.Minute, "quanto tempo rodar depois que todos entram")
 	ramp := flag.Duration("ramp", 50*time.Millisecond, "intervalo entre a entrada de cada bot")
 	prefix := flag.String("prefix", "Bot", "início do nome dos personagens (letras)")
+	plaza := flag.Float64("plaza", 0, "raio (m) de uma praça em volta do centro: os bots ficam passeando nela, sem caçar (medir FPS com muita gente à vista); 0 = caçam nos anéis")
 	chat := flag.Bool("chat", true, "bots falam no chat geral de vez em quando")
 	chaos := flag.Bool("chaos", false, "teste de caos: ações válidas e inválidas de todo o protocolo, quedas e conferência da economia (ver chaos.go)")
 	seed := flag.String("seed", "", "caos: semente das escolhas (vazio = sorteada e impressa)")
@@ -103,7 +104,7 @@ func main() {
 		go func(i int) {
 			defer wg.Done()
 			name := fmt.Sprintf("%s%03d", *prefix, i)
-			if err := runBot(ctx, *base, name, classes[i%len(classes)], *chat, m); err != nil && ctx.Err() == nil {
+			if err := runBot(ctx, *base, name, classes[i%len(classes)], *chat, *plaza, m); err != nil && ctx.Err() == nil {
 				m.errors.Add(1)
 				log.Printf("%s: %v", name, err)
 			}
@@ -203,7 +204,7 @@ func login(ctx context.Context, client *http.Client, base, name, class string) (
 
 type vec struct{ x, z float64 }
 
-func runBot(ctx context.Context, base, name, class string, chat bool, m *metrics) error {
+func runBot(ctx context.Context, base, name, class string, chat bool, plaza float64, m *metrics) error {
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar, Timeout: 10 * time.Second}
 	id, err := login(ctx, client, base, name, class)
@@ -340,6 +341,11 @@ func runBot(ctx context.Context, base, name, class string, chat bool, m *metrics
 			switch {
 			case isDead:
 				send(&pb.ClientMessage{Msg: &pb.ClientMessage_Respawn{Respawn: &pb.Respawn{}}})
+			case plaza > 0:
+				// Passeia pela praça: um ponto qualquer dentro do raio, sem atacar ninguém.
+				a := rng.Float64() * 2 * math.Pi
+				r := plaza * math.Sqrt(rng.Float64())
+				send(&pb.ClientMessage{Msg: &pb.ClientMessage_MoveTo{MoveTo: &pb.MoveTo{X: float32(r * math.Cos(a)), Z: float32(r * math.Sin(a))}}})
 			case target != 0 && rng.Float64() < 0.7:
 				send(&pb.ClientMessage{Msg: &pb.ClientMessage_Attack{Attack: &pb.Attack{TargetId: target}}})
 			default:
