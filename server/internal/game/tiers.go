@@ -526,12 +526,12 @@ func buildTierGear() tierGearSet {
 			ref := weaponProfile[c]
 			for _, w := range ts.weapons {
 				f := tierCurve(w.level) / tierCurve(refWeaponLevel) * ts.weaponMult
-				add(weapon(fmt.Sprintf("%s_%s%d", weaponPrefix[c], low, w.level), w.names[c], c, GradeCommon, w.level,
+				add(weapon(generatedWeaponType(c, w.models[c]), fmt.Sprintf("%s_%s%d", weaponPrefix[c], low, w.level), w.names[c], c, GradeCommon, w.level,
 					scaleStats(ref, f), tierPrice(w.level, GradeCommon, KindWeapon), w.models[c], w.offModel[c], w.desc))
 			}
 			f := tierCurve(ts.epicLevel) / tierCurve(refWeaponLevel) * gradeFactor(GradeEpic)
 			m := epicWeaponModels[c]
-			add(weapon(fmt.Sprintf("%s_%s_epic", weaponPrefix[c], low), epicWeaponNouns[c]+" "+ts.epicTheme, c, GradeEpic, ts.epicLevel,
+			add(weapon(generatedWeaponType(c, m[0]), fmt.Sprintf("%s_%s_epic", weaponPrefix[c], low), epicWeaponNouns[c]+" "+ts.epicTheme, c, GradeEpic, ts.epicLevel,
 				scaleStats(ref, f), tierPrice(ts.epicLevel, GradeEpic, KindWeapon), m[0], m[1], ts.epicDesc))
 		}
 		// Conjuntos: um por peso, cinco peças, cada uma comum e épica.

@@ -599,6 +599,11 @@ func (z *Zone) onJoin(info JoinInfo) {
 	if skipped > 0 {
 		z.log.Warn("items skipped on load", "id", info.ID, "count", skipped)
 	}
+	// Equipamento que a classe não usa (ou mão secundária junto de arma de duas mãos) vai para
+	// a bolsa; sem espaço, fica equipado: nada se perde e o invariante "equip" avisa.
+	if moved, stuck := inv.dropInvalidGear(class, spec, level); moved+stuck > 0 {
+		z.log.Warn("invalid gear on load", "id", info.ID, "moved", moved, "stuck", stuck)
+	}
 	p := &entity{
 		id: info.ID, kind: pb.EntityKind_ENTITY_KIND_PLAYER,
 		name: info.Name, model: info.Class, level: level, scale: 1,
@@ -663,6 +668,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		ServerTimeMs: z.cfg.Clock().UnixMilli(),
 		DayCycleMs:   uint32(game.DayCycle.Milliseconds()),
 		SkillCatalog: skillCatalog(),
+		Weapons:      weaponCatalog(),
 		ItemCatalog:  itemCatalog,
 		Inventory:    inventoryPB(&p.pl.inv),
 		GroundItems:  z.groundList(),
@@ -1160,6 +1166,9 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 	}
 	if e.obj != nil {
 		out.Title = "Estandarte"
+		if e.obj.title != "" {
+			out.Title = e.obj.title // túmulo do chefe de campo: hora da morte e quem mais bateu
+		}
 	}
 	return out
 }

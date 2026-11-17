@@ -99,7 +99,42 @@ const (
 	PassiveCrit                   // +Value de chance de crítico
 	PassiveEvasion                // +Value de esquiva
 	PassivePoisonProc             // Value = chance de envenenar ao acertar (4% do ataque/s, 5 s)
+
+	passiveKindCount // sempre o último: tamanho de Passives
 )
+
+// Passives: a soma de PValue de todas as skills aprendidas, por PassiveKind.
+// As mecânicas especiais reagem ao tipo, não ao ID de uma skill.
+type Passives [passiveKindCount]float64
+
+// Of é o total do tipo k (0 = nenhuma skill daquele tipo aprendida).
+func (t Passives) Of(k PassiveKind) float64 {
+	if k >= passiveKindCount {
+		return 0
+	}
+	return t[k]
+}
+
+// Has diz se alguma skill passiva do tipo k está aprendida (total > 0).
+func (t Passives) Has(k PassiveKind) bool { return t.Of(k) > 0 }
+
+// PassiveTotals soma, para cada tipo, o PValue no rank de cada skill aprendida (ranks: skill → rank).
+func PassiveTotals(ranks map[uint32]int) Passives {
+	var t Passives
+	for id, r := range ranks {
+		sk := Skills[id]
+		if sk == nil || r < 1 || !sk.IsPassive() || sk.Passive >= passiveKindCount {
+			continue
+		}
+		t[sk.Passive] += sk.PValue.At(r)
+	}
+	return t
+}
+
+// SkillAvailable: a skill existe e vale para a classe (e, se for de caminho, para a spec).
+func SkillAvailable(s *SkillDef, class, spec string) bool {
+	return s != nil && s.Class == class && (s.Spec == "" || s.Spec == spec)
+}
 
 // Constantes das passivas e mecânicas especiais.
 const (

@@ -122,7 +122,7 @@ func (z *Zone) basicAttack(src, dst *entity) {
 
 // skillMP: custo de mana no rank (Sobrecarga encarece 10%).
 func skillMP(p *entity, s *game.SkillDef) float64 {
-	return game.SkillMPCost(s, p.pl.rank(s.ID), p.pl.rank(game.SkillOverload) > 0)
+	return game.SkillMPCost(s, p.pl.rank(s.ID), p.pl.passives.Has(game.PassiveOverload))
 }
 
 // skillCD: recarga no rank, dividida pela velocidade de conjuração.
@@ -340,8 +340,8 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 	// Brasa Viva: skills de fogo deixam o alvo queimando (menos as que já queimam por conta
 	// própria, como o Inferno: a queimadura mais fraca da Brasa substituiria a delas).
 	if s.Fire && src.pl != nil && (s.OnTarget == nil || s.OnTarget.Kind != game.EffectBurn) {
-		if r := src.pl.rank(game.SkillEmber); r > 0 {
-			v := math.Round(src.atk(true, z.now) * game.Skills[game.SkillEmber].PValue.At(r))
+		if pv := src.pl.passives.Of(game.PassiveFireBurn); pv > 0 {
+			v := math.Round(src.atk(true, z.now) * pv)
 			z.applyEffect(src, dst, &game.EffectDef{Kind: game.EffectBurn, Duration: game.FireBurnSeconds, Value: math.Max(1, v)})
 		}
 	}
@@ -414,15 +414,15 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 
 	if src.pl != nil && taken > 0 && !src.dead {
 		// Sede de Sangue
-		if r := src.pl.rank(game.SkillBloodthirst); r > 0 {
-			heal := math.Round(taken * game.Skills[game.SkillBloodthirst].PValue.At(r))
+		if pv := src.pl.passives.Of(game.PassiveLifesteal); pv > 0 {
+			heal := math.Round(taken * pv)
 			if heal > 0 && src.hp < src.stats.MaxHP {
 				src.hp = math.Min(src.stats.MaxHP, src.hp+heal)
 				ev.Heal = uint32(heal)
 			}
 		}
 		// Lâmina Envenenada
-		if r := src.pl.rank(game.SkillPoisonedBlade); r > 0 && !dst.dead && z.rng.Float64() < game.Skills[game.SkillPoisonedBlade].PValue.At(r) {
+		if pv := src.pl.passives.Of(game.PassivePoisonProc); pv > 0 && !dst.dead && z.rng.Float64() < pv {
 			v := math.Max(1, math.Round(z.attackPower(src, false)*game.PoisonProcFrac))
 			z.applyEffect(src, dst, &game.EffectDef{Kind: game.EffectPoison, Duration: game.PoisonProcSecs, Value: v})
 		}
@@ -496,14 +496,14 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 
 // checkLastStand: Muralha Viva (cavaleiro abaixo de 30% ganha um escudo).
 func (z *Zone) checkLastStand(p *entity) {
-	if p.pl == nil || p.pl.rank(game.SkillLivingWall) < 1 || z.now < p.pl.lastStandReady {
+	if p.pl == nil || p.pl.passives.Of(game.PassiveLastStand) <= 0 || z.now < p.pl.lastStandReady {
 		return
 	}
 	if p.hp >= p.stats.MaxHP*game.LastStandBelow {
 		return
 	}
 	p.pl.lastStandReady = z.now + game.LastStandCD
-	v := math.Round(p.stats.MaxHP * game.Skills[game.SkillLivingWall].PValue.At(1))
+	v := math.Round(p.stats.MaxHP * p.pl.passives.Of(game.PassiveLastStand))
 	z.applyEffect(p, p, &game.EffectDef{Kind: game.EffectShield, Duration: game.LastStandSeconds, Value: v})
 	z.system(p, "Muralha Viva! Um escudo protege você.")
 }
@@ -531,8 +531,8 @@ func (z *Zone) regen(e *entity, dt float64) {
 		hp += v
 	}
 	// Espírito do Urso
-	if e.pl != nil && e.pl.rank(game.SkillBearSpirit) > 0 && e.hp < e.stats.MaxHP*game.BearBelow {
-		hp += e.stats.MaxHP * game.Skills[game.SkillBearSpirit].PValue.At(1)
+	if e.pl != nil && e.pl.passives.Has(game.PassiveBearSpirit) && e.hp < e.stats.MaxHP*game.BearBelow {
+		hp += e.stats.MaxHP * e.pl.passives.Of(game.PassiveBearSpirit)
 	}
 	e.hp = math.Min(e.stats.MaxHP, e.hp+hp*dt)
 	e.mp = math.Min(e.stats.MaxMP, e.mp+mp*dt)

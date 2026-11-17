@@ -46,9 +46,65 @@ export function showScreen(screen: Screen, text = "Carregando…"): void {
     stopBg = null;
     overlay.hidden = true;
     content.replaceChildren();
+    progress = null;
     return;
   }
-  mount("loading", el("div", "entry-loading", el("h1", "logo-word", "EREVIA"), el("span", "spinner"), el("p", "muted", text)));
+  progress = null;
+  const spinner = el("span", "spinner");
+  const label = el("p", "muted", text);
+  const fill = el("div", "load-fill");
+  const bar = el("div", "load-bar", fill);
+  bar.hidden = true;
+  const stepsEl = el("ol", "load-steps");
+  stepsEl.hidden = true;
+  mount("loading", el("div", "entry-loading", el("h1", "logo-word", "EREVIA"), spinner, bar, stepsEl, label));
+  progress = { spinner, bar, fill, stepsEl, label };
+}
+
+interface LoadingUi {
+  spinner: HTMLElement;
+  bar: HTMLElement;
+  fill: HTMLElement;
+  stepsEl: HTMLElement;
+  label: HTMLElement;
+}
+let progress: LoadingUi | null = null;
+
+/**
+ * Barra de progresso da entrada no mundo, com etapas ("Mapa", "Cenário"…): `current` é a etapa em curso
+ * (steps.length = tudo pronto). Troca o spinner pela barra.
+ */
+export function setLoadingProgress(steps: string[], current: number): void {
+  const p = progress;
+  if (!p) return;
+  p.spinner.hidden = true;
+  p.bar.hidden = false;
+  p.stepsEl.hidden = false;
+  const k = steps.length ? Math.min(1, current / steps.length) : 1;
+  p.fill.style.width = `${Math.round(k * 100)}%`;
+  p.bar.setAttribute("role", "progressbar");
+  p.bar.setAttribute("aria-valuenow", String(Math.round(k * 100)));
+  p.stepsEl.replaceChildren(
+    ...steps.map((s, i) => el("li", i < current ? "done" : i === current ? "now" : "", s)),
+  );
+  p.label.textContent = current < steps.length ? steps[current] : "Pronto";
+}
+
+/** Sai da tela de carregamento com um fade curto (sem corte seco) e some de vez. */
+export function leaveLoadingScreen(ms = 300): Promise<void> {
+  if (overlay.hidden) return Promise.resolve();
+  return new Promise((resolve) => {
+    overlay.style.transition = `opacity ${ms}ms ease`;
+    overlay.style.opacity = "0";
+    overlay.style.pointerEvents = "none";
+    window.setTimeout(() => {
+      showScreen(null);
+      overlay.style.transition = "";
+      overlay.style.opacity = "";
+      overlay.style.pointerEvents = "";
+      resolve();
+    }, ms);
+  });
 }
 
 export function showMessage(title: string, text: string, buttonText: string, onClick: () => void): void {

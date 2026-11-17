@@ -157,8 +157,9 @@ func TestLootReservedForTopDamageThenFree(t *testing.T) {
 	b, peerB := joinKit(z, 2, "rogue", 42, 0, 0)
 	m.mon.hate[b.id] = 500
 	m.mon.hate[a.id] = 10
-	z.kill(m, a)          // A deu o último golpe, mas B causou mais dano
-	m.mon.respawnAt = 1e9 // o chefe não volta durante o teste
+	z.raidCredit(m, b, 500) // o chefe de campo divide por dano (raid.go)
+	z.raidCredit(m, a, 10)
+	z.kill(m, a) // A deu o último golpe, mas B causou mais dano
 
 	if len(z.ground) == 0 {
 		t.Fatal("boss must drop loot")
@@ -294,7 +295,7 @@ func TestLootAndXPArriveAfterDeathSnapshot(t *testing.T) {
 	z := newCombatZone(fixed("bone_lord", 22, 40, 0)) // o chefe sempre deixa itens
 	m := z.onlyMonster()
 	a, peer := joinKit(z, 1, "knight", 38, 0, 0)
-	m.mon.respawnAt = 1e9
+	z.raidCredit(m, a, 100)
 	z.kill(m, a)
 	z.update(0.05)
 

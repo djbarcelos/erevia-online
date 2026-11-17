@@ -9,7 +9,7 @@ func TestBrejoMonsters(t *testing.T) {
 		neutralByDay bool
 	}{
 		"brejeiro_lanceiro": {ArchPack, true}, "brejeiro_xama": {ArchHealer, true}, "sapo_boi": {ArchBrute, false},
-		"lodo_vivo": {ArchSplitter, false}, "afogado": {ArchAmbusher, false}, "mae_lodo": {ArchSummoner, false},
+		"lodo_vivo": {ArchSplitter, false}, "afogado": {ArchAmbusher, false}, "mae_lodo": {ArchBrute, false},
 	} {
 		m := Monsters[id]
 		if m == nil {
@@ -25,8 +25,8 @@ func TestBrejoMonsters(t *testing.T) {
 	if !Monsters["sapo_boi"].BalanceBaseline() || Monsters["brejeiro_lanceiro"].BalanceBaseline() {
 		t.Error("o Sapo-Boi é o único bruto do Brejo (entra nas contas de caça); os de papel ficam fora")
 	}
-	if m := Monsters["mae_lodo"]; !m.Boss || len(m.Abilities) != 2 {
-		t.Errorf("Mãe-Lodo: chefe de campo com Golfada e Maré de Lama: %+v", m)
+	if m := Monsters["mae_lodo"]; !m.Boss || len(m.Abilities) != 2 || m.FieldBoss == nil || m.FieldBoss.PhaseCount() != 3 {
+		t.Errorf("Mãe-Lodo: chefe de campo de 3 fases com Golfada e Maré de Lama: %+v", m)
 	}
 	r := Monsters["rare_escamosa"]
 	if r == nil || r.Rare == nil || r.Archetype != ArchSummoner || r.Arch.Summon != "lodo_menor" || r.Name != "Velha Escamosa" {

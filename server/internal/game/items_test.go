@@ -26,6 +26,14 @@ func TestCatalogIsConsistent(t *testing.T) {
 		if d.Kind == KindWeapon && (d.Model == "" || d.WeaponType == "") {
 			t.Errorf("%s: weapon without model or type", id)
 		}
+		if d.Kind == KindWeapon {
+			if Weapons[d.WeaponType] == nil {
+				t.Errorf("%s: tipo de arma %q sem entrada em Weapons", id, d.WeaponType)
+			}
+			if len(d.Classes) == 1 && !CanWield(d.Classes[0], "", d.WeaponType) {
+				t.Errorf("%s: a classe %s não empunha %s", id, d.Classes[0], d.WeaponType)
+			}
+		}
 		if d.Equippable() && d.Price <= 0 {
 			t.Errorf("%s: equipment without price", id)
 		}
@@ -238,5 +246,32 @@ func TestAppearance(t *testing.T) {
 		if HatClasses[c] == (c == "rogue") {
 			t.Errorf("%s: hat %v", c, HatClasses[c])
 		}
+	}
+}
+
+// A empunhadura vem do tipo da arma, nunca do modelo: a Lâmina do Vigia tem o modelo de duas
+// mãos e continua de uma; varinhas são WeaponWand.
+func TestWeaponHandsAndWands(t *testing.T) {
+	for _, id := range []string{"sword_rare", "sword_epic", "axe_rare"} {
+		if d := Items[id]; d.Hands() != 1 || d.TwoHanded() {
+			t.Errorf("%s deveria ser de uma mão", id)
+		}
+	}
+	for _, id := range []string{"wand_common", "staff_rare"} {
+		if Items[id].WeaponType != WeaponWand {
+			t.Errorf("%s: %s", id, Items[id].WeaponType)
+		}
+	}
+	for id, d := range Items {
+		if d.Kind == KindWeapon && d.Model == "wand" && d.WeaponType != WeaponWand {
+			t.Errorf("%s usa o modelo da varinha mas é %s", id, d.WeaponType)
+		}
+		switch d.WeaponType { // tipos definidos para as próximas fases: nenhum item os usa ainda
+		case WeaponAxe2H, WeaponBow, WeaponCrossbow, WeaponCrossbow2H:
+			t.Errorf("%s: tipo %s ainda sem item", id, d.WeaponType)
+		}
+	}
+	if Items["daggers_common"].TwoHanded() == false {
+		t.Error("as adagas são duplas e ocupam a mão secundária")
 	}
 }

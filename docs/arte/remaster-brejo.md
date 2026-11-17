@@ -15,7 +15,7 @@ A expansão leste do Mapa 1 (roadmap 5.3 e T12): o mapa vai de x −150 a 330 (4
 | Sapo-Boi (×9 + 7 de dia) | bruto; "Língua": linha de 8 m, 1 s de aviso, prende 1,5 s | dia e noite | `frog` (#135) |
 | Lodo Vivo (×8) | divide em 2 Lodinhos; o golpe dá lentidão de 20% | dia e noite | `slime` (#135), `Tint` #a8794f |
 | Afogado (×7) | emboscador (4,5 m), agarra 1,5 s | só à noite, no lugar dos 7 sapos de dia | `skeleton_warrior`, `Tint` #6fa89a |
-| **Mãe-Lodo** (chefe de campo, nível 21, (250, −40), 50–100 min) | Golfada em cone de 60°, Maré de Lama (4 círculos com veneno), Lodinhos a cada 25 s | | `slime`, `Tint` #6f8a4a, escala 2,8 |
+| **Mãe-Lodo** (chefe de campo, nível 21, (250, −40), janela de 60 a 90 min) | F1: Golfada em cone de 60°. F2 (66%): divide-se em 3 Lodinhos que voltam e a curam em 20% se vivos após 30 s. F3 (33%): Maré de Lama (4 círculos com veneno) | | `slime`, `Tint` #6f8a4a, escala 2,8 |
 | **Velha Escamosa** (rara, hospedeiro Xamã, 2%) | invoca 2 Lodinhos e atira lama envenenada | | `brejeiro` |
 
 - **Balanceamento:** o Sapo-Boi é o único bruto (os outros têm papel e ficam fora das contas, `BalanceBaseline`). Ele segue a curva do Guerreiro Esqueleto (vida +14%, ataque −12%): a XP por abate do 14 ao 20 fica igual à tabela de antes, e a tabela de progressão (`docs/progressao.md`) só troca o nome da caça. O simulador conta o Brejo como **uma região só** (`BrejoHuntArea`, 12.400 m²: a fatia dos 16 sapos nos 28.000 m² do pântano com os 36 bichos). `TestPowerBudget` passa sem exceção nova.
@@ -44,7 +44,7 @@ A linha de base (`e2e/bench-baseline.json`) foi regerada com `npm run bench:base
 
 - **Javali** (`boar`): não foi entregue pela #135; o Brejo não usa.
 - **Lágrima de Vau** (conjunto "do Brejo", nível 18) e o **Cajado de Junco** (raro do mago): um item novo de arma entra nas linhas de encantamento do `TestPowerBudget` como exceção nova, e o teste não pode afrouxar. A Velha Escamosa solta os épicos do grau D no lugar.
-- **Mãe-Lodo:** sem as fases 2 e 3 do roadmap (a divisão em 3 Lodos que voltam a curá-la, a poça que vai encolhendo o chão); só as duas habilidades e os Lodinhos. A fase por vida existe só no raid.
+- **Mãe-Lodo:** já tem as 3 fases por vida (#132, `FieldBossDef`). Falta só a poça de lentidão de 10 s que cada círculo da Maré deveria deixar, com o chão encolhendo: não há efeito de chão no servidor ainda. Os Lodinhos da F2 são os pequenos (`lodo_menor`), não "Lodos médios".
 - **Brejeiros:** o "Paz com os Brejeiros" (hostilidade de 1 h por matar mais de 10 de dia) e a aldeia das palafitas.
 - **Sino Afogado** (segredo), **Pedra-Selo** (não existe como item), **Foz do Lamagris** (portão para Maresia) e **Ponte de Troncos por missão** (hoje é só cenário): ficam para as tasks de portão e de Pedra-Selo.
 - **Zona segura de 10 m do posto:** a zona segura é só a da cidade.
