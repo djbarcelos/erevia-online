@@ -109,7 +109,7 @@ Só os heróis do remaster usam a tabela; o esqueleto (rig com repouso diferente
 - Blender headless (ângulos): `cavaleiro-angulos.jpg`, `barbaro-angulos.jpg`, `mago-angulos.jpg`, `ladino-angulos.jpg`.
 - Tiras de animação: `*-locomocao-combate.jpg`, `*-emotes.jpg`.
 - Pega das armas: `pega-*.jpg` e, de perto, `pega-ladino-perto.jpg`, `pega-cavaleiro-perto.jpg`. Elmo e chapéu: `cavaleiro-elmo.jpg`, `mago-chapeu.jpg`. Parados e pausas: `idle-*.jpg`. Golpes candidatos: `golpes-candidatos.jpg` (bárbaro: Axe Spin, Charged Slash, Reaping Swing; cavaleiro: Charged Slash, Charged Upward Slash).
-- Os 4 lado a lado no laboratório (o mesmo `CharacterModels` do jogo): `quatro-classes.jpg` (parado) e `quatro-classes-poses.jpg` (parado, correndo, acenando, sentado). Os prints dentro do jogo (`tools/art/remaster-herois/jogo.mjs`) não saíram: ver "O que ficou em aberto".
+- No jogo (`?remaster=1`, praça, uma conta por classe, em sequência): `jogo-4-classes.jpg` (câmera de lado) e `jogo-4-classes-costas.jpg`, feitos com `tools/art/remaster-herois/jogo.mjs` (`CLASSES=mage TAG=mago node ...`); a câmera padrão fica longe, então os detalhes de perto estão nos prints do laboratório. Os 4 lado a lado no laboratório (o mesmo `CharacterModels` do jogo): `quatro-classes.jpg` (parado) e `quatro-classes-poses.jpg` (parado, correndo, acenando, sentado).
 
 O Blender aberto na tela não foi usado (headless, como na v3).
 
@@ -119,7 +119,7 @@ O Blender aberto na tela não foi usado (headless, como na v3).
 4. **Tufos de cabelo sob o elmo** do cavaleiro; vale uma passada para esconder as orelhas.
 5. **FPS de GPU real** continua sem medida (SwiftShader).
 6. **Arco:** o jogo não tem arco como arma; nenhuma ação de tiro foi comprada.
-8. **Prints dentro do jogo e bench de contadores:** só saiu 1 print no jogo (`jogo-cavaleiro-elmo.jpg`: o cavaleiro com o elmo novo na praça, de costas, `?remaster=1`). O servidor de teste sobe (Go no Docker, 4 contas), mas com 4 navegadores de SwiftShader em paralelo (e com os outros agentes usando a máquina) o carregamento e o `page.screenshot` estouram o tempo; a mesma conta rodou por classe (`CLASSES=mage TAG=mago node tools/art/remaster-herois/jogo.mjs ...`) ainda lenta. Além disso a main nova abre a janela "O que há de novo" ao entrar (o script agora a fecha com Esc). Os prints dos 4 lado a lado vêm do laboratório (mesmo `CharacterModels`, mesmos GLB e KTX2). O `?bench=contadores` (`tools/art/remaster-v3/bench.mjs`) não rodou: precisa de uma máquina livre.
+8. **Bench de contadores:** não rodou (fica para a revisão de FPS, precisa de máquina livre).
 
 ## Segunda rodada (retornos do Daniel)
 
