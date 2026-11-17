@@ -24,7 +24,7 @@ import {
 import { reportClientError } from "../net/errors";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, REMASTER, REMASTER_FILES, REMASTER_MASKS } from "./remaster";
+import { lodFor, REMASTER, REMASTER_FILES, REMASTER_MASKS, REMASTER_WEAPONS } from "./remaster";
 import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
 
 /**
@@ -204,6 +204,9 @@ interface ModelAssets {
   mask: Texture | null;
 }
 
+/** Escala extra das armas do remaster que dividem o arquivo com outra (REMASTER_WEAPONS). */
+const weaponScale = new Map<AssetContainer, number>();
+
 export class CharacterModels {
   private constructor(
     private models: Map<string, ModelAssets>,
@@ -345,7 +348,16 @@ export class CharacterModels {
 
     const [animContainers, weaponList, bodies] = await Promise.all([
       Promise.all(ANIM_FILES.map(load)),
-      Promise.all(weaponFiles.map((w) => tryLoad(`weapons/${w}.glb`).then((c) => [w, c] as const))),
+      // ?remaster=1: a arma nova no lugar (e o KayKit de sempre se o arquivo faltar).
+      Promise.all(
+        weaponFiles.map(async (w) => {
+          const rw = REMASTER ? REMASTER_WEAPONS[w] : undefined;
+          // Um container por nome (as escalas diferem entre quem divide o arquivo).
+          const c = rw ? await tryLoad(`weapons/${rw.file}.glb`) : null;
+          if (c && rw?.scale) weaponScale.set(c, rw.scale);
+          return [w, c ?? (await tryLoad(`weapons/${w}.glb`))] as const;
+        }),
+      ),
       Promise.all(
         modelIds.map(async (id) => {
           // ?remaster=1: o arquivo do estilo B, se existir; senão, o KayKit de sempre.
@@ -482,6 +494,8 @@ export class CharacterModels {
       for (const child of wRoot.getChildren() as TransformNode[]) {
         child.parent = hand as TransformNode;
         child.position = Vector3.Zero();
+        const ws = weaponScale.get(container);
+        if (ws) child.scaling.scaleInPlace(ws);
         nodes.push(child);
         const glow = glowKey(grade, enchant);
         if (glow) {
