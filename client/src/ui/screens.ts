@@ -297,7 +297,28 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     void preview?.show(c.class, look);
     setPlate(c.name, `${classInfo(c.class).label} · Nível ${c.level ?? 1}`, look.emblem);
     const play = button("Entrar no mundo", "btn btn-gold btn-play", () => onPlay(c));
-    selectFoot.replaceChildren(el("div", "foot-info", el("b", null, c.name), el("span", "muted small", `${classInfo(c.class).label} · Nível ${c.level ?? 1}`)), play);
+    const info = classInfo(c.class);
+    const extra = CLASS_EXTRA[c.class];
+    const dot = el("span", "sc-dot");
+    const bars = el("div", "sc-bars");
+    extra.bars.forEach((v, i) => {
+      const fill = el("i");
+      fill.style.setProperty("--v", `${v}%`);
+      bars.append(el("span", "cb-name", CLASS_BAR_NAMES[i]), el("span", "cb-bar", fill), el("span", "cb-val", String(v)));
+    });
+    selectFoot.style.setProperty("--cc", info.color);
+    selectFoot.replaceChildren(
+      el(
+        "div",
+        "sc-card frame",
+        el("span", "sc-class", dot, info.label),
+        el("h2", "sc-name", c.name),
+        el("span", "sc-role", extra.role),
+        el("span", "sc-level", `Nível ${c.level ?? 1}`),
+        bars,
+      ),
+      play,
+    );
   };
 
   // ---------- Criação ----------
