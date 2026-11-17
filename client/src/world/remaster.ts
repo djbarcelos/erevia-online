@@ -40,6 +40,11 @@ export const REMASTER_FILES: Record<string, string> = {
   skeleton_rogue: "skeleton_rogue_b",
   skeleton_mage: "skeleton_mage_b",
   stone_golem: "stone_golem_b",
+  // Famílias não humanoides (tunnel#135): quadrúpede, artrópode, amorfo e anfíbio. Base CC0 (Quaternius) com retexture do Meshy.
+  wolf: "wolf_b",
+  spider: "spider_b",
+  slime: "slime_b",
+  frog: "frog_b",
   // Chefes com silhueta própria: não são modelos do servidor, ver remasterModelOf.
   bone_lord: "bone_lord_b",
   ozrhal: "ozrhal_b",
@@ -54,10 +59,15 @@ export const REMASTER_FILES: Record<string, string> = {
  */
 export const REMASTER_LAZY = [
   "stone_golem", "bone_lord", "ozrhal",
+  // Famílias (1 a 1,7 MB cada): só baixam quando a primeira aparece na tela, nunca no tempo ocioso (REMASTER_NO_PREFETCH).
+  "wolf", "spider", "slime", "frog",
   // NPCs (REMASTER_NPC_BY_NAME): a praça primeiro (a entidade os pede ao aparecer; o prefetch cobre o resto).
   "npc_livia", "npc_bruno", "npc_teodoro", "npc_otto", "npc_ysolde", "npc_edrian", "npc_severino", "npc_iselda", "npc_cassio",
   "npc_guarda", "npc_anselmo", "npc_marga", "npc_darcio", "npc_maelis", "npc_gaspar", "npc_rovena",
 ];
+
+/** Corpos sob demanda que o tempo ocioso NÃO baixa: monstros de uma região só, que a maioria dos jogadores nunca vê. */
+export const REMASTER_NO_PREFETCH = ["wolf", "spider", "slime", "frog"];
 
 /** Modelos que só existem no remaster (sem arquivo do estilo antigo para cair de volta). */
 export const REMASTER_ONLY = ["bone_lord", "ozrhal"];
@@ -76,6 +86,8 @@ export function remasterModelOf(model: string, boss: boolean): string {
 
 /** Altura (m) em que o modelo do remaster é normalizado antes da escala da entidade (padrão: 1,8). */
 export const REMASTER_HEIGHTS: Record<string, number> = {
+  // Famílias: a altura do corpo na pose de repouso (lobo nas quatro patas, aranha de pernas abertas, lodo, sapo ereto).
+  wolf: 1.0, spider: 0.5, slime: 0.8, frog: 1.1,
   stone_golem: 2.65, // a altura do golem em código (GOLEM_BODY), antes da escala 1,25 do servidor
   skeleton_minion: 1.5, // o lacaio é baixo e de crânio grande: lê menor que o guerreiro de longe
   skeleton_rogue: 1.75,
