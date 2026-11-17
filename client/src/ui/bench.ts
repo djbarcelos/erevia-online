@@ -299,6 +299,19 @@ function benchPoints(regions: Region[], b: BenchDeps["bounds"]): { region: strin
       out.push({ region: r.name, x: 0, z: 0 });
       continue;
     }
+    if (r.sector) {
+      // Setor com nome (o Bosque Gris e o núcleo das Terras Mortas): até 4 pontos espalhados dentro do mapa.
+      const cands: { x: number; z: number }[] = [];
+      for (let rr = r.rMin + 12; rr <= Math.min(r.rMax, 200); rr += 22) {
+        for (let a = r.sector.a0 + 8; a < r.sector.a1; a += 14) {
+          const x = Math.round(Math.cos((a * Math.PI) / 180) * rr);
+          const z = Math.round(Math.sin((a * Math.PI) / 180) * rr);
+          if (inside(x, z) && regionAt(regions, x, z) === r) cands.push({ x, z });
+        }
+      }
+      for (let i = 0; i < Math.min(4, cands.length); i++) out.push({ region: r.name, ...cands[Math.floor((i * cands.length) / Math.min(4, cands.length))] });
+      continue;
+    }
     const mid = (r.rMin + r.rMax) / 2;
     for (const a of RING_ANGLES) {
       const x = Math.cos(a) * mid;

@@ -295,7 +295,11 @@ func (z *Zone) AdminBossRespawn(ctx context.Context, id uint32) (string, error) 
 			// fica com o renascimento "agora", para um reinício não o esconder de novo.
 			m.mon.hidden = true
 			r.spawnAt, r.warned = z.cfg.Clock(), true
-			z.saveBoss(BossData{ID: m.mon.def.ID, RespawnAt: r.spawnAt, KilledAt: r.killedAt})
+			bd := BossData{ID: m.mon.def.ID, RespawnAt: r.spawnAt, KilledAt: r.killedAt}
+			if m.mon.def.Raid {
+				bd.TopName = z.regicide // o nome da Lápide do Último Regicida não se perde ao nascer pelo GM
+			}
+			z.saveBoss(bd)
 		} else {
 			m.mon.respawnAt = z.now
 		}

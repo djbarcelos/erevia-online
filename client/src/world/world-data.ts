@@ -47,6 +47,8 @@ export interface WorldData {
   /** Mapas além do principal: id e os kits de cenário (.glb) que ele usa (sem o campo: os dois de sempre). */
   id?: string;
   kits?: string[];
+  /** Masmorra (scripts/dungeons/): sem céu, chão plano de pedra e luz fixa de cripta. */
+  indoor?: boolean;
 }
 
 /** Limites do mapa (sem `bounds` no arquivo: o quadrado `size` centrado na cidade). */

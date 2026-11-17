@@ -3,6 +3,7 @@ package zone
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
@@ -235,7 +236,20 @@ func (z *Zone) sendDialog(p *entity, n *entity, text string) {
 	}
 	opts = append(opts, &pb.DialogOption{Kind: pb.DialogOptionKind_DIALOG_OPTION_LEAVE, Label: "Até mais."})
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_NpcDialog{NpcDialog: &pb.NpcDialog{
-		NpcId: n.id, Name: n.name, Title: n.npc.title, Text: text, Options: opts}}})
+		NpcId: n.id, Name: n.name, Title: n.npc.title, Text: z.fillTokens(text), Options: opts}}})
+}
+
+// fillTokens troca os marcadores do texto de um NPC pelo que só a zona sabe: o nome de quem mais causou dano na última morte
+// do Ozrhal (BossData.TopName), na Lápide do Último Regicida e na conversa do Irmão Caedmon.
+func (z *Zone) fillTokens(text string) string {
+	if !strings.Contains(text, game.TokenRegicide) {
+		return text
+	}
+	who := z.regicide
+	if who == "" {
+		who = "ninguém, ainda"
+	}
+	return strings.ReplaceAll(text, game.TokenRegicide, who)
 }
 
 // npcLine: a saudação quando há o que oferecer ou entregar; com uma missão dele em

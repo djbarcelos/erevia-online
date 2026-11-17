@@ -539,7 +539,7 @@ func TestRoleGoesToTheClient(t *testing.T) {
 	}
 }
 
-// Cada arquétipo aparece no mapa principal, poucas vezes (até 14: o Brejo traz 4 acampamentos de matilha, os Afogados da noite e os Lodos) e em áreas de nível baixo o bastante
+// Cada arquétipo aparece no mapa principal, poucas vezes (até 24: o Brejo traz 4 acampamentos de matilha, os Afogados da noite e os Lodos; o Bosque Gris e as Terras Mortas, os bandoleiros, as aranhas e os espectros, os lobos e os carniçais) e em áreas de nível baixo o bastante
 // para todo mundo cruzar com ele.
 func TestEveryArchetypeIsInTheWorld(t *testing.T) {
 	z := New(testConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -553,8 +553,8 @@ func TestEveryArchetypeIsInTheWorld(t *testing.T) {
 		}
 	}
 	for a := game.ArchArcher; a <= game.ArchExploder; a++ {
-		if seen[a] == 0 || seen[a] > 14 {
-			t.Errorf("%s: %d no mundo, quero de 1 a 14", a, seen[a])
+		if seen[a] == 0 || seen[a] > 24 {
+			t.Errorf("%s: %d no mundo, quero de 1 a 24", a, seen[a])
 		}
 	}
 	if neutral == 0 {
@@ -582,8 +582,9 @@ func TestEveryArchetypeIsInTheWorld(t *testing.T) {
 				t.Errorf("matilha espalhada: %d longe de %d", id, m.id)
 			}
 		}
-		if m.mon.def.Archetype == game.ArchPack && len(m.mon.arch.pack) != 3 {
-			t.Errorf("o bando dos Saqueadores tem 4: %d ligados", len(m.mon.arch.pack))
+		// O bando dos Saqueadores tem 4 (3 ligados); as matilhas de lobos e de carniçais, 3 (2 ligados).
+		if want := map[string]int{"skeleton_raider": 3, "lobo_cinzento": 2, "carnical": 2}; m.mon.def.Archetype == game.ArchPack && len(m.mon.arch.pack) != want[m.mon.def.ID] && want[m.mon.def.ID] != 0 {
+			t.Errorf("%s: %d ligados na matilha", m.mon.def.ID, len(m.mon.arch.pack))
 		}
 	}
 }

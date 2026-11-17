@@ -330,6 +330,7 @@ Os números de atributo são relativos às definições atuais em `monsters.go` 
     - no A1: 0 modelos novos (rogue e barbarian recoloridos);
     - no A2: +3 (lobo, javali e aranha), dois deles das famílias quadrúpede e artrópode, que outras áreas reutilizam.
   - **Cenário:** +300 objetos do kit de floresta atual, sem malha nova. Paliçada e tendas usam `fence_wood_straight` e `tent`, que já existem.
+- **Entregue na T10 (tunnel#137, `docs/arte/remaster-bosque-gris.md`):** os 3 humanoides (`rogue` e `barbarian` do remaster só com cor), o Lobo Cinzento e a Aranha-de-Musgo (famílias `wolf` e `spider`), o Corvo Rubro com as 3 fases, a Toca do Corvo, a Árvore-Forca, a Carroça Tombada e a Toca da Matilha, a linha "A caravana de Caio" e 3 diárias. **O que mudou do roadmap:** 16 monstros ao mesmo tempo (e não 22), porque o pico de 14 a 70 m do setor só fecha com esse total; sem javali (a #135 não o entregou), a Presa de Lobo ocupa o lugar da Presa de Javali; a Seda de Musgo cai das aranhas à noite; ficam de fora o raro Presa-Branca, o uivo do líder, o segredo do Mapa Rasgado e o salto "sem alvo" da F3.
 
 ---
 
@@ -388,6 +389,7 @@ Os números de atributo são relativos às definições atuais em `monsters.go` 
   - **Pico no raio de 70 m:** 14. Atenção: o covil fica fora da contagem.
   - **Modelos:** 0 novos no A1, todos esqueletos e humanoides recoloridos. No [B], viram parte da #98.
   - **Cenário:** cerca de 150 objetos, com 8 malhas novas de cemitério (CC0 grátis) e a torre (1 malha nova).
+- **Entregue na T10 (tunnel#137, `docs/arte/remaster-bosque-gris.md`):** o núcleo e a extensão são a mesma região (`terras-mortas-nucleo.mjs` e `terras-mortas.mjs`, uma LUT, uma névoa e a mesma música), os 5 monstros (Acólito, Necromante Devoto, Cavaleiro do Ossário, Carniçal e Espectro, os dois últimos só à noite) com os esqueletos e o mago do remaster, o Sino Rachado que toca nos 10 min de aviso do Ozrhal, a Lápide do Último Regicida (`BossData.TopName`), o Bastião Cinzento (pedra a 260 moedas e o Irmão Caedmon) e a linha "As velas do Ossário" (5 missões) com 3 diárias. **O que mudou do roadmap:** 14 monstros ao mesmo tempo (o bloco é pequeno: mais que isso passa o teto de 14 a 70 m), o Bastião ficou em (196, 94) (o ponto de (170, 110) cai em cima do cemitério), "Cavaleiro do Ossário" no lugar de "Cavaleiro Ossário" (o nome já é do elite da Vigília, do 33 ao 38), o sangramento do Carniçal é veneno de 4 s e a queima de mana do Espectro é enfraquecimento do ataque (não há sangramento nem queima de mana no servidor); ficam de fora a Irmã Vésper, o Malthus, o Altar dos Devotos e o evento "O Bastião resiste".
 
 ---
 
@@ -812,6 +814,17 @@ Os **kobolds** (os "Tocos") adoram o brilho do cristal e se mudaram para lá. O 
 | **D3 Santuário Submerso** | 26–30 | Biblioteca Afundada (Ruínas) | 2 andares e uma sala alagada, ~25 min | **Guardião do Selo**: lógica de "leitura de runas". O mural mostra 3 símbolos, e o grupo fica nos 3 pedestais certos antes de 8 s | Ruínas, mais água |
 | **D4 Necrópole do Rei Ossário** | 30 | sob a Cripta Esquecida; pede as **5 Pedras-Selo** (uma vez, por missão) | 3 salas e o trono, ~35 min, para 6 jogadores | **Ozrhal Desperto**: a versão difícil, de grupo, com as fases do raid comprimidas e uma 4ª fase (o selo se rompe, e o chão some em setores) | reaproveita o raid (`zone/raid.go`) |
 | **D5 Forja Primeva** | 38–40 | Coração de Brasa | 3 salas, ~30 min | **Os Fundidores**: 3 mini-chefes e a coroa refundida | Coração de Brasa |
+
+**D1 entregue (T14, #140).** O que existe, para as outras masmorras copiarem:
+- **Instância = uma `Zone` por cópia** (`zone/instance.go`). O gerente cria a cópia quando o líder do grupo (ou quem está sozinho, como grupo de 1) usa a **Porta das Catacumbas**, um portão ao lado da igreja (`GateDef.Dungeon`). Os outros membros entram pela mesma porta até 2 min depois; quem já entrou volta enquanto a cópia existir. A cópia fecha 5 min depois de ficar vazia ou aos 45 min (aviso aos 40 min), e quem estiver lá sai na porta da igreja. Até 24 cópias ao mesmo tempo no processo.
+- **Isolamento:** monstros, AOI, saque e chat local são da cópia (é outra zona). O chat geral não entra nem sai (`broadcastGeneral`); grupo, chat de grupo e sussurro cruzam, como entre as outras zonas.
+- **Mapa gerado por um bioma de masmorra** (`client/scripts/dungeons/catacumbas.mjs`, rodado por `build-dungeons.mjs` sobre o motor do mundo): 2 andares de 15 × 15 células de 4 m, 8 salas por andar, escadas (`GateDef.Stairs`, o jogador muda de andar sem sair da zona) e a sala do chefe de 20 × 20 m. O mesmo `catacumbas.json` leva ao servidor a colisão, a entrada, as escadas e o lugar de cada monstro (`world.Dungeon`).
+- **Monstros:** 28 esqueletos do remaster com papel (Ossada em matilha, Guarda de escudo, Acólito atirador e Coveiro emboscador, `game/catacumbas.go`), do 12 ao 16, mais o chefe e as 4 ossadas que ele chama (33 no máximo, abaixo do teto de 40). Não renascem (`DungeonNoRespawn`).
+- **Abade Ulric:** chefe de campo de masmorra (`FieldBossDef.Instance`: nasce com a cópia, sem janela, sem renascimento salvo, sem túmulo). F1 Responso (anel de 3 a 9 m), F2 aos 60% Ossuário (4 ossadas e 2 círculos sorteados), F3 aos 25% Vela Final (marca que segue um jogador) e fúria. É o esqueleto mago em escala 2 com cor.
+- **Baú diário:** quem lutou (dano, ou vivo a até 60 m) abre o **Baú do Abade** ao matar o chefe: moedas, poções, essência, pergaminhos e uma peça do grau D da sua classe. O dia (de Brasília) fica em `QuestState.Chests` (`characters.quests`, sem migração). No mesmo dia, só a XP e o saque comum.
+- **Telemetria:** `game_events` kind `dungeon` por cópia (`ref` = a masmorra, `amount` = duração em segundos, `extra`: mortes, jogadores, se o chefe caiu e em quanto tempo, baús abertos e o motivo do fim), mais `dungeon_chest` e `dungeon_stairs` por jogador.
+- **Arte:** o kit é o **KayKit Dungeon Remastered** (CC0, do mesmo autor e da mesma escala dos esqueletos; peças modulares de 4 m, 1 textura), com o atlas regradado em tom frio (`build-dungeon-kit.mjs`). Parede de 2,2 m (a masmorra não tem teto), chão pintado de pedra, luz fixa de noite fechada. Licença em `client/public/models/CREDITS.md`.
+- **Liga e desliga:** ligada por padrão; `EREVIA_DUNGEONS=off` tira a porta.
 
 ---
 

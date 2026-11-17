@@ -55,7 +55,7 @@ import { runBench, setupShots, wantBench, wantShots } from "./ui/bench";
 import { enchantedName, GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { contractNotice, ContractsStore, ContractsWindow } from "./ui/contracts";
-import { ContractCmdKind, NpcTalkKind, ReputationCmdKind } from "./gen/erevia/v1/game_pb";
+import { AnnounceKind, ContractCmdKind, NpcTalkKind, ReputationCmdKind } from "./gen/erevia/v1/game_pb";
 import { NpcDialogWindow } from "./ui/dialog";
 import { TeleportWindow } from "./ui/teleport";
 import { SpecWindow } from "./ui/spec";
@@ -67,7 +67,7 @@ import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
 import { TradeWindow } from "./ui/trade";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
-import { buildRegions, regionAt } from "./ui/regions";
+import { BELL_TOWER, buildRegions, RAID_WARN_TITLE, regionAt } from "./ui/regions";
 import { buildInventory } from "./ui/windows/inventory";
 import { buildWorldMap } from "./ui/windows/worldmap";
 import { buildSettings } from "./ui/windows/settings";
@@ -100,7 +100,7 @@ import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
 import { afterFrames, waitWorldReady } from "./world/ready";
 import { loadEnvironment, type Environment } from "./world/environment";
-import { DayNight, isNight, WorldClock } from "./world/daynight";
+import { DayNight, INDOOR_PHASE, isNight, WorldClock } from "./world/daynight";
 import { configureKtx2 } from "./world/assets";
 import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
@@ -268,11 +268,13 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const world = await createWorldScene(canvas, worldData, engine);
   const unwatchEngine = watchEngine(world.engine, "jogo");
   const clock = new WorldClock(Number(welcome.serverTimeMs), welcome.dayCycleMs);
+  if (worldData.indoor) clock.setFixed(INDOOR_PHASE); // masmorra: sempre a mesma luz, a da noite fechada
   const dayNight = new DayNight(world, worldData);
   const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
   const collision = new Collision(worldData);
   const picks = new PickAreas();
   const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision, picks);
+  entities.setBoats(worldData.objects.filter((o) => o.k === "boat"));
   entities.holdCapsules(); // sem pílulas: as entidades esperam os modelos (ver CharacterModels.load abaixo)
   setSpecs(welcome.specs);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
@@ -2049,9 +2051,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "chat":
           chat.receive(msg.msg.value);
           break;
-        case "announce":
-          raid.announce(msg.msg.value);
+        case "announce": {
+          const a = msg.msg.value;
+          if (a.kind === AnnounceKind.BOSS_SOON && a.title === RAID_WARN_TITLE) {
+            // Faltam 10 min para o Ozrhal acordar: a Torre do Sino Rachado toca 3 vezes (mais baixo quanto mais longe dela).
+            const pos = entities.localPosition();
+            gameAudio.bell(pos ? Math.hypot(pos.x - BELL_TOWER.x, pos.z - BELL_TOWER.z) : 0);
+          }
+          raid.announce(a);
           break;
+        }
         case "bossStatus":
           raid.onStatus(msg.msg.value);
           break;

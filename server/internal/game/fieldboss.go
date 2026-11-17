@@ -17,6 +17,9 @@ type FieldBossDef struct {
 	RespawnMin, RespawnMax float64
 	// Place completa os anúncios ("desperta na lagoa de Vau Velho").
 	Place string
+	// Instance: o chefe de uma masmorra (catacumbas.go). Nasce com a cópia e não renasce: sem
+	// janela, sem renascimento salvo no banco e sem túmulo. RespawnMin e RespawnMax ficam em zero.
+	Instance bool
 	// Phases: a fase 2 é Phases[0], a 3 é Phases[1]... A 1 é a luta inteira antes delas.
 	Phases []FieldPhase
 }
@@ -61,7 +64,11 @@ func ValidateFieldBoss(m *MonsterDef) error {
 	if !m.Boss || m.Raid {
 		return bad("precisa de Boss e não pode ser Raid")
 	}
-	if f.RespawnMin <= 0 || f.RespawnMax < f.RespawnMin {
+	if f.Instance {
+		if f.RespawnMin != 0 || f.RespawnMax != 0 {
+			return bad("o chefe de masmorra não renasce")
+		}
+	} else if f.RespawnMin <= 0 || f.RespawnMax < f.RespawnMin {
 		return bad("renascimento de %.0f a %.0f min inválido", f.RespawnMin, f.RespawnMax)
 	}
 	last := 1.0

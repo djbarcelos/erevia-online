@@ -28,6 +28,9 @@ const REPEAT_MS = 40;
 const STRIDE = 1.7;
 const WALK_SPEED = 1;
 const BASE = "/audio/";
+/** O Sino Rachado: o intervalo entre as 3 batidas (ms) e a distância (m) em que o som chega ao mínimo. */
+const BELL_GAP_MS = 2200;
+const BELL_HEARD = 320;
 
 type Clip = keyof typeof SPRITE;
 
@@ -87,6 +90,8 @@ const SOUNDS = {
   enchant: { clips: ["enchant"], gain: 0.65 },
   fail: { clips: ["fail"], gain: 0.5 },
   anvil: { clips: ["anvil"], gain: 0.16, jitter: 0.05 },
+  // O Sino Rachado da Torre das Terras Mortas (tunnel#137): a bigorna, uma oitava abaixo.
+  bell: { clips: ["anvil"], gain: 0.9, rate: 0.5 },
 } satisfies Record<string, SoundDef>;
 
 export type SoundName = keyof typeof SOUNDS;
@@ -165,16 +170,24 @@ function soundRegion(regions: Region[], x: number, z: number): Region {
   return regions.find((g) => !g.area && !g.sector && !g.rect && d < g.rMax) ?? r;
 }
 
+/**
+ * Região com som próprio (tunnel#137): o Bosque Gris (floresta fechada: a música leve dos ermos de perto e a floresta de dia e de
+ * noite) e as Terras Mortas (o coro grave da cripta e o vento, o dia inteiro). Reaproveitam as faixas que já existem.
+ */
+const BOSQUE = "Bosque Gris";
+const TERRAS_MORTAS = "Terras Mortas";
+
 /** Música de cada região: cidade, ermos perto, ermos longe e a cripta do raid boss. */
 function musicFor(r: Region): string {
   if (r.safe) return "town";
-  if (r.name === RAID_LAIR.name) return "crypt";
+  if (r.name === RAID_LAIR.name || r.name === TERRAS_MORTAS) return "crypt";
+  if (r.name === BOSQUE) return "wild";
   return r.levelMax <= 12 ? "wild" : "dark";
 }
 
 /** Fundo ambiente: grilos à noite, cidade, vento nas terras mortas e na cripta, floresta. */
 function ambientFor(r: Region, night: boolean): string {
-  if (r.name === RAID_LAIR.name) return "wind";
+  if (r.name === RAID_LAIR.name || r.name === TERRAS_MORTAS) return "wind";
   if (night) return "night";
   if (r.safe) return "town";
   return r.levelMax > 20 ? "wind" : "forest";
@@ -383,6 +396,15 @@ class GameAudio {
     if (model === "stone_golem") return this.play("rubble", at, local);
     this.play(boss ? "boss" : "skeleton", at, local);
     this.play("bones", at, local, 0.8);
+  }
+
+  /**
+   * O Sino Rachado da Torre das Terras Mortas toca 3 vezes, 10 min antes de o Ozrhal acordar. Ouve-se no mapa todo, mais baixo
+   * quanto mais longe da torre (distance, em m).
+   */
+  bell(distance: number): void {
+    const k = Math.max(0.2, 1 - distance / BELL_HEARD);
+    for (let i = 0; i < 3; i++) window.setTimeout(() => this.play("bell", null, true, k), i * BELL_GAP_MS);
   }
 
   levelUp(at: Pos, local: boolean): void {

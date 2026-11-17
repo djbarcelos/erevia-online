@@ -458,6 +458,7 @@ var Items = func() map[string]*ItemDef {
 	}
 	list = append(list, RepItems...) // as capas das facções (reputation.go)
 	list = append(list, bridgeItems()...)
+	list = append(list, bosqueItems()...) // o Bosque Gris e as Terras Mortas (bosque.go)
 	list = append(list, tierGear.items...) // os graus D, C e B (tiers.go)
 	m := make(map[string]*ItemDef, len(list))
 	for _, d := range list {

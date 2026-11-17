@@ -50,4 +50,15 @@ A linha de base (`e2e/bench-baseline.json`) foi regerada com `npm run bench:base
 - **Zona segura de 10 m do posto:** a zona segura é só a da cidade.
 - **Vaga-lumes à noite, cogumelos que brilham, sons de sapo e do sino:** sem partículas nem áudio novos.
 - **Terras Mortas (extensão):** só cenário; os monstros (24–28), o Bastião Cinzento e o Malthus são da task seguinte.
-- **Cabana do Meshy:** a malha vem com um pedaço de poça azulada no chão, que aparece sob a cabana.
+- **Cabana do Meshy:** ver o polimento abaixo.
+
+## Polimento do cais e da balsa (corrigido em produção)
+
+O que o jogador viu no cais da Lagoa de Vau Velho e a causa de cada coisa:
+
+- **A balsa era uma cápsula amarela.** O NPC do barco (`ferry_boat`) é desenhado em código (poste, lanterna e sino), mas a "soltura das cápsulas" depois do carregamento (`releaseCapsules`) só pulava as pedras de teleporte e os objetos, não o barco: o poste ganhava uma cápsula de NPC em pé do lado. Agora a regra é uma só (`drawnInCode`: objeto, pedra, túmulo e barco nunca viram cápsula, nem na entrada nem na soltura). O barco ganhou um **barqueiro sentado no bote do cenário** mais perto do poste (o corpo base do Bárbaro, o mesmo do Tomé), e o clique vale no bote (`PickAreas.addEntityExtra`) além do poste. O nome da balsa agora fica sobre o bote, longe do poste onde o jogador espera.
+- **Juncos e mato em cima de tudo.** O bioma sorteava juncos e capim sem saber onde ficam o bote, o cais, o NPC e a pedra (o raio do cais era 3 m, e o bote está a 3 m do poste). `overlay` em `scripts/biomes/brejo.mjs` roda depois de todos os biomas e tira o mato (`reeds`, `bush_*`, `grass_*`) de dentro de um raio de cada NPC e pedra do Brejo, de 3,2 m de cada bote, de 6 m do cais, das estradas (largura + 0,8 m) e dos colisores do posto. Teste: `world-gen.test.ts`.
+- **Juncos esbranquiçados com disco na base.** O cartão antigo recortava o fundo do conceito por distância de cor (limiar 26): sobrava uma mancha clara na base (o disco) e um contorno claro nas folhas (a cor dos pixels vazios era o fundo claro, e os mipmaps a puxavam para a borda). `scripts/build-reeds.mjs` pinta os juncos (folhas e quatro taboas) em SVG, o alfa nasce da forma, e a cor dos pixels vazios é o verde-escuro da folha. O material é `MASK` (alphaTest, corte 0,5, sem blend), dupla face, 256 px em KTX2.
+- **O bote e o chão.** O bote é posto na altura do relevo (`heightAt`) e o chão em volta do cais está colado no nível da água (a lagoa é rasa: -0,35 m; no cais o chão fica em -0,3 m), então o casco encosta na margem, não flutua nem afunda.
+
+- **Poça sob a cabana.** A malha do Meshy traz uma película azulada rente ao chão (triângulos a menos de 0,12 m). A cabana agora afunda 0,15 m (`SINK` em `environment.ts`; o chão do posto é plano), o que esconde a película sem mexer no arquivo.

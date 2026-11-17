@@ -136,6 +136,25 @@ var dailyQuests = []*QuestDef{
 	daily("d_ronda_brejo", DailyVenture, 14, 20, "Ronda do Brejo",
 		"A Guarda quer saber se o cais do posto e a lagoa de Vau Velho seguem de pé. Passe pelo cais do barqueiro e pela lagoa onde só a torre da capela aparece.",
 		visit(spotDock, "Passar pelo Cais do Barqueiro"), visit(spotMother, "Passar pela lagoa de Vau Velho")),
+	// ---- Bosque Gris e Terras Mortas (tunnel#137; no fim, para não mudar o sorteio de ninguém) ----
+	daily("d_peles", DailyCollect, 8, 16, "Couro para o inverno",
+		"Os curtidores da cidade pagam a Guarda por cada pele de lobo do Bosque Gris: o inverno vem, e a muralha precisa de couro. Pegue Peles de Lobo do saque dos lobos.",
+		collect("wolf_pelt", 10, "Pegar Peles de Lobo do saque")),
+	daily("d_presas", DailyDeliver, 8, 16, "Presas para o carroceiro",
+		"Hélio, da Carroça Tombada, troca presa de lobo por pão com os caçadores do Bosque. Pegue presas do saque dos lobos e leve seis a ele.",
+		deliver("wolf_fang", 6, TalkCarter, "Entregar 6 Presas de Lobo a Hélio")),
+	daily("d_ronda_bosque", DailyVenture, 9, 16, "Ronda do Bosque",
+		"A Guarda quer saber se a Árvore-Forca e a Carroça Tombada seguem como estavam. Passe pelas duas, e que o Bando do Corvo não veja você.",
+		visit(spotGallows, "Passar pela Árvore-Forca"), visit(spotWagon, "Passar pela Carroça Tombada")),
+	daily("d_velas_negras", DailyCollect, 24, 30, "Apague as velas negras",
+		"Cada Vela Negra tirada dos Devotos é uma chama verde a menos na porta da Cripta. Pegue Velas Negras do saque dos mortos das Terras Mortas.",
+		collect("black_candle", 6, "Pegar Velas Negras do saque")),
+	daily("d_cinzas", DailyDeliver, 24, 30, "Cinza para o Bastião",
+		"O Irmão Caedmon mistura Cinza Sepulcral na argamassa do Bastião: a cinza dos Devotos segura a pedra. Leve oito a ele.",
+		deliver("grave_ash", 8, TalkBrother, "Entregar 8 Cinzas Sepulcrais a Caedmon")),
+	daily("d_ronda_mortas", DailyVenture, 24, 30, "Ronda das Terras Mortas",
+		"A Guarda quer saber se o Bastião Cinzento e a Torre do Sino Rachado seguem de pé. Passe pelos dois e conte o que viu entre as covas.",
+		visit(spotBastion, "Passar pelo Bastião Cinzento"), visit(spotBell, "Passar pela Torre do Sino Rachado")),
 }
 
 // dailyPool: as diárias da vaga para o nível.

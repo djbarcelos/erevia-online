@@ -6,6 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { COVER, KEEP_CLEAR } from "../scripts/biomes/brejo.mjs";
 import { paint as paintVale, transition as valeTransition } from "../scripts/biomes/vale.mjs";
 import { BIOMES_DIR, buildWorld, loadBiomes, mulberry32, OUTPUTS } from "../scripts/world-gen.mjs";
 import { Collision, worldBiomes, worldBounds, type BiomeEntry, type WorldData } from "../src/world/world-data.ts";
@@ -24,17 +25,24 @@ test("no formato antigo, o mapa sai byte a byte igual ao do gerador de antes dos
   assert.equal(sha256(json), LEGACY_SHA256);
 });
 
-test("o mundo de hoje tem os cinco biomas, e o Brejo e as Terras Mortas só acrescentam (o resto não muda)", async () => {
+test("o mundo de hoje tem os sete biomas, e os que vieram depois só acrescentam (o resto não muda, fora o que a Toca e os lugares do Bosque Gris limpam)", async () => {
   const base = (await buildWorld({ biomes: await original() })).world as WorldData;
   const now = (await buildWorld()).world as WorldData;
-  assert.deepEqual(now.biomes!.map((b) => b.id), [...ORIGINAL, "brejo", "terras-mortas"]);
+  assert.deepEqual(now.biomes!.map((b) => b.id), [...ORIGINAL.slice(0, 3), "bosque-gris", "brejo", "terras-mortas", "terras-mortas-nucleo"]);
   assert.deepEqual(now.bounds, { minX: -150, maxX: 330, minZ: -330, maxZ: 150 });
   assert.deepEqual(base.bounds, { minX: -150, maxX: 150, minZ: -330, maxZ: 150 });
   assert.deepEqual(now.biomes!.slice(0, 3), base.biomes);
-  // As montanhas da borda leste da floresta (x ≈ 168) que caíram dentro do mapa novo saem; o resto fica igual.
+  // As montanhas da borda leste da floresta (x ≈ 168) que caíram dentro do mapa novo saem, e o Bosque Gris limpa o chão da Toca do
+  // Corvo (a paliçada), da Árvore-Forca, da Carroça Tombada e da Toca da Matilha; o resto fica igual.
   const gone = base.objects.filter((o) => !now.objects.some((p) => p.k === o.k && p.x === o.x && p.z === o.z));
-  assert.ok(gone.length > 0 && gone.length <= 12, `${gone.length} objetos sumiram`);
-  for (const o of gone) assert.ok(/^(mountain|hills)/.test(o.k) && o.x > 150 && o.x < 190 && Math.abs(o.z) < 160, `${o.k} em (${o.x}, ${o.z})`);
+  const cleared: [number, number, number][] = [[-128, 118, 17.5], [-52, 84, 6], [-33, 90, 5], [-86, 52, 7]];
+  const inBosque = (o: { x: number; z: number }) => cleared.some(([x, z, r]) => Math.hypot(o.x - x, o.z - z) < r);
+  assert.ok(gone.length > 0 && gone.length <= 60, `${gone.length} objetos sumiram`);
+  for (const o of gone) {
+    const east = /^(mountain|hills)/.test(o.k) && o.x > 150 && o.x < 190 && Math.abs(o.z) < 160;
+    assert.ok(east || inBosque(o), `${o.k} em (${o.x}, ${o.z})`);
+  }
+  assert.ok(gone.some(inBosque), "a Toca do Corvo limpou o chão da floresta");
   // O Brejo diz onde fica a lagoa, as partes fundas e a ilha (o relevo e a água do cliente leem daqui).
   const brejo = now.biomes!.find((b) => b.id === "brejo") as BiomeEntry & { lagoon: { x: number; z: number }; deeps: { x: number; z: number; r: number }[]; island: { r: number } };
   assert.equal(brejo.deeps.length, 2);
@@ -150,7 +158,7 @@ test("criar um bioma é escrever um arquivo: o mapa cresce e o resto não muda",
     );
     const base = (await buildWorld()).world;
     const biomes = await loadBiomes(BIOMES_DIR, dir);
-    assert.deepEqual(biomes.map((b: { id: string }) => b.id), ["floresta", "vale", "cripta", "brejo", "terras-mortas", "teste"]);
+    assert.deepEqual(biomes.map((b: { id: string }) => b.id), ["floresta", "vale", "cripta", "bosque-gris", "brejo", "terras-mortas", "terras-mortas-nucleo", "teste"]);
     const grown = (await buildWorld({ biomes })).world;
 
     assert.deepEqual(grown.bounds, { ...base.bounds, maxX: 390 });
@@ -179,5 +187,27 @@ test("um bioma sem semente própria (ou com a de outro) não entra", async () =>
     await assert.rejects(loadBiomes(BIOMES_DIR, dir), /seed 20261114 repetida/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("Brejo: juncos, mato e capim não ficam em cima de NPC, pedra, bote, cais, estrada nem dos colisores do posto", async () => {
+  const w = (await buildWorld()).world as WorldData;
+  const cover = w.objects.filter((o) => o.x >= 150 && COVER.test(o.k));
+  assert.ok(cover.length > 100, "o Brejo ainda tem mato");
+  const boats = w.objects.filter((o) => o.k === "boat");
+  assert.equal(boats.length, 2, "um bote no cais e outro na ilha");
+  for (const o of cover) {
+    for (const k of KEEP_CLEAR) assert.ok(Math.hypot(o.x - k.x, o.z - k.z) >= k.r, `${o.k} em (${o.x}, ${o.z}) em cima de um NPC ou pedra`);
+    for (const b of boats) assert.ok(Math.hypot(o.x - b.x, o.z - b.z) >= 3.2, `${o.k} em (${o.x}, ${o.z}) dentro do bote`);
+    for (const r of w.roads) {
+      if (Math.max(r.x1, r.x2) < 150) continue;
+      const dx = r.x2 - r.x1;
+      const dz = r.z2 - r.z1;
+      const t = Math.max(0, Math.min(1, ((o.x - r.x1) * dx + (o.z - r.z1) * dz) / (dx * dx + dz * dz || 1)));
+      assert.ok(Math.hypot(o.x - (r.x1 + dx * t), o.z - (r.z1 + dz * t)) >= r.w / 2, `${o.k} em (${o.x}, ${o.z}) na estrada`);
+    }
+    if (Math.hypot(o.x - 165, o.z) < 16) {
+      for (const c of w.colliders) assert.ok(Math.hypot(o.x - c.x, o.z - c.z) >= c.r, `${o.k} em (${o.x}, ${o.z}) dentro de um colisor do posto`);
+    }
   }
 });

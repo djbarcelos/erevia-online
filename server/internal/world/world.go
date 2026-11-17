@@ -61,11 +61,13 @@ type World struct {
 	Size       float64
 	Bounds     Bounds
 	SafeRadius float64
-	colliders  []Collider
-	buckets    map[[2]int][]int
-	nx, nz     int       // células em X e em Z
-	blocked    []bool    // grade nx×nz para o A*
-	pool       sync.Pool // *astarScratch: memória do A* reaproveitada (seguro entre goroutines)
+	// Dungeon: os dados da masmorra (nil nos mapas abertos). Ver dungeon.go.
+	Dungeon   *Dungeon
+	colliders []Collider
+	buckets   map[[2]int][]int
+	nx, nz    int       // células em X e em Z
+	blocked   []bool    // grade nx×nz para o A*
+	pool      sync.Pool // *astarScratch: memória do A* reaproveitada (seguro entre goroutines)
 }
 
 // fileFormat é o que o servidor lê do world.json. Os biomas (`biomes[]`, ou o `biome`
@@ -76,6 +78,7 @@ type fileFormat struct {
 	Bounds     *Bounds    `json:"bounds"`
 	SafeRadius float64    `json:"safeRadius"`
 	Colliders  []Collider `json:"colliders"`
+	Dungeon    *Dungeon   `json:"dungeon"`
 }
 
 func (c *Collider) UnmarshalJSON(b []byte) error {
@@ -130,6 +133,7 @@ func parseNamed(name string, data []byte) (*World, error) {
 	w := NewBounds(b, f.Colliders)
 	w.Size = f.Size
 	w.SafeRadius = f.SafeRadius
+	w.Dungeon = f.Dungeon
 	return w, nil
 }
 

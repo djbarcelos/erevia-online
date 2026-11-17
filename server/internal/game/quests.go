@@ -133,6 +133,8 @@ type QuestState struct {
 	Done   []string         `json:"done,omitempty"`
 	// Daily: as diárias do dia (o sorteio e as já entregues). As aceitas ficam em Active.
 	Daily *DailyState `json:"daily,omitempty"`
+	// Chests: o dia (ContractDay) em que o baú de cada masmorra foi aberto (catacumbas.go).
+	Chests map[string]int `json:"chests,omitempty"`
 }
 
 // TutorialStart é a primeira missão de um personagem novo.

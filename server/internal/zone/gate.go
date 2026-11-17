@@ -37,12 +37,18 @@ const (
 
 // GateDef é um portão da zona.
 type GateDef struct {
-	Name     string  // nome sobre o portão ("Portão da Clareira")
-	X, Z     float64 // onde fica
-	To       string  // id do mapa de destino
-	ArriveX  float64 // ponto de chegada no destino (o jogador é espalhado em volta)
-	ArriveZ  float64
-	ToTitle  string // nome do mapa de destino (preenchido pelo gerente; "" = o id)
+	Name    string  // nome sobre o portão ("Portão da Clareira")
+	X, Z    float64 // onde fica
+	To      string  // id do mapa de destino
+	ArriveX float64 // ponto de chegada no destino (o jogador é espalhado em volta)
+	ArriveZ float64
+	ToTitle string // nome do mapa de destino (preenchido pelo gerente; "" = o id)
+	// Masmorra (instance.go): Dungeon é a porta que leva à cópia do grupo (To fica vazio) e
+	// Stairs, a escada de dentro dela (leva ao ponto de chegada, no outro andar). Label troca o
+	// título do portão ("Portão para <destino>").
+	Dungeon  string
+	Stairs   bool
+	Label    string
 	disabled bool
 }
 
@@ -86,9 +92,17 @@ func (z *Zone) spawnGates() {
 			id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
 			name: g.Name, model: gateModel, level: 1, scale: 1,
 			pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
-			npc: &npcState{title: "Portão para " + g.title(), role: pb.NpcRole_NPC_ROLE_GATE, stone: i},
+			npc: &npcState{title: g.npcTitle(), role: pb.NpcRole_NPC_ROLE_GATE, stone: i},
 		})
 	}
+}
+
+// npcTitle: o que aparece sob o nome do portão.
+func (g GateDef) npcTitle() string {
+	if g.Label != "" {
+		return g.Label
+	}
+	return "Portão para " + g.title()
 }
 
 func (g GateDef) title() string {
@@ -119,6 +133,14 @@ func (z *Zone) useGate(id, npcID uint32) {
 	}
 	if dist(p.pos, n.pos) > gateRange {
 		z.system(p, fmt.Sprintf("Chegue mais perto de %s.", n.name))
+		return
+	}
+	if g.Dungeon != "" {
+		z.useDungeonDoor(p, g)
+		return
+	}
+	if g.Stairs {
+		z.useStairs(p, g)
 		return
 	}
 	var dest *Zone

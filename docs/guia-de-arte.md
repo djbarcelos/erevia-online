@@ -68,7 +68,8 @@ A raridade se lê pela **forma** primeiro e pela cor depois. Assim funciona tamb
 | Vale das Pedras Vivas | rocha `#7d7f86`, musgo `#5f7a44` | runas âmbar `#f0a640` | `#2c3440` | mágico, antigo |
 | Cripta Esquecida (raid) | pedra fria `#4a4e5c` | roxo `#8a5cff`, osso | `#14121c` | ameaça |
 | Brejo de Lamagris | lodo `#5b5a3a`, musgo `#6b7d3e` | fungo bioluminescente `#9fe870` | `#24302a` | úmida, densa, vaga-lumes à noite |
-| Terras Mortas (extensão) | cinza-osso `#8f8a80` | roxo da Cripta `#8a5cff`, vela `#b8f0a0` | `#1b1a24` | silêncio, névoa baixa e densa |
+| Bosque Gris | musgo cinza-prateado `#7d8a6a`, tronco `#4e4234` | pano vermelho dos bandidos `#a2302a` | `#2b3530` | floresta fechada, pouca luz no chão |
+| Terras Mortas (núcleo e extensão) | cinza-osso `#8f8a80` | roxo da Cripta `#8a5cff`, vela `#b8f0a0` | `#1b1a24` | silêncio, névoa baixa e densa |
 
 Cada região ganha uma LUT de cor no render novo (tunnel#92) seguindo esta tabela.
 

@@ -1,6 +1,9 @@
 package game
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 // Os cinco bichos do Brejo (tunnel#139), a Mãe-Lodo e a Velha Escamosa: papéis, neutralidade e a família do bestiário.
 func TestBrejoMonsters(t *testing.T) {
@@ -69,11 +72,12 @@ func TestBrejoQuestsFitTheBudget(t *testing.T) {
 			t.Errorf("nível %d: %.1f%% de XP de história (o teto é %.0f%%)", lvl, share*100, StoryShareMax*100)
 		}
 	}
-	// As 3 diárias novas estão no fim da lista (acrescentar não muda o sorteio de ninguém).
-	n := len(dailyQuests)
+	// As 3 diárias novas vêm juntas, depois das de antes do Brejo (acrescentar não muda o sorteio de ninguém); as do Bosque Gris
+	// e das Terras Mortas vêm depois delas (bosque_test.go).
+	first := slices.IndexFunc(dailyQuests, func(q *QuestDef) bool { return q.ID == "d_juncos" })
 	for i, id := range []string{"d_juncos", "d_antidoto", "d_ronda_brejo"} {
-		if dailyQuests[n-3+i].ID != id {
-			t.Errorf("diária %d do fim = %s, esperava %s", i, dailyQuests[n-3+i].ID, id)
+		if first < 0 || dailyQuests[first+i].ID != id {
+			t.Errorf("diária %d do Brejo não está depois de d_juncos: %s", i, id)
 		}
 	}
 }
