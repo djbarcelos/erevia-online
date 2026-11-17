@@ -1,4 +1,4 @@
-import { SceneInstrumentation, type AbstractEngine, type AbstractMesh, type ArcRotateCamera, type Node, type Scene, type TransformNode } from "@babylonjs/core";
+import { EngineInstrumentation, SceneInstrumentation, type AbstractEngine, type AbstractMesh, type ArcRotateCamera, type Node, type Scene, type TransformNode } from "@babylonjs/core";
 import { EntityKind } from "../gen/erevia/v1/game_pb";
 import type { MapMarker } from "../world/entities";
 import { regionAt, type Region } from "./regions";
@@ -66,6 +66,8 @@ interface Sample {
   p99Ms: number;
   /** Triângulos desenhados por quadro (inclui sombras e malhas com instâncias). */
   tris: number;
+  /** Tempo da GPU por quadro (ms, EXT_disjoint_timer_query; 0 se o navegador não oferece). */
+  gpuMs: number;
   cpuMs: number;
   /** Partes do tempo de CPU: desenho da cena, render targets (sombras, brilho), escolha das malhas ativas e animação. */
   renderMs: number;
@@ -206,6 +208,8 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
   inst.captureRenderTargetsRenderTime = true;
   inst.captureActiveMeshesEvaluationTime = true;
   inst.captureAnimationsTime = true;
+  const gpuInst = new EngineInstrumentation(d.engine);
+  gpuInst.captureGPUFrameTime = true;
   const cam = { alpha: d.camera.alpha, beta: d.camera.beta, radius: d.camera.radius };
   d.camera.alpha = -Math.PI / 2;
   d.camera.beta = 1.0;
@@ -232,13 +236,14 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
       say(`Medindo FPS ${n}/${total}: ${p.region}, ${ph.label}…`);
       d.setFocus(p);
       await wait(WARMUP_MS);
-      samples.push({ region: p.region, time: ph.label, x: p.x, z: p.z, ...(await measure(d, inst, p)) });
+      samples.push({ region: p.region, time: ph.label, x: p.x, z: p.z, ...(await measure(d, inst, gpuInst, p)) });
     }
   }
   d.setFocus(null);
   d.setTime(null);
   Object.assign(d.camera, cam);
   inst.dispose();
+  gpuInst.dispose();
 
   const device = deviceInfo(d.engine);
   const table = renderTable(device, samples);
@@ -280,7 +285,7 @@ function benchPoints(regions: Region[], b: BenchDeps["bounds"]): { region: strin
   return out;
 }
 
-async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number; z: number }) {
+async function measure(d: BenchDeps, inst: SceneInstrumentation, gpuInst: EngineInstrumentation, p: { x: number; z: number }) {
   const dts: number[] = [];
   let cpu = 0;
   let render = 0;
@@ -290,6 +295,8 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
   let draws = 0;
   let active = 0;
   let tris = 0;
+  let gpuNs = 0;
+  let gpuFrames = 0;
   let frames = 0;
   const start = performance.now();
   await new Promise<void>((done) => {
@@ -303,6 +310,10 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
       draws += inst.drawCallsCounter.current;
       active += d.scene.getActiveMeshes().length;
       tris += d.scene.getActiveIndices() / 3;
+      if (gpuInst.gpuFrameTimeCounter.current > 0) {
+        gpuNs += gpuInst.gpuFrameTimeCounter.current;
+        gpuFrames++;
+      }
       frames++;
       if (performance.now() - start >= sampleMs()) {
         d.scene.onAfterRenderObservable.remove(obs);
@@ -328,6 +339,7 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
     p95Ms: round(dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.95))] ?? 0, 1),
     p99Ms: round(dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.99))] ?? 0, 1),
     tris: Math.round(tris / f),
+    gpuMs: round(gpuNs / Math.max(gpuFrames, 1) / 1e6, 2),
     cpuMs: round(cpu / f, 1),
     renderMs: round(render / f, 1),
     targetsMs: round(targets / f, 1),
@@ -408,8 +420,8 @@ function deviceInfo(engine: AbstractEngine): Record<string, string | number> {
 function renderTable(device: Record<string, string | number>, samples: Sample[]): string {
   const lines = Object.entries(device).map(([k, v]) => `${k}: ${v}`);
   lines.push("");
-  lines.push("| Região | Hora | FPS | Frame (ms) | p95 (ms) | p99 (ms) | CPU (ms) | Draws | Triângulos | Malhas ativas / total | Cenário: draws, ativas / total | Jogadores | Monstros |");
-  lines.push("|---|---|---|---|---|---|---|---|---|---|---|---|---|");
+  lines.push("| Região | Hora | FPS | Frame (ms) | p95 (ms) | p99 (ms) | CPU (ms) | GPU (ms) | Draws | Triângulos | Malhas ativas / total | Cenário: draws, ativas / total | Jogadores | Monstros |");
+  lines.push("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
   const groups = new Map<string, Sample[]>();
   for (const s of samples) {
     const k = `${s.region}|${s.time}`;
@@ -420,20 +432,21 @@ function renderTable(device: Record<string, string | number>, samples: Sample[])
     const max = (f: (s: Sample) => number) => Math.max(...g.map(f));
     lines.push(
       `| ${g[0].region} | ${g[0].time} | ${avg((s) => s.fps)} | ${avg((s) => s.frameMs)} | ${max((s) => s.p95Ms)} | ${max((s) => s.p99Ms)} | ` +
-        `${avg((s) => s.cpuMs)} | ${max((s) => s.draws)} | ${avg((s) => s.tris)} | ${max((s) => s.active)} / ${g[0].meshes} | ` +
+        `${avg((s) => s.cpuMs)} | ${avg((s) => s.gpuMs)} | ${max((s) => s.draws)} | ${avg((s) => s.tris)} | ${max((s) => s.active)} / ${g[0].meshes} | ` +
         `${max((s) => s.sceneDraws)}, ${max((s) => s.sceneActive)} / ${g[0].sceneMeshes} | ` +
         `${max((s) => s.players)} | ${max((s) => s.monsters)} |`,
     );
   }
   lines.push("");
   lines.push("Onde vai o tempo de CPU (ms por quadro, média):");
-  lines.push("| Região | Hora | CPU | Desenho | Sombras/brilho | Malhas ativas | Animação |");
-  lines.push("|---|---|---|---|---|---|---|");
+  lines.push("| Região | Hora | CPU | Desenho | Sombras/brilho | Malhas ativas | Animação | Resto (lógica, física, interface) |");
+  lines.push("|---|---|---|---|---|---|---|---|");
   for (const g of groups.values()) {
     const avg = (f: (s: Sample) => number) => round(g.reduce((t, s) => t + f(s), 0) / g.length, 1);
     lines.push(
       `| ${g[0].region} | ${g[0].time} | ${avg((s) => s.cpuMs)} | ${avg((s) => s.renderMs)} | ${avg((s) => s.targetsMs)} | ` +
-        `${avg((s) => s.evalMs)} | ${avg((s) => s.animMs)} |`,
+        `${avg((s) => s.evalMs)} | ${avg((s) => s.animMs)} | ` +
+        `${avg((s) => s.cpuMs - s.renderMs - s.targetsMs - s.evalMs - s.animMs)} |`,
     );
   }
   return lines.join("\n");
