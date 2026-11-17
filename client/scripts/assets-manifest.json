@@ -142,6 +142,57 @@
         }
       }
     },
+    "town_bench_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_blacksmith_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_cart_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_church_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_crystal_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_gate_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_home_a_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_home_b_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_lamp_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_market_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_pillar_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_sign_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_stall_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_tavern_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_tomb_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_tower_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_wall_b.glb": {
+      "categoria": "cenario"
+    },
     "weapons/axe_1handed.glb": {
       "categoria": "arma"
     },
