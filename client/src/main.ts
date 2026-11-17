@@ -274,6 +274,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const collision = new Collision(worldData);
   const picks = new PickAreas();
   const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision, picks);
+  entities.setBoats(worldData.objects.filter((o) => o.k === "boat"));
   entities.holdCapsules(); // sem pílulas: as entidades esperam os modelos (ver CharacterModels.load abaixo)
   setSpecs(welcome.specs);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);

@@ -165,6 +165,46 @@ export function build(ctx) {
   return { lagoon: { ...LAGOON, level: -0.35 }, deeps: DEEPS, island: ISLAND, post: POST, dock: DOCK, mother: MOTHER };
 }
 
+// ---------- Limpeza do que cobre o chão (depois de todos os biomes) ----------
+/** Mato que cobre o chão: juncos, arbustos e capim (sem colisor). Nada disso fica em cima de gente, pedra, bote, cais ou estrada. */
+export const COVER = /^(reeds|bush_|grass_)/;
+/** Quem precisa de chão limpo (m): os NPCs e as pedras de teleporte do posto, o barco de Tomé no cais e na ilha. */
+export const KEEP_CLEAR = [
+  { x: 169, z: -3, r: 2.6 }, // Tomé
+  { x: 162, z: 5, r: 3.2 }, // a Pedra de Teleporte do posto
+  { x: DOCK.x, z: DOCK.z, r: 3.4 }, // o poste do barco no cais
+  { x: ISLAND.x, z: ISLAND.z, r: 3.4 }, // o poste do barco na ilha
+];
+
+/**
+ * Tira o mato de cima do que o jogador usa: dentro de um raio dos NPCs e pedras, em volta de cada bote (e do cais),
+ * sobre as estradas e os caminhos do Brejo e dentro dos colisores do posto. É depois dos outros biomas porque o
+ * capim da floresta e os juncos daqui são sorteados sem saber onde ficam essas coisas (e sem mexer nas sementes).
+ */
+export function overlay(ctx) {
+  const { objects, colliders, roads } = ctx;
+  const inBrejo = (x) => x >= bounds.minX; // o resto do mapa é dos outros biomas
+  const boats = objects.filter((o) => o.k === 'boat');
+  const roadNear = (x, z) =>
+    roads.some((r) => {
+      if (Math.max(r.x1, r.x2) < bounds.minX) return false;
+      const dx = r.x2 - r.x1;
+      const dz = r.z2 - r.z1;
+      const t = Math.max(0, Math.min(1, ((x - r.x1) * dx + (z - r.z1) * dz) / (dx * dx + dz * dz || 1)));
+      return Math.hypot(x - (r.x1 + dx * t), z - (r.z1 + dz * t)) < r.w / 2 + 0.8;
+    });
+  const blocked = (x, z) =>
+    KEEP_CLEAR.some((k) => Math.hypot(x - k.x, z - k.z) < k.r) ||
+    boats.some((b) => Math.hypot(x - b.x, z - b.z) < 3.2) ||
+    nearDock(x, z, 6) ||
+    nearPost(x, z, 16) && colliders.some((c) => Math.hypot(x - c.x, z - c.z) < c.r + 0.8) ||
+    roadNear(x, z);
+  for (let i = objects.length - 1; i >= 0; i--) {
+    const o = objects[i];
+    if (inBrejo(o.x) && COVER.test(o.k) && blocked(o.x, o.z)) objects.splice(i, 1);
+  }
+}
+
 // ---------- Pintura do chão (cliente: client/src/world/map-painter.ts) ----------
 /**
  * Lodo e musgo: a grama da floresta vai ficando verde-oliva escura de oeste para leste (a borda mistura em 18 m),

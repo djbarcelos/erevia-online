@@ -178,6 +178,20 @@ export const TOMB_MODEL = "tomb";
 export const LAPIDE_MODEL = "lapide";
 /** Modelo do barco de Tomé (Brejo de Lamagris): o clique do barco é um poste com lanterna e sino; o bote é cenário (world.json, `boat`). */
 export const FERRY_MODEL = "ferry_boat";
+/** O barqueiro sentado no bote do cais: o corpo base do Bárbaro (o mesmo do Tomé do posto), sem visual do servidor. */
+const FERRYMAN_MODEL = "barbarian";
+/** Alcance (m) do bote até o poste: o NPC do barco fica no cais e o bote (cenário `boat` do world.json) um pouco adiante. */
+const FERRY_BOAT_REACH = 8;
+/** Altura (m) do nome do barqueiro acima do assento, e do assento acima do chão do bote; escala do barqueiro. */
+const FERRYMAN_LABEL_Y = 1.9;
+const FERRYMAN_SEAT_Y = 0.0;
+const FERRYMAN_SCALE = 0.9;
+/** Área de clique do bote: raio e altura (m). */
+const FERRY_BOAT_PICK = { radius: 1.7, height: 1.9 };
+/** O que NUNCA vira cápsula: os desenhos próprios (pedra, túmulo, poste do barco) e todo objeto. */
+export function drawnInCode(kind: EntityKind, model: string): boolean {
+  return kind === EntityKind.OBJECT || model === STONE_MODEL || model === TOMB_MODEL || model === FERRY_MODEL;
+}
 /** A função (título) dos NPCs do barco, igual à do servidor (zone/teleport.go): o mapa não os lista como pedra. */
 export const FERRY_TITLE = "Barco do Tomé";
 
@@ -245,6 +259,8 @@ interface View extends EntityInfo {
   root: TransformNode;
   visual: TransformNode;
   head: TransformNode;
+  /** Barco de Tomé: onde está o bote do cenário em relação ao poste (m) e a área de clique dele. */
+  ferryBoat: { dx: number; dz: number; dy: number; pick: TransformNode } | null;
   capsule: Mesh | null;
   model3d: CharacterInstance | null;
   anim: AnimController | null;
@@ -322,6 +338,8 @@ export class EntityManager {
   private models: CharacterModels | null = null;
   /** Entrada no mundo: enquanto os modelos não chegam, nenhuma entidade vira cápsula (ver holdCapsules). */
   private capsulesHeld = false;
+  /** Os botes do cenário (world.json, `boat`): o barqueiro do cais senta no mais perto. */
+  private boats: { x: number; z: number }[] = [];
   /** Entidades esperando o download do próprio modelo (golem, chefes, NPCs do remaster): invisíveis até chegar. */
   private lazyWaits = new Map<number, Promise<boolean>>();
   private targetId = 0;
@@ -498,6 +516,25 @@ export class EntityManager {
     this.releaseCapsules();
   }
 
+  /** O bote do cenário mais perto de (x, z), até FERRY_BOAT_REACH m (null = nenhum). */
+  private nearestBoat(x: number, z: number): { x: number; z: number } | null {
+    let best: { x: number; z: number } | null = null;
+    let bd = FERRY_BOAT_REACH;
+    for (const b of this.boats) {
+      const d = Math.hypot(b.x - x, b.z - z);
+      if (d < bd) {
+        bd = d;
+        best = b;
+      }
+    }
+    return best;
+  }
+
+  /** Os botes do cenário (o barco de Tomé senta o barqueiro no mais perto do poste). */
+  setBoats(boats: { x: number; z: number }[]): void {
+    this.boats = boats;
+  }
+
   /** Entrada no mundo: segura as cápsulas até os modelos carregarem (ou falharem: releaseCapsules). */
   holdCapsules(): void {
     this.capsulesHeld = true;
@@ -507,13 +544,13 @@ export class EntityManager {
   releaseCapsules(): void {
     this.capsulesHeld = false;
     for (const v of this.views.values()) {
-      if (v.kind === EntityKind.OBJECT || v.model === STONE_MODEL || v.model3d || v.capsule) continue;
+      if (drawnInCode(v.kind, v.model) || v.model3d || v.capsule) continue;
       if (this.wantsCapsule(v)) v.capsule = this.createCapsule(v);
     }
   }
 
   private wantsCapsule(v: View): boolean {
-    return !this.capsulesHeld && !this.lazyWaits.has(v.id);
+    return !this.capsulesHeld && !this.lazyWaits.has(v.id) && !drawnInCode(v.kind, v.model);
   }
 
   /** Resolve quando nenhuma entidade espera mais o download do próprio modelo (só esses downloads, não o pacote todo). */
@@ -557,6 +594,17 @@ export class EntityManager {
       // Monstros grandes (golem) ganham uma área do tamanho do corpo, senão o clique
       // passa pelos ombros e braços sem selecionar.
       this.picks.addEntity(e.id, root, ((body?.width ?? 1.2) * scale) / 2, (body?.height ?? 2.1) * scale);
+    }
+    // O barco de Tomé: o clique vale no bote (e no barqueiro nele), não só no poste do cais.
+    let ferryBoat: View["ferryBoat"] = null;
+    if (e.model === FERRY_MODEL) {
+      const b = this.nearestBoat(e.x, e.z);
+      if (b) {
+        const pick = new TransformNode(`fpick${e.id}`, this.scene);
+        pick.position.set(b.x, heightAt(b.x, b.z), b.z);
+        this.picks.addEntityExtra(e.id, pick, FERRY_BOAT_PICK.radius, FERRY_BOAT_PICK.height);
+        ferryBoat = { dx: b.x - e.x, dz: b.z - e.z, dy: heightAt(b.x, b.z) - heightAt(e.x, e.z), pick };
+      }
     }
 
     // Anel no chão: na cor do emblema para jogadores (o seu, mais forte), dourado sem emblema.
@@ -649,7 +697,7 @@ export class EntityManager {
       px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
-      root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
+      root, visual, head, ferryBoat, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
       impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, greetUntil: 0, fightAt: 0, hand: undefined,
       bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
@@ -749,6 +797,34 @@ export class EntityManager {
     bell.material = this.material("#c9a24a");
     for (const m of [pole, arm, lamp, bell]) m.isPickable = false;
     v.meshes = [pole, arm, lamp, bell];
+    // O nome fica sobre o bote (onde está o barqueiro), não sobre o poste: não se mistura com o de quem espera no cais.
+    if (v.ferryBoat) v.head.position.set(v.ferryBoat.dx, v.ferryBoat.dy + FERRYMAN_LABEL_Y, v.ferryBoat.dz);
+    else v.head.position.y = FERRYMAN_LABEL_Y;
+    if (this.models) this.seatFerryman(v);
+  }
+
+  /** O barqueiro de Tomé, sentado no bote do cenário (sem bote por perto, o poste fica sozinho). */
+  private seatFerryman(v: View): void {
+    const b = v.ferryBoat;
+    if (!b || !this.models || v.model3d) return;
+    const inst = this.models.instantiate(FERRYMAN_MODEL, String(v.id));
+    if (!inst) return;
+    const seat = new TransformNode(`fseat${v.id}`, this.scene);
+    seat.parent = v.root;
+    seat.position.set(b.dx, b.dy + FERRYMAN_SEAT_Y, b.dz);
+    seat.rotation.y = v.visual.rotation.y;
+    inst.root.parent = seat;
+    inst.root.scaling.scaleInPlace(FERRYMAN_SCALE);
+    const meshes = inst.meshes();
+    this.notPickable(meshes);
+    // Fora do corpo fixo do poste (fixBounds): o barqueiro está a metros dele, e a caixa o cortaria da tela.
+    for (const m of meshes) m.alwaysSelectAsActiveMesh = true;
+    v.meshes = [...v.meshes, ...meshes];
+    v.model3d = inst;
+    v.anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
+    v.anim.setBodyScale(FERRYMAN_SCALE);
+    v.anim.legacy = this.legacyMove;
+    if (this.lazyWaits.has(v.id)) this.fadeIn(v);
   }
 
   /** Estandarte: mastro, bandeira com a cor da ordem e o círculo da área (8 m). */
@@ -814,6 +890,7 @@ export class EntityManager {
   private disposeView(v: View): void {
     this.lazyWaits.delete(v.id);
     v.model3d?.dispose();
+    v.ferryBoat?.pick.dispose();
     // Materiais são compartilhados (modelo, anel, efeitos): só as malhas são descartadas.
     v.root.dispose(false, false);
   }
@@ -1909,6 +1986,10 @@ export class EntityManager {
 
   private attachModel(v: View): void {
     if (v.model3d || !this.models) return;
+    if (v.model === FERRY_MODEL) {
+      this.seatFerryman(v);
+      return;
+    }
     // Remaster (padrão): os chefes com silhueta própria (Senhor dos Ossos, Ozrhal) têm modelo à parte.
     const bossModel = v.boss ? remasterModelOf(v.model, true) : v.model;
     // Remaster (padrão): NPC com modelo próprio (pelo nome; o servidor manda um herói).

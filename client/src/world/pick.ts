@@ -23,6 +23,8 @@ export interface PickHit {
 export class PickAreas {
   private entities = new Map<number, Area>();
   private loot = new Map<number, Area>();
+  /** Áreas a mais de uma entidade (o bote do barco de Tomé, longe do poste): o clique nelas vale como na entidade. */
+  private extras: Area[] = [];
   /** Resultado reaproveitado (o hover testa a cada 80 ms). */
   private hit: PickHit = {};
 
@@ -30,8 +32,14 @@ export class PickAreas {
     this.entities.set(id, { id, node, radius, height });
   }
 
+  /** Uma segunda área para a mesma entidade. */
+  addEntityExtra(id: number, node: TransformNode, radius: number, height: number): void {
+    this.extras.push({ id, node, radius, height });
+  }
+
   removeEntity(id: number): void {
     this.entities.delete(id);
+    this.extras = this.extras.filter((a) => a.id !== id);
   }
 
   addLoot(id: number, node: TransformNode, radius: number, height: number): void {
@@ -50,6 +58,14 @@ export class PickAreas {
     let entity = -1;
     let loot = -1;
     for (const a of this.entities.values()) {
+      const p = a.node.position;
+      const t = rayCylinder(o.x, o.y, o.z, d.x, d.y, d.z, p.x, p.y, p.z, a.radius, a.height);
+      if (t < best) {
+        best = t;
+        entity = a.id;
+      }
+    }
+    for (const a of this.extras) {
       const p = a.node.position;
       const t = rayCylinder(o.x, o.y, o.z, d.x, d.y, d.z, p.x, p.y, p.z, a.radius, a.height);
       if (t < best) {
