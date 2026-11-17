@@ -26,7 +26,7 @@ import { reportClientError } from "../net/errors";
 import { RoleMap } from "./anim";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, REMASTER, REMASTER_FILES, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS } from "./remaster";
+import { lodFor, REMASTER, REMASTER_FILES, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_NPC_EAGER, REMASTER_ONLY, REMASTER_WEAPONS } from "./remaster";
 import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
 
 /**
@@ -168,6 +168,25 @@ const REMASTER_SETS: Record<string, AnimSet> = {
   ozrhal: { idle: "OZ_Idle", walk: "OZ_Walk", run: "OZ_Run", attack: "OZ_Attack", skill: "OZ_Stomp", buff: "OZ_Roar", hit: "OZ_Hit", death: "OZ_Death" },
 };
 /**
+ * NPCs do remaster (docs/arte/remaster-npcs.md): parado próprio, duas pausas (olhar em volta e o gesto do ofício) e o
+ * "cumprimento" (`buff`) que toca quando o jogador abre a conversa ou a loja. NPC não anda nem apanha: os papéis de
+ * combate caem no cumprimento só para o conjunto ficar completo.
+ */
+function npcSet(p: string): AnimSet {
+  return {
+    idle: `${p}Idle`, walk: `${p}Walk`, run: `${p}Run`, attack: `${p}Greet`, skill: `${p}Greet`, buff: `${p}Greet`, hit: `${p}Greet`, death: `${p}Greet`,
+    break1: `${p}Break1`, break2: `${p}Break2`,
+  };
+}
+/** Prefixo dos clipes no arquivo de cada NPC (o adaptador guarda os clipes de todos os modelos num mapa só). */
+export const NPC_CLIP_PREFIX: Record<string, string> = {
+  npc_livia: "LV_", npc_bruno: "BR_", npc_teodoro: "TD_", npc_otto: "OT_", npc_ysolde: "YS_", npc_edrian: "ED_", npc_severino: "SV_",
+  npc_iselda: "IS_", npc_cassio: "CS_", npc_guarda: "GD_", npc_anselmo: "AN_", npc_marga: "MG_", npc_darcio: "DC_", npc_maelis: "ML_",
+  npc_gaspar: "GS_", npc_rovena: "RV_",
+};
+for (const [m, p] of Object.entries(NPC_CLIP_PREFIX)) REMASTER_SETS[m] = npcSet(p);
+
+/**
  * Conjunto de clipes quando o herói segura uma arma de duas mãos (e a esquerda está vazia): parado, andar e
  * correr com as duas mãos juntas na frente do peito (compose-2h-clips.mjs). O bárbaro é o único hoje; sem
  * pausas do parado (os braços ficam presos à arma). null tira o papel do conjunto.
@@ -246,6 +265,10 @@ const WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
   rogue: {},
   npc_merchant: {},
   npc_smith: { "handslot.r": "axe_1handed" },
+};
+/** Ferramenta na mão dos NPCs do remaster (arquivo da arma): o ferreiro leva o martelo (machado de uma mão). */
+const NPC_WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
+  npc_bruno: { "handslot.r": "axe_1handed" }, // o gesto do ofício é o martelo; sem martelo no jogo, a ferramenta de uma mão de sempre
 };
 /** Todas as armas que os itens podem mostrar na mão. */
 const ITEM_WEAPONS = [
@@ -514,7 +537,48 @@ export class CharacterModels {
     const idle = templates.get("Idle_A");
     const death = templates.get("Death_A");
     if (idle && death) templates.set(SIT_POSE, buildSitPose(idle, death, scene));
-    return new CharacterModels(models, templates, weaponByFile, scene);
+    const cm = new CharacterModels(models, templates, weaponByFile, scene);
+    // ?remaster=1: os NPCs da praça já ficam prontos (os das outras regiões carregam quando aparecem).
+    if (REMASTER) await Promise.all(REMASTER_NPC_EAGER.map((m) => cm.ensure(m)));
+    return cm;
+  }
+
+  private npcLoading = new Map<string, Promise<boolean>>();
+  /**
+   * Carrega (uma vez) o modelo de um NPC do remaster (REMASTER_NPC_BY_NAME). Devolve se ele ficou disponível; sem o
+   * arquivo, o NPC continua com o modelo de sempre. Sem `?remaster=1` não faz nada.
+   */
+  ensure(model: string): Promise<boolean> {
+    if (this.models.has(model)) return Promise.resolve(true);
+    const file = REMASTER ? REMASTER_FILES[model] : undefined;
+    if (!file || !(model in NPC_CLIP_PREFIX)) return Promise.resolve(false);
+    let p = this.npcLoading.get(model);
+    if (!p) {
+      p = LoadAssetContainerAsync(`${BASE}${file}.glb`, this.scene).then(
+        (body) => {
+          for (const m of body.materials) setPaletteKind(m, "char");
+          const maskFile = REMASTER_MASKS[model];
+          const mask = maskFile ? new Texture(`${BASE}${maskFile}`, this.scene, true, false) : null;
+          const weapons: ModelAssets["weapons"] = {};
+          for (const [slot, f] of Object.entries(NPC_WEAPONS[model] ?? {}) as [Slot, string][]) {
+            const w = this.weaponFiles.get(f);
+            if (w) weapons[slot] = w;
+          }
+          this.models.set(model, { body, weapons, scale: measureScale(body, model, REMASTER_HEIGHTS[model]), heads: new Map(), remaster: true, mask });
+          for (const g of body.animationGroups) {
+            g.stop();
+            this.animTemplates.set(g.name, g);
+          }
+          return true;
+        },
+        (err: unknown) => {
+          reportClientError("model", `modelo de NPC não carregou: ${file}`, { file, error: String((err as Error)?.message ?? err) }, err);
+          return false;
+        },
+      );
+      this.npcLoading.set(model, p);
+    }
+    return p;
   }
 
   /** Cópia do material com brilho (uma por material + tipo de brilho; "e2" pulsa). */

@@ -49,7 +49,7 @@ import { settings } from "../ui/kit";
 import { skillFxColors } from "../ui/skill-themes";
 import type { EntityProbe } from "../net/invariants";
 import { FIGHT_MS, type HuntCandidate } from "./huntrules";
-import { remasterModelOf } from "./remaster";
+import { remasterModelOf, remasterNpcModel } from "./remaster";
 import { ARCH, neutralNow } from "./roles";
 import { groundClearance, heightAt, terrain } from "./terrain";
 
@@ -258,6 +258,8 @@ interface View extends EntityInfo {
   lastLand: number;
   /** Para onde virar (golpes): gira suave até lá; null = segue o movimento. */
   faceYaw: number | null;
+  /** NPC do remaster que cumprimentou: até quando fica virado para o jogador (performance.now(); 0 = parado como sempre). */
+  greetUntil: number;
   /** Monstros: último golpe entre ele e você (performance.now(); a auto-caça vê quem briga). */
   fightAt: number;
   /** Encaixe da mão da arma (rastro do golpe); undefined = ainda não procurado. */
@@ -605,7 +607,7 @@ export class EntityManager {
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
-      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, fightAt: 0, hand: undefined,
+      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, greetUntil: 0, fightAt: 0, hand: undefined,
       bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
     };
     this.views.set(e.id, v);
@@ -1483,6 +1485,21 @@ export class EntityManager {
     this.refreshHpBar(v);
   }
 
+  /**
+   * O jogador abriu a conversa ou a loja de um NPC do remaster: ele se vira para o jogador e faz o gesto de
+   * cumprimento (clipe `buff`); alguns segundos depois volta a olhar para a praça. NPC de outro estilo: nada muda.
+   */
+  greetNpc(id: number): void {
+    const v = this.views.get(id);
+    if (v?.kind !== EntityKind.NPC || !v.anim || !remasterNpcModel(v.name)) return;
+    const me = this.localPosition();
+    if (me) {
+      v.faceYaw = Math.atan2(me.x - v.root.position.x, me.z - v.root.position.z);
+      v.greetUntil = performance.now() + 6000;
+    }
+    v.anim.play("buff");
+  }
+
   /** Emote de um jogador: acenar toca uma vez; sentar e dançar ficam até ele andar ou atacar. */
   emote(id: number, kind: EmoteKind): void {
     const v = this.views.get(id);
@@ -1557,6 +1574,10 @@ export class EntityManager {
       const steering = dist > 0.05 && !v.dead;
       const moving = this.legacyMove ? steering : v.walking;
       if (v.id === this.localId) this.footsteps(v, moving, dt);
+      if (v.greetUntil && performance.now() > v.greetUntil) {
+        v.greetUntil = 0;
+        v.faceYaw = Math.atan2(-pos.x, -pos.z); // de volta para o centro da praça
+      }
       if (steering) {
         v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
         v.faceYaw = null;
@@ -1774,7 +1795,16 @@ export class EntityManager {
     if (v.model3d || !this.models) return;
     // ?remaster=1: os chefes com silhueta própria (Senhor dos Ossos, Ozrhal) têm modelo à parte.
     const bossModel = v.boss ? remasterModelOf(v.model, true) : v.model;
+    // ?remaster=1: NPC com modelo próprio (pelo nome; o servidor manda um herói). Carrega sob demanda e entra quando chegar.
+    const npcModel = v.kind === EntityKind.NPC ? remasterNpcModel(v.name) : null;
+    if (npcModel && !this.models.has(npcModel)) {
+      void this.models.ensure(npcModel).then((ok) => {
+        if (ok && this.views.get(v.id) === v && !v.model3d) this.attachModel(v);
+      });
+    }
+    // O visual do servidor (pele, cabelo, roupa) é de herói: só vale nos modelos de NPC que têm máscara de repintura.
     const inst =
+      (npcModel && this.models.has(npcModel) ? this.models.instantiate(npcModel, String(v.id), undefined, npcModel === "npc_guarda" ? v.look : undefined) : null) ??
       (bossModel !== v.model ? this.models.instantiate(bossModel, String(v.id), undefined, v.look) : null) ??
       this.models.instantiate(v.model, String(v.id), undefined, v.look);
     if (!inst) return;

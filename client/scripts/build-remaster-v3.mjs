@@ -49,7 +49,10 @@ async function copyClips(path, namer, keep) {
   const fix = Math.abs(qa[3]) < 0.999; // Armature girado: compensar no quadril
   for (const srcClip of src.getRoot().listAnimations()) {
     if (keep && !keep.includes(srcClip.getName())) continue;
-    const clip = doc.createAnimation(`${prefix}${namer(srcClip.getName())}`);
+    // O mesmo clipe pode estar em mais de um arquivo (o Meshy repete o Idle e o Short Breathe): vale o primeiro.
+    const outName = `${prefix}${namer(srcClip.getName())}`;
+    if (doc.getRoot().listAnimations().some((a) => a.getName() === outName)) continue;
+    const clip = doc.createAnimation(outName);
     for (const ch of srcClip.listChannels()) {
       const name = ch.getTargetNode().getName();
       const target = nodeByName.get(name);

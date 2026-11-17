@@ -102,7 +102,49 @@
     "nature_tree_vale_b.glb": {
       "categoria": "cenario"
     },
+    "npc_anselmo_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_bruno_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_cassio_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_darcio_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_edrian_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_gaspar_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_guarda_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_iselda_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_livia_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_maelis_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_marga_b.glb": {
+      "categoria": "personagem"
+    },
     "npc_merchant.glb": {
+      "categoria": "personagem"
+    },
+    "npc_otto_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_rovena_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_severino_b.glb": {
       "categoria": "personagem"
     },
     "npc_smith.glb": {
@@ -113,6 +155,12 @@
           "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
         }
       }
+    },
+    "npc_teodoro_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_ysolde_b.glb": {
+      "categoria": "personagem"
     },
     "ozrhal_b.glb": {
       "categoria": "chefe"

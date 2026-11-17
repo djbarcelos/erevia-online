@@ -43,6 +43,7 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
 (window as unknown as { lab: unknown }).lab = {
   async show(spec: Spec): Promise<string> {
     await ready;
+    await Promise.all(spec.items.map((i) => models!.ensure(i.model))); // NPCs das outras regiões carregam sob demanda
     Object.assign(WEAPON_GRIPS, spec.grips ?? {});
     for (const i of live) i.dispose();
     live = [];

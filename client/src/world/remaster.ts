@@ -9,6 +9,25 @@
  */
 export const REMASTER = new URLSearchParams(location.search).get("remaster") === "1";
 
+/**
+ * NPCs com identidade (tunnel#NPC, docs/arte/remaster-npcs.md): nome do NPC no Welcome → modelo próprio do estilo B.
+ * O servidor continua mandando o modelo de herói (knight, rogue...); com `?remaster=1` o cliente troca pelo mapa abaixo.
+ * Carregam sob demanda (CharacterModels.ensure), na primeira vez que o NPC aparece.
+ */
+export const REMASTER_NPC_BY_NAME: Record<string, string> = {
+  Lívia: "npc_livia", Bruno: "npc_bruno", Teodoro: "npc_teodoro", Otto: "npc_otto", Ysolde: "npc_ysolde", Edrian: "npc_edrian",
+  Severino: "npc_severino", Iselda: "npc_iselda", Cássio: "npc_cassio", Anselmo: "npc_anselmo", Marga: "npc_marga",
+  Dárcio: "npc_darcio", Maelis: "npc_maelis", Gaspar: "npc_gaspar", Bertrand: "npc_guarda", Rovena: "npc_rovena",
+};
+
+/** NPCs da praça: carregam junto com os heróis (os das outras regiões, sob demanda). */
+export const REMASTER_NPC_EAGER = ["npc_livia", "npc_bruno", "npc_teodoro", "npc_otto", "npc_ysolde", "npc_edrian", "npc_severino", "npc_iselda", "npc_cassio"];
+
+/** Modelo do remaster de um NPC pelo nome (null = sem remaster ou NPC sem modelo próprio). */
+export function remasterNpcModel(name: string): string | null {
+  return REMASTER ? (REMASTER_NPC_BY_NAME[name] ?? null) : null;
+}
+
 /** Modelo do jogo → arquivo remasterizado (sem a extensão). */
 export const REMASTER_FILES: Record<string, string> = {
   knight: "knight_b",
@@ -24,6 +43,8 @@ export const REMASTER_FILES: Record<string, string> = {
   // Chefes com silhueta própria: não são modelos do servidor, ver remasterModelOf.
   bone_lord: "bone_lord_b",
   ozrhal: "ozrhal_b",
+  // NPCs (REMASTER_NPC_BY_NAME): o arquivo é <modelo>_b; o servidor não conhece estes modelos.
+  ...Object.fromEntries(Object.values(REMASTER_NPC_BY_NAME).map((m) => [m, `${m}_b`])),
 };
 
 /** Modelos que só existem no remaster (sem arquivo do estilo antigo para cair de volta). */
@@ -47,6 +68,10 @@ export const REMASTER_HEIGHTS: Record<string, number> = {
   skeleton_minion: 1.5, // o lacaio é baixo e de crânio grande: lê menor que o guerreiro de longe
   skeleton_rogue: 1.75,
   skeleton_mage: 2.0, // com o chapéu pontudo
+  // NPCs: a altura de cada um (a mesma que o rig do Meshy recebeu em height_meters).
+  npc_livia: 1.65, npc_bruno: 1.8, npc_teodoro: 1.85, npc_otto: 1.55, npc_ysolde: 1.75, npc_edrian: 1.8, npc_severino: 1.65,
+  npc_iselda: 1.72, npc_cassio: 1.8, npc_guarda: 1.78, npc_anselmo: 1.7, npc_marga: 1.7, npc_darcio: 1.8, npc_maelis: 1.7,
+  npc_gaspar: 1.65, npc_rovena: 1.8,
 };
 
 /** Modelo do jogo → máscara de repintura (PNG ao lado do GLB; ver scripts/make-remaster-mask.mjs). */
@@ -55,6 +80,7 @@ export const REMASTER_MASKS: Record<string, string> = {
   barbarian: "barbarian_b.mask.png",
   mage: "mage_b.mask.png",
   rogue: "rogue_b.mask.png",
+  npc_guarda: "npc_guarda_b.mask.png", // o tabardo do guarda: Bertrand (Cavaleiro do Bastião) usa a cor do Bastião
 };
 
 /** Distâncias (m) a partir das quais cada LOD entra (guia de arte, seção 5). */
