@@ -233,7 +233,7 @@ export type Slot = "handslot.r" | "handslot.l";
  * (para os dedos, com o braço pendurado), Z para a frente. Os encaixes
  * `handslot.*` dos GLB deixam a lâmina (Y da arma) apontando para a frente da mão; aqui cada tipo ganha a
  * sua pega: espada para cima e para a frente, escudo preso ao antebraço, cajado em pé. Calibrado no
- * laboratório (client/lab.html). Os modelos KayKit (sem ?remaster=1) não usam esta tabela.
+ * laboratório (client/lab.html). Os modelos KayKit (com ?remaster=0) não usam esta tabela.
  */
 export interface Grip {
   rot: [number, number, number];
@@ -336,7 +336,7 @@ interface ModelAssets {
   scale: number;
   /** Cabeças que o arquivo traz ("Head_<id>"), por id: só a escolhida é copiada para a cena. */
   heads: Map<string, AbstractMesh>;
-  /** Modelo do estilo B (?remaster=1): clipes e LODs no próprio arquivo. */
+  /** Modelo do estilo B (remaster, o padrão): clipes e LODs no próprio arquivo. */
   remaster: boolean;
   /** Máscara de repintura do remaster (R pano, G pele): a base é KTX2 e não dá para ler os pixels. */
   mask: Texture | null;
@@ -579,7 +579,7 @@ export class CharacterModels {
 
     const [animContainers, weaponList, bodies, formList] = await Promise.all([
       Promise.all(ANIM_FILES.map(load)),
-      // ?remaster=1: a arma nova no lugar (e o KayKit de sempre se o arquivo faltar).
+      // Remaster (padrão): a arma nova no lugar (e o KayKit de sempre se o arquivo faltar).
       Promise.all(
         weaponFiles.map(async (w) => {
           const rw = REMASTER ? REMASTER_WEAPONS[w] : undefined;
@@ -591,12 +591,12 @@ export class CharacterModels {
       ),
       Promise.all(
         modelIds.map(async (id) => {
-          // ?remaster=1: o arquivo do estilo B, se existir; senão, o KayKit de sempre.
+          // Remaster (padrão): o arquivo do estilo B, se existir; senão, o KayKit de sempre.
           const rm = REMASTER && REMASTER_FILES[id] ? await tryLoad(`${REMASTER_FILES[id]}.glb`) : null;
           return [id, rm ?? (await tryLoad(`${id}.glb`)), !!rm] as const;
         }),
       ),
-      // ?remaster=1: as formas por raridade (comum, rara e alta de cada família); o grau do item escolhe uma.
+      // Remaster (padrão): as formas por raridade (comum, rara e alta de cada família); o grau do item escolhe uma.
       Promise.all(WEAPON_FORM_FILES.filter(() => REMASTER).map(async (f) => [f, await tryLoad(`weapons/${f}.glb`)] as const)),
     ]);
     for (const [f, c] of formList) if (c) weaponForms.set(f, c);

@@ -1,5 +1,7 @@
 # Remaster v3: cavaleiro e esqueleto guerreiro pelo Meshy (tunnel#93)
 
+> **Atualização (2026-11-17):** o remaster agora é o visual padrão do jogo. Onde este documento diz "atrás de `?remaster=1`" ou "com `?remaster=1`", leia "no padrão"; `?remaster=0` desliga, para comparar ("sem remaster"). `?render=antigo` é independente: troca só o render (tons, vento, água, nuvens, relevo), não a arte.
+
 A v3 refaz os dois personagens da fatia vertical chamando a **API do Meshy direto** (sem o add-on do Blender), com o fluxo de qualidade: conceito 2D, imagem para 3D com topologia inteligente, rig e animação do próprio Meshy. Tudo continua atrás de `?remaster=1`. Histórico e o que deu errado na v1/v2: `docs/arte/fatia-vertical.md`.
 
 Como olhar: abra o jogo duas vezes, `/` e `/?remaster=1`, no mesmo ponto da praça (`/tp 2 7`) e junto de um Esqueleto Guerreiro (Vigília Ossária).

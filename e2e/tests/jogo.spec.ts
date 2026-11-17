@@ -163,6 +163,8 @@ async function waitWorldReady(page: Page, w: Watch): Promise<boolean> {
 }
 
 test("jogador novo: entrar, andar, janelas, loja, combate, poção e voltar depois de recarregar", async ({ page, problems }) => {
+  // O remaster (o visual padrão) pesa mais no WebGL por software: o cliente relata low_fps, como deve, e isso não é erro do jogo.
+  problems.allow("low_fps no WebGL por software", /^relatório de erro do cliente: client_invariant: low_fps /);
   const watch = watchPage(page);
   // Qualidade gráfica salva como Baixa (como se o jogador tivesse escolhido em Configurações):
   // na Alta (SSAO, FXAA), o WebGL por software trava a página por dezenas de segundos.

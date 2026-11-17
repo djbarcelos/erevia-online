@@ -2,130 +2,135 @@
   "_sobre": "Linha de base de e2e/tests/bench.spec.ts (contadores do ?bench=1 no CI). Não edite à mão: rode `npm run bench:baseline` em e2e/ (com o servidor no ar) e commite o diff junto com a mudança.",
   "regioes": {
     "Cidade · dia": {
-      "draws": 114,
-      "ativas": 62,
-      "malhas": 112
+      "draws": 88,
+      "ativas": 47,
+      "malhas": 146
     },
     "Arredores · dia": {
-      "draws": 127,
-      "ativas": 75,
-      "malhas": 113
+      "draws": 92,
+      "ativas": 51,
+      "malhas": 147
     },
     "Campos dos Ossos · dia": {
-      "draws": 122,
-      "ativas": 70,
-      "malhas": 112
+      "draws": 86,
+      "ativas": 44,
+      "malhas": 147
     },
     "Ermos Partidos · dia": {
-      "draws": 119,
-      "ativas": 67,
-      "malhas": 112
+      "draws": 80,
+      "ativas": 38,
+      "malhas": 146
     },
     "Vale das Pedras Vivas · dia": {
-      "draws": 117,
-      "ativas": 65,
-      "malhas": 112
+      "draws": 79,
+      "ativas": 37,
+      "malhas": 146
     },
     "Fundo do Vale · dia": {
-      "draws": 113,
-      "ativas": 61,
-      "malhas": 112
+      "draws": 75,
+      "ativas": 33,
+      "malhas": 146
     },
     "Vigília Ossária · dia": {
-      "draws": 92,
-      "ativas": 40,
-      "malhas": 113
+      "draws": 63,
+      "ativas": 21,
+      "malhas": 147
     },
     "Confins Partidos · dia": {
-      "draws": 113,
-      "ativas": 61,
-      "malhas": 113
+      "draws": 77,
+      "ativas": 35,
+      "malhas": 147
     },
     "Saqueador Ossudo · dia": {
-      "draws": 117,
-      "ativas": 65,
-      "malhas": 112
+      "draws": 82,
+      "ativas": 40,
+      "malhas": 146
     },
     "Cripta Esquecida · dia": {
-      "draws": 91,
-      "ativas": 39,
-      "malhas": 112
+      "draws": 61,
+      "ativas": 19,
+      "malhas": 146
     },
     "Cidade · noite": {
-      "draws": 123,
-      "ativas": 65,
-      "malhas": 112
+      "draws": 97,
+      "ativas": 50,
+      "malhas": 146
     },
     "Arredores · noite": {
-      "draws": 136,
-      "ativas": 78,
-      "malhas": 113
+      "draws": 101,
+      "ativas": 54,
+      "malhas": 147
     },
     "Campos dos Ossos · noite": {
-      "draws": 131,
-      "ativas": 73,
-      "malhas": 112
+      "draws": 95,
+      "ativas": 47,
+      "malhas": 147
     },
     "Ermos Partidos · noite": {
-      "draws": 128,
-      "ativas": 70,
-      "malhas": 112
+      "draws": 89,
+      "ativas": 41,
+      "malhas": 146
     },
     "Vale das Pedras Vivas · noite": {
-      "draws": 126,
-      "ativas": 68,
-      "malhas": 112
+      "draws": 88,
+      "ativas": 40,
+      "malhas": 146
     },
     "Fundo do Vale · noite": {
-      "draws": 122,
-      "ativas": 64,
-      "malhas": 112
+      "draws": 84,
+      "ativas": 36,
+      "malhas": 146
     },
     "Vigília Ossária · noite": {
-      "draws": 101,
-      "ativas": 43,
-      "malhas": 113
+      "draws": 72,
+      "ativas": 24,
+      "malhas": 147
     },
     "Confins Partidos · noite": {
-      "draws": 122,
-      "ativas": 64,
-      "malhas": 113
+      "draws": 86,
+      "ativas": 38,
+      "malhas": 147
     },
     "Saqueador Ossudo · noite": {
-      "draws": 126,
-      "ativas": 68,
-      "malhas": 112
+      "draws": 91,
+      "ativas": 43,
+      "malhas": 146
     },
     "Cripta Esquecida · noite": {
-      "draws": 100,
-      "ativas": 42,
-      "malhas": 112
+      "draws": 70,
+      "ativas": 22,
+      "malhas": 146
     }
   },
   "censo": {
+    "BannerPost": {
+      "malhas": 5,
+      "soltas": 1,
+      "nos": 0
+    },
     "barrel": {
       "malhas": 1,
-      "soltas": 0,
+      "soltas": 1,
       "nos": 0
     },
     "building": {
       "malhas": 9,
-      "soltas": 0,
+      "soltas": 8,
       "nos": 0
     },
     "Bush": {
       "malhas": 4,
-      "soltas": 0,
+      "soltas": 4,
       "nos": 0
     },
     "crate": {
       "malhas": 2,
-      "soltas": 0,
+      "soltas": 2,
       "nos": 0
     },
     "fade": {
-      "malhas": 13,
-      "soltas": 13,
+      "malhas": 4,
+      "soltas": 4,
       "nos": 0
     },
     "fence": {
@@ -135,7 +140,12 @@
     },
     "flag": {
       "malhas": 1,
-      "soltas": 0,
+      "soltas": 1,
+      "nos": 0
+    },
+    "Fountain": {
+      "malhas": 2,
+      "soltas": 1,
       "nos": 0
     },
     "fx": {
@@ -145,7 +155,7 @@
     },
     "Grass": {
       "malhas": 2,
-      "soltas": 0,
+      "soltas": 2,
       "nos": 0
     },
     "ground": {
@@ -155,7 +165,7 @@
     },
     "hills": {
       "malhas": 4,
-      "soltas": 0,
+      "soltas": 4,
       "nos": 0
     },
     "lake": {
@@ -175,7 +185,7 @@
     },
     "mountain": {
       "malhas": 7,
-      "soltas": 0,
+      "soltas": 7,
       "nos": 0
     },
     "moveMarker": {
@@ -183,8 +193,18 @@
       "soltas": 1,
       "nos": 0
     },
+    "node": {
+      "malhas": 11,
+      "soltas": 0,
+      "nos": 0
+    },
     "outer": {
       "malhas": 1,
+      "soltas": 1,
+      "nos": 0
+    },
+    "Paving": {
+      "malhas": 2,
       "soltas": 1,
       "nos": 0
     },
@@ -205,7 +225,7 @@
     },
     "Rock": {
       "malhas": 14,
-      "soltas": 0,
+      "soltas": 14,
       "nos": 0
     },
     "sack": {
@@ -235,7 +255,7 @@
     },
     "tent": {
       "malhas": 1,
-      "soltas": 0,
+      "soltas": 1,
       "nos": 0
     },
     "torchFlame": {
@@ -268,14 +288,24 @@
       "soltas": 0,
       "nos": 0
     },
+    "town": {
+      "malhas": 22,
+      "soltas": 2,
+      "nos": 0
+    },
     "Tree": {
       "malhas": 13,
+      "soltas": 13,
+      "nos": 0
+    },
+    "tuft": {
+      "malhas": 1,
       "soltas": 0,
       "nos": 0
     },
     "wall": {
       "malhas": 3,
-      "soltas": 1,
+      "soltas": 3,
       "nos": 0
     },
     "weaponrack": {
@@ -285,18 +315,18 @@
     },
     "wheelbarrow": {
       "malhas": 1,
-      "soltas": 0,
+      "soltas": 1,
       "nos": 0
     }
   },
   "entidades": {
     "MONSTER: Esqueleto Lacaio": {
-      "malhas": 3,
-      "nos": 30
+      "malhas": 4,
+      "nos": 38
     },
     "NPC: Anselmo": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Arredores": {
       "malhas": 9,
@@ -304,11 +334,11 @@
     },
     "NPC: Bertrand": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Bruno": {
-      "malhas": 2,
-      "nos": 29
+      "malhas": 4,
+      "nos": 38
     },
     "NPC: Campos dos Ossos": {
       "malhas": 9,
@@ -316,19 +346,19 @@
     },
     "NPC: Cássio": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Cidade": {
       "malhas": 9,
       "nos": 3
     },
     "NPC: Dárcio": {
-      "malhas": 2,
-      "nos": 29
+      "malhas": 3,
+      "nos": 38
     },
     "NPC: Edrian": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Ermos Partidos": {
       "malhas": 9,
@@ -336,27 +366,27 @@
     },
     "NPC: Gaspar": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Iselda": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Lívia": {
-      "malhas": 1,
-      "nos": 29
+      "malhas": 3,
+      "nos": 38
     },
     "NPC: Maelis": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Marga": {
-      "malhas": 2,
-      "nos": 29
+      "malhas": 3,
+      "nos": 38
     },
     "NPC: Otto": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Portão da Clareira": {
       "malhas": 9,
@@ -364,15 +394,15 @@
     },
     "NPC: Rovena": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Severino": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "NPC: Teodoro": {
-      "malhas": 2,
-      "nos": 29
+      "malhas": 3,
+      "nos": 38
     },
     "NPC: Vale das Pedras Vivas": {
       "malhas": 9,
@@ -380,11 +410,11 @@
     },
     "NPC: Ysolde": {
       "malhas": 3,
-      "nos": 30
+      "nos": 38
     },
     "PLAYER": {
-      "malhas": 6,
-      "nos": 30
+      "malhas": 8,
+      "nos": 40
     }
   }
 }

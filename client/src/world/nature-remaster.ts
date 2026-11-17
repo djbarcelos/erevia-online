@@ -1,5 +1,5 @@
 /**
- * Natureza do remaster (?remaster=1): árvores, arbustos, mato, pedras e montanhas pintados à mão
+ * Natureza do remaster (remaster, o padrão): árvores, arbustos, mato, pedras e montanhas pintados à mão
  * (Meshy, Smart Topology; docs/arte/remaster-natureza.md) no lugar do kit KayKit, nas MESMAS posições
  * geradas. Cada item KayKit aponta para uma peça nova (nature-map.json, feito por
  * scripts/build-nature-kit.mjs) e a escala do mapa leva a peça ao tamanho do item antigo: mesma altura

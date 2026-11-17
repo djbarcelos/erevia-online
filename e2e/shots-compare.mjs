@@ -3,7 +3,7 @@
  * cada um e conta os pixels que diferem (e grava os dois PNG e um de diferença). Serve para provar que uma
  * otimização não muda o visual (docs/desempenho-remaster.md).
  *
- *   node shots-compare.mjs --a http://localhost:8097 --b http://localhost:8098 --out ../.bench/prints "remaster=1&quality=media"
+ *   node shots-compare.mjs --a http://localhost:8097 --b http://localhost:8098 --out ../.bench/prints "quality=media"
  *
  * O vento mexe nas árvores e na grama com o tempo, então sobra uma diferença pequena nas copas mesmo sem mudança: olhe o
  * PNG de diferença, não só o número.

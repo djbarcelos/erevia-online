@@ -13,6 +13,16 @@ Como escrever (o client/scripts/build-changelog.mjs lê exatamente este formato)
 O rascunho sai de "node client/scripts/changelog-draft.mjs" (PRs mergeados desde a última versão).
 -->
 
+## 2026-11-17 · O visual novo de Erevia chegou para todo mundo
+
+### Novidades
+- **Erevia em visual novo:** heróis, monstros, chefes e NPCs foram refeitos, com pintura à mão e animações novas (andar, atacar, acenar, dançar, sentar). A cidade de Vel'Aran, a natureza (árvores, arbustos, pedras e montanhas) e o chão também ganharam cara nova, e a praça agora tem uma fonte no lugar do poço.
+- **Armas e armaduras por raridade:** espadas, machados, cajados, adagas e escudos mudam de forma conforme o grau, e peito, elmo e capa ficam mais impressionantes a cada raridade, do comum ao lendário. Todo mundo vê o que você veste.
+
+### Melhorias
+- O jogo baixa um pouco mais de dados na primeira vez que você entra (uns 64 MB). Os chefes, o Golem e os NPCs mais distantes chegam depois, e aparecem assim que carregam.
+- Quer comparar com o visual de antes? Coloque ?remaster=0 no fim do endereço.
+
 ## 2026-11-16.2 · O mundo ganha relevo e vida
 
 ### Novidades

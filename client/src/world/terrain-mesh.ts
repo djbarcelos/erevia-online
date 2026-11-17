@@ -36,7 +36,7 @@ const SPLAT_CELL = 2;
 /** Metros que cada camada cobre antes de repetir: grama, terra, pedra e cascalho. */
 const TILE_M = [2.6, 3.4, 4.2, 2.2];
 
-/** Remaster (?remaster=1): metros por repetição das texturas pintadas à mão (maiores, para a repetição não aparecer). */
+/** Remaster (remaster, o padrão): metros por repetição das texturas pintadas à mão (maiores, para a repetição não aparecer). */
 const TILE_M_PAINTED = [5.2, 5.2, 6.5, 3.6];
 /** Arquivos das camadas pintadas (public/terrain, feitos por scripts/make-seamless.mjs): grama, terra, pedra, cascalho. */
 const PAINTED_FILES = ["grass", "dirt", "stone", "gravel"];

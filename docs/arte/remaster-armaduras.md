@@ -1,5 +1,7 @@
 # Remaster: armadura visível que muda com o equipamento (tunnel#96)
 
+> **Atualização (2026-11-17):** o remaster agora é o visual padrão do jogo. Onde este documento diz "atrás de `?remaster=1`" ou "com `?remaster=1`", leia "no padrão"; `?remaster=0` desliga, para comparar ("sem remaster"). `?render=antigo` é independente: troca só o render (tons, vento, água, nuvens, relevo), não a arte.
+
 Sequência de `remaster-herois.md`: o peito, o elmo e a capa que o jogador veste mudam o que todo mundo vê, nas **5 raridades** (comum, bom, raro, épico, lendário). Tudo atrás de `?remaster=1`; sem o parâmetro nada muda.
 
 Como olhar: `/?remaster=1`, vestir peças de raridades diferentes (a troca aparece na hora para todos) ou o laboratório `client/lab.html?remaster=1` no `vite dev` (`window.lab.show({ items: [{ model, armor: { chest, helm, cape } }] })`).

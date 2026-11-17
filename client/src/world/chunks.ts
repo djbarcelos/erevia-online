@@ -1,5 +1,5 @@
 /**
- * Recortes do cenário do remaster (docs/desempenho-remaster.md). DESLIGADO por padrão: `?remaster=1&chunks=1` liga.
+ * Recortes do cenário do remaster (docs/desempenho-remaster.md). DESLIGADO por padrão: `?chunks=1` liga (com o remaster, que é o padrão).
  *
  * Medido numa GPU NVIDIA e numa Intel Arc (com a CPU 4x mais lenta, como um celular médio), cortar os triângulos pela
  * metade NÃO ganhou FPS: o recorte soma draw calls (de 106 para 134 com as células de 64 m) e o quadro é limitado pela

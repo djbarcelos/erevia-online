@@ -1,5 +1,7 @@
 # Remaster: o bestiário no estilo novo (tunnel#98)
 
+> **Atualização (2026-11-17):** o remaster agora é o visual padrão do jogo. Onde este documento diz "atrás de `?remaster=1`" ou "com `?remaster=1`", leia "no padrão"; `?remaster=0` desliga, para comparar ("sem remaster"). `?render=antigo` é independente: troca só o render (tons, vento, água, nuvens, relevo), não a arte.
+
 Esqueletos comuns (lacaio, ladino, mago), Golem de Pedra e os dois chefes (Senhor dos Ossos e Ozrhal, o raid boss) refeitos pelo Meshy com o fluxo da v3 (`docs/arte/remaster-v3.md`): conceito 2D, imagem para 3D com Smart Topology, rig `mixamo` e ações da biblioteca do Meshy. Tudo atrás de `?remaster=1`; sem o parâmetro, nada muda (o golem continua o de código, os chefes continuam o esqueleto guerreiro e o mago do KayKit). O esqueleto guerreiro já era da v3.
 
 Como olhar: `/?remaster=1`, `/tp 95 0` (Campos dos Ossos: guerreiro, ladino), `/tp 0 -50` (lacaios), `/tp 128 0` (mago), `/tp 0 -125` (Senhor dos Ossos), `/tp 0 -262` (golens do Vale), `/tp 70 70` (covil de Ozrhal; é nível 35, chegue com cuidado).

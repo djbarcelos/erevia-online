@@ -12,7 +12,7 @@
  *
  * Elmo (peça `Hat`): raro e épico trocam o modelo por uma variante da classe; a capa equipada (raro, épico ou
  * lendário) é uma peça anexada nas costas. As peças de pernas, luvas e botas não têm malha nem região própria
- * (o corpo é uma textura só): contam só quando o peito está vazio. Tudo isso só existe em `?remaster=1`.
+ * (o corpo é uma textura só): contam só quando o peito está vazio. Tudo isso só existe no remaster (o padrão).
  */
 
 export interface ArmorGrades {

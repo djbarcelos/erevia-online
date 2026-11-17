@@ -1801,9 +1801,9 @@ export class EntityManager {
 
   private attachModel(v: View): void {
     if (v.model3d || !this.models) return;
-    // ?remaster=1: os chefes com silhueta própria (Senhor dos Ossos, Ozrhal) têm modelo à parte.
+    // Remaster (padrão): os chefes com silhueta própria (Senhor dos Ossos, Ozrhal) têm modelo à parte.
     const bossModel = v.boss ? remasterModelOf(v.model, true) : v.model;
-    // ?remaster=1: NPC com modelo próprio (pelo nome; o servidor manda um herói).
+    // Remaster (padrão): NPC com modelo próprio (pelo nome; o servidor manda um herói).
     const npcModel = v.kind === EntityKind.NPC ? remasterNpcModel(v.name) : null;
     // Remaster: golem, chefes e NPCs baixam sob demanda; até chegar a entidade fica como cápsula (não o modelo de outro).
     for (const m of new Set([npcModel, bossModel, v.model])) {
