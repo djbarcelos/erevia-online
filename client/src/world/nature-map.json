@@ -1,0 +1,370 @@
+{
+ "models": [
+  "tree_oak",
+  "tree_pine",
+  "tree_dead",
+  "tree_vale",
+  "bush_leaf",
+  "grass_tuft",
+  "rock_s",
+  "rock_m",
+  "rock_l",
+  "cliff",
+  "grave",
+  "crystal"
+ ],
+ "kinds": {
+  "tree_1_a": {
+   "model": "tree_oak",
+   "s": [
+    3.121,
+    4.161,
+    3.412
+   ]
+  },
+  "tree_1_b": {
+   "model": "tree_oak",
+   "s": [
+    3.697,
+    4.93,
+    3.697
+   ]
+  },
+  "tree_2_a": {
+   "model": "tree_oak",
+   "s": [
+    3.506,
+    4.675,
+    3.506
+   ]
+  },
+  "tree_2_b": {
+   "model": "tree_oak",
+   "s": [
+    4.531,
+    6.042,
+    4.531
+   ]
+  },
+  "tree_3_a": {
+   "model": "tree_oak",
+   "s": [
+    2.678,
+    3.507,
+    3.247
+   ]
+  },
+  "tree_4_a": {
+   "model": "tree_pine",
+   "s": [
+    5.46,
+    5.274,
+    4.973
+   ]
+  },
+  "tree_4_b": {
+   "model": "tree_pine",
+   "s": [
+    7.003,
+    6.943,
+    5.633
+   ]
+  },
+  "tree_bare_1_a": {
+   "model": "tree_dead",
+   "s": [
+    2,
+    2.857,
+    2
+   ]
+  },
+  "tree_bare_1_b": {
+   "model": "tree_dead",
+   "s": [
+    2.276,
+    3.251,
+    2.276
+   ]
+  },
+  "tree_bare_2_a": {
+   "model": "tree_dead",
+   "s": [
+    2.69,
+    3.843,
+    2.69
+   ]
+  },
+  "tree_bare_2_b": {
+   "model": "tree_dead",
+   "s": [
+    3.879,
+    5.542,
+    3.879
+   ]
+  },
+  "tree_bare_1_c": {
+   "model": "tree_dead",
+   "s": [
+    4.137,
+    5.255,
+    3.678
+   ]
+  },
+  "tree_bare_2_c": {
+   "model": "tree_dead",
+   "s": [
+    5.33,
+    7.614,
+    5.33
+   ]
+  },
+  "bush_1_a": {
+   "model": "bush_leaf",
+   "s": [
+    0.219,
+    0.227,
+    0.199
+   ]
+  },
+  "bush_2_a": {
+   "model": "bush_leaf",
+   "s": [
+    0.432,
+    0.528,
+    0.45
+   ]
+  },
+  "bush_3_a": {
+   "model": "bush_leaf",
+   "s": [
+    0.679,
+    0.485,
+    0.679
+   ]
+  },
+  "bush_4_a": {
+   "model": "bush_leaf",
+   "s": [
+    0.472,
+    0.434,
+    0.492
+   ]
+  },
+  "grass_1_a": {
+   "model": "grass_tuft",
+   "s": [
+    0.643,
+    0.559,
+    0.643
+   ]
+  },
+  "grass_2_a": {
+   "model": "grass_tuft",
+   "s": [
+    1.057,
+    0.919,
+    1.057
+   ]
+  },
+  "rock_2_a": {
+   "model": "rock_s",
+   "s": [
+    0.13,
+    0.216,
+    0.145
+   ]
+  },
+  "rock_2_c": {
+   "model": "rock_s",
+   "s": [
+    0.796,
+    1.326,
+    0.872
+   ]
+  },
+  "rock_1_c": {
+   "model": "rock_s",
+   "s": [
+    0.324,
+    0.54,
+    0.407
+   ]
+  },
+  "rock_1_a": {
+   "model": "rock_m",
+   "s": [
+    0.342,
+    0.54,
+    0.415
+   ]
+  },
+  "rock_1_e": {
+   "model": "rock_m",
+   "s": [
+    0.678,
+    1.13,
+    0.741
+   ]
+  },
+  "rock_3_b": {
+   "model": "rock_m",
+   "s": [
+    0.617,
+    1.028,
+    0.617
+   ]
+  },
+  "rock_3_c": {
+   "model": "rock_m",
+   "s": [
+    0.581,
+    0.968,
+    0.587
+   ]
+  },
+  "rock_3_a": {
+   "model": "rock_l",
+   "s": [
+    1.46,
+    0.859,
+    1.356
+   ]
+  },
+  "rock_3_e": {
+   "model": "rock_l",
+   "s": [
+    2.005,
+    1.288,
+    1.985
+   ]
+  },
+  "rock_3_g": {
+   "model": "rock_l",
+   "s": [
+    3.261,
+    2,
+    2.914
+   ]
+  },
+  "rock_3_j": {
+   "model": "rock_l",
+   "s": [
+    3.223,
+    1.896,
+    2.918
+   ]
+  },
+  "rock_1_h": {
+   "model": "rock_l",
+   "s": [
+    2.683,
+    1.868,
+    2.575
+   ]
+  },
+  "rock_1_k": {
+   "model": "rock_l",
+   "s": [
+    6.202,
+    3.648,
+    5.261
+   ]
+  },
+  "rock_2_f": {
+   "model": "rock_l",
+   "s": [
+    4.865,
+    2.862,
+    4.822
+   ]
+  },
+  "mountain_a_grass_trees": {
+   "model": "cliff",
+   "s": [
+    1.73,
+    2.176,
+    1.751
+   ]
+  },
+  "mountain_b_grass": {
+   "model": "cliff",
+   "s": [
+    1.68,
+    1.836,
+    1.751
+   ]
+  },
+  "mountain_c_grass_trees": {
+   "model": "cliff",
+   "s": [
+    1.641,
+    2.112,
+    1.888
+   ]
+  },
+  "hills_a_trees": {
+   "model": "cliff",
+   "s": [
+    1.637,
+    1.332,
+    1.621
+   ]
+  },
+  "hills_b_trees": {
+   "model": "cliff",
+   "s": [
+    1.375,
+    1.369,
+    1.516
+   ]
+  },
+  "mountain_a": {
+   "model": "cliff",
+   "s": [
+    1.68,
+    1.425,
+    1.751
+   ]
+  },
+  "mountain_b": {
+   "model": "cliff",
+   "s": [
+    1.68,
+    1.77,
+    1.751
+   ]
+  },
+  "mountain_c": {
+   "model": "cliff",
+   "s": [
+    1.641,
+    1.508,
+    1.888
+   ]
+  },
+  "mountain_a_grass": {
+   "model": "cliff",
+   "s": [
+    1.68,
+    1.501,
+    1.751
+   ]
+  },
+  "hills_a": {
+   "model": "cliff",
+   "s": [
+    1.637,
+    0.794,
+    1.621
+   ]
+  },
+  "hills_c": {
+   "model": "cliff",
+   "s": [
+    1.424,
+    0.555,
+    1.376
+   ]
+  }
+ }
+}

@@ -11,6 +11,7 @@ import {
   Vector3,
   VertexData,
 } from "@babylonjs/core";
+import { loadNatureKit, natureExtras, remapNature } from "./nature-remaster";
 import { addRemasterPlaza } from "./plaza-remaster";
 import { REMASTER } from "./remaster";
 import { monolithProtos } from "./teleport-stone";
@@ -19,7 +20,7 @@ import { setWindKind, type WindKind } from "./wind";
 import type { WorldData } from "./world-data";
 
 /** Tipos que projetam sombra (grama, arbustos e adereços pequenos não, para economizar). */
-const CASTS_SHADOW = /^(tree_|rock_3|rock_1_[hk]|rock_2_f|monolith|tavern|church|blacksmith|market|home_|well|windmill|tower_|wall_)/;
+const CASTS_SHADOW = /^(tree_|rock_3|rock_1_[hk]|rock_2_f|rock_l|cliff|monolith|tavern|church|blacksmith|market|home_|well|windmill|tower_|wall_)/;
 /** Tipos que recebem sombra (construções e muralhas ficam mais "assentadas" no chão). */
 const RECEIVES_SHADOW = /^(tavern|church|blacksmith|market|home_|windmill|tower_|wall_|well|monolith)/;
 /** Árvores ficam translúcidas quando tapam o jogador ou o alvo. */
@@ -66,12 +67,19 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
     for (const [kind, mesh] of monolithProtos(scene)) protos.set(kind, mesh);
   }
 
+  // Remaster: a natureza do mapa principal vem do kit pintado à mão, nas mesmas posições (nature-remaster.ts).
+  let objects = world.objects;
+  if (REMASTER && !world.kits) {
+    for (const [name, mesh] of await loadNatureKit(scene)) protos.set(name, mesh);
+    objects = [...remapNature(objects), ...natureExtras(world)];
+  }
+
   // Agrupa as posições por tipo e cria um buffer de matrizes para cada um.
   const byKind = new Map<string, WorldData["objects"]>();
   // O lago fica na beira leste do mapa: o que a geração pôs em cima dele (montanhas da borda) some.
   const field = terrain();
   const lake = field.lake;
-  for (const o of world.objects) {
+  for (const o of objects) {
     if (REMASTER && o.k === "well") continue; // a fonte do remaster ocupa o lugar do poço
     if (lake && field.lakeU(o.x, o.z) < 1.5 && heightAt(o.x, o.z) < lake.level + 0.45) continue;
     let list = byKind.get(o.k);
