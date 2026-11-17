@@ -6,6 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { COVER, KEEP_CLEAR } from "../scripts/biomes/brejo.mjs";
 import { paint as paintVale, transition as valeTransition } from "../scripts/biomes/vale.mjs";
 import { BIOMES_DIR, buildWorld, loadBiomes, mulberry32, OUTPUTS } from "../scripts/world-gen.mjs";
 import { Collision, worldBiomes, worldBounds, type BiomeEntry, type WorldData } from "../src/world/world-data.ts";
@@ -179,5 +180,27 @@ test("um bioma sem semente própria (ou com a de outro) não entra", async () =>
     await assert.rejects(loadBiomes(BIOMES_DIR, dir), /seed 20261114 repetida/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("Brejo: juncos, mato e capim não ficam em cima de NPC, pedra, bote, cais, estrada nem dos colisores do posto", async () => {
+  const w = (await buildWorld()).world as WorldData;
+  const cover = w.objects.filter((o) => o.x >= 150 && COVER.test(o.k));
+  assert.ok(cover.length > 100, "o Brejo ainda tem mato");
+  const boats = w.objects.filter((o) => o.k === "boat");
+  assert.equal(boats.length, 2, "um bote no cais e outro na ilha");
+  for (const o of cover) {
+    for (const k of KEEP_CLEAR) assert.ok(Math.hypot(o.x - k.x, o.z - k.z) >= k.r, `${o.k} em (${o.x}, ${o.z}) em cima de um NPC ou pedra`);
+    for (const b of boats) assert.ok(Math.hypot(o.x - b.x, o.z - b.z) >= 3.2, `${o.k} em (${o.x}, ${o.z}) dentro do bote`);
+    for (const r of w.roads) {
+      if (Math.max(r.x1, r.x2) < 150) continue;
+      const dx = r.x2 - r.x1;
+      const dz = r.z2 - r.z1;
+      const t = Math.max(0, Math.min(1, ((o.x - r.x1) * dx + (o.z - r.z1) * dz) / (dx * dx + dz * dz || 1)));
+      assert.ok(Math.hypot(o.x - (r.x1 + dx * t), o.z - (r.z1 + dz * t)) >= r.w / 2, `${o.k} em (${o.x}, ${o.z}) na estrada`);
+    }
+    if (Math.hypot(o.x - 165, o.z) < 16) {
+      for (const c of w.colliders) assert.ok(Math.hypot(o.x - c.x, o.z - c.z) >= c.r, `${o.k} em (${o.x}, ${o.z}) dentro de um colisor do posto`);
+    }
   }
 });

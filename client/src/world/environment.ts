@@ -28,6 +28,8 @@ const CASTS_SHADOW = /^(tree_|rock_3|rock_1_[hk]|rock_2_f|rock_l|cliff|monolith|
 /** Tipos que recebem sombra (construções e muralhas ficam mais "assentadas" no chão). */
 const RECEIVES_SHADOW = /^(tavern|church|blacksmith|market|home_|windmill|tower_|wall_|well|monolith|town_)/;
 /** Árvores ficam translúcidas quando tapam o jogador ou o alvo. */
+/** Peças que afundam um pouco no chão (m): a malha do Meshy traz uma película de poça azulada rente ao chão, sob a cabana. */
+const SINK: Record<string, number> = { ferryman_hut: 0.15 };
 const FADES = /^tree_/;
 
 /** Itens que balançam ao vento (vertex shader, wind.ts): grama, arbustos e árvores. */
@@ -149,7 +151,7 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
       items.forEach((o, i) => {
         scale.set(o.s[0], o.s[1], o.s[2]);
         Quaternion.RotationYawPitchRollToRef(o.r, 0, 0, rot);
-        pos.set(o.x, heightAt(o.x, o.z), o.z);
+        pos.set(o.x, heightAt(o.x, o.z) - (SINK[kind] ?? 0), o.z);
         Matrix.ComposeToRef(scale, rot, pos, m);
         m.copyToArray(buf, i * 16);
         if (fades) fader.addTree(kind, i, o, m, target);
