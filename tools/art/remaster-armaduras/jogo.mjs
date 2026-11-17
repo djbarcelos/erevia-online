@@ -2,19 +2,22 @@
 // Cada conta é um personagem com peito, elmo e capa de uma raridade (itens inseridos no banco antes de entrar no
 // mundo); todos vão ao mesmo ponto da praça e a primeira conta tira os prints, de frente, de lado e de costas.
 //   MODE=tiers   -> 3 cavaleiros: comum, raro, épico
-//   MODE=classes -> as 4 classes em épico
+//   MODE=classes -> as 4 classes em raro
+//   MODE=solo    -> uma conta só (CLS=classe G=0..3 comum, bom, raro, épico): a que mais cabe numa máquina cheia
 //   node tools/art/remaster-armaduras/jogo.mjs <pasta-de-saida> [zoom]
 // env: PW_E2E (pasta e2e com o @playwright/test), BASE (servidor), DB (banco)
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
-const require = createRequire(process.env.PW_E2E ?? 'C:/Users/DanielTeofilo/erevia-wt/perf-ci/e2e/');
+const require = createRequire(process.env.PW_E2E ?? new URL('../../../e2e/', import.meta.url).pathname.slice(1));
 const { chromium } = require('@playwright/test');
 const [out, zoom = '10'] = process.argv.slice(2);
 const BASE = process.env.BASE ?? 'http://localhost:8098';
 const DB = process.env.DB ?? 'erevia_armaduras';
 const MODE = process.env.MODE ?? 'tiers';
 const SUFFIX = ['common', 'good', 'rare', 'epic'];
-const people = MODE === 'classes'
+const people = MODE === 'solo'
+  ? [{ cls: process.env.CLS ?? 'knight', g: Number(process.env.G ?? 3) }]
+  : MODE === 'classes'
   ? ['knight', 'barbarian', 'mage', 'rogue'].map((cls) => ({ cls, g: 3 }))
   : [0, 2, 3].map((g) => ({ cls: 'knight', g }));
 const tag = Date.now().toString(36).slice(-5);
@@ -59,11 +62,12 @@ const main = pages[0];
 const wheel = async (n) => { await main.mouse.move(640, 300); for (let i = 0; i < n; i++) { await main.mouse.wheel(0, -300); await main.waitForTimeout(80); } };
 await wheel(+zoom);
 await main.waitForTimeout(8000); // as texturas de raridade e as peças baixam sob demanda
-await main.screenshot({ path: `${out}/jogo-${MODE}.png` });
+const T = MODE === 'solo' ? `solo-${people[0].cls}-${SUFFIX[people[0].g]}` : MODE;
+await main.screenshot({ path: `${out}/jogo-${T}.png` });
 const drag = async (dx) => { await main.mouse.move(640, 360); await main.mouse.down({ button: 'right' }); await main.mouse.move(640 + dx, 360, { steps: 8 }); await main.mouse.up({ button: 'right' }); await main.waitForTimeout(1500); };
 await drag(220);
-await main.screenshot({ path: `${out}/jogo-${MODE}-lado.png` });
+await main.screenshot({ path: `${out}/jogo-${T}-lado.png` });
 await drag(220);
-await main.screenshot({ path: `${out}/jogo-${MODE}-costas.png` });
+await main.screenshot({ path: `${out}/jogo-${T}-costas.png` });
 await browser.close();
 console.log('ok');

@@ -85,7 +85,7 @@ Prompts em `tools/art/remaster-armaduras/prompts.mjs` (retexture) e `pieces.mjs`
 - `<classe>-5-raridades-front.jpg` e `-back.jpg`: as 5 raridades lado a lado, da esquerda para a direita **lendário, épico, raro, bom, comum** (o laboratório põe o primeiro à direita; de costas a ordem se inverte).
 - `<classe>-de-perto-three.jpg` e `-back.jpg`: raro, épico e lendário de perto (3/4 e costas).
 - `4-classes-grau1|3|4-front|back.jpg`: as 4 classes em comum, rara e épica lado a lado.
-- `jogo-tiers*.jpg`: no jogo (`?remaster=1`, praça), três cavaleiros com peito, elmo e capa comuns, raros e épicos vindos do banco, de frente, de lado e de costas (`tools/art/remaster-armaduras/jogo.mjs`). A raridade lendária não aparece no jogo porque o servidor ainda não tem peito, elmo nem capa lendários (só armas, anel e colar); o cliente já os trata, e o laboratório mostra como ficam.
+- `jogo-solo-knight-<comum|rare|epic>.jpg` (e `-lado`, `-costas`): no jogo (`?remaster=1`, praça, servidor de verdade): um cavaleiro com peito, elmo e capa comuns, raros e épicos postos no banco e vistos pelo próprio cliente (`MODE=solo CLS=knight G=0|2|3 node tools/art/remaster-armaduras/jogo.mjs <pasta>`; o modo com vários jogadores também existe, mas numa máquina cheia o SwiftShader não deu conta de 3 páginas). A raridade lendária não aparece no jogo porque o servidor ainda não tem peito, elmo nem capa lendários (só armas, anel e colar); o cliente já os trata e o laboratório mostra como ficam.
 
 ## O que ficou em aberto
 

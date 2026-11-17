@@ -5,7 +5,7 @@
 // env: PW_E2E (pasta e2e com o @playwright/test), CAM (front|back|three), ONLY (classe), STACK (raridade do conjunto inteiro)
 import { createRequire } from 'node:module';
 import { mkdirSync } from 'node:fs';
-const require = createRequire(process.env.PW_E2E ?? 'C:/Users/DanielTeofilo/erevia-wt/perf-ci/e2e/');
+const require = createRequire(process.env.PW_E2E ?? new URL('../../../e2e/', import.meta.url).pathname.slice(1));
 const { chromium } = require('@playwright/test');
 const [out, port = '5196'] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
