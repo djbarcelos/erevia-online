@@ -2300,125 +2300,607 @@ section.party {
   background: linear-gradient(90deg, #5fa8ff, #bfe3ff);
 }
 
-/* ======================= REDESIGN "VIGÍLIA": o jogo é a estrela, a interface sai da frente ======================= */
+.go-pill .go-actions {
+  display: flex;
+  gap: 6px;
+}
 
-.hud-me,
-.hud-target,
-.channel-bar {
-  background: rgba(9, 10, 16, 0.74);
-  border: 1px solid rgba(236, 230, 218, 0.12);
-  border-radius: 8px;
+/* ======================= Ouro de Vel'Aran: revisão visual do HUD =======================
+ * Só aparência e arranjo (os seletores e o DOM de ui/hud.ts seguem os mesmos). Tudo usa os tokens
+ * de tokens.css. Sem backdrop-filter e sem animação contínua em vários elementos.
+ * O que é só do PC fica sob .hud-screen:not(.touch); o toque herda as regras de cima. */
+
+.hud {
+  font-size: 0.95rem;
+}
+
+/* Painéis do HUD: o mesmo desenho das janelas (degradê, borda e filete duplo, cantos chanfrados). */
+.hotbar,
+.hud-menu,
+.hud-chat,
+.mm-plaque {
+  background: linear-gradient(180deg, rgba(34, 31, 44, 0.94), rgba(23, 21, 31, 0.96));
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
   box-shadow: none;
+  clip-path: var(--chamfer-clip);
 }
 
-.hud-target {
-  border-color: rgba(210, 80, 60, 0.45);
+.hotbar,
+.hud-menu,
+.mm-plaque {
+  --chamfer: 9px;
+  position: relative;
 }
 
-.hud-target.boss {
-  border-color: rgba(180, 108, 255, 0.6);
+.hotbar::before,
+.hud-menu::before,
+.hud-chat::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px solid var(--line);
+  clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px);
+  pointer-events: none;
+  z-index: 1;
 }
 
-.me-name,
-.t-name b,
-.mm-zone {
-  font-family: var(--font-cond);
-  font-weight: 600;
-  letter-spacing: 0.02em;
+.hud-chat {
+  --chamfer: 9px;
+  background: linear-gradient(0deg, rgba(23, 21, 31, 0.9), rgba(23, 21, 31, 0.72));
+  border-color: var(--line);
+}
+
+/* ---------- Efeitos (buffs e debuffs): logo abaixo do quadro do jogador ---------- */
+
+.hud-left > .effects {
+  padding: 0 2px;
+  gap: 4px;
+}
+
+.hud-left > .effects:empty {
+  display: none;
+}
+
+.effect {
+  width: 30px;
+  height: 30px;
+  border-radius: 2px;
+  background: var(--bg-1);
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 0 1px rgba(15, 14, 22, 0.9);
+}
+
+.effect.debuff {
+  border-color: var(--danger-line);
+  box-shadow:
+    0 0 0 1px rgba(15, 14, 22, 0.9),
+    0 0 0 2px rgba(201, 65, 58, 0.35);
+}
+
+.effect-time {
+  font-family: var(--font-title);
+  font-size: 0.58rem;
+  background: rgba(15, 14, 22, 0.7);
+}
+
+/* ---------- Quadro do jogador ---------- */
+
+.hud-me {
+  gap: 2px 12px;
+  padding: 10px 14px 10px 10px;
 }
 
 .me-crest {
-  width: 52px;
-  height: 52px;
-  border-radius: 6px;
-  border: 1px solid rgba(214, 180, 110, 0.6);
+  width: 64px;
+  height: 72px;
+  border: 0;
+  border-radius: 0;
+  background: none;
   box-shadow: none;
-  background: #1a1d29;
 }
 
+/* Retrato hexagonal: filete dourado por fora, fundo escuro por dentro. */
+.me-crest::before,
+.me-crest::after {
+  content: "";
+  position: absolute;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+
+.me-crest::before {
+  inset: 0;
+  background: var(--gold-grad);
+}
+
+.me-crest::after {
+  inset: 3px;
+  background: radial-gradient(circle at 35% 30%, #3a3150, #120f1a);
+}
+
+.me-initial {
+  position: relative;
+  z-index: 1;
+  font-size: 1.8rem;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--emblem) 60%, transparent);
+}
+
+/* Selo de nível, dourado, no canto do retrato */
 .me-level {
-  background: #0c0e15;
-  border: 1px solid var(--gold);
-  color: var(--gold-hi);
-  font-family: var(--font-cond);
+  z-index: 2;
+  right: -6px;
+  bottom: 2px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 4px;
+  border-radius: 50%;
+  font-family: var(--font-title);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--on-gold);
+  background: var(--gold-grad);
+  border: 2px solid var(--bg-0);
+  box-shadow: 0 0 0 1px var(--gold-glow);
 }
 
+.me-body {
+  gap: 5px;
+}
+
+.me-name {
+  font-size: 1.02rem;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 0 #000;
+}
+
+/* Barras do quadro: pontas inclinadas, número dentro */
 .hud-me .pbar,
-.hud-target .pbar {
-  border-radius: 3px;
+.hud-target .pbar,
+.party .pbar {
+  border-radius: 0;
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
 }
 
-/* Minimapa: anel fino dourado em vez do aro grosso. */
+.hud-me .pbar.hp {
+  height: 20px;
+}
+
+.hud-me .pbar.mp {
+  height: 14px;
+}
+
+.hud-me .pbar.hp b {
+  font-size: 0.78rem;
+}
+
+.hud-me .pbar.mp b {
+  font-size: 0.64rem;
+}
+
+.pbar > i {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* ---------- Alvo: borda vermelha ---------- */
+
+.hud-target {
+  --chamfer: 12px;
+  --chamfer-line: var(--danger-line);
+  border-color: var(--danger-line);
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(201, 65, 58, 0.14), transparent 70%),
+    linear-gradient(180deg, rgba(44, 28, 36, 0.95), rgba(23, 21, 31, 0.97));
+  width: min(380px, 40vw);
+}
+
+.hud-target::before {
+  border-color: rgba(201, 65, 58, 0.25);
+}
+
+.hud-target.npc,
+.hud-target.pc.ally {
+  --chamfer-line: var(--line-strong);
+  border-color: var(--line-strong);
+  background: linear-gradient(180deg, rgba(34, 31, 44, 0.96), rgba(23, 21, 31, 0.97));
+}
+
+.hud-target.npc::before,
+.hud-target.pc.ally::before {
+  border-color: var(--line);
+}
+
+.hud-target .t-name {
+  font-size: 1rem;
+  color: var(--danger-text);
+}
+
+.hud-target .t-name b {
+  font-size: 1.1rem;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.hud-target .t-name span {
+  font-size: 0.9rem;
+}
+
+.hud-target .pbar {
+  height: 16px;
+}
+
+.t-close {
+  color: var(--muted);
+}
+
+/* ---------- Minimapa: aro dourado e plaqueta ---------- */
+
 .mm-frame {
-  padding: 3px;
-  background: rgba(9, 10, 16, 0.82);
+  background: conic-gradient(from 20deg, var(--gold-shadow), var(--gold-glow), var(--gold-deep), var(--gold-hi), var(--gold-shadow), var(--gold-glow), var(--gold-deep), var(--gold-hi), var(--gold-shadow));
   box-shadow:
-    0 0 0 1px rgba(214, 180, 110, 0.55),
-    0 6px 20px rgba(0, 0, 0, 0.5);
+    0 6px 18px rgba(0, 0, 0, 0.6),
+    0 0 0 2px rgba(15, 14, 22, 0.9);
+}
+
+.mm-canvas {
+  border: 2px solid var(--bg-0);
+  background: var(--bg-1);
+}
+
+.mm-n {
+  background: var(--bg-1);
+  border-color: var(--gold);
+  font-family: var(--font-title);
+  color: var(--gold-hi);
+}
+
+/* A região e a hora numa plaqueta embaixo do aro (a hora saiu de dentro do mapa). */
+.mm-plaque {
+  --chamfer: 7px;
+  display: grid;
+  justify-items: center;
+  gap: 0;
+  margin-top: -16px;
+  min-width: 132px;
+  padding: 5px 18px 5px;
+  z-index: 1;
 }
 
 .mm-zone {
-  color: var(--text);
-  text-shadow: 0 1px 4px #000;
+  font-size: 0.82rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
-/* Missões e grupo: cartão translúcido, título condensado. */
-.quests,
-section.party {
-  background: rgba(9, 10, 16, 0.6);
-  border: 1px solid rgba(236, 230, 218, 0.1);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
+.mm-clock {
+  position: static;
+  transform: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
-.side-head {
-  font-family: var(--font-cond);
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: 0.1em;
+.mm-coords,
+.hud-stats {
+  background: rgba(23, 21, 31, 0.88);
+  border-color: var(--line-strong);
 }
 
-.quest b {
-  font-family: var(--font-cond);
-  color: var(--text);
+.mm-btn {
+  border-radius: 0;
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+  background: rgba(23, 21, 31, 0.92);
+  border-color: var(--line-strong);
+  color: var(--gold-hi);
 }
 
-.m-crest {
-  border-radius: 6px;
-}
+/* ---------- Atalhos ---------- */
 
-/* Barra de skills e botão de caça: tinta-noite, ouro só no estado ativo. */
 .hotbar {
-  background: rgba(9, 10, 16, 0.72);
-  border: 1px solid rgba(236, 230, 218, 0.12);
-  border-radius: 8px;
-  box-shadow: none;
+  gap: 5px;
+  padding: 7px;
+}
+
+.hb-slot {
+  border-radius: 3px;
+  border-color: var(--line-strong);
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.05), transparent 70%),
+    linear-gradient(180deg, #1c1926, #100e17);
 }
 
 .hb-key {
-  font-family: var(--font-cond);
+  font-family: var(--font-title);
+  font-size: 0.64rem;
+  color: var(--gold-hi);
+}
+
+.hb-slot .qty {
+  font-family: var(--font-title);
+  font-size: 0.72rem;
+  color: var(--text);
 }
 
 .auto-btn {
-  background: rgba(9, 10, 16, 0.72);
-  border: 1px solid rgba(214, 180, 110, 0.6);
-  border-radius: 8px;
-  color: var(--gold-hi);
-  font-family: var(--font-cond);
+  border-radius: 0;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%);
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+  padding: 0 14px;
 }
 
 .auto-btn[aria-pressed="true"],
 .act-auto[aria-pressed="true"] {
-  background: var(--gold);
-  color: #17130b;
+  background: var(--gold-grad);
+  color: var(--on-gold);
+  border-color: var(--gold-glow);
 }
+
+/* ---------- Menu ---------- */
 
 .menu-btn {
-  background: rgba(9, 10, 16, 0.72);
-  border-color: rgba(236, 230, 218, 0.12);
-  border-radius: 8px;
+  border-radius: 2px;
+  border-color: var(--line);
+  background: linear-gradient(180deg, #2a2638, #1b1826);
+  color: var(--gold);
 }
 
-.hud-xp {
-  background: rgba(0, 0, 0, 0.6);
+.menu-btn:hover,
+.menu-btn.on {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, #342f46, #221f2c);
+}
+
+.menu-btn kbd {
+  font-family: var(--font-title);
+  color: var(--muted);
+}
+
+/* ---------- Chat ---------- */
+
+.chat-tabs {
+  padding: 5px 8px 0;
+  gap: 4px;
+  position: relative;
+  z-index: 2;
+}
+
+.chat-tab {
+  font-family: var(--font-title);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+
+.chat-tab[aria-pressed="true"] {
+  color: var(--gold-hi);
+  border-bottom-color: var(--gold);
+  background: linear-gradient(0deg, rgba(214, 180, 110, 0.16), transparent 80%);
+}
+
+.chat-log {
+  font-size: 0.9rem;
+  padding: 6px 12px;
+}
+
+.chat-input {
+  border-color: var(--line);
+  border-radius: 2px;
+  background: rgba(15, 14, 22, 0.7);
+  position: relative;
+  z-index: 2;
+}
+
+/* ---------- Grupo e missões ---------- */
+
+.quests,
+section.party {
+  background: linear-gradient(90deg, rgba(23, 21, 31, 0.86), rgba(23, 21, 31, 0.55) 80%, transparent);
+  border-left: 2px solid var(--gold-deep);
+  border-radius: 0;
+}
+
+.side-head {
+  color: var(--gold-hi);
+  letter-spacing: 0.16em;
+}
+
+.m-crest {
+  width: 30px;
+  height: 34px;
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+
+.quest b {
+  font-size: 0.92rem;
+  color: var(--gold-hi);
+}
+
+.q-journal {
+  border-radius: 0;
+  border-color: var(--line-strong);
+}
+
+.go-pill,
+.auto-pill {
+  background: rgba(23, 21, 31, 0.92);
+  border-color: var(--gold);
+}
+
+/* ======================= Só no PC: arranjo novo ======================= */
+
+/* Hotbar no centro, embaixo, com a XP fina logo abaixo; o AUTO fica ao lado da barra. */
+.hud-screen:not(.touch) .hud-bottom {
+  bottom: 30px;
+}
+
+.hud-screen:not(.touch) .hb-row {
+  position: relative;
+}
+
+.hud-screen:not(.touch) .auto-btn {
+  position: absolute;
+  left: calc(100% + 10px);
+  bottom: 0;
+}
+
+.hud-screen:not(.touch) .hud-xp {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: min(580px, 56vw);
+  bottom: 14px;
+  height: 10px;
+  border: 1px solid var(--line-strong);
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 100%, 0 100%);
+}
+
+/* Menu: grade de ícones embaixo à direita, com a tecla no canto (11 ícones, 6 por linha). */
+.hud-screen:not(.touch) .hud-menu {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  display: grid;
+  grid-template-columns: repeat(6, 42px);
+  gap: 4px;
+  padding: 8px;
+}
+
+.hud-screen:not(.touch) .menu-btn {
+  width: 42px;
+  height: 42px;
+}
+
+.hud-screen:not(.touch) .hud-chat {
+  bottom: 110px;
+}
+
+/* Minimapa: zoom em coluna ao lado do aro (tira altura do bloco). */
+.hud-screen:not(.touch) .mm-zoom {
+  position: absolute;
+  left: -36px;
+  top: 52px;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+/* Rastreador de missões: à direita, abaixo do minimapa, alinhado à direita. */
+.hud-screen:not(.touch) .quests {
+  position: fixed;
+  right: 12px;
+  top: 318px;
+  width: 250px;
+  text-align: right;
+  border-left: 0;
+  border-right: 2px solid var(--gold-deep);
+  background: linear-gradient(270deg, rgba(23, 21, 31, 0.92), rgba(23, 21, 31, 0.8) 75%, rgba(23, 21, 31, 0.35));
+}
+
+.hud-screen:not(.touch) .quests .q-panel-head {
+  flex-direction: row-reverse;
+}
+
+.hud-screen:not(.touch) .quest {
+  margin: 0;
+  padding: 2px 6px 2px 0;
+  border-left: 0;
+  border-right: 2px solid transparent;
+}
+
+.hud-screen:not(.touch) .quest.tracked {
+  border-right-color: var(--gold);
+}
+
+.hud-screen:not(.touch) .quest .q-head {
+  flex-direction: row-reverse;
+}
+
+.hud-screen:not(.touch) .quest.tracked b::before {
+  content: "";
+}
+
+.hud-screen:not(.touch) .quest.tracked b::after {
+  content: " ◎";
+  color: var(--gold-hi);
+}
+
+.hud-screen:not(.touch) .quest .q-step {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 1400px) {
+  .hud-screen:not(.touch) .hud-menu {
+    grid-template-columns: repeat(4, 40px);
+  }
+
+  .hud-screen:not(.touch) .menu-btn {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 1150px) {
+  .hud-screen:not(.touch) .hud-xp {
+    width: 480px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .hud-screen:not(.touch) .hud-menu {
+    grid-template-columns: repeat(3, 40px);
+  }
+}
+
+/* ======================= Toque: ajustes do desenho novo ======================= */
+
+.hud-screen.touch .me-crest {
+  width: 46px;
+  height: 52px;
+}
+
+.hud-screen.touch .me-initial {
+  font-size: 1.3rem;
+}
+
+.hud-screen.touch .me-level {
+  min-width: 22px;
+  height: 22px;
+  font-size: 0.7rem;
+  right: -5px;
+  bottom: 0;
+}
+
+.hud-screen.touch .mm-plaque {
+  --chamfer: 6px;
+  margin-top: -14px;
+  min-width: 0;
+  padding: 1px 10px;
+}
+
+.hud-screen.touch .hud-left > .effects {
+  margin-top: -2px;
+}
+
+.hud-screen.touch .hud-me .pbar.hp {
+  height: 16px;
+}
+
+.hud-screen.touch .hud-me .pbar.mp {
+  height: 11px;
+}
+
+.act-attack {
+  background: radial-gradient(circle at 35% 30%, var(--gold-glow), var(--gold) 50%, var(--gold-shadow));
+  border-color: var(--gold-glow);
+}
+
+.act-small,
+.hud-screen.touch .menu-burger {
+  border-color: var(--line-strong);
 }

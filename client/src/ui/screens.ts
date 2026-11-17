@@ -30,11 +30,7 @@ function mount(kind: string, ...nodes: Node[]): void {
   preview?.dispose();
   preview = null;
   overlay.hidden = false;
-  overlay.dataset.kind = kind;
-  if (kind === "login" || kind === "chars" || kind === "loading") {
-    stopBg?.();
-    stopBg = null;
-  } else if (!stopBg) stopBg = animatedBackdrop(overlay, { castle: true });
+  if (!stopBg) stopBg = animatedBackdrop(overlay, { castle: false, city: true });
   content.className = `entry-content ${kind}`;
   content.replaceChildren(...nodes);
 }
@@ -452,27 +448,25 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     const subs = classesLine(c);
     setPlate(c.name, classLine(c, "Nível") + (subs ? ` (${subs})` : ""), look.emblem);
     const play = button("Entrar no mundo", "btn btn-gold btn-play", () => onPlay(c));
-    const info = classInfo(c.class);
-    const extra = CLASS_EXTRA[c.class];
-    const dot = el("span", "sc-dot");
-    const bars = el("div", "sc-bars");
-    extra.bars.forEach((v, i) => {
-      const fill = el("i");
-      fill.style.setProperty("--v", `${v}%`);
-      bars.append(el("span", "cb-name", CLASS_BAR_NAMES[i]), el("span", "cb-bar", fill), el("span", "cb-val", String(v)));
-    });
-    selectFoot.style.setProperty("--cc", info.color);
-    selectFoot.replaceChildren(
+    selectFoot.replaceChildren(play);
+    const cls0 = classInfo(c.activeClass ?? c.class);
+    const cell = (k: string, ...v: (Node | string)[]) => el("div", "dt-cell", el("span", "label", k), el("b", null, ...v));
+    const sw = el("i", "dt-swatch");
+    sw.style.setProperty("--c", look.emblem);
+    detailPanel.style.setProperty("--cc", cls0.color);
+    detailPanel.replaceChildren(
+      el("h2", "title panel-title", "Detalhes"),
+      el("div", "dt-head", el("span", "dt-name", c.name), el("span", "dt-class", cls0.label)),
+      el("div", "dt-level", el("small", null, "Nível"), el("b", null, String(c.level ?? 1))),
       el(
         "div",
-        "sc-card frame",
-        el("span", "sc-class", dot, info.label),
-        el("h2", "sc-name", c.name),
-        el("span", "sc-role", extra.role),
-        el("span", "sc-level", `Nível ${c.level ?? 1}`),
-        bars,
+        "dt-grid",
+        cell("Classe", cls0.label),
+        cell("Subclasse", subs ? c.classes!.slice(1).map((k) => classInfo(k.class).label).join(", ") : "Nenhuma"),
+        cell("Evolução", subs || "Classe base"),
+        cell("Emblema", sw),
       ),
-      play,
+      el("p", "hint-box small", "Clique duas vezes num cartão, ou use o botão abaixo, para entrar no mundo."),
     );
   };
 
