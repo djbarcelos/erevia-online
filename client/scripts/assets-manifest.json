@@ -16,6 +16,9 @@
     "anims-special.glb": {
       "categoria": "animacao"
     },
+    "barbarian_b.glb": {
+      "categoria": "personagem"
+    },
     "barbarian.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -27,6 +30,9 @@
           "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
         }
       }
+    },
+    "bone_lord_b.glb": {
+      "categoria": "chefe"
     },
     "env-forest.glb": {
       "categoria": "cenario",
@@ -51,6 +57,9 @@
         "^Head_"
       ]
     },
+    "mage_b.glb": {
+      "categoria": "personagem"
+    },
     "mage.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -69,6 +78,9 @@
         }
       }
     },
+    "ozrhal_b.glb": {
+      "categoria": "chefe"
+    },
     "plaza_BannerPost_b.glb": {
       "categoria": "cenario"
     },
@@ -81,11 +93,17 @@
     "props/loot_sack.glb": {
       "categoria": "cenario"
     },
+    "rogue_b.glb": {
+      "categoria": "personagem"
+    },
     "rogue.glb": {
       "categoria": "personagem",
       "variantes": [
         "^Head_"
       ]
+    },
+    "skeleton_mage_b.glb": {
+      "categoria": "monstro"
     },
     "skeleton_mage.glb": {
       "categoria": "monstro",
@@ -100,6 +118,9 @@
         }
       }
     },
+    "skeleton_minion_b.glb": {
+      "categoria": "monstro"
+    },
     "skeleton_minion.glb": {
       "categoria": "monstro",
       "excecoes": {
@@ -112,6 +133,9 @@
           "motivo": "KayKit legado, substituído na #98"
         }
       }
+    },
+    "skeleton_rogue_b.glb": {
+      "categoria": "monstro"
     },
     "skeleton_rogue.glb": {
       "categoria": "monstro",
@@ -141,6 +165,9 @@
           "motivo": "KayKit legado, substituído na #98"
         }
       }
+    },
+    "stone_golem_b.glb": {
+      "categoria": "monstro"
     },
     "weapons/axe_1handed.glb": {
       "categoria": "arma"

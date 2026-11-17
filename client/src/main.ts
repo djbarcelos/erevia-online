@@ -1632,12 +1632,12 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         return p ? { x: p.x, z: p.z } : null;
       },
       screenPos: (id: number) => entities.screenPos(id, world.scene),
-      /** Entidades vivas que o cliente conhece: NPCs ou monstros (sem os chefes), com nome e posição. */
-      entities: (kind: "npc" | "monster") => {
+      /** Entidades vivas que o cliente conhece: NPCs ou monstros (sem os chefes, salvo com bosses), com nome e posição. */
+      entities: (kind: "npc" | "monster", bosses = false) => {
         const want = kind === "npc" ? EntityKind.NPC : EntityKind.MONSTER;
         const out: { id: number; name: string; x: number; z: number }[] = [];
         entities.forEachMarker((m) => {
-          if (m.kind === want && !m.boss) out.push({ id: m.id, name: entities.info(m.id)?.name ?? "", x: m.x, z: m.z });
+          if (m.kind === want && (bosses || !m.boss)) out.push({ id: m.id, name: entities.info(m.id)?.name ?? "", x: m.x, z: m.z });
         });
         return out;
       },
