@@ -12,11 +12,12 @@ const BASE = process.env.BASE ?? 'http://localhost:8093';
 const DB = process.env.DB ?? 'erevia_herois';
 const tag = Date.now().toString(36).slice(-5);
 const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-const classes = ['knight', 'barbarian', 'mage', 'rogue'];
+const classes = (process.env.CLASSES ?? 'knight,barbarian,mage,rogue').split(',');
 const pages = [];
 for (const [i, cls] of classes.entries()) {
   const ctx = await browser.newContext({ viewport: i === 0 ? { width: 1280, height: 720 } : { width: 480, height: 270 }, locale: 'pt-BR' });
   const page = await ctx.newPage();
+  page.setDefaultTimeout(300000);
   page.on('pageerror', (e) => console.log(`[pageerror ${cls}]`, String(e).slice(0, 300)));
   await page.addInitScript(() => { try { localStorage.setItem('erevia.settings', JSON.stringify({ quality: 'baixa', qualityPicked: true })); } catch {} });
   const user = `h${i}${tag}`;
@@ -44,18 +45,18 @@ const main = pages[0];
 const wheel = async (n) => { await main.mouse.move(640, 300); for (let i = 0; i < n; i++) { await main.mouse.wheel(0, -300); await main.waitForTimeout(80); } };
 await wheel(+zoom);
 await main.waitForTimeout(3500);
-await main.screenshot({ path: `${out}/jogo-4-classes.png` });
+await main.screenshot({ path: `${out}/jogo-${process.env.TAG ?? '4-classes'}.png` });
 // de costas e de lado: gira a câmera arrastando o mouse
 const drag = async (dx) => { await main.mouse.move(640, 360); await main.mouse.down({ button: 'right' }); await main.mouse.move(640 + dx, 360, { steps: 8 }); await main.mouse.up({ button: 'right' }); await main.waitForTimeout(1500); };
 await drag(220);
-await main.screenshot({ path: `${out}/jogo-4-classes-lado.png` });
+await main.screenshot({ path: `${out}/jogo-${process.env.TAG ?? '4-classes'}-lado.png` });
 await drag(220);
-await main.screenshot({ path: `${out}/jogo-4-classes-costas.png` });
+await main.screenshot({ path: `${out}/jogo-${process.env.TAG ?? '4-classes'}-costas.png` });
 await drag(-440);
 // emotes: cada conta faz um (acenar, dançar, sentar) e a primeira tira o print
-const emotes = ['/acenar', '/dancar', '/sentar', '/acenar'];
+const emotes = ['/acenar', '/dancar', '/sentar', '/acenar'].slice(0, classes.length);
 for (const [i, page] of pages.entries()) await say(page, emotes[i]);
 await main.waitForTimeout(2500);
-await main.screenshot({ path: `${out}/jogo-4-classes-emotes.png` });
+await main.screenshot({ path: `${out}/jogo-${process.env.TAG ?? '4-classes'}-emotes.png` });
 await browser.close();
 console.log('ok');

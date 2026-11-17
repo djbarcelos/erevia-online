@@ -109,7 +109,7 @@ Só os heróis do remaster usam a tabela; o esqueleto (rig com repouso diferente
 - Blender headless (ângulos): `cavaleiro-angulos.jpg`, `barbaro-angulos.jpg`, `mago-angulos.jpg`, `ladino-angulos.jpg`.
 - Tiras de animação: `*-locomocao-combate.jpg`, `*-emotes.jpg`.
 - Pega das armas: `pega-*.jpg`. Elmo: `cavaleiro-elmo.jpg`.
-- Os 4 juntos no jogo (frente, lado, costas e emotes): `jogo-4-classes*.jpg`; no laboratório: `quatro-classes.jpg`.
+- Os 4 lado a lado no laboratório (o mesmo `CharacterModels` do jogo): `quatro-classes.jpg` (parado) e `quatro-classes-poses.jpg` (parado, correndo, acenando, sentado). Os prints dentro do jogo (`tools/art/remaster-herois/jogo.mjs`) não saíram: ver "O que ficou em aberto".
 
 O Blender aberto na tela não foi usado (headless, como na v3).
 
@@ -122,3 +122,5 @@ O Blender aberto na tela não foi usado (headless, como na v3).
 5. **FPS de GPU real** continua sem medida (SwiftShader).
 6. **Arco:** o jogo não tem arco como arma; nenhuma ação de tiro foi comprada.
 7. **Bárbaro de duas mãos:** a arma fica só na mão direita; falta um encaixe para as duas mãos no cabo.
+8. **Prints dentro do jogo e bench de contadores:** o servidor de teste subiu (Go no Docker, `?remaster=1`, 4 contas), mas o Docker Desktop caiu no meio e depois a máquina ficou saturada (CPU em 99%, SwiftShader estourando 30 s só no `page.screenshot`), então `tools/art/remaster-herois/jogo.mjs` (4 classes lado a lado, frente, lado, costas e emotes, também por classe com `CLASSES=mage TAG=mago`) e o `?bench=contadores` do `tools/art/remaster-v3/bench.mjs` não terminaram. As provas visuais saíram do laboratório, que usa o mesmo `CharacterModels`, os mesmos GLB e KTX2. Rodar os dois numa máquina livre.
+9. **Teto de créditos:** o aviso do coordenador subindo o teto para 400 novos (518 somados) chegou, mas o gasto extra (mago sem chapéu, trocas de ação) foi bloqueado pela permissão do ambiente por não vir do Daniel; nada além dos 245 foi gasto (363 somados). `MESHY_BUDGET=518` e as ações candidatas estão acima, prontas para rodar assim que ele confirmar.
