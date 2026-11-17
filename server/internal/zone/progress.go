@@ -207,7 +207,7 @@ func validHotbarEntry(p *entity, e string) bool {
 		return s != nil && s.Class == p.pl.class && (s.Spec == "" || s.Spec == p.pl.spec) && !s.IsPassive() && p.pl.rank(s.ID) > 0
 	case strings.HasPrefix(e, "item:"):
 		d := game.Items[e[5:]]
-		return d != nil && (d.HealHP > 0 || d.HealMP > 0)
+		return d != nil && (d.HealHP > 0 || d.HealMP > 0 || d.Cleanse)
 	}
 	return false
 }

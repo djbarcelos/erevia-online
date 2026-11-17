@@ -161,7 +161,8 @@ function soundRegion(regions: Region[], x: number, z: number): Region {
   if (r.area && Math.hypot(x - r.area.x, z - r.area.z) < r.area.r * 1.6) return r; // 1,6 = AREA_FRINGE
   if (r.sector) return r; // dentro de um setor (regionAt só o devolve lá dentro)
   const d = Math.hypot(x, z);
-  return regions.find((g) => !g.area && !g.sector && d < g.rMax) ?? r;
+  if (r.rect) return r; // dentro de um bioma retangular (regionAt só o devolve lá dentro)
+  return regions.find((g) => !g.area && !g.sector && !g.rect && d < g.rMax) ?? r;
 }
 
 /** Música de cada região: cidade, ermos perto, ermos longe e a cripta do raid boss. */

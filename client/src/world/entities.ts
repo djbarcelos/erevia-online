@@ -172,6 +172,10 @@ const MODEL_BODY: Record<string, { radius: number; width: number; height: number
 
 /** Modelo das Pedras de Teleporte (desenhadas aqui, sem arquivo 3D). */
 export const STONE_MODEL = "teleport_stone";
+/** Modelo do barco de Tomé (Brejo de Lamagris): o clique do barco é um poste com lanterna e sino; o bote é cenário (world.json, `boat`). */
+export const FERRY_MODEL = "ferry_boat";
+/** A função (título) dos NPCs do barco, igual à do servidor (zone/teleport.go): o mapa não os lista como pedra. */
+export const FERRY_TITLE = "Barco do Tomé";
 
 /** Cores dos nomes por estado (o Babylon GUI não lê variáveis CSS). */
 export const NAME_COLORS = {
@@ -661,6 +665,10 @@ export class EntityManager {
       this.buildStone(v);
       return;
     }
+    if (e.model === FERRY_MODEL) {
+      this.buildFerryPost(v);
+      return;
+    }
     if (this.models) this.attachModel(v);
     if (!v.model3d && this.wantsCapsule(v)) v.capsule = this.createCapsule(v);
     if (v.dead) this.showDead(v, true);
@@ -670,6 +678,31 @@ export class EntityManager {
   /** Pedra de Teleporte: monólito com runas acesas e núcleo de luz (ver teleport-stone.ts). */
   private buildStone(v: View): void {
     v.meshes = buildTeleportStone(this.scene, this.fx, v.id, v.visual, v.root).shadowMeshes;
+  }
+
+  /** Barco de Tomé: um poste de madeira com a lanterna verde e o sino do barqueiro (o bote em si é cenário do mapa). */
+  private buildFerryPost(v: View): void {
+    const pole = MeshBuilder.CreateCylinder(`fpole${v.id}`, { height: 2.4, diameterTop: 0.1, diameterBottom: 0.16, tessellation: 8 }, this.scene);
+    pole.parent = v.visual;
+    pole.position.y = 1.2;
+    pole.material = this.material("#5b4630");
+    const arm = MeshBuilder.CreateBox(`farm${v.id}`, { width: 0.9, height: 0.07, depth: 0.07 }, this.scene);
+    arm.parent = v.visual;
+    arm.position.set(0.4, 2.25, 0);
+    arm.material = this.material("#5b4630");
+    const lamp = MeshBuilder.CreateSphere(`flamp${v.id}`, { diameter: 0.3, segments: 8 }, this.scene);
+    lamp.parent = v.visual;
+    lamp.position.set(0.8, 2.0, 0);
+    const glow = new StandardMaterial(`flamp-mat${v.id}`, this.scene);
+    glow.diffuseColor = Color3.FromHexString("#9fe870");
+    glow.emissiveColor = Color3.FromHexString("#9fe870").scale(0.85);
+    lamp.material = glow;
+    const bell = MeshBuilder.CreateCylinder(`fbell${v.id}`, { height: 0.26, diameterTop: 0.12, diameterBottom: 0.3, tessellation: 10 }, this.scene);
+    bell.parent = v.visual;
+    bell.position.set(-0.3, 2.1, 0);
+    bell.material = this.material("#c9a24a");
+    for (const m of [pole, arm, lamp, bell]) m.isPickable = false;
+    v.meshes = [pole, arm, lamp, bell];
   }
 
   /** Estandarte: mastro, bandeira com a cor da ordem e o círculo da área (8 m). */

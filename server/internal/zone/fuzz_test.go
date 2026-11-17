@@ -875,7 +875,7 @@ func fuzzFixedSetup(spot byte) []byte {
 // fuzzMasterID: a Mestra dos Caminhos (depois dela vêm o Quadro de Contratos, boardID, o
 // Leiloeiro, o Guardião das Sendas e os NPCs da conversa, talk.go; ver spawnNPCs).
 var (
-	fuzzMasterID   = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+1)
+	fuzzMasterID   = npcIDBase + uint32(len(townNPCs)+legacyStones+1)
 	fuzzGuardianID = guardianID
 )
 
@@ -929,11 +929,11 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_Teleport{Teleport: &pb.Teleport{NpcId: npc + uint32(len(townNPCs)), DestId: 1}}},
 		{Msg: &pb.ClientMessage_CancelChannel{CancelChannel: &pb.CancelChannel{}}},
 		{Msg: &pb.ClientMessage_Enchant{Enchant: &pb.Enchant{ScrollSlot: 8, Place: 1, Slot: game.SlotWeapon}}},
-		{Msg: &pb.ClientMessage_StorageMove{StorageMove: &pb.StorageMove{NpcId: npc + uint32(len(townNPCs)+len(teleportStones)), FromPlace: 0, FromSlot: 10, ToPlace: 2, ToSlot: 0}}},
-		{Msg: &pb.ClientMessage_StorageGold{StorageGold: &pb.StorageGold{NpcId: npc + uint32(len(townNPCs)+len(teleportStones)), Amount: 10}}},
+		{Msg: &pb.ClientMessage_StorageMove{StorageMove: &pb.StorageMove{NpcId: npc + uint32(len(townNPCs)+legacyStones), FromPlace: 0, FromSlot: 10, ToPlace: 2, ToSlot: 0}}},
+		{Msg: &pb.ClientMessage_StorageGold{StorageGold: &pb.StorageGold{NpcId: npc + uint32(len(townNPCs)+legacyStones), Amount: 10}}},
 		// Retiradas do armazém (o outro sentido).
-		{Msg: &pb.ClientMessage_StorageMove{StorageMove: &pb.StorageMove{NpcId: npc + uint32(len(townNPCs)+len(teleportStones)), FromPlace: 2, FromSlot: 0, ToPlace: 0, ToSlot: 30}}},
-		{Msg: &pb.ClientMessage_StorageGold{StorageGold: &pb.StorageGold{NpcId: npc + uint32(len(townNPCs)+len(teleportStones)), Amount: -10}}},
+		{Msg: &pb.ClientMessage_StorageMove{StorageMove: &pb.StorageMove{NpcId: npc + uint32(len(townNPCs)+legacyStones), FromPlace: 2, FromSlot: 0, ToPlace: 0, ToSlot: 30}}},
+		{Msg: &pb.ClientMessage_StorageGold{StorageGold: &pb.StorageGold{NpcId: npc + uint32(len(townNPCs)+legacyStones), Amount: -10}}},
 		{Msg: &pb.ClientMessage_ChangeLook{ChangeLook: &pb.ChangeLook{NpcId: npc + 2, Look: &pb.BodyLook{Skin: 1, Hair: 2, Outfit: 3, Head: "rogue"}}}},
 		{Msg: &pb.ClientMessage_TradeCmd{TradeCmd: &pb.TradeCmd{Kind: pb.TradeCmdKind(1), TargetId: 2}}},
 		{Msg: &pb.ClientMessage_Craft{Craft: &pb.Craft{NpcId: npc + 1, RecipeId: fuzzRecipeIDs[0]}}},
