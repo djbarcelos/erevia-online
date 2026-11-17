@@ -294,6 +294,7 @@ type Zone struct {
 	telemetryDone chan struct{} // fechado quando a telemetria gravou o que faltava (TelemetryDone)
 	telemetryOnce sync.Once
 	bossBackend   BossBackend
+	regicide      string // quem mais causou dano na última morte do raid boss (a Lápide do Último Regicida)
 	bossJobs      chan BossData
 	telegraphs    []*telegraph
 	telegraphSeq  uint32

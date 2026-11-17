@@ -21,6 +21,9 @@ const (
 	raidReserve     = 60.0 // segundos de saque reservado
 	raidNear        = 60.0 // quem está a esta distância ouve o chefe
 	raidWarnBefore  = 10 * time.Minute
+	// raidWarnTitle: o título do aviso de 10 min. O cliente reconhece o aviso por ele e toca o Sino Rachado, a Torre das Terras
+	// Mortas (client/src/main.ts, RAID_WARN_TITLE): mude os dois juntos.
+	raidWarnTitle   = "O chão treme…"
 	raidPhase2At    = 0.70
 	raidPhase3At    = 0.40
 	raidEnrageAt    = 0.20
@@ -93,6 +96,9 @@ func (z *Zone) initRaid(m *entity) { // também do chefe de campo (fieldboss.go)
 	for _, b := range z.cfg.Bosses {
 		if b.ID != m.mon.def.ID {
 			continue
+		}
+		if m.mon.def.Raid && b.TopName != "" {
+			z.regicide = b.TopName // a Lápide do Último Regicida (talk.go)
 		}
 		if b.RespawnAt.After(z.cfg.Clock()) {
 			m.dead, m.hp = true, 0
@@ -305,6 +311,9 @@ func (z *Zone) raidKilled(m *entity) {
 	z.setWindow(m, wall, r.spawnAt)
 	ms.forget()
 	ms.corpseEnd = z.now + corpseSeconds*2
+	if def.Raid && topName != "" {
+		z.regicide = topName
+	}
 	z.saveBoss(BossData{ID: def.ID, RespawnAt: r.spawnAt, KilledAt: wall, TopName: topName})
 	z.log.Info("raid boss killed", "boss", def.ID, "top", topName, "respawn_at", r.spawnAt)
 	if def.FieldBoss != nil {
@@ -327,7 +336,7 @@ func (z *Zone) updateDeadRaid(m *entity) {
 	}
 	if !r.warned && !wall.Before(r.spawnAt.Add(-raidWarnBefore)) && wall.Before(r.spawnAt) {
 		r.warned = true
-		z.announce(pb.AnnounceKind_ANNOUNCE_KIND_BOSS_SOON, "O chão treme…",
+		z.announce(pb.AnnounceKind_ANNOUNCE_KIND_BOSS_SOON, raidWarnTitle,
 			fmt.Sprintf("Algo se mexe na Cripta Esquecida. %s desperta em breve.", m.mon.def.Name))
 	}
 	if wall.Before(r.spawnAt) {

@@ -52,7 +52,7 @@ func TestStonesAreListedWithDestinations(t *testing.T) {
 }
 
 func TestValeStoneIsLastAndKeepsOldIDs(t *testing.T) {
-	want := []string{"Cidade", "Arredores", "Campos dos Ossos", "Ermos Partidos", "Vale das Pedras Vivas", "Posto do Barqueiro", "Cais do Barqueiro", "Ilha dos Vaga-lumes"}
+	want := []string{"Cidade", "Arredores", "Campos dos Ossos", "Ermos Partidos", "Vale das Pedras Vivas", "Posto do Barqueiro", "Cais do Barqueiro", "Ilha dos Vaga-lumes", "Bastião Cinzento"}
 	if len(teleportStones) != len(want) {
 		t.Fatalf("%d pedras, esperava %d", len(teleportStones), len(want))
 	}

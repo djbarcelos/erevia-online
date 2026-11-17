@@ -570,8 +570,11 @@ func DefaultSpawns() []Spawn {
 		{Monster: "rubble_golem", Count: 2, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 30, Respawn: 45,
 			Region: "Vale das Pedras Vivas"},
 	}
-	// Brejo de Lamagris (tunnel#139): no fim da lista, sem mudar os ids de quem já existia.
-	return append(spawns, brejoSpawns()...)
+	// Brejo de Lamagris (tunnel#139), Bosque Gris e Terras Mortas (tunnel#137): no fim da lista, sem mudar os ids de quem
+	// já existia.
+	spawns = append(spawns, brejoSpawns()...)
+	spawns = append(spawns, bosqueSpawns()...)
+	return append(spawns, terrasMortasSpawns()...)
 }
 
 // ExpandSpawns sorteia as posições (determinístico para a mesma semente).

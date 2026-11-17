@@ -55,7 +55,7 @@ import { runBench, setupShots, wantBench, wantShots } from "./ui/bench";
 import { enchantedName, GRADE_COLOR, itemLabel, ItemStore, ItemTip, PLACE_BAG, setEnchantRules } from "./ui/items";
 import { ShopWindow } from "./ui/shop";
 import { contractNotice, ContractsStore, ContractsWindow } from "./ui/contracts";
-import { ContractCmdKind, NpcTalkKind, ReputationCmdKind } from "./gen/erevia/v1/game_pb";
+import { AnnounceKind, ContractCmdKind, NpcTalkKind, ReputationCmdKind } from "./gen/erevia/v1/game_pb";
 import { NpcDialogWindow } from "./ui/dialog";
 import { TeleportWindow } from "./ui/teleport";
 import { SpecWindow } from "./ui/spec";
@@ -67,7 +67,7 @@ import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
 import { TradeWindow } from "./ui/trade";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
-import { buildRegions, regionAt } from "./ui/regions";
+import { BELL_TOWER, buildRegions, RAID_WARN_TITLE, regionAt } from "./ui/regions";
 import { buildInventory } from "./ui/windows/inventory";
 import { buildWorldMap } from "./ui/windows/worldmap";
 import { buildSettings } from "./ui/windows/settings";
@@ -2049,9 +2049,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "chat":
           chat.receive(msg.msg.value);
           break;
-        case "announce":
-          raid.announce(msg.msg.value);
+        case "announce": {
+          const a = msg.msg.value;
+          if (a.kind === AnnounceKind.BOSS_SOON && a.title === RAID_WARN_TITLE) {
+            // Faltam 10 min para o Ozrhal acordar: a Torre do Sino Rachado toca 3 vezes (mais baixo quanto mais longe dela).
+            const pos = entities.localPosition();
+            gameAudio.bell(pos ? Math.hypot(pos.x - BELL_TOWER.x, pos.z - BELL_TOWER.z) : 0);
+          }
+          raid.announce(a);
           break;
+        }
         case "bossStatus":
           raid.onStatus(msg.msg.value);
           break;

@@ -297,6 +297,29 @@ Object.assign(GLYPHS, {
     <path d="M24 12 L24 22 M32 8 L32 20 M38 14 L38 24" stroke="#7a5a3a" stroke-width="5" ${STROKE}/>
     <path d="M14 54 C22 48 42 48 50 54" stroke="#6b7d3e" stroke-width="3" fill="none" ${STROKE}/>`,
 });
+// Bosque Gris e Terras Mortas (tunnel#137): os materiais do Bando do Corvo, dos lobos, das aranhas e dos Devotos.
+Object.assign(GLYPHS, {
+  wolf_pelt: `<path d="M14 18 C22 10 42 10 50 18 L54 34 C50 36 48 40 50 48 L40 54 C38 50 26 50 24 54 L14 48 C16 40 14 36 10 34 Z" fill="#8b8f96"/>
+    <path d="M22 22 L28 34 L24 46 M42 22 L36 34 L40 46" stroke="#5a5e66" stroke-width="2.5" fill="none" ${STROKE}/>`,
+  wolf_fang: `<path d="M26 10 C40 12 44 30 36 54 C30 40 24 28 26 10 Z" fill="#efe6cf"/>
+    <path d="M30 16 C36 24 36 36 34 44" stroke="#bfae86" stroke-width="2.5" fill="none" ${STROKE}/>`,
+  moss_silk: `<path d="M32 8 V56 M12 20 L52 44 M52 20 L12 44" stroke="#c4d2c0" stroke-width="2" ${STROKE}/>
+    <path d="M32 18 L44 24 V40 L32 46 L20 40 V24 Z" fill="none" stroke="#9fb79a" stroke-width="2.5"/>
+    <path d="M32 27 L38 30 V36 L32 39 L26 36 V30 Z" fill="none" stroke="#7d8a6a" stroke-width="2"/>`,
+  crow_insignia: `<path d="M12 40 C20 20 34 14 50 18 L44 26 L52 30 C40 32 38 44 22 50 Z" fill="#a2302a"/>
+    <circle cx="42" cy="22" r="2" fill="#f5e6c8"/><path d="M50 18 L58 20 L50 24 Z" fill="#d6b46e"/>
+    <path d="M18 44 L26 40" stroke="#d6b46e" stroke-width="2.5" ${STROKE}/>`,
+  grave_ash: `<path d="M10 50 C12 36 24 30 32 18 C40 30 52 36 54 50 Z" fill="#8f8a80"/>
+    <path d="M22 46 C26 38 38 38 42 46" stroke="#5b5750" stroke-width="2.5" fill="none" ${STROKE}/>
+    <circle cx="32" cy="14" r="2.2" fill="#b9b3a6"/><circle cx="24" cy="24" r="1.6" fill="#b9b3a6"/>`,
+  black_candle: `<rect x="26" y="26" width="12" height="28" rx="2" fill="#2b2a33"/>
+    <path d="M32 8 C38 16 38 22 32 26 C26 22 26 16 32 8 Z" fill="#b8f0a0"/>
+    <path d="M22 54 H42" stroke="#4a4858" stroke-width="3" ${STROKE}/>`,
+  profane_tome: `<path d="M14 10 H46 V54 H14 Z" fill="#4b2f6a"/><path d="M14 10 H19 V54 H14 Z" fill="#2e1c44"/>
+    <path d="M26 22 H38 M26 30 H38 M26 38 H34" stroke="#8a5cff" stroke-width="2.5" ${STROKE}/><circle cx="32" cy="47" r="3" fill="#b8f0a0"/>`,
+  seal_fragment: `<path d="M12 36 L22 14 L44 10 L54 30 L46 52 L22 54 Z" fill="#6f6a62"/>
+    <path d="M26 22 L36 20 M30 30 L42 34 M24 40 L34 44" stroke="#8a5cff" stroke-width="2.5" ${STROKE}/>`,
+});
 GLYPHS.potion_hp_big = GLYPHS.potion_hp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;
 GLYPHS.potion_mp_big = GLYPHS.potion_mp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;
 

@@ -59,8 +59,10 @@ func HuntPlace(spawns []Spawn, monsters []string, level int, px, pz float64) (Qu
 			continue
 		}
 		if monsters == nil {
-			if s.Fixed {
-				continue // "qualquer monstro" e "chegar ao nível" não mandam para um chefe
+			if s.Fixed || !def.BalanceBaseline() {
+				// "qualquer monstro" e "chegar ao nível" não mandam para um chefe, nem para uma área só de bichos de papel (o Bosque
+				// Gris e as Terras Mortas): a caça do nível é a dos brutos da faixa.
+				continue
 			}
 		} else if !slices.Contains(monsters, s.Monster) {
 			continue

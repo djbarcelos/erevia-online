@@ -359,6 +359,8 @@ var storyQuests = concatLines(
 				"As outras estão além das montanhas. Quando as estradas abrirem, Vel'Aran vai precisar de você outra vez.",
 			Reward: QuestReward{XP: boss, Items: items("scroll_ench_weapon_b", 1), Faction: FactionGuard, Rep: 2 * storyRep}},
 	),
+	bosqueQuests, // Bosque Gris (bosque_story.go, tunnel#137)
+	terrasQuests, // Terras Mortas (bosque_story.go)
 )
 
 func concatLines(lines ...[]*QuestDef) []*QuestDef {

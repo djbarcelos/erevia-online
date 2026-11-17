@@ -56,6 +56,8 @@ var teleportStones = []stoneDef{
 	// O barco de Tomé: do cais até a Ilha dos Vaga-lumes (e de volta) por 10 moedas.
 	{key: "cais", name: "Cais do Barqueiro", region: regionBrejo, x: game.DockX, z: game.DockZ, price: 10, ferry: true},
 	{key: "ilha", name: "Ilha dos Vaga-lumes", region: regionBrejo, x: game.IslandX, z: game.IslandZ, price: 10, ferry: true},
+	// Bastião Cinzento (tunnel#137): o posto avançado das Terras Mortas, no mapa principal. Descobre-se a pé, como as outras.
+	{key: "bastiao", name: "Bastião Cinzento", region: game.TerrasMortasRegion, x: game.BastionX - 3, z: game.BastionZ - 3, price: 260},
 }
 
 const (
@@ -68,7 +70,6 @@ const (
 // aparecem para o jogador quando o mapa delas existe neste processo (maps.go). As posições
 // valem até o mapa entrar. Maresia e Valdurn são cidades: o Pergaminho de Retorno leva a elas.
 var futureStones = []stoneDef{
-	{key: "bastiao", name: "Bastião", region: "Minas", mapID: "minas", x: 0, z: 5, price: 260},
 	{key: "lanterna", name: "Lanterna", region: "Ruínas", mapID: "ruinas", x: 0, z: 5, price: 240},
 	{key: "maresia", name: "Maresia", region: "Costa", mapID: "costa", x: 7, z: 7, price: 300, town: true},
 	{key: "vigilia", name: "Vigília", region: "Ruínas", mapID: "ruinas", x: 40, z: 5, price: 320},

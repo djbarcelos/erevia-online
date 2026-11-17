@@ -330,6 +330,7 @@ Os números de atributo são relativos às definições atuais em `monsters.go` 
     - no A1: 0 modelos novos (rogue e barbarian recoloridos);
     - no A2: +3 (lobo, javali e aranha), dois deles das famílias quadrúpede e artrópode, que outras áreas reutilizam.
   - **Cenário:** +300 objetos do kit de floresta atual, sem malha nova. Paliçada e tendas usam `fence_wood_straight` e `tent`, que já existem.
+- **Entregue na T10 (tunnel#137, `docs/arte/remaster-bosque-gris.md`):** os 3 humanoides (`rogue` e `barbarian` do remaster só com cor), o Lobo Cinzento e a Aranha-de-Musgo (famílias `wolf` e `spider`), o Corvo Rubro com as 3 fases, a Toca do Corvo, a Árvore-Forca, a Carroça Tombada e a Toca da Matilha, a linha "A caravana de Caio" e 3 diárias. **O que mudou do roadmap:** 16 monstros ao mesmo tempo (e não 22), porque o pico de 14 a 70 m do setor só fecha com esse total; sem javali (a #135 não o entregou), a Presa de Lobo ocupa o lugar da Presa de Javali; a Seda de Musgo cai das aranhas à noite; ficam de fora o raro Presa-Branca, o uivo do líder, o segredo do Mapa Rasgado e o salto "sem alvo" da F3.
 
 ---
 
@@ -388,6 +389,7 @@ Os números de atributo são relativos às definições atuais em `monsters.go` 
   - **Pico no raio de 70 m:** 14. Atenção: o covil fica fora da contagem.
   - **Modelos:** 0 novos no A1, todos esqueletos e humanoides recoloridos. No [B], viram parte da #98.
   - **Cenário:** cerca de 150 objetos, com 8 malhas novas de cemitério (CC0 grátis) e a torre (1 malha nova).
+- **Entregue na T10 (tunnel#137, `docs/arte/remaster-bosque-gris.md`):** o núcleo e a extensão são a mesma região (`terras-mortas-nucleo.mjs` e `terras-mortas.mjs`, uma LUT, uma névoa e a mesma música), os 5 monstros (Acólito, Necromante Devoto, Cavaleiro do Ossário, Carniçal e Espectro, os dois últimos só à noite) com os esqueletos e o mago do remaster, o Sino Rachado que toca nos 10 min de aviso do Ozrhal, a Lápide do Último Regicida (`BossData.TopName`), o Bastião Cinzento (pedra a 260 moedas e o Irmão Caedmon) e a linha "As velas do Ossário" (5 missões) com 3 diárias. **O que mudou do roadmap:** 14 monstros ao mesmo tempo (o bloco é pequeno: mais que isso passa o teto de 14 a 70 m), o Bastião ficou em (196, 94) (o ponto de (170, 110) cai em cima do cemitério), "Cavaleiro do Ossário" no lugar de "Cavaleiro Ossário" (o nome já é do elite da Vigília, do 33 ao 38), o sangramento do Carniçal é veneno de 4 s e a queima de mana do Espectro é enfraquecimento do ataque (não há sangramento nem queima de mana no servidor); ficam de fora a Irmã Vésper, o Malthus, o Altar dos Devotos e o evento "O Bastião resiste".
 
 ---
 

@@ -131,7 +131,9 @@ const LOOKS: Record<string, Look> = {
   [RAID_LAIR.name]: { shade: "#14121c", accent: "#8a5cff", sat: -22, shadowTint: 65, lightTint: 30, exposure: -40, fog: 1.6, fogTint: 0.6, fogValue: 0.5 },
   // Brejo de Lamagris (tunnel#139): lodo e musgo, névoa verde-escura e densa, destaque de fungo.
   "Brejo de Lamagris": { shade: "#24302a", accent: "#9fe870", sat: -4, shadowTint: 55, lightTint: 14, exposure: -12, fog: 1.55, fogTint: 0.55, fogValue: 0.85 },
-  // Terras Mortas (extensão): cinza-osso, sombra quase preta e roxa, névoa baixa e densa.
+  // Bosque Gris (tunnel#137): musgo cinza-prateado, sombra verde-escura, pouca luz no chão e o vermelho dos bandidos no destaque.
+  "Bosque Gris": { shade: "#2b3530", accent: "#c8523f", sat: -12, shadowTint: 52, lightTint: 18, exposure: -16, fog: 1.3, fogTint: 0.45, fogValue: 0.85 },
+  // Terras Mortas (o núcleo e a extensão): cinza-osso, sombra quase preta e roxa, névoa baixa e densa.
   "Terras Mortas": { shade: "#1b1a24", accent: "#8a5cff", sat: -20, shadowTint: 60, lightTint: 26, exposure: -22, fog: 1.45, fogTint: 0.5, fogValue: 0.8 },
 };
 /** Anéis de fora que o guia ainda não cobre: usam o visual mais próximo. */

@@ -32,7 +32,7 @@ func recipe(id, result string, gold int64, mats ...QuestItem) *Recipe {
 func mat(id string, n int) QuestItem { return QuestItem{ID: id, Count: n} }
 
 // RecipeList: em ordem de nível (é a ordem que o cliente mostra).
-var RecipeList = append([]*Recipe{
+var RecipeList = append(append([]*Recipe{
 	// Faixa 1 (ossos e crânios).
 	recipe("craft_ench_armor", "scroll_ench_armor", 150, mat("bone_old", 15), mat("skull_cracked", 2)),
 	recipe("craft_cape_good", "cape_good", 250, mat("bone_old", 20), mat("skull_cracked", 3)),
@@ -65,13 +65,31 @@ var RecipeList = append([]*Recipe{
 	recipe("craft_ench_armor_b", "scroll_ench_armor_b", 1000, mat("rune_core", 2), mat("shadow_essence", 2)),
 	recipe("craft_ring_legend", "ring_legend", 8000, mat("rune_core", 5), mat("shadow_essence", 5)),
 	recipe("craft_neck_legend", "neck_legend", 9000, mat("rune_core", 6), mat("shadow_essence", 6)),
-}...)...)
+}...)...), bosqueRecipes()...)
 
 // antidoteRecipe: 3 Antídotos por 2 Glândulas de Sapo e 1 Junco-de-Prata (que só crescem no Brejo).
 func antidoteRecipe() *Recipe {
 	r := recipe("craft_potion_antidote", "potion_antidote", 60, mat("frog_gland", 2), mat("silver_reed", 1))
 	r.Count = 3
 	return r
+}
+
+// bosqueRecipes: as 6 receitas do Bosque Gris e das Terras Mortas (tunnel#137), no fim da lista.
+//   - capa e luvas raras do nível 13 (as que já existem), com Pele de Lobo, Insígnia do Corvo e Seda de Musgo: outro jeito de
+//     chegar à capa e às luvas, pelos bandidos do Bosque;
+//   - o Cetro Profano e a Varinha Profana (épicos do nível 24), com o Tomo Profano, a Vela Negra e a Cinza Sepulcral;
+//   - os pergaminhos abençoados (de arma e de armadura) com a cinza e o Tomo, para quem caça nas Terras Mortas.
+// As armas custam as moedas da loja mais 100 (como as do grau D): criar e vender não dá lucro.
+func bosqueRecipes() []*Recipe {
+	forgeGold := func(id string) int64 { return int64(math.Ceil(float64(Items[id].SellPrice())/100)*100) + 100 }
+	return []*Recipe{
+		recipe("craft_cape_corvo", "cape_rare", 1000, mat("wolf_pelt", 14), mat("wolf_fang", 4), mat("crow_insignia", 4)),
+		recipe("craft_gloves_corvo", "gloves_rare", 1000, mat("wolf_pelt", 10), mat("moss_silk", 5), mat("crow_insignia", 4)),
+		recipe("craft_staff_devout", "staff_devout_epic", forgeGold("staff_devout_epic"), mat("profane_tome", 2), mat("black_candle", 8), mat("grave_ash", 20)),
+		recipe("craft_wand_devout", "wand_devout_epic", forgeGold("wand_devout_epic"), mat("profane_tome", 2), mat("black_candle", 8), mat("grave_ash", 20)),
+		recipe("craft_ench_weapon_b_tomo", "scroll_ench_weapon_b", 1500, mat("profane_tome", 1), mat("grave_ash", 8)),
+		recipe("craft_ench_armor_b_cinza", "scroll_ench_armor_b", 800, mat("grave_ash", 12), mat("black_candle", 4)),
+	}
 }
 
 // Recipes: as receitas por id.

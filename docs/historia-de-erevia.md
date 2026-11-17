@@ -67,7 +67,9 @@ conversa. Cada linha conta um pedaço do todo e termina apontando para a próxim
 | Campos dos Ossos (6–12) | **Marga**, a Coveira | perto da pedra dos Campos (−6, 90) | o exército do rei foi enterrado em fileira e está em formação; os crânios têm nomes da Guarda do Rei; o estandarte de Ozrhal ainda está fincado; o relato vai a Iselda |
 | Ermos Partidos (13–20) | **Dárcio**, Batedor da Guarda | perto da pedra dos Ermos (−122, −10) | os Magos Esqueletos eram a corte do rei; a Essência Sombria é a Partição escorrendo das fendas; o Passo de Brasaferro; calar o arauto (Senhor dos Ossos) |
 | Brejo de Lamagris (15–20) | **Tomé**, o Barqueiro | Posto do Barqueiro, no fim da estrada leste (169, −3) | o Lamagris represado afogou Vau Velho e o veneno do selo levanta os Afogados à noite; os Brejeiros defendem a água e só atacam à noite; o Antídoto vem da Glândula de Sapo e do Junco-de-Prata; a Mãe-Lodo guarda a lagoa, e uma das Pedras-Selo está debaixo dela (a Pedra-Selo ainda não existe como item: a linha termina no aviso) |
+| Bosque Gris (9–16) | **Hélio**, o Carroceiro | junto à Carroça Tombada, no noroeste (−37, 94) | os esqueletos dos Campos expulsaram os lobos para o Bosque; o Bando do Corvo, desertores da guarda de Vel'Aran, assalta as caravanas de Brasaferro e paga os lobos com carne; Caio, o irmão da Lívia, está refém na Toca do Corvo; o Corvo Rubro é o chefe |
 | Vale das Pedras Vivas (20–30) | **Maelis**, Tecelã de Runas | acampamento ao norte do Vale (−8, −201) | os monólitos são nós da rede e os golens, os guardiões dela; a rede está desafinada; Ysolde confirma que o rei puxa a rede de dentro da Cripta |
+| Terras Mortas (24–28) | **Irmão Caedmon**, do Bastião Cinzento | pátio do Bastião Cinzento, no nordeste (199, 93) | os Devotos do Ossário, gente viva que perdeu alguém, cavam as covas da Partição, levantam os mortos e alimentam o selo com velas de sebo negro; o Sino Rachado da Torre toca 3 vezes quando faltam 10 min para o Ozrhal acordar; a Ordem guarda a primeira Pedra-Selo (o Fragmento de Selo da última missão); a Lápide do Último Regicida, ao lado do cemitério, grava quem mais feriu o Rei Ossário na última queda dele |
 | Fundo do Vale (30–35) | **Irmão Gaspar**, do Bastião | acampamento ao norte do Vale (14, −206) | os Golens Ancestrais foram os primeiros guardiões; as pedras do círculo do Fundo se inclinam para a Cripta |
 | Vigília Ossária (33–38) | **Sor Bertrand**, Cavaleiro do Bastião | posto a sudoeste da Cripta (79, 79) | os Devotos cantam para o selo ceder; a guarda pessoal do rei já está na porta; a queda de Ozrhal (o raid) dá um respiro ao selo |
 | Confins Partidos (35–40) | **Capitã Rovena**, da Guarda | posto a noroeste da cidade (−79, 79) | as três rachaduras crescem; os relatos de Maelis e de Bertrand fecham a conta: o rei puxa a rede, a rede puxa a terra e a terra racha; das cinco Pedras-Selo, só se sabe onde está uma |
@@ -116,3 +118,9 @@ Brasília. Têm outro sabor que os contratos de caça:
 | Círculo do Fundo | (−10, −302) | Fundo do Vale |
 | Borda da Cripta | (86, 86) | Vigília Ossária |
 | Rachaduras do Noroeste, Sudoeste e Sudeste | (−122, 122), (−122, −122) e (122, −122) | Confins Partidos |
+| Árvore-Forca | (−52, 84), um carvalho morto de 19 m cheio de corvos | Bosque Gris |
+| Carroça Tombada | (−33, 90) | Bosque Gris |
+| Toca do Corvo | (−128, 118), o acampamento com paliçada | Bosque Gris |
+| Bastião Cinzento | (196, 94) | Terras Mortas |
+| Torre do Sino Rachado | (238, 122) | Terras Mortas |
+| Cemitério dos Reis Sem Nome | (172, 122) | Terras Mortas |

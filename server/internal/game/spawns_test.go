@@ -123,7 +123,9 @@ func TestAppendingSpawnsKeepsExistingMonsters(t *testing.T) {
 		t.Fatalf("o spawn novo devia vir no fim: %d pontos", len(plain))
 	}
 
-	owned := ExpandSpawns(append(DefaultSpawns(), testSector("skeleton_rogue", 9, WhenAny)), rng())
+	// O setor noroeste já é do Bosque Gris (DefaultSpawns): o setor novo é o do sudoeste.
+	southwest := Spawn{Monster: "skeleton_rogue", Count: 9, RMin: 80, RMax: 108, LevelMin: 7, LevelMax: 15, Respawn: 30, AngleMin: 200, AngleMax: 260, Region: "Sudoeste de Teste"}
+	owned := ExpandSpawns(append(DefaultSpawns(), southwest), rng())
 	moved := 0
 	for i, p := range before {
 		if owned[i].Monster != p.Monster {

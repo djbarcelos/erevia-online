@@ -214,6 +214,8 @@ var Talkers = []*Talker{
 					"As outras estão no Brejo, nas Minas de Brasaferro, na Costa e nas Ruínas de Ilvaren. Quando as estradas para lá abrirem, a Guarda vai precisar de você."},
 		}},
 	brejoTalker, // Brejo de Lamagris (tunnel#139): o Barqueiro
+	// Bosque Gris e Terras Mortas (tunnel#137, bosque_story.go): o carroceiro, o Irmão do Bastião e a lápide do Ozrhal.
+	bosqueTalker, bastionTalker, tombTalker,
 }
 
 // brejoTalker: Tomé, o Barqueiro, no Posto do Barqueiro (a entrada do Brejo). Fica no fim da lista (os ids

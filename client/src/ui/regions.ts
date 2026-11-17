@@ -26,7 +26,7 @@ export interface Region {
    * a0 (0–360) a a1 > a0 (passa de 360 quando o setor cruza o 0°).
    */
   sector?: { a0: number; a1: number };
-  /** Bioma inteiro, um retângulo do mapa (o Brejo e a extensão das Terras Mortas): vale antes das áreas e dos anéis. */
+  /** Bioma inteiro, um retângulo do mapa (o Brejo e a extensão das Terras Mortas): vale antes das áreas e dos anéis. A outra metade das Terras Mortas (o núcleo) é um setor, e o Bosque Gris também (o servidor manda os dois). */
   rect?: { minX: number; maxX: number; minZ: number; maxZ: number };
 }
 
@@ -54,6 +54,13 @@ export interface BossPoint {
 /** Nome e raio do covil do raid boss (server/internal/game: RaidLairRadius). */
 export const RAID_LAIR = { name: "Cripta Esquecida", r: 24 };
 
+/**
+ * A Torre do Sino Rachado, nas Terras Mortas (game.BellX e BellZ): o sino toca 3 vezes no aviso de 10 min do Ozrhal. O aviso
+ * chega como um anúncio de "em breve" com este título (zone/raid.go, raidWarnTitle: mude os dois juntos).
+ */
+export const BELL_TOWER = { name: "Torre do Sino Rachado", x: 238, z: 122 };
+export const RAID_WARN_TITLE = "O chão treme…";
+
 const RING_NAMES = ["Arredores", "Campos dos Ossos", "Ermos Partidos", "Terras Mortas", "Confins"];
 
 function tierRgb(levelMax: number): string {
@@ -75,6 +82,13 @@ export function buildRegions(zones: MapZone[], safeRadius: number, mapTitle = ""
     ...r,
     monsters: [...new Set(zones.filter((z) => z.area && z.region === r.name).flatMap((z) => z.name.split(", ")))].join(", "),
   }));
+  // Os monstros de uma região com grupos em discos (o Brejo, o Bosque Gris, as Terras Mortas): os nomes dos discos dela.
+  const regionMonsters = (name: string, fallback: string) => {
+    const names = [...new Set(zones.filter((z) => z.area && z.region === name).flatMap((z) => z.name.split(", ")))];
+    return names.length ? names.join(", ") : fallback;
+  };
+  // Regiões que valem pelo retângulo ou pelo setor (os discos dos monstros delas não viram regiões à parte).
+  const covered = (name: string) => rects.some((r) => r.name === name) || zones.some((z) => isSector(z) && z.region === name);
   const regions: Region[] = [
     { name: mapTitle ? "Praça" : "Cidade", monsters: "", rMin: 0, rMax: safeRadius, levelMin: 0, levelMax: 0, safe: true, rgb: "120,190,255" },
     ...rings.map((z, i) => ({
@@ -90,7 +104,7 @@ export function buildRegions(zones: MapZone[], safeRadius: number, mapTitle = ""
     // Setores com nome próprio: ficam por cima do anel em que estão.
     ...zones.filter(isSector).map((z) => ({
       name: z.region || z.name,
-      monsters: z.name,
+      monsters: z.region ? regionMonsters(z.region, z.name) : z.name,
       rMin: z.rMin,
       rMax: z.rMax,
       levelMin: z.levelMin,
@@ -100,7 +114,7 @@ export function buildRegions(zones: MapZone[], safeRadius: number, mapTitle = ""
       sector: { a0: z.angleMin, a1: z.angleMax },
     })),
     ...zones
-      .filter((z) => z.area && !rects.some((r) => r.name === z.region)) // os discos do Brejo valem pelo retângulo dele
+      .filter((z) => z.area && !covered(z.region)) // os discos do Brejo valem pelo retângulo dele, e os do Bosque Gris e das Terras Mortas, pelo setor
       .map((z) => ({
         name: z.region || z.name,
         monsters: z.name,

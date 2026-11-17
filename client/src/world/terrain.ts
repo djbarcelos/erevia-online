@@ -410,7 +410,31 @@ export const REGION_SPLAT: Record<string, Splat> = {
   // Brejo de Lamagris: lodo (terra) com musgo, sem pedra; as Terras Mortas (extensão): terra cinza e cascalho.
   "Brejo de Lamagris": [0.16, 0.64, 0, 0.2],
   "Terras Mortas": [0.06, 0.34, 0.2, 0.4],
+  // Bosque Gris (tunnel#137): musgo cinza-prateado e terra de raiz, com um pouco de pedra.
+  "Bosque Gris": [0.5, 0.28, 0.08, 0.14],
 };
+
+/**
+ * Os dois pedaços de região que são setores do anel e não retângulos (iguais aos setores do servidor, game/bosque.go): o Bosque Gris
+ * (de 100° a 170°, de 80 m ao canto do quadrado) e o núcleo das Terras Mortas (de 15° a 75°, a partir de 142 m; a extensão é um
+ * bioma retangular, o terras-mortas).
+ */
+const SECTOR_SPLATS: { region: string; rMin: number; rMax: number; a0: number; a1: number }[] = [
+  { region: "Bosque Gris", rMin: 80, rMax: 212, a0: 100, a1: 170 },
+  { region: "Terras Mortas", rMin: 142, rMax: 1e9, a0: 15, a1: 75 },
+];
+const SECTOR_BLEND = 14;
+
+/** Quanto (0–1) o ponto está dentro do setor, com a borda suave de SECTOR_BLEND metros. */
+export function sectorWeight(x: number, z: number, s: { rMin: number; rMax: number; a0: number; a1: number }): number {
+  const r = Math.hypot(x, z);
+  const a = ((Math.atan2(z, x) * 180) / Math.PI + 360) % 360;
+  const span = s.a1 - s.a0;
+  const off = (((a - s.a0) % 360) + 360) % 360;
+  const toEdge = off <= span ? Math.min(off, span - off) : -Math.min(off - span, 360 - off);
+  const arc = (toEdge * Math.PI * r) / 180; // metros até a borda do ângulo (negativo: fora)
+  return smoothstep(0, SECTOR_BLEND, Math.min(arc, r - s.rMin, s.rMax - r));
+}
 
 /** Raio (do centro da cidade) onde cada região do anel está inteira; entre dois, mistura. */
 const RING_KEYS: [number, string][] = [
@@ -449,6 +473,10 @@ export function regionSplat(world: WorldData, x: number, z: number): Splat {
     if (!bounds) continue;
     const inside = 1 - smoothstep(0, 16, distToRect(x, z, bounds));
     if (inside > 0) w = lerp4(w, REGION_SPLAT[region], inside);
+  }
+  for (const s of SECTOR_SPLATS) {
+    const inside = sectorWeight(x, z, s);
+    if (inside > 0) w = lerp4(w, REGION_SPLAT[s.region], inside);
   }
   const crypt = biomeById(world, "cripta")?.bounds;
   if (crypt) {

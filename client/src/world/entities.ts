@@ -174,6 +174,8 @@ const MODEL_BODY: Record<string, { radius: number; width: number; height: number
 export const STONE_MODEL = "teleport_stone";
 /** Túmulo do chefe de campo (objeto do servidor, 10 min no corpo): lápide com a dica no nome. */
 export const TOMB_MODEL = "tomb";
+/** A Lápide do Último Regicida (NPC de conversa nas Terras Mortas, tunnel#137): a mesma lápide de pedra do túmulo, mas clicar conversa. */
+export const LAPIDE_MODEL = "lapide";
 /** Modelo do barco de Tomé (Brejo de Lamagris): o clique do barco é um poste com lanterna e sino; o bote é cenário (world.json, `boat`). */
 export const FERRY_MODEL = "ferry_boat";
 /** A função (título) dos NPCs do barco, igual à do servidor (zone/teleport.go): o mapa não os lista como pedra. */
@@ -659,7 +661,7 @@ export class EntityManager {
     this.refreshName(v);
     this.refreshHpBar(v);
 
-    if (e.model === TOMB_MODEL) {
+    if (e.model === TOMB_MODEL || e.model === LAPIDE_MODEL) {
       this.buildTomb(v);
       return;
     }
