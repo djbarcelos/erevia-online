@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Erevia — Seus personagens</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&amp;family=Barlow+Semi+Condensed:wght@500;600;700&amp;family=Barlow:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#07080c}
+a{color:#e2c482}a:hover{color:#f6e6bd}
+</style>
+</helmet>
+<div style="width: 1280px; height: 720px; position: relative; overflow: hidden; background: #07080c; font-family: Barlow, system-ui, sans-serif; color: #ece6da;">
+  <img src="/_blob/5a6d8dc4792e8216a62c208fdd30b0e8" alt="" aria-hidden="true" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;">
+  <div aria-hidden="true" style="position: absolute; inset: 0; background: radial-gradient(42% 60% at 50% 58%, rgba(7,8,12,0.05) 0%, rgba(7,8,12,0.62) 70%, rgba(7,8,12,0.9) 100%);"></div>
+
+  <header style="position: absolute; left: 32px; right: 32px; top: 20px; height: 44px; display: flex; align-items: center; justify-content: space-between;">
+    <span style="font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 700; font-size: 28px; letter-spacing: 0.12em; color: #f2ead8;">EREVIA</span>
+    <nav aria-label="Conta" style="display: flex; gap: 8px;">
+      <button type="button" style="height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 8px; border-radius: 6px; background: rgba(9,10,16,0.6); border: 1px solid rgba(236,230,218,0.14); color: #d8d1c3; font: 600 15px 'Barlow Semi Condensed', sans-serif; cursor: pointer;">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4.5 20c1.4-3.4 4.3-5 7.5-5s6.1 1.6 7.5 5"/></svg>Conta
+      </button>
+      <a href="Main.dc.html" style="height: 44px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; gap: 8px; border-radius: 6px; background: rgba(9,10,16,0.6); border: 1px solid rgba(236,230,218,0.14); color: #d8d1c3; text-decoration: none; font: 600 15px 'Barlow Semi Condensed', sans-serif;">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h4v16h-4 M10 8l-4 4 4 4 M6 12h10"/></svg>Sair
+      </a>
+    </nav>
+  </header>
+
+  <aside aria-label="Seus personagens" style="position: absolute; left: 32px; top: 96px; width: 300px; display: flex; flex-direction: column; gap: 8px;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 2px 6px;">
+      <h1 style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 700; font-size: 28px; color: #f2ead8;">Personagens</h1>
+      <span style="font: 600 14px 'Barlow Semi Condensed', sans-serif; color: #b3ab9c;">3 de 4</span>
+    </div>
+    <sc-for list="{{chars}}" as="c" hint-placeholder-count="3">
+      <button type="button" onClick="{{c.pick}}" aria-pressed="{{c.on}}" style="{{c.row}}">
+        <img src="{{c.portrait}}" alt="" style="{{c.ring}}">
+        <span style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: left;">
+          <span style="font: 600 18px 'Barlow Semi Condensed', sans-serif; color: #f2ead8;">{{c.name}}</span>
+          <span style="font-size: 14px; color: #c4bcad;">{{c.cls}} · Nv {{c.level}}</span>
+          <span style="font-size: 13px; color: #9a9386;">{{c.region}}</span>
+        </span>
+      </button>
+    </sc-for>
+    <button type="button" style="height: 60px; display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: 8px; background: transparent; border: 1px dashed rgba(236,230,218,0.28); color: #d8d1c3; font: 600 16px 'Barlow Semi Condensed', sans-serif; cursor: pointer;">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14 M5 12h14"/></svg>
+      Criar novo personagem
+    </button>
+  </aside>
+
+  <div aria-hidden="true" style="position: absolute; left: 490px; top: 590px; width: 300px; height: 40px; border-radius: 50%; background: radial-gradient(50% 50% at 50% 50%, rgba(214,180,110,0.28) 0%, rgba(214,180,110,0.08) 55%, rgba(214,180,110,0) 72%); box-shadow: 0 0 0 1px rgba(214,180,110,0.22);"></div>
+  <img src="{{sel.hero}}" alt="{{sel.alt}}" style="position: absolute; left: 468px; top: 52px; width: 344px; height: 560px; object-fit: contain; filter: drop-shadow(0 18px 24px rgba(0,0,0,0.55));">
+  <button type="button" aria-label="Girar para a esquerda" style="position: absolute; left: 418px; top: 470px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(9,10,16,0.6); border: 1px solid rgba(236,230,218,0.16); color: #d8d1c3; cursor: pointer;">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12a7.5 7.5 0 1 0 2.3-5.4 M4.5 4v4.5H9"/></svg>
+  </button>
+  <button type="button" aria-label="Girar para a direita" style="position: absolute; left: 818px; top: 470px; width: 44px; height: 44px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(9,10,16,0.6); border: 1px solid rgba(236,230,218,0.16); color: #d8d1c3; cursor: pointer;">
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12a7.5 7.5 0 1 1-2.3-5.4 M19.5 4v4.5H15"/></svg>
+  </button>
+  <p style="position: absolute; left: 340px; right: 340px; top: 648px; margin: 0; text-align: center; font-size: 13px; color: #9a9386;">Arraste para girar · role ou pince para aproximar</p>
+
+  <section aria-label="Personagem escolhido" style="position: absolute; right: 32px; top: 96px; bottom: 32px; width: 328px; display: flex; flex-direction: column; gap: 16px;">
+    <div style="box-sizing: border-box; padding: 22px 22px 20px; border-radius: 10px; background: rgba(9,10,16,0.74); border: 1px solid rgba(236,230,218,0.11); backdrop-filter: blur(14px); display: flex; flex-direction: column; gap: 18px;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <span style="display: flex; align-items: center; gap: 8px; font: 600 12px 'Barlow Semi Condensed', sans-serif; letter-spacing: 0.2em; text-transform: uppercase; color: {{sel.color}};"><span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 50%; background: {{sel.color}};"></span>{{sel.cls}}</span>
+        <h2 style="margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 700; font-size: 46px; line-height: 1; color: #f2ead8;">{{sel.name}}</h2>
+        <span style="font-size: 15px; color: #c4bcad;">{{sel.role}}</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <span style="font: 600 17px 'Barlow Semi Condensed', sans-serif; color: #f2ead8;">Nível {{sel.level}}</span>
+          <span style="font-size: 13px; color: #b3ab9c;">{{sel.xpText}}</span>
+        </div>
+        <div role="meter" aria-label="Experiência" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{sel.xpNum}}" style="height: 6px; border-radius: 3px; background: rgba(236,230,218,0.12); overflow: hidden;"><div style="height: 100%; width: {{sel.xp}}; background: #d6b46e;"></div></div>
+      </div>
+      <dl style="margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 15px;">
+        <div style="display: flex; justify-content: space-between; gap: 12px;"><dt style="color: #9a9386;">Onde parou</dt><dd style="margin: 0; text-align: right; color: #ece6da;">{{sel.region}}</dd></div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;"><dt style="color: #9a9386;">Equipamento</dt><dd style="margin: 0; display: flex; align-items: center; gap: 7px; color: {{sel.rarityColor}};"><span aria-hidden="true" style="width: 7px; height: 7px; transform: rotate(45deg); background: {{sel.rarityColor}};"></span>{{sel.rarity}}</dd></div>
+      </dl>
+      <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 16px; border-top: 1px solid rgba(236,230,218,0.09);">
+        <sc-for list="{{sel.bars}}" as="b" hint-placeholder-count="4">
+          <div style="display: grid; grid-template-columns: 86px 1fr 28px; align-items: center; gap: 10px; font-size: 13px;">
+            <span style="color: #b3ab9c;">{{b.name}}</span>
+            <span style="height: 4px; border-radius: 2px; background: rgba(236,230,218,0.1); overflow: hidden;"><span style="display: block; height: 100%; width: {{b.w}}; background: {{b.color}};"></span></span>
+            <span style="text-align: right; font: 600 13px 'Barlow Semi Condensed', sans-serif; color: #d8d1c3; font-variant-numeric: tabular-nums;">{{b.v}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <a href="Carregamento.dc.html" style="margin-top: auto; height: 58px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 12px; border-radius: 8px; background: #d6b46e; color: #17130b; text-decoration: none; font: 700 20px 'Barlow Semi Condensed', sans-serif; letter-spacing: 0.04em; box-shadow: 0 10px 30px rgba(214,180,110,0.22);">
+      Entrar no mundo
+      <kbd style="font: 600 12px 'Barlow Semi Condensed', sans-serif; padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(23,19,11,0.35); color: #3a2f18;">Enter</kbd>
+    </a>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":720}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { picked: 0 }; }
+  renderVals() {
+    const list = [
+      { name: 'Aldric', cls: 'Cavaleiro', color: '#8fa7c8', level: 11, xp: 62, region: 'Campos dos Ossos', rarity: 'Conjunto raro', rarityColor: '#6fa8ff', role: 'Tanque · corpo a corpo', bars: [55, 95, 15, 45], hero: '/_blob/0b16fce9c4ee3573059298b3f9b341d1', portrait: '/_blob/326e8f98faffa6e1f59229e60b8aaa3f' },
+      { name: 'Morwen', cls: 'Mago', color: '#a58cf0', level: 24, xp: 18, region: 'Vale das Pedras Vivas', rarity: 'Conjunto épico', rarityColor: '#c08cff', role: 'Dano · à distância', bars: [20, 30, 100, 45], hero: '/_blob/37d0024fd334c141888adfeb9b26c7ef', portrait: '/_blob/aa2937ae2f06297e14ff24be9cb4b3c1' },
+      { name: 'Brakka', cls: 'Bárbaro', color: '#d4825e', level: 19, xp: 81, region: 'Ermos Partidos', rarity: 'Conjunto raro', rarityColor: '#6fa8ff', role: 'Dano · corpo a corpo', bars: [90, 60, 10, 55], hero: '/_blob/3f6451095b7fe11526fb48887c01b4df', portrait: '/_blob/57f25f39165cefe3b014d988f489595e' },
+    ];
+    const names = ['Ataque', 'Defesa', 'Magia', 'Mobilidade'];
+    const picked = this.state.picked;
+    const chars = list.map((c, i) => {
+      const on = i === picked;
+      return {
+        ...c, on: on ? 'true' : 'false',
+        pick: () => this.setState({ picked: i }),
+        row: 'display: flex; align-items: center; gap: 12px; height: 76px; padding: 0 14px 0 12px; box-sizing: border-box; border-radius: 8px; cursor: pointer; color: inherit; font: inherit; backdrop-filter: blur(10px); background: ' + (on ? 'rgba(214,180,110,0.14)' : 'rgba(9,10,16,0.66)') + '; border: 1px solid ' + (on ? 'rgba(214,180,110,0.6)' : 'rgba(236,230,218,0.1)') + ';',
+        ring: 'width: 52px; height: 52px; flex: none; border-radius: 6px; object-fit: cover; background: #1a1d29; box-sizing: border-box; border: ' + (on ? '2px solid #d6b46e' : '1px solid rgba(236,230,218,0.16)') + ';',
+      };
+    });
+    const s = list[picked];
+    const sel = {
+      ...s,
+      alt: s.name + ', ' + s.cls.toLowerCase() + ' de nível ' + s.level,
+      xp: s.xp + '%', xpNum: s.xp, xpText: s.xp + '% para o nível ' + (s.level + 1),
+      bars: s.bars.map((v, i) => ({ name: names[i], v, w: v + '%', color: s.color })),
+    };
+    return { chars, sel };
+  }
+}
+</script>
+</body>
+</html>
