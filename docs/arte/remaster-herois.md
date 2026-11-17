@@ -120,7 +120,7 @@ O Blender aberto na tela não foi usado (headless, como na v3).
 5. **FPS de GPU real** continua sem medida (SwiftShader).
 6. **Arco:** o jogo não tem arco como arma; nenhuma ação de tiro foi comprada.
 7. **Bárbaro de duas mãos:** a arma fica só na mão direita; ver "Duas mãos do bárbaro" acima (precisa de clipe próprio ou IK nos dois braços).
-8. **Prints dentro do jogo e bench de contadores:** o servidor de teste subiu (Go no Docker, `?remaster=1`, 4 contas), mas o Docker Desktop caiu no meio e depois a máquina ficou saturada (CPU em 99%, SwiftShader estourando 30 s só no `page.screenshot`), então `tools/art/remaster-herois/jogo.mjs` (4 classes lado a lado, frente, lado, costas e emotes, também por classe com `CLASSES=mage TAG=mago`) e o `?bench=contadores` do `tools/art/remaster-v3/bench.mjs` não terminaram. As provas visuais saíram do laboratório, que usa o mesmo `CharacterModels`, os mesmos GLB e KTX2. Rodar os dois numa máquina livre.
+8. **Prints dentro do jogo e bench de contadores:** só saiu 1 print no jogo (`jogo-cavaleiro-elmo.jpg`: o cavaleiro com o elmo novo na praça, de costas, `?remaster=1`). O servidor de teste sobe (Go no Docker, 4 contas), mas com 4 navegadores de SwiftShader em paralelo (e com os outros agentes usando a máquina) o carregamento e o `page.screenshot` estouram o tempo; a mesma conta rodou por classe (`CLASSES=mage TAG=mago node tools/art/remaster-herois/jogo.mjs ...`) ainda lenta. Além disso a main nova abre a janela "O que há de novo" ao entrar (o script agora a fecha com Esc). Os prints dos 4 lado a lado vêm do laboratório (mesmo `CharacterModels`, mesmos GLB e KTX2). O `?bench=contadores` (`tools/art/remaster-v3/bench.mjs`) não rodou: precisa de uma máquina livre.
 
 ## Segunda rodada (retornos do Daniel)
 
