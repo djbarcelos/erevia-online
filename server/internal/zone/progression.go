@@ -84,6 +84,7 @@ func (z *Zone) kill(dead, killer *entity) {
 		cause = "player"
 	}
 	z.track(dead, "death", cause, 0, nil)
+	z.dungeonDeath(dead) // telemetria da cópia da masmorra
 	before := dead.pl.xp
 	losses := 0
 	switch {

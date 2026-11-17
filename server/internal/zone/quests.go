@@ -2,6 +2,7 @@ package zone
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -35,6 +36,7 @@ type questLog struct {
 	active []*activeQuest
 	done   map[string]bool
 	daily  game.DailyState // as diárias do dia (dailies.go); as aceitas ficam em active
+	chests map[string]int  // o dia em que o baú de cada masmorra foi aberto (instance.go)
 	// doneSent: a lista de concluídas já foi ao cliente nesta sessão (depois disso ela só vai
 	// de novo quando uma missão termina).
 	doneSent bool
@@ -52,6 +54,7 @@ func loadQuests(st game.QuestState, level int) questLog {
 	if d := game.NormalDaily(st.Daily); d != nil {
 		q.daily = *d
 	}
+	q.chests = game.NormalChests(st.Chests)
 	ids := make([]string, 0, len(st.Active))
 	for id := range st.Active {
 		ids = append(ids, id)
@@ -90,6 +93,7 @@ func (q *questLog) state() game.QuestState {
 		d := game.DailyState{Day: q.daily.Day, Offer: slices.Clone(q.daily.Offer), Done: slices.Clone(q.daily.Done)}
 		st.Daily = &d
 	}
+	st.Chests = maps.Clone(q.chests)
 	return st
 }
 

@@ -200,6 +200,10 @@ func (z *Zone) command(p *entity, text string) {
 		z.devRare(p, args)
 		return
 	}
+	if cmd == "/catacumbas" && z.cfg.DevCommands { // entra nas Catacumbas de onde estiver (instance.go)
+		z.devDungeon(p)
+		return
+	}
 	if cmd == "/avisos" && z.cfg.DevCommands { // avisos no chão de teste (abilities.go)
 		z.devWarnings(p)
 		return

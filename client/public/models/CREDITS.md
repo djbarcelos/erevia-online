@@ -39,3 +39,15 @@ de origem. A cor é nova: o retexture do Meshy repintou a malha (a UV foi refeit
 
 Quaternius publica tudo em CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/); crédito opcional, registrado aqui. Fora de uso por não serem CC0: nenhum
 (o QAL do Quaternius não foi usado). Montagem, retexture e medidas: `docs/arte/familias-monstro.md` e `tools/art/familias-monstro/`.
+
+## Masmorras: Catacumbas de Vel'Aran (tunnel#140)
+
+`env-catacumbas.glb` (paredes, pilares, escada, barris, caixas, entulho, velas e estandarte da masmorra) vem do **KayKit Dungeon Remastered 1.0**,
+por Kay Lousberg ([www.kaylousberg.com](https://www.kaylousberg.com)), licença **CC0 1.0** (domínio público; crédito opcional, registrado aqui; `LICENSE.txt` do pacote).
+
+- Fonte: https://github.com/KayKit-Game-Assets/KayKit-Dungeon-Remastered-1.0 (também em https://kaylousberg.itch.io/kaykit-dungeon-remastered).
+- Por que ele e não o Quaternius Modular Dungeon (também CC0): é do mesmo autor e da mesma escala dos esqueletos e do cenário que o jogo já usa, as peças são modulares
+  em 4 m (a grade do gerador), cada peça tem poucos triângulos (a maior que entrou tem 788) e o pacote inteiro usa uma textura só. A cor do atlas foi regradada
+  (dessaturada e fria, para o cinza-azulado da cripta); a malha não mudou.
+- Para regerar: baixe o pacote para `assets-src/kaykit-dungeon/src` (pasta ignorada pelo git; nada de dentro dela é executado) e, dentro de `client/`, rode
+  `node scripts/build-dungeon-kit.mjs` (kit e tamanhos) e `node scripts/build-dungeons.mjs` (mapa para o cliente e o servidor).

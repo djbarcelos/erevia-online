@@ -255,6 +255,9 @@ func (z *Zone) raidKilled(m *entity) {
 		}
 	}
 	z.dropRaidLoot(m, owner, ownerClan)
+	if f := ms.def.FieldBoss; f != nil && f.Instance {
+		z.dungeonBossKilled(m, r.byPlayer) // baú do dia de cada jogador (instance.go)
+	}
 
 	// XP: cada pontuação com 5% ou mais do dano leva a parte dela.
 	for _, pl := range pools {
@@ -302,9 +305,16 @@ func (z *Zone) raidKilled(m *entity) {
 	r.killedAt = wall
 	r.spawnAt = wall.Add(time.Duration(delay * float64(time.Second)))
 	r.warned = false
-	z.setWindow(m, wall, r.spawnAt)
 	ms.forget()
 	ms.corpseEnd = z.now + corpseSeconds*2
+	if def.FieldBoss != nil && def.FieldBoss.Instance {
+		// Chefe de masmorra: não renasce, não grava no banco e não deixa túmulo (a cópia some).
+		r.spawnAt = time.Time{}
+		z.log.Info("dungeon boss killed", "boss", def.ID, "top", topName)
+		z.bossChanged(m)
+		return
+	}
+	z.setWindow(m, wall, r.spawnAt)
 	z.saveBoss(BossData{ID: def.ID, RespawnAt: r.spawnAt, KilledAt: wall, TopName: topName})
 	z.log.Info("raid boss killed", "boss", def.ID, "top", topName, "respawn_at", r.spawnAt)
 	if def.FieldBoss != nil {

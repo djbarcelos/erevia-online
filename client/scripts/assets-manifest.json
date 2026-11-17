@@ -67,6 +67,10 @@
     "brejeiro_b.glb": {
       "categoria": "monstro"
     },
+    "env-catacumbas.glb": {
+      "categoria": "cenario",
+      "porPeca": true
+    },
     "env-forest.glb": {
       "categoria": "cenario",
       "porPeca": true

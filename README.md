@@ -331,6 +331,9 @@ client/
   scripts/build-maps.mjs     os outros mapas (Clareira de Testes) → public/worlds/ e server/internal/world/maps/
   scripts/world-gen.mjs      motor do gerador do mapa (fases, sorteio por bioma, saída)
   scripts/biomes/            um arquivo por bioma (ver [Como criar um bioma](#como-criar-um-bioma))
+  scripts/dungeons/          uma masmorra por arquivo (mesmo contrato do bioma) + kit-sizes.json do kit delas
+  scripts/build-dungeons.mjs as masmorras (Catacumbas) → public/worlds/ e server/internal/world/maps/ (o CI confere)
+  scripts/build-dungeon-kit.mjs  kit de cenario das masmorras (KayKit Dungeon Remastered, CC0) → public/models/env-catacumbas.glb
   scripts/build-changelog.mjs  CHANGELOG.md → public/novidades.json (roda no npm run build)
   scripts/changelog-draft.mjs  rascunho do changelog com os PRs mergeados (via gh)
   src/net/                   conexão com o servidor
@@ -390,6 +393,7 @@ Depois de mexer num bioma, rode `node scripts/build-world.mjs` e commite os dois
 | `INVASION_CHANCE` | `0.15` | Chance (0 a 1) de invasão da cidade a cada noite; `0` = só por GM |
 | `XP2_DAYS` | `sab,dom` | Dias de XP em dobro (horário de Brasília); vazio ou `nenhum` = só por GM |
 | `EREVIA_ZONES` | vazio | Mapas além do principal, separados por vírgula (hoje só `teste`). Com `DEV_LOGIN=true` o `teste` já liga |
+| `EREVIA_DUNGEONS` | vazio (todas ligadas) | Masmorras instanciadas (a porta da Catacumbas, na igreja da cidade). `off` ou `nenhuma` tira a porta; senao, ids separados por virgula (hoje so `catacumbas`). Com `DEV_LOGIN=true`, o comando `/catacumbas` entra sem a porta |
 | `ALERT_WEBHOOK_URL` | vazio | Webhook do Discord dos [alertas](#alertas-no-discord). **Segredo**: só na variável da Railway, nunca no git. Vazio = os alertas só vão para o log |
 | `ALERT_SPIKE_N` | `50` | Pico de erros: avisa com mais de N ocorrências de um mesmo erro em 5 min |
 
@@ -575,6 +579,8 @@ O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem tr
 | `v_gold_per_hour` | Ouro ganho e gasto por hora de jogo, por faixa |
 | `v_level_reached` | Funil: quantos chegaram a cada nível e quantos pararam nele |
 | `v_contracts_daily` | Contratos do quadro aceitos e concluídos por dia (Brasília), com as moedas pagas |
+
+**Masmorras** (`kind = 'dungeon'`, uma linha por cópia ao fechar): `ref` = a masmorra, `amount` = a duração em segundos e `extra` = mortes (`deaths`), jogadores que entraram (`players`), se o chefe caiu (`boss_down`) e em quantos segundos (`boss_seconds`), baús abertos (`chests`) e o motivo do fim (`reason`: `vazia` ou `tempo`). Por jogador: `dungeon_chest` (o baú do dia, `amount` = moedas) e `dungeon_stairs`. Exemplo: `SELECT date_trunc('day', at) AS dia, count(*) AS copias, avg(amount)::int AS seg, sum((extra->>'deaths')::int) AS mortes FROM game_events WHERE kind = 'dungeon' GROUP BY 1 ORDER BY 1 DESC;`
 
 **Progressão** ([docs/progressao.md](docs/progressao.md)): a XP ganha não vai uma linha por abate; a zona soma por personagem, nível e fonte e grava um evento `xp` a cada minuto, ao subir e ao sair. Ao desligar, a zona fecha a sessão de quem está online antes de a telemetria esvaziar a fila (senão todo deploy perderia o tempo de jogo). As consultas prontas estão em `server/internal/store/queries/progressao.sql`, e as tabelas aparecem no portal em `/admin#progressao`.
 

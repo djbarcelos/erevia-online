@@ -27,6 +27,9 @@ import type { WorldData } from "./world-data";
 /** Início da noite na fase do ciclo (igual ao servidor: game.NightStart). */
 export const NIGHT_START = 0.75;
 
+/** Fase fixa das masmorras: a noite fechada (tochas acesas, luar frio), de dia e de noite. */
+export const INDOOR_PHASE = 0.875;
+
 export function isNight(phase: number): boolean {
   return phase >= NIGHT_START;
 }
@@ -285,6 +288,8 @@ export class DayNight {
   private sunMat: StandardMaterial;
   private moonMat: StandardMaterial;
   private lastSky = -1;
+  /** Masmorra: sem céu (nada de sol, lua nem estrelas) e o chão de fora é rocha escura. */
+  private readonly indoor: boolean;
   private lastLightSweep = 0;
   private dir = new Vector3();
   private _night = 0;
@@ -294,6 +299,7 @@ export class DayNight {
     data: WorldData,
   ) {
     const scene = world.scene;
+    this.indoor = data.indoor === true;
     this.glow = new GlowLayer("glow", scene, { mainTextureRatio: 0.5, blurKernelSize: 48 });
     this.glow.intensity = 0.9;
     this.render = new RenderQuality(world, this.glow);
@@ -377,7 +383,9 @@ export class DayNight {
       night: k.night,
       golden: golden(phase),
     });
-    this.world.outerMat.diffuseColor = Color3.Lerp(new Color3(0.2, 0.26, 0.14), new Color3(0.07, 0.09, 0.08), k.night);
+    this.world.outerMat.diffuseColor = this.indoor
+      ? new Color3(0.05, 0.05, 0.07)
+      : Color3.Lerp(new Color3(0.2, 0.26, 0.14), new Color3(0.07, 0.09, 0.08), k.night);
 
     // Sol de dia, lua à noite. Perto do horizonte a luz some, então a troca não aparece.
     const { elevation, moon } = bodyDir(phase, this.dir);
@@ -408,6 +416,12 @@ export class DayNight {
     this.stars.setEnabled(starVis > 0.01);
     this.stars.visibility = starVis;
     this.stars.rotation.y = phase * Math.PI * 0.6;
+    if (this.indoor) {
+      // Cripta: o luar entra como luz (acima), mas o céu não aparece.
+      this.sunDisc.setEnabled(false);
+      this.moon.setEnabled(false);
+      this.stars.setEnabled(false);
+    }
 
     this.torches?.update(k.night, performance.now() / 1000, player);
     this.glow.intensity = 0.55 + 0.45 * k.night;

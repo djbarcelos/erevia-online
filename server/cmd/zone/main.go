@@ -109,21 +109,20 @@ func run(log *slog.Logger) error {
 			log.Error("XP2_DAYS inválida, usando o padrão", "err", err)
 		}
 	}
-	zcfg.DevCommands = devLogin                         // /raid no chat: só em desenvolvimento
-	zcfg.Version = env("RAILWAY_GIT_COMMIT_SHA", "dev") // a Railway define o commit do deploy
+	zcfg.Dungeons = zone.EnabledDungeons(os.Getenv("EREVIA_DUNGEONS")) // as masmorras: a porta da igreja (zone/instance.go)
+	zcfg.DevCommands = devLogin                                        // /raid no chat: só em desenvolvimento
+	zcfg.Version = env("RAILWAY_GIT_COMMIT_SHA", "dev")                // a Railway define o commit do deploy
 	// Zonas: uma por mapa, cada uma com a sua goroutine e o seu canal de persistência
 	// (uma goroutine por zona grava em lote). O mapa de testes só liga com DEV_LOGIN=true
 	// ou EREVIA_ZONES=teste (zone/maps.go).
 	maps := zone.EnabledMaps(devLogin, os.Getenv("EREVIA_ZONES"))
 	m := zone.NewManager(log)
 	var persistDone []chan struct{}
-	for _, id := range maps {
-		cfg, err := zone.MapConfig(zcfg, id, maps)
-		if err != nil {
-			return err
-		}
+	// wire cria a zona com os bancos e a persistência dela (uma goroutine por zona grava em
+	// lote). Serve às zonas fixas e às cópias das masmorras (zone/instance.go).
+	wire := func(cfg zone.Config, zlog *slog.Logger) (*zone.Zone, chan struct{}) {
 		saves := make(chan []zone.SavedState, 1024)
-		z := zone.New(cfg, log.With("zone", id), saves)
+		z := zone.New(cfg, zlog, saves)
 		z.SetClanBackend(clanStore{st})
 		z.SetBossBackend(bossStore{st})
 		z.SetEventBackend(serverEventStore{st})
@@ -132,16 +131,25 @@ func run(log *slog.Logger) error {
 		z.SetEventSink(eventStore{st})
 		z.SetRankingBackend(rankingStore{st})
 		z.SetAuctionBackend(auctionStore{st})
-		m.Add(z)
 		done := make(chan struct{})
-		persistDone = append(persistDone, done)
 		go func() {
 			defer close(done)
 			for batch := range saves {
-				saveBatch(st, m, z, log, batch)
+				saveBatch(st, m, z, zlog, batch)
 			}
 		}()
+		return z, done
 	}
+	for _, id := range maps {
+		cfg, err := zone.MapConfig(zcfg, id, maps)
+		if err != nil {
+			return err
+		}
+		z, done := wire(cfg, log.With("zone", id))
+		m.Add(z)
+		persistDone = append(persistDone, done)
+	}
+	m.EnableDungeons(zcfg, func(cfg zone.Config, zlog *slog.Logger) (*zone.Zone, <-chan struct{}) { return wire(cfg, zlog) })
 	log.Info("zones", "maps", strings.Join(maps, ","))
 	// Anúncios agendados pelo portal que ainda não saíram (sobrevivem ao reinício): cada
 	// zona avisa os seus jogadores na hora.

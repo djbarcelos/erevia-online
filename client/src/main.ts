@@ -100,7 +100,7 @@ import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
 import { afterFrames, waitWorldReady } from "./world/ready";
 import { loadEnvironment, type Environment } from "./world/environment";
-import { DayNight, isNight, WorldClock } from "./world/daynight";
+import { DayNight, INDOOR_PHASE, isNight, WorldClock } from "./world/daynight";
 import { configureKtx2 } from "./world/assets";
 import { renderMapCanvas } from "./world/map-painter";
 import { createWorldScene } from "./world/scene";
@@ -268,6 +268,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const world = await createWorldScene(canvas, worldData, engine);
   const unwatchEngine = watchEngine(world.engine, "jogo");
   const clock = new WorldClock(Number(welcome.serverTimeMs), welcome.dayCycleMs);
+  if (worldData.indoor) clock.setFixed(INDOOR_PHASE); // masmorra: sempre a mesma luz, a da noite fechada
   const dayNight = new DayNight(world, worldData);
   const fx = new Fx(world.scene, world.gui, dayNight.glow, world.camera);
   const collision = new Collision(worldData);

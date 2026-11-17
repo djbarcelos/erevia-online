@@ -81,6 +81,9 @@ func MapConfig(base Config, id string, enabled []string) (Config, error) {
 		g.disabled = !slices.Contains(enabled, g.To)
 		cfg.Gates = append(cfg.Gates, g)
 	}
+	if id == world.StarterMap {
+		cfg.Gates = append(cfg.Gates, dungeonDoors(base.Dungeons)...) // a porta da igreja (instance.go)
+	}
 	if d.noTown {
 		// Sem a cidade: sem NPCs da praça, armazém, invasão nem raid boss; os clãs ficam
 		// na zona da cidade (ver o PR das zonas: clã entre mapas fica para depois).

@@ -18,7 +18,8 @@ export type BiomePaint = (ctx: Ctx, biome: BiomeEntry, h: BiomePaintHelpers) => 
  * (e o que ela usa) entra no pacote do cliente; o resto do arquivo é do gerador.
  */
 const BIOME_PAINT: Record<string, BiomePaint> = Object.fromEntries(
-  Object.entries(import.meta.glob<{ paint?: BiomePaint }>("../../scripts/biomes/*.mjs", { eager: true }))
+  // Os biomas do mundo e os das masmorras (scripts/dungeons/, o chão de pedra delas).
+  Object.entries(import.meta.glob<{ paint?: BiomePaint }>(["../../scripts/biomes/*.mjs", "../../scripts/dungeons/*.mjs"], { eager: true }))
     .filter(([, mod]) => typeof mod.paint === "function")
     .map(([path, mod]) => [path.slice(path.lastIndexOf("/") + 1, -".mjs".length), mod.paint!]),
 );
