@@ -16,6 +16,36 @@
     "anims-special.glb": {
       "categoria": "animacao"
     },
+    "armor/cape_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/cape_legend.glb": {
+      "categoria": "armadura"
+    },
+    "armor/cape_rare.glb": {
+      "categoria": "armadura"
+    },
+    "armor/hat_mage_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/helm_barbarian_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/helm_knight_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/helm_knight_rare.glb": {
+      "categoria": "armadura"
+    },
+    "armor/hood_rogue_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/pauldron_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/pauldron_legend.glb": {
+      "categoria": "armadura"
+    },
     "barbarian_b.glb": {
       "categoria": "personagem"
     },

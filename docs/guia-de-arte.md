@@ -90,6 +90,7 @@ Valores iniciais, a ajustar com o `?bench=1` do PC 2 (tunnel#64) e a fatia verti
 |---|---|---|---|---|---|
 | Personagem (corpo + armadura) | ≤ 8.000 tri | ≤ 3.000 | ≤ 1.000 | 1024² atlas | 1 (+1 emissivo) |
 | Arma / escudo | ≤ 800 tri | ≤ 300 | — | atlas da família | 1 |
+| Peça de armadura anexada (ombreiras, capa, elmo; tunnel#96) | ≤ 1.600 tri | ≤ 650 | — | 512², uma por peça | 1 |
 | Monstro comum | ≤ 4.000 tri | ≤ 1.500 | ≤ 500 | 512–1024² | 1 |
 | Chefe / raid | ≤ 15.000 tri | ≤ 5.000 | ≤ 2.000 | 2048² | ≤ 3 |
 | Peça de cenário (casa) | ≤ 3.000 tri | ≤ 1.000 | impostor | atlas do kit | 1 |

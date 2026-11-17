@@ -36,6 +36,7 @@ import {
 import { gameAudio } from "../audio";
 import { AnimController } from "./anim";
 import { updateMotion } from "./motion";
+import { toArmorGrades, type ArmorGrades } from "./armor";
 import { toBodyLook, type BodyLook } from "./body-look";
 import type { Fx, FxBody, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
@@ -204,6 +205,8 @@ interface View extends EntityInfo {
   offhand: string;
   grade: number;
   weaponEnchant: number;
+  /** Jogadores: raridade das peças de armadura (remaster: o corpo, as ombreiras, a capa e o elmo seguem). */
+  armor: ArmorGrades;
   /** Jogadores: cor do emblema (nome e anel no chão). */
   emblem: string;
   /** Visual do corpo (heróis: jogadores e o barbeiro). */
@@ -454,11 +457,13 @@ export class EntityManager {
     v.offhand = a.offhand;
     v.grade = a.weaponGrade;
     v.weaponEnchant = a.weaponEnchant;
+    v.armor = toArmorGrades(a.armor);
     if (a.look) v.look = toBodyLook(a.look);
     if (!v.model3d) return;
     v.model3d.setLook(v.look);
     this.setShadow(v, false); // as malhas mudam; a sombra volta no próximo quadro
     v.model3d.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
+    v.model3d.setArmor(v.armor);
     v.meshes = v.model3d.meshes();
     this.notPickable(v.meshes);
     this.fixBounds(v); // a cabeça nova é outra malha
@@ -598,7 +603,7 @@ export class EntityManager {
 
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
-      model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
+      model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, armor: toArmorGrades(e.armor), emblem, look: toBodyLook(e.look),
       weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, cls: e.activeClass || e.model, baseColor, clanText, titleText, pkRing: null,
       px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0,
       server: { x: e.x, z: e.z },
@@ -1778,7 +1783,10 @@ export class EntityManager {
       (bossModel !== v.model ? this.models.instantiate(bossModel, String(v.id), undefined, v.look) : null) ??
       this.models.instantiate(v.model, String(v.id), undefined, v.look);
     if (!inst) return;
-    if (v.kind === EntityKind.PLAYER) inst.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
+    if (v.kind === EntityKind.PLAYER) {
+      inst.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
+      inst.setArmor(v.armor);
+    }
     inst.root.parent = v.visual;
     inst.root.scaling.scaleInPlace(v.scale);
     const meshes = inst.meshes();

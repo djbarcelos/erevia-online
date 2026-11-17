@@ -9,6 +9,8 @@
 export const BUDGET = {
   personagem: { tris: 8000, lod1: 3000, lod2: 1000, texture: 1024, materials: 2, bones: 60, ratios: [0.375, 0.125] },
   arma: { tris: 800, lod1: 300, lod2: null, texture: 1024, materials: 1, bones: 0, ratios: [0.375, null] },
+  // Peça de armadura anexada ao herói (ombreiras, capa, elmo): textura própria e um material (tunnel#96).
+  armadura: { tris: 1600, lod1: 650, lod2: null, texture: 1024, materials: 1, bones: 0, ratios: [0.4, null] },
   monstro: { tris: 4000, lod1: 1500, lod2: 500, texture: 1024, materials: 1, bones: 60, ratios: [0.375, 0.125] },
   chefe: { tris: 15000, lod1: 5000, lod2: 2000, texture: 2048, materials: 3, bones: 60, ratios: [0.333, 0.133] },
   // Peça de cenário (casa, árvore): o limite vale por peça. Um kit com várias peças num
