@@ -1,0 +1,187 @@
+/*
+ * Redesign "Vigília": a arte do jogo é a estrela e a interface sai da frente.
+ * Camada por cima do kit: só sobrescreve; nada aqui muda a lógica nem o layout do jogo.
+ * Referência: design/redesign/ (telas exportadas do canvas de design).
+ */
+@import "@fontsource/cormorant-garamond/latin-600.css";
+@import "@fontsource/cormorant-garamond/latin-700.css";
+@import "@fontsource/barlow/latin-400.css";
+@import "@fontsource/barlow/latin-500.css";
+@import "@fontsource/barlow/latin-600.css";
+@import "@fontsource/barlow-semi-condensed/latin-500.css";
+@import "@fontsource/barlow-semi-condensed/latin-600.css";
+@import "@fontsource/barlow-semi-condensed/latin-700.css";
+
+:root {
+  --font-title: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-ui: Barlow, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-cond: "Barlow Semi Condensed", Barlow, system-ui, sans-serif;
+}
+
+/* ======================= CARREGAMENTO ======================= */
+
+#overlay:has(.entry-content.loading) {
+  background: #07080c url("/art/carregamento.jpg") center / cover no-repeat;
+}
+
+#overlay:has(.entry-content.loading) .backdrop {
+  display: none;
+}
+
+#overlay:has(.entry-content.loading)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(7, 8, 12, 0.55), rgba(7, 8, 12, 0) 120px),
+    linear-gradient(0deg, rgba(7, 8, 12, 0.96) 0%, rgba(7, 8, 12, 0.78) 24%, rgba(7, 8, 12, 0.1) 52%, rgba(7, 8, 12, 0) 70%);
+}
+
+.entry-content.loading .entry-loading {
+  display: block;
+  padding: 0;
+  text-align: left;
+}
+
+/* Marca no canto de cima */
+.entry-content.loading .load-mid .logo-word {
+  position: absolute;
+  left: 56px;
+  top: 36px;
+  font-size: 1.7rem;
+  letter-spacing: 0.12em;
+  opacity: 1;
+  color: #f2ead8;
+  background: none;
+  -webkit-text-fill-color: #f2ead8;
+  filter: none;
+}
+
+/* Para onde você vai: embaixo à esquerda */
+.entry-content.loading .load-dest {
+  position: absolute;
+  left: 88px;
+  bottom: 120px;
+  max-width: 640px;
+  justify-items: start;
+  gap: 12px;
+}
+
+.entry-content.loading .load-over {
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.22em;
+  color: #f0a640;
+}
+
+.entry-content.loading .load-place {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: clamp(2.6rem, 5.4vw, 4.25rem);
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 0.95;
+  background: none;
+  -webkit-text-fill-color: #f2ead8;
+  color: #f2ead8;
+  filter: none;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
+}
+
+/* Progresso: embaixo à direita */
+.entry-content.loading .load-mid {
+  position: absolute;
+  right: 88px;
+  bottom: 88px;
+  width: 360px;
+  gap: 14px;
+  justify-items: stretch;
+}
+
+.entry-content.loading .load-label {
+  order: -1;
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 1rem;
+  color: #ece6da;
+}
+
+.entry-content.loading .load-steps {
+  width: 100%;
+  gap: 8px;
+  font-family: var(--font-cond);
+  font-size: 0.88rem;
+  color: #8a8478;
+}
+
+.entry-content.loading .load-steps li {
+  justify-items: start;
+  gap: 8px;
+}
+
+.entry-content.loading .load-steps li span {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.entry-content.loading .load-steps li i {
+  height: 4px;
+  clip-path: none;
+  border: 0;
+  border-radius: 2px;
+  background: rgba(236, 230, 218, 0.14);
+}
+
+.entry-content.loading .load-steps .done {
+  color: #b3ab9c;
+}
+
+.entry-content.loading .load-steps .done i {
+  background: var(--gold);
+}
+
+.entry-content.loading .load-steps .now {
+  color: #ece6da;
+}
+
+.entry-content.loading .load-steps .now i {
+  background: linear-gradient(90deg, var(--gold) 0 45%, rgba(236, 230, 218, 0.14) 45%);
+  border: 0;
+}
+
+/* Dica como cartão, ao lado do destino */
+.entry-content.loading .load-tip {
+  position: absolute;
+  left: 88px;
+  bottom: 40px;
+  max-width: 520px;
+  padding: 12px 16px;
+  border: 1px solid rgba(236, 230, 218, 0.11);
+  border-radius: 6px;
+  background: rgba(9, 10, 16, 0.7);
+  font-size: 0.9rem;
+  color: #b3ab9c;
+}
+
+@media (max-width: 900px) {
+  .entry-content.loading .load-dest {
+    left: 24px;
+    right: 24px;
+    bottom: 200px;
+  }
+  .entry-content.loading .load-mid {
+    left: 24px;
+    right: 24px;
+    bottom: 120px;
+    width: auto;
+  }
+  .entry-content.loading .load-tip {
+    left: 24px;
+    right: 24px;
+    bottom: 24px;
+    max-width: none;
+  }
+}
