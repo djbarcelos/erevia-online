@@ -8,6 +8,7 @@
  */
 import { ArcRotateCamera, Color4, Engine, HemisphericLight, DirectionalLight, Scene, Vector3, type AnimationGroup, type TransformNode } from "@babylonjs/core";
 import { configureKtx2 } from "../world/assets";
+import { AnimController } from "../world/anim";
 import { CharacterModels, WEAPON_GRIPS, type AnimRole, type CharacterInstance, type Grip } from "../world/models";
 import { setBodyPalettes, type BodyLook } from "../world/body-look";
 
@@ -67,6 +68,32 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
     for (let f = 0; f < 6; f++) await new Promise((r) => requestAnimationFrame(r));
     await new Promise((r) => setTimeout(r, 1500));
     return live.map((i) => (i.root as TransformNode).name).join(",");
+  },
+  /** Toca o parado de verdade (AnimController com as pausas) e diz quando cada pausa começou, por até `seconds` s. */
+  async idleBreaks(model: string, seconds: number): Promise<{ t: number; role: string }[]> {
+    await ready;
+    for (const i of live) i.dispose();
+    live = [];
+    const inst = models!.instantiate(model, "labb");
+    if (!inst) return [];
+    live.push(inst);
+    const ctl = new AnimController(inst.anims, inst.resetPose, inst.impacts);
+    const out: { t: number; role: string }[] = [];
+    const seen = new Set<string>();
+    const t0 = performance.now();
+    let last = t0;
+    while (performance.now() - t0 < seconds * 1000) {
+      await new Promise((r) => setTimeout(r, 100));
+      const now = performance.now();
+      ctl.update((now - last) / 1000, false, 1);
+      last = now;
+      for (const r of ["break1", "break2"] as const) {
+        const playing = !!inst.anims.get(r)?.isPlaying;
+        if (playing && !seen.has(r)) out.push({ t: Math.round((now - t0) / 100) / 10, role: r });
+        if (playing) seen.add(r); else seen.delete(r);
+      }
+    }
+    return out;
   },
   models: () => models,
   cam: () => ({ a: cam.alpha, b: cam.beta, r: cam.radius, p: cam.position.asArray() }),

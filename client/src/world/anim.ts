@@ -73,6 +73,11 @@ export class AnimController {
   private deferred: { role: AnimRole; opts: PlayOpts } | null = null;
   /** Uma ação foi cortada fora de cena: volta à pose de descanso antes de retomar. */
   private resetOnWake = false;
+  /** Pausas do parado ("idle breaks": olhar em volta, alongar, gesto): tocam de vez em quando, com tempo e fase próprios. */
+  private breaks: AnimationGroup[];
+  private breakGroup: AnimationGroup | null = null;
+  private breakW = 0;
+  private breakTimer = 0;
 
   /**
    * resetPose: devolve os ossos à pose de descanso quando uma ação sai.
@@ -84,6 +89,9 @@ export class AnimController {
     private impacts: Partial<Record<AnimRole, number>> = {},
   ) {
     this.groups = [...new Set(anims.values())];
+    this.breaks = (["break1", "break2", "break3"] as const).map((r) => anims.get(r)).filter((g): g is AnimationGroup => !!g);
+    // Cada personagem começa numa fase e num tempo próprios (ninguém respira ou olha em volta junto com o vizinho).
+    this.breakTimer = BREAK_MIN_S + Math.random() * (BREAK_MAX_S - BREAK_MIN_S);
     const idle = anims.get("idle");
     const run = anims.get("run");
     const walk = anims.get("walk");
@@ -94,6 +102,7 @@ export class AnimController {
     if (idle) {
       idle.weight = 1;
       idle.start(true);
+      idle.goToFrame(idle.from + Math.random() * (idle.to - idle.from));
     }
     if (run) {
       run.weight = 0;
@@ -243,6 +252,7 @@ export class AnimController {
     const idle = this.anims.get("idle");
     const run = this.anims.get("run");
     if (idle) idle.speedRatio = 1;
+    for (const g of this.breaks) g.speedRatio = 1;
     if (run) run.speedRatio = this.runRatio;
     const walk = this.anims.get("walk");
     if (walk) walk.speedRatio = this.walkRatio;
@@ -398,7 +408,32 @@ export class AnimController {
     const run = this.anims.get("run");
     // Peso exatamente 0 faz o Babylon pular a animação (não calcula os ossos). As misturas
     // convergem exponencialmente e nunca chegam a 0 sozinhas, então zeramos as sobras.
-    if (idle) idle.weight = snap(loco * (1 - this.runWeight));
+    // Pausas do parado: só com o corpo parado, sem ação; entram e saem suaves, e o clipe acaba antes do fim.
+    const standing = loco > 0.9 && this.runWeight < 0.05;
+    let breakTarget = 0;
+    if (this.breakGroup) {
+      const frame = this.breakGroup.animatables[0]?.masterFrame ?? this.breakGroup.from;
+      const left = (this.breakGroup.to - frame) / fps(this.breakGroup);
+      breakTarget = standing && left > 0.5 && this.breakGroup.isPlaying ? 1 : 0;
+      this.breakW += (breakTarget - this.breakW) * (1 - Math.exp(-6 * dt));
+      if (breakTarget === 0 && this.breakW < 0.02) {
+        this.breakGroup.stop();
+        this.breakGroup = null;
+        this.breakW = 0;
+        this.breakTimer = BREAK_MIN_S + Math.random() * (BREAK_MAX_S - BREAK_MIN_S);
+      }
+    } else if (this.breaks.length && standing) {
+      this.breakTimer -= dt;
+      if (this.breakTimer <= 0) {
+        this.breakGroup = this.breaks[Math.floor(Math.random() * this.breaks.length)];
+        this.breakGroup.weight = 0.001;
+        this.breakGroup.start(false);
+        this.breakW = 0;
+      }
+    }
+    const bw = this.breakGroup ? this.breakW : 0;
+    if (this.breakGroup) this.breakGroup.weight = Math.max(loco * (1 - this.runWeight) * bw, 0.001);
+    if (idle) idle.weight = snap(loco * (1 - this.runWeight) * (1 - bw));
     const walk = this.anims.get("walk");
     const walkW = walk ? this.walkMix : 0;
     if (run) {
@@ -417,6 +452,9 @@ export class AnimController {
 /** Velocidade (m/s) abaixo da qual o personagem anda em vez de correr, e a que o clipe de andar casa com o chão. */
 const WALK_BELOW = 3.4;
 const WALK_ANIM_SPEED = 1.9;
+/** Intervalo (s) entre as pausas do parado. */
+const BREAK_MIN_S = 8;
+const BREAK_MAX_S = 20;
 
 function snap(w: number): number {
   return w < 0.01 ? 0 : w > 0.99 ? 1 : w;
