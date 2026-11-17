@@ -1,5 +1,6 @@
 import {
   AbstractMesh,
+  BoundingInfo,
   Color3,
   Matrix,
   Mesh,
@@ -14,6 +15,7 @@ import { AdvancedDynamicTexture, Rectangle, StackPanel, TextBlock } from "@babyl
 import { classInfo } from "../classes";
 import {
   Effect,
+  EmoteKind,
   EntityKind,
   PvpState,
   SkillTarget,
@@ -25,18 +27,32 @@ import {
   type EntityState,
   type HpUpdate,
   type LevelUp,
+  type MonsterArchetype,
   type PlayerStatus,
   type Revive,
   type SkillCast,
   type SkillInfo,
 } from "../gen/erevia/v1/game_pb";
+import { gameAudio } from "../audio";
 import { AnimController } from "./anim";
+import { updateMotion } from "./motion";
+import { toArmorGrades, type ArmorGrades } from "./armor";
 import { toBodyLook, type BodyLook } from "./body-look";
 import type { Fx, FxBody, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
 import { GOLEM_BODY, GOLEM_MODEL } from "./golem";
 import { buildTeleportStone } from "./teleport-stone";
+import type { PickAreas } from "./pick";
 import type { Bounds, Collision } from "./world-data";
+import { specInfo } from "../ui/specs";
+import { GRADE_COLOR } from "../ui/items";
+import { settings } from "../ui/kit";
+import { skillFxColors } from "../ui/skill-themes";
+import type { EntityProbe } from "../net/invariants";
+import { FIGHT_MS, type HuntCandidate } from "./huntrules";
+import { remasterModelOf, remasterNpcModel } from "./remaster";
+import { ARCH, neutralNow } from "./roles";
+import { groundClearance, heightAt, terrain } from "./terrain";
 
 /** Quão rápido a posição desenhada converge para a do servidor (1/s). */
 const CORRECTION_RATE = 12;
@@ -54,10 +70,14 @@ const LOCAL_SMOOTH_RATE = 10;
 const LOCAL_HISTORY_MS = 2000;
 /** Velocidade de referência da animação de corrida (m/s). */
 const RUN_ANIM_SPEED = 5;
+
 /** Nomes e barras só aparecem até esta distância do jogador (o alvo sempre aparece). */
 const LABEL_DISTANCE = 30;
 /** Além desta distância da câmera (ou fora da tela) o personagem congela a animação. */
 const ANIM_DISTANCE = 50;
+/** Quem anda continua animado (a 15 Hz) até esta distância: parado em pose de parado, o monstro que vem de longe deslizava. */
+const ANIM_FAR_DISTANCE = 90;
+const ANIM_FAR_STEP = 1 / 15;
 /** Só personagens até esta distância do jogador projetam sombra. */
 const SHADOW_DISTANCE = 35;
 const BONE_COLOR = "#d9d2c0";
@@ -67,6 +87,10 @@ const NPC_COLOR = "#e0c27a";
 
 /** Velocidade dos projéteis (m/s): o dano só aparece quando o projétil chega. */
 const PROJECTILE_SPEED = 26;
+/** Golpe de cura do monstro curandeiro (game.HitMonsterHeal: RAID_HIT_BASE + 4). */
+const MONSTER_HEAL_HIT = 9005;
+/** Lâmina arremessada do atirador. */
+const THROWN_COLOR = new Color3(0.86, 0.8, 0.62);
 /**
  * Quanto da preparação do golpe ainda aparece (s). O servidor decide o dano no instante em
  * que o golpe começa; o cliente começa o clipe perto do impacto e mostra dano, barra de vida
@@ -82,6 +106,20 @@ const FACE_RATE = 25;
 /** Corpo sumindo (s) e monstro nascendo (s). */
 const CORPSE_SINK_S = 0.9;
 const SPAWN_FADE_S = 0.5;
+/**
+ * Pausa de impacto (s) no seu golpe que acerta: congela só a pose do alvo (e a sua, se o
+ * golpe é corpo a corpo). Normal, skill, crítico e o golpe que mata.
+ */
+const HIT_STOP = { hit: 0.045, skill: 0.06, crit: 0.075, kill: 0.08 };
+/** Rastro da arma: começa antes do impacto e acaba logo depois (ms). */
+const TRAIL_BEFORE_MS = 140;
+const TRAIL_AFTER_MS = 60;
+/** Rastro dos outros só até esta distância de você (m). */
+const TRAIL_OTHERS_M = 20;
+/** Distância de um passo correndo (m): uma nuvem de poeira por passo. */
+const STEP_M = 1.6;
+/** Abaixo desta velocidade (m/s) é andar, não correr: sem poeira. */
+const DUST_MIN_SPEED = 2.5;
 
 /** Efeito ativo numa entidade (para os ícones do HUD). */
 export interface ActiveEffect {
@@ -104,14 +142,24 @@ export interface EntityInfo {
   hp: number;
   maxHp: number;
   dead: boolean;
-  /** NPC: função ("Mercadora"). */
+  /** NPC: função ("Mercadora"); jogador: título escolhido (conquista, "" = nenhum). */
   title: string;
   /** Chefe (marcador e quadro do alvo diferentes). */
   boss?: boolean;
+  /** Monstro raro (named): nome dourado e selo "RARO" no quadro do alvo. */
+  rare?: boolean;
+  /** Monstros: papel na luta (Entity.role, tunnel#129; 0 = bruto) e se é neutro. */
+  role?: MonsterArchetype;
+  neutral?: boolean;
+  neutralByDay?: boolean;
   /** Jogadores: normal, em combate (roxo) ou com karma (vermelho). */
   pvpState: PvpState;
   /** Jogadores: nome do clã ("" = sem clã). */
   clanName: string;
+  /** Jogadores: especialização (id em Welcome.specs; "" = ainda não escolheu). */
+  spec: string;
+  /** Jogadores: classe ativa (a subclasse em uso, ou a principal, que é a do modelo). */
+  cls: string;
 }
 
 /**
@@ -124,6 +172,28 @@ const MODEL_BODY: Record<string, { radius: number; width: number; height: number
 
 /** Modelo das Pedras de Teleporte (desenhadas aqui, sem arquivo 3D). */
 export const STONE_MODEL = "teleport_stone";
+/** Túmulo do chefe de campo (objeto do servidor, 10 min no corpo): lápide com a dica no nome. */
+export const TOMB_MODEL = "tomb";
+/** A Lápide do Último Regicida (NPC de conversa nas Terras Mortas, tunnel#137): a mesma lápide de pedra do túmulo, mas clicar conversa. */
+export const LAPIDE_MODEL = "lapide";
+/** Modelo do barco de Tomé (Brejo de Lamagris): o clique do barco é um poste com lanterna e sino; o bote é cenário (world.json, `boat`). */
+export const FERRY_MODEL = "ferry_boat";
+/** O barqueiro sentado no bote do cais: o corpo base do Bárbaro (o mesmo do Tomé do posto), sem visual do servidor. */
+const FERRYMAN_MODEL = "barbarian";
+/** Alcance (m) do bote até o poste: o NPC do barco fica no cais e o bote (cenário `boat` do world.json) um pouco adiante. */
+const FERRY_BOAT_REACH = 8;
+/** Altura (m) do nome do barqueiro acima do assento, e do assento acima do chão do bote; escala do barqueiro. */
+const FERRYMAN_LABEL_Y = 1.9;
+const FERRYMAN_SEAT_Y = 0.0;
+const FERRYMAN_SCALE = 0.9;
+/** Área de clique do bote: raio e altura (m). */
+const FERRY_BOAT_PICK = { radius: 1.7, height: 1.9 };
+/** O que NUNCA vira cápsula: os desenhos próprios (pedra, túmulo, poste do barco) e todo objeto. */
+export function drawnInCode(kind: EntityKind, model: string): boolean {
+  return kind === EntityKind.OBJECT || model === STONE_MODEL || model === TOMB_MODEL || model === FERRY_MODEL;
+}
+/** A função (título) dos NPCs do barco, igual à do servidor (zone/teleport.go): o mapa não os lista como pedra. */
+export const FERRY_TITLE = "Barco do Tomé";
 
 /** Cores dos nomes por estado (o Babylon GUI não lê variáveis CSS). */
 export const NAME_COLORS = {
@@ -131,6 +201,8 @@ export const NAME_COLORS = {
   chaotic: "#ff5a4a",
   party: "#7fd0ff",
   clan: "#e8cf8a",
+  title: "#cdb8f2",
+  rare: "#ffcf4a",
 } as const;
 
 /** O que o mapa precisa saber de cada entidade. */
@@ -155,6 +227,8 @@ interface View extends EntityInfo {
   offhand: string;
   grade: number;
   weaponEnchant: number;
+  /** Jogadores: raridade das peças de armadura (remaster: o corpo, as ombreiras, a capa e o elmo seguem). */
+  armor: ArmorGrades;
   /** Jogadores: cor do emblema (nome e anel no chão). */
   emblem: string;
   /** Visual do corpo (heróis: jogadores e o barbeiro). */
@@ -162,17 +236,31 @@ interface View extends EntityInfo {
   /** Cor do nome sem estado PvP (emblema, local, tipo). */
   baseColor: string;
   clanText: TextBlock;
+  /**
+   * Jogadores: título sob o nome (null nos outros). Texto fixo: só muda quando chega um
+   * PlayerStatus com outro título, nada por quadro.
+   */
+  titleText: TextBlock | null;
   /** Anel vermelho nos pés de quem tem karma (criado na hora). */
   pkRing: Mesh | null;
   boss: boolean;
   scale: number;
   speed: number;
+  /** Posição desenhada no quadro anterior, velocidade desenhada (m/s, suavizada) e se está andando de fato (com histerese). */
+  px: number;
+  pz: number;
+  vis: number;
+  walking: boolean;
+  /** Tempo (s) desde a última vez que a animação rodou, para animar a 15 Hz quem anda longe (ANIM_FAR_DISTANCE). */
+  animAcc: number;
   /** Posição do servidor, extrapolada localmente em direção ao destino. */
   server: { x: number; z: number };
   target: { x: number; z: number };
   root: TransformNode;
   visual: TransformNode;
   head: TransformNode;
+  /** Barco de Tomé: onde está o bote do cenário em relação ao poste (m) e a área de clique dele. */
+  ferryBoat: { dx: number; dz: number; dy: number; pick: TransformNode } | null;
   capsule: Mesh | null;
   model3d: CharacterInstance | null;
   anim: AnimController | null;
@@ -197,6 +285,23 @@ interface View extends EntityInfo {
   lastLand: number;
   /** Para onde virar (golpes): gira suave até lá; null = segue o movimento. */
   faceYaw: number | null;
+  /** NPC do remaster que cumprimentou: até quando fica virado para o jogador (performance.now(); 0 = parado como sempre). */
+  greetUntil: number;
+  /** Monstros: último golpe entre ele e você (performance.now(); a auto-caça vê quem briga). */
+  fightAt: number;
+  /** Encaixe da mão da arma (rastro do golpe); undefined = ainda não procurado. */
+  hand: TransformNode | null | undefined;
+  /**
+   * Caixa fixa e generosa do corpo, dividida por todas as malhas com esqueleto do modelo
+   * (doNotSyncBoundingInfo): o Babylon não refaz a caixa de cada malha a cada quadro; ela
+   * só anda junto com a entidade (ver moveBounds). null = sem modelo com esqueleto.
+   */
+  bounds: BoundingInfo | null;
+  boundsAt: Matrix;
+  /** Onde a caixa estava da última vez (NaN = refazer). */
+  boundsX: number;
+  boundsY: number;
+  boundsZ: number;
 }
 
 /** Jogadores e monstros na tela: criação, movimento suave, animações e combate. */
@@ -210,6 +315,8 @@ export class EntityManager {
    * quando discordam de onde estávamos há um ping. Desligado = segue o servidor (caminho
    * em volta de obstáculos, aproximação de ataque, auto-caça), como os outros personagens.
    */
+  /** Só para medir o deslize no navegador (?e2e=1&legacymove=1): volta à regra antiga (destino do servidor e velocidade nominal). */
+  private legacyMove = new URLSearchParams(location.search).has("legacymove");
   private localDriven = false;
   /** Posições previstas recentes do jogador local, para comparar com snapshots atrasados. */
   private localHistory: { t: number; x: number; z: number }[] = [];
@@ -229,8 +336,17 @@ export class EntityManager {
   private lastDeathShow = 0;
   private selectRing: Mesh;
   private models: CharacterModels | null = null;
+  /** Entrada no mundo: enquanto os modelos não chegam, nenhuma entidade vira cápsula (ver holdCapsules). */
+  private capsulesHeld = false;
+  /** Os botes do cenário (world.json, `boat`): o barqueiro do cais senta no mais perto. */
+  private boats: { x: number; z: number }[] = [];
+  /** Entidades esperando o download do próprio modelo (golem, chefes, NPCs do remaster): invisíveis até chegar. */
+  private lazyWaits = new Map<number, Promise<boolean>>();
   private targetId = 0;
   private catalog = new Map<number, SkillInfo>();
+  /** Passos do jogador local correndo (poeira): fração do passo atual e o pé. */
+  private stepPhase = 0;
+  private stepSide = 1;
 
   constructor(
     private scene: Scene,
@@ -241,6 +357,8 @@ export class EntityManager {
     private fx: Fx,
     private shadows: ShadowGenerator,
     private collision: Collision,
+    /** Áreas de clique (cilindros testados em código, sem malha na cena). */
+    private picks: PickAreas,
   ) {
     this.ringMat = new StandardMaterial("localRing", scene);
     this.ringMat.emissiveColor = new Color3(0.95, 0.8, 0.4);
@@ -330,6 +448,14 @@ export class EntityManager {
     if (!v) return;
     v.pvpState = s.pvpState;
     v.clanName = s.clanName;
+    v.title = s.title;
+    v.spec = s.spec;
+    // Trocou de classe (subclasse): a classe e o nível novos (o modelo continua o da principal).
+    if (s.activeClass) v.cls = s.activeClass;
+    if (s.level > 0 && s.level !== v.level) {
+      v.level = s.level;
+      this.refreshLabel(v);
+    }
     this.refreshName(v);
     // O clã do jogador local mudou: os aliados de clã mudam de cor também.
     if (s.id === this.localId) for (const o of this.views.values()) if (o !== v) this.refreshName(o);
@@ -363,13 +489,16 @@ export class EntityManager {
     v.offhand = a.offhand;
     v.grade = a.weaponGrade;
     v.weaponEnchant = a.weaponEnchant;
+    v.armor = toArmorGrades(a.armor);
     if (a.look) v.look = toBodyLook(a.look);
     if (!v.model3d) return;
     v.model3d.setLook(v.look);
     this.setShadow(v, false); // as malhas mudam; a sombra volta no próximo quadro
     v.model3d.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
+    v.model3d.setArmor(v.armor);
     v.meshes = v.model3d.meshes();
     this.notPickable(v.meshes);
+    this.fixBounds(v); // a cabeça nova é outra malha
   }
 
   isEnemy(id: number): boolean {
@@ -380,7 +509,53 @@ export class EntityManager {
   /** Quando os modelos 3D terminam de carregar: troca as cápsulas pelos modelos. */
   setModels(models: CharacterModels): void {
     this.models = models;
+    models.onModelReady = () => {
+      for (const v of this.views.values()) if (v.kind !== EntityKind.OBJECT) this.attachModel(v);
+    };
     for (const v of this.views.values()) if (v.kind !== EntityKind.OBJECT) this.attachModel(v);
+    this.releaseCapsules();
+  }
+
+  /** O bote do cenário mais perto de (x, z), até FERRY_BOAT_REACH m (null = nenhum). */
+  private nearestBoat(x: number, z: number): { x: number; z: number } | null {
+    let best: { x: number; z: number } | null = null;
+    let bd = FERRY_BOAT_REACH;
+    for (const b of this.boats) {
+      const d = Math.hypot(b.x - x, b.z - z);
+      if (d < bd) {
+        bd = d;
+        best = b;
+      }
+    }
+    return best;
+  }
+
+  /** Os botes do cenário (o barco de Tomé senta o barqueiro no mais perto do poste). */
+  setBoats(boats: { x: number; z: number }[]): void {
+    this.boats = boats;
+  }
+
+  /** Entrada no mundo: segura as cápsulas até os modelos carregarem (ou falharem: releaseCapsules). */
+  holdCapsules(): void {
+    this.capsulesHeld = true;
+  }
+
+  /** Solta as cápsulas: quem ficou sem modelo (e não espera um download) vira cápsula, o último recurso. */
+  releaseCapsules(): void {
+    this.capsulesHeld = false;
+    for (const v of this.views.values()) {
+      if (drawnInCode(v.kind, v.model) || v.model3d || v.capsule) continue;
+      if (this.wantsCapsule(v)) v.capsule = this.createCapsule(v);
+    }
+  }
+
+  private wantsCapsule(v: View): boolean {
+    return !this.capsulesHeld && !this.lazyWaits.has(v.id) && !drawnInCode(v.kind, v.model);
+  }
+
+  /** Resolve quando nenhuma entidade espera mais o download do próprio modelo (só esses downloads, não o pacote todo). */
+  async modelsSettled(): Promise<void> {
+    while (this.lazyWaits.size) await Promise.allSettled([...this.lazyWaits.values()]);
   }
 
   setTarget(id: number): void {
@@ -388,7 +563,7 @@ export class EntityManager {
     const v = this.views.get(id);
     if (v) {
       this.selectRing.parent = v.root;
-      this.selectRing.position.set(0, 0.04, 0);
+      this.selectRing.position.set(0, 0.1, 0);
       this.selectRing.scaling.setAll(v.scale);
       this.selectRing.setEnabled(true);
     } else {
@@ -406,24 +581,30 @@ export class EntityManager {
     const scale = e.scale > 0 ? e.scale : 1;
 
     const root = new TransformNode(`e${e.id}`, this.scene);
-    root.position.set(e.x, 0, e.z);
+    root.position.set(e.x, heightAt(e.x, e.z), e.z);
     const visual = new TransformNode(`visual${e.id}`, this.scene);
     visual.parent = root;
 
-    // Área de clique estável (invisível): o modelo animado não serve, porque o picking de
-    // malha com esqueleto usa a pose parada e braços/pernas entram e saem do cursor.
+    // Área de clique estável: um cilindro nos pés, testado em código (world/pick.ts). O
+    // modelo animado não serve, porque o picking de malha com esqueleto usa a pose parada e
+    // braços/pernas entram e saem do cursor.
     const isObject = e.kind === EntityKind.OBJECT;
     const body = MODEL_BODY[e.model];
-    if (!isObject) {
+    if (!isObject || e.model === TOMB_MODEL) {
       // Monstros grandes (golem) ganham uma área do tamanho do corpo, senão o clique
       // passa pelos ombros e braços sem selecionar.
-      const h = (body?.height ?? 2.1) * scale;
-      const hit = MeshBuilder.CreateCylinder(`hit${e.id}`, { height: h, diameter: (body?.width ?? 1.2) * scale, tessellation: 12 }, this.scene);
-      hit.parent = root;
-      hit.position.y = h / 2;
-      hit.isVisible = false;
-      hit.isPickable = true;
-      hit.metadata = { entityId: e.id };
+      this.picks.addEntity(e.id, root, ((body?.width ?? 1.2) * scale) / 2, (body?.height ?? 2.1) * scale);
+    }
+    // O barco de Tomé: o clique vale no bote (e no barqueiro nele), não só no poste do cais.
+    let ferryBoat: View["ferryBoat"] = null;
+    if (e.model === FERRY_MODEL) {
+      const b = this.nearestBoat(e.x, e.z);
+      if (b) {
+        const pick = new TransformNode(`fpick${e.id}`, this.scene);
+        pick.position.set(b.x, heightAt(b.x, b.z), b.z);
+        this.picks.addEntityExtra(e.id, pick, FERRY_BOAT_PICK.radius, FERRY_BOAT_PICK.height);
+        ferryBoat = { dx: b.x - e.x, dz: b.z - e.z, dy: heightAt(b.x, b.z) - heightAt(e.x, e.z), pick };
+      }
     }
 
     // Anel no chão: na cor do emblema para jogadores (o seu, mais forte), dourado sem emblema.
@@ -431,7 +612,7 @@ export class EntityManager {
     if (isLocal || emblem) {
       const ring = MeshBuilder.CreateTorus(`ring${e.id}`, { diameter: isLocal ? 1.1 : 1.0, thickness: isLocal ? 0.06 : 0.04, tessellation: 32 }, this.scene);
       ring.parent = root;
-      ring.position.y = 0.03;
+      ring.position.y = 0.1;
       ring.material = emblem ? this.ringMaterial(emblem, isLocal ? 0.85 : 0.5) : this.ringMat;
       ring.isPickable = false;
     }
@@ -457,17 +638,32 @@ export class EntityManager {
       : isLocal
         ? "#f0d79a"
         : e.kind === EntityKind.MONSTER
-        ? "#ffb4a8"
+        ? e.rare
+          ? NAME_COLORS.rare
+          : "#ffb4a8"
         : e.kind === EntityKind.NPC
           ? "#a8e6a0"
           : e.kind === EntityKind.OBJECT
             ? "#bcd4ff"
             : "#e6ecff";
     nameText.color = baseColor;
+    if (e.rare) nameText.fontWeight = "bold"; // raro: nome dourado, em negrito
     // Contorno em vez de shadowBlur: o desfoque do canvas 2D é caro e a GUI redesenha muito.
     nameText.outlineWidth = 3;
     nameText.outlineColor = "rgba(0,0,0,0.85)";
     stack.addControl(nameText);
+    let titleText: TextBlock | null = null;
+    if (e.kind === EntityKind.PLAYER) {
+      titleText = new TextBlock();
+      titleText.resizeToFit = true;
+      titleText.fontSize = 11;
+      titleText.fontStyle = "italic";
+      titleText.color = NAME_COLORS.title;
+      titleText.outlineWidth = 3;
+      titleText.outlineColor = "rgba(0,0,0,0.85)";
+      titleText.isVisible = false;
+      stack.addControl(titleText);
+    }
     const clanText = new TextBlock();
     clanText.resizeToFit = true;
     clanText.fontSize = 11;
@@ -496,13 +692,15 @@ export class EntityManager {
 
     const v: View = {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
-      model: e.model, boss: e.boss, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
-      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, baseColor, clanText, pkRing: null,
+      model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, armor: toArmorGrades(e.armor), emblem, look: toBodyLook(e.look),
+      weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, cls: e.activeClass || e.model, baseColor, clanText, titleText, pkRing: null,
+      px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
-      root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
+      root, visual, head, ferryBoat, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
-      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null,
+      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, greetUntil: 0, fightAt: 0, hand: undefined,
+      bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
     };
     this.views.set(e.id, v);
     // NPCs ficam parados, virados para o centro da praça.
@@ -511,6 +709,10 @@ export class EntityManager {
     this.refreshName(v);
     this.refreshHpBar(v);
 
+    if (e.model === TOMB_MODEL || e.model === LAPIDE_MODEL) {
+      this.buildTomb(v);
+      return;
+    }
     if (isObject) {
       this.buildBanner(v);
       return;
@@ -519,15 +721,110 @@ export class EntityManager {
       this.buildStone(v);
       return;
     }
+    if (e.model === FERRY_MODEL) {
+      this.buildFerryPost(v);
+      return;
+    }
     if (this.models) this.attachModel(v);
-    if (!v.model3d) v.capsule = this.createCapsule(v);
+    if (!v.model3d && this.wantsCapsule(v)) v.capsule = this.createCapsule(v);
     if (v.dead) this.showDead(v, true);
     else if (fade && e.kind === EntityKind.MONSTER) this.fadeIn(v);
+  }
+
+  /** Túmulo clicável: nome em cima e a dica (hora da morte e quem mais bateu) na linha de baixo. */
+  tomb(id: number): { name: string; title: string } | null {
+    const v = this.views.get(id);
+    return v?.model === TOMB_MODEL ? { name: v.name, title: v.title } : null;
+  }
+
+  /** Lápide de pedra sobre um montinho de terra, com uma luz fria apagando devagar. */
+  private buildTomb(v: View): void {
+    const mound = MeshBuilder.CreateSphere(`tmound${v.id}`, { diameterX: 1.7, diameterY: 0.5, diameterZ: 2.4, segments: 8 }, this.scene);
+    mound.parent = v.visual;
+    mound.position.y = 0.05;
+    mound.material = this.material("#4d4033");
+    const slab = MeshBuilder.CreateBox(`tslab${v.id}`, { width: 0.95, height: 1.25, depth: 0.22 }, this.scene);
+    slab.parent = v.visual;
+    slab.position.set(0, 0.7, -0.75);
+    slab.material = this.material("#8a8f96");
+    const cap = MeshBuilder.CreateCylinder(`tcap${v.id}`, { height: 0.22, diameter: 0.95, tessellation: 14 }, this.scene);
+    cap.parent = v.visual;
+    cap.rotation.x = Math.PI / 2;
+    cap.position.set(0, 1.32, -0.75);
+    cap.material = this.material("#8a8f96");
+    const cross = MeshBuilder.CreateBox(`tcross${v.id}`, { width: 0.1, height: 0.5, depth: 0.05 }, this.scene);
+    cross.parent = v.visual;
+    cross.position.set(0, 0.85, -0.87);
+    cross.material = this.material("#3a3d42");
+    const bar = MeshBuilder.CreateBox(`tbar${v.id}`, { width: 0.34, height: 0.1, depth: 0.05 }, this.scene);
+    bar.parent = v.visual;
+    bar.position.set(0, 0.95, -0.87);
+    bar.material = this.material("#3a3d42");
+    for (const m of [mound, slab, cap, cross, bar]) m.isPickable = false;
+    v.meshes = [mound, slab, cap];
+    v.head.position.y = 1.9;
+    v.nameText.color = "#d8d2c0";
+    v.clanText.text = v.title; // a dica fica sempre à vista, abaixo do nome
+    v.clanText.color = "#b9b29c";
+    v.clanText.isVisible = !!v.title;
   }
 
   /** Pedra de Teleporte: monólito com runas acesas e núcleo de luz (ver teleport-stone.ts). */
   private buildStone(v: View): void {
     v.meshes = buildTeleportStone(this.scene, this.fx, v.id, v.visual, v.root).shadowMeshes;
+  }
+
+  /** Barco de Tomé: um poste de madeira com a lanterna verde e o sino do barqueiro (o bote em si é cenário do mapa). */
+  private buildFerryPost(v: View): void {
+    const pole = MeshBuilder.CreateCylinder(`fpole${v.id}`, { height: 2.4, diameterTop: 0.1, diameterBottom: 0.16, tessellation: 8 }, this.scene);
+    pole.parent = v.visual;
+    pole.position.y = 1.2;
+    pole.material = this.material("#5b4630");
+    const arm = MeshBuilder.CreateBox(`farm${v.id}`, { width: 0.9, height: 0.07, depth: 0.07 }, this.scene);
+    arm.parent = v.visual;
+    arm.position.set(0.4, 2.25, 0);
+    arm.material = this.material("#5b4630");
+    const lamp = MeshBuilder.CreateSphere(`flamp${v.id}`, { diameter: 0.3, segments: 8 }, this.scene);
+    lamp.parent = v.visual;
+    lamp.position.set(0.8, 2.0, 0);
+    const glow = new StandardMaterial(`flamp-mat${v.id}`, this.scene);
+    glow.diffuseColor = Color3.FromHexString("#9fe870");
+    glow.emissiveColor = Color3.FromHexString("#9fe870").scale(0.85);
+    lamp.material = glow;
+    const bell = MeshBuilder.CreateCylinder(`fbell${v.id}`, { height: 0.26, diameterTop: 0.12, diameterBottom: 0.3, tessellation: 10 }, this.scene);
+    bell.parent = v.visual;
+    bell.position.set(-0.3, 2.1, 0);
+    bell.material = this.material("#c9a24a");
+    for (const m of [pole, arm, lamp, bell]) m.isPickable = false;
+    v.meshes = [pole, arm, lamp, bell];
+    // O nome fica sobre o bote (onde está o barqueiro), não sobre o poste: não se mistura com o de quem espera no cais.
+    if (v.ferryBoat) v.head.position.set(v.ferryBoat.dx, v.ferryBoat.dy + FERRYMAN_LABEL_Y, v.ferryBoat.dz);
+    else v.head.position.y = FERRYMAN_LABEL_Y;
+    if (this.models) this.seatFerryman(v);
+  }
+
+  /** O barqueiro de Tomé, sentado no bote do cenário (sem bote por perto, o poste fica sozinho). */
+  private seatFerryman(v: View): void {
+    const b = v.ferryBoat;
+    if (!b || !this.models || v.model3d) return;
+    const inst = this.models.instantiate(FERRYMAN_MODEL, String(v.id));
+    if (!inst) return;
+    const seat = new TransformNode(`fseat${v.id}`, this.scene);
+    seat.parent = v.root;
+    seat.position.set(b.dx, b.dy + FERRYMAN_SEAT_Y, b.dz);
+    seat.rotation.y = v.visual.rotation.y;
+    inst.root.parent = seat;
+    inst.root.scaling.scaleInPlace(FERRYMAN_SCALE);
+    const meshes = inst.meshes();
+    this.notPickable(meshes);
+    // Fora do corpo fixo do poste (fixBounds): o barqueiro está a metros dele, e a caixa o cortaria da tela.
+    for (const m of meshes) m.alwaysSelectAsActiveMesh = true;
+    v.meshes = [...v.meshes, ...meshes];
+    v.model3d = inst;
+    v.anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
+    v.anim.setBodyScale(FERRYMAN_SCALE);
+    v.anim.legacy = this.legacyMove;
+    if (this.lazyWaits.has(v.id)) this.fadeIn(v);
   }
 
   /** Estandarte: mastro, bandeira com a cor da ordem e o círculo da área (8 m). */
@@ -550,7 +847,8 @@ export class EntityManager {
     emblem.material = this.material("#e2c070");
     const area = MeshBuilder.CreateTorus(`area${v.id}`, { diameter: 16, thickness: 0.08, tessellation: 64 }, this.scene);
     area.parent = v.root;
-    area.position.y = 0.05;
+    // O círculo de 16 m sobe o que as colinas pedirem, para não afundar.
+    area.position.y = 0.05 + groundClearance(terrain(), v.root.position.x, v.root.position.z, 8);
     const areaMat = new StandardMaterial(`areaMat${v.id}`, this.scene);
     areaMat.emissiveColor = new Color3(0.45, 0.7, 1);
     areaMat.disableLighting = true;
@@ -583,13 +881,16 @@ export class EntityManager {
     this.dropStage(id);
     v.label.dispose();
     this.views.delete(id);
+    this.picks.removeEntity(id);
     // Corpo de monstro: afunda e desbota antes de sumir.
     if (v.shownDead && v.kind === EntityKind.MONSTER) this.sinkAndDispose(v);
     else this.disposeView(v);
   }
 
   private disposeView(v: View): void {
+    this.lazyWaits.delete(v.id);
     v.model3d?.dispose();
+    v.ferryBoat?.pick.dispose();
     // Materiais são compartilhados (modelo, anel, efeitos): só as malhas são descartadas.
     v.root.dispose(false, false);
   }
@@ -599,10 +900,11 @@ export class EntityManager {
     for (const m of v.root.getChildMeshes(false)) m.isPickable = false;
     const meshes = v.meshes.length ? v.meshes : v.root.getChildMeshes(false);
     let t = 0;
+    const y0 = v.root.position.y; // o chão onde caiu (o relevo)
     const obs = this.scene.onBeforeRenderObservable.add(() => {
       t += this.scene.getEngine().getDeltaTime() / 1000;
       const k = Math.min(1, t / CORPSE_SINK_S);
-      v.root.position.y = -0.5 * v.scale * k * k;
+      v.root.position.y = y0 - 0.5 * v.scale * k * k;
       for (const m of meshes) m.visibility = 1 - k;
       if (k >= 1) {
         this.scene.onBeforeRenderObservable.remove(obs);
@@ -631,11 +933,11 @@ export class EntityManager {
     if (s.teleport) {
       // Piscar/Investida: pula direto (sem deslizar), com clarão nos dois pontos.
       const from = v.root.position.clone();
-      v.root.position.set(s.x, 0, s.z);
+      v.root.position.set(s.x, heightAt(s.x, s.z), s.z);
       v.server.x = v.target.x = s.x;
       v.server.z = v.target.z = s.z;
       if (s.id === this.localId) this.resetLocalPrediction();
-      this.fx.blinkFlash(from, v.root.position.clone(), new Color3(0.7, 0.5, 1));
+      this.fx.as(s.id === this.localId, () => this.fx.blinkFlash(from, v.root.position.clone(), new Color3(0.7, 0.5, 1)));
       if (s.speed > 0) v.speed = s.speed;
       return;
     }
@@ -820,20 +1122,42 @@ export class EntityManager {
     const dst = this.views.get(ev.targetId);
     if (!dst) return;
     const now = performance.now();
+    // Cura do monstro curandeiro (tunnel#129): o número verde sai no aliado curado.
+    if (ev.skillId === MONSTER_HEAL_HIT) {
+      if (src && src !== dst) {
+        this.face(src, dst);
+        src.anim?.play("skill", { lead: SWING_LEAD });
+      }
+      this.at(Math.max(now, dst.impactUntil), dst.id, () => {
+        if (ev.heal && showDamage()) this.fx.number(dst.head, "heal", `+${ev.heal}`);
+      });
+      return;
+    }
+    // Quem briga com você (a auto-caça prefere e não pula, mesmo neutro).
+    if (src && ev.targetId === this.localId && src.kind === EntityKind.MONSTER) src.fightAt = now;
+    if (ev.sourceId === this.localId && dst.kind === EntityKind.MONSTER) dst.fightAt = now;
     // Veneno, queimadura e praga: só o número (sem animação de golpe).
     if (ev.dot !== Effect.UNSPECIFIED) {
-      const color = ev.dot === Effect.BURN ? "#ffa04a" : ev.dot === Effect.PLAGUE ? "#9ccf5a" : "#7dff7a";
+      // Queimadura no Lendário do guia, veneno no Bom, praga num verde mais seco.
+      const color = ev.dot === Effect.BURN ? "#ff9a3c" : ev.dot === Effect.PLAGUE ? "#9ccf5a" : "#7bd88f";
       this.at(Math.max(now, dst.impactUntil), dst.id, () => {
-        this.fx.damageNumber(dst.head, String(ev.damage), color, false);
+        if (showDamage()) this.fx.number(dst.head, "dot", String(ev.damage), color);
         if (ev.kill) dst.anim?.play("hit");
       });
       return;
     }
-    // Golpes de área do raid boss: o visual veio no aviso do chão; aqui só o número.
+    // Golpes de área do raid boss: o visual veio no aviso do chão; aqui o número e, em
+    // você, o tremor e o flash.
     if (ev.skillId >= RAID_HIT_BASE) {
       this.at(Math.max(now, dst.impactUntil), dst.id, () => {
-        if (ev.damage > 0) this.fx.damageNumber(dst.head, String(ev.damage), "#d68cff", ev.crit);
+        const onMe = ev.targetId === this.localId;
+        if (ev.damage > 0 && showDamage()) this.fx.number(dst.head, ev.crit ? "crit" : "raid", ev.crit ? `${ev.damage}!` : String(ev.damage));
+        gameAudio.hit("raid", ev.crit, false, dst.root.position, onMe);
         dst.anim?.play("hit");
+        if (onMe && ev.damage > 0) {
+          this.fx.shake(0.12, 0.25);
+          this.fx.hitFlash(dst.meshes, false);
+        }
       });
       return;
     }
@@ -858,7 +1182,9 @@ export class EntityManager {
     } else if (src && src !== dst) {
       release = this.swing(src, dst, ev.skillId ? "skill" : "attack", now);
       if (sk && sk.target === SkillTarget.ENEMY) this.fx.skillName(src.head, sk.name);
+      if (!isCaster(src.model)) this.startTrail(src, release, sk);
     }
+    const local = ev.sourceId === this.localId || ev.targetId === this.localId;
 
     let impact = release;
     if (src && src !== dst && !isArea) {
@@ -868,16 +1194,17 @@ export class EntityManager {
       const bolt = BOLT_COLOR[sk?.fx ?? ""];
       // O projétil sai da mão no instante da soltura, do lugar onde cada um estiver.
       const launch = (fn: (from: Vector3, to: Vector3) => void) =>
-        this.at(release, dst.id, () =>
-          fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0))),
-        );
-      if (sk?.fx === "fireball") {
+        this.at(release, dst.id, () => {
+          gameAudio.launch(sk?.fx, src.root.position, local);
+          this.fx.as(local, () => fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0))));
+        });
+      if (sk?.fx === "fireball" || sk?.fx === "me_lance") {
         launch((a, b) => this.fx.fireball(a, b, travel));
         impact = release + travel * 1000;
-      } else if (sk?.fx === "m_rain") {
+      } else if (sk?.fx === "m_rain" || sk?.fx === "m_inferno") {
         launch(() => this.fx.emberRain(dst.root.position.clone(), sk.splash));
         impact = release + 650;
-      } else if (sk?.fx === "m_meteor") {
+      } else if (sk?.fx === "m_meteor" || sk?.fx === "me_cata") {
         launch(() => this.fx.meteor(dst.root.position.clone(), sk.splash, ev.sourceId === this.localId));
         impact = release + 760;
       } else if (bolt) {
@@ -886,6 +1213,10 @@ export class EntityManager {
       } else if (!ev.skillId && isCaster(src.model)) {
         // Ataque básico de quem usa magia (magos e esqueletos magos).
         launch((a, b) => this.fx.arcaneBolt(a, b, travel));
+        impact = release + travel * 1000;
+      } else if (!ev.skillId && src.role === ARCH.archer) {
+        // Atirador (tunnel#129): a lâmina arremessada voa até o alvo.
+        launch((a, b) => this.fx.bolt(a, b, travel, THROWN_COLOR));
         impact = release + travel * 1000;
       }
     }
@@ -963,39 +1294,96 @@ export class EntityManager {
     if (!this.views.has(dst.id)) return;
     // Último golpe a caminho chegou: a barra mostra a vida que o servidor mandou.
     this.flushHp(dst);
-    if (ev.heal && src) this.fx.damageNumber(src.head, `+${ev.heal}`, "#7dff9a", false);
-    if (ev.absorbed && !ev.miss) this.fx.damageNumber(dst.head, `(${ev.absorbed} absorvido)`, "#9fc6ff", false);
+    const numbers = showDamage();
+    if (ev.heal && src && numbers) this.fx.number(src.head, "heal", `+${ev.heal}`);
     const mine = ev.sourceId === this.localId;
     const onMe = ev.targetId === this.localId;
     if (ev.miss) {
-      this.fx.damageNumber(dst.head, "Errou", "#b9b4c2", false);
+      // Em você: você esquivou; nos outros: o golpe errou.
+      if (numbers) this.fx.number(dst.head, onMe ? "dodge" : "miss", onMe ? "Esquivou" : "Errou");
+      if (!quiet) gameAudio.miss(dst.root.position, mine || onMe);
       return;
     }
+    // O escudo segurou: tudo ("Bloqueado") ou parte (o número sai também, logo abaixo).
+    if (ev.absorbed && numbers) this.fx.number(dst.head, "block", ev.damage === 0 ? "Bloqueado" : `(${ev.absorbed} absorvido)`);
+    if (!quiet) gameAudio.hit(sk?.fx, ev.crit, !sk && !!src && isCaster(src.model), dst.root.position, mine || onMe);
+    if (!quiet) this.feel(ev, src, dst, sk, mine, onMe);
     // Impacto (a Bola de Fogo e a magia básica já explodiram ao chegar).
     const at = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
     const from = src ? src.root.position.add(new Vector3(0, 1 * src.scale, 0)) : at;
+    // Marca no chão da área em volta do alvo (uma vez por skill, não por inimigo atingido).
+    if (!quiet && sk && sk.splash > 0) this.fx.as(mine || onMe, () => this.fx.areaMark(dst.root.position, sk.splash, sk.fx));
+    this.fx.as(mine || onMe, () => this.impactFx(quiet, ev, src, dst, sk, at, from, mine));
+    const color = onMe || ev.crit || !sk ? undefined : (SKILL_NUMBER_COLOR[sk.fx] ?? skillFxColors(sk.fx)?.trail);
+    if (ev.damage === 0 && sk && sk.power === 0) return; // skill só de efeito (Frasco, Marca…)
+    if (ev.damage > 0 || !ev.absorbed) {
+      const kind = onMe ? "taken" : ev.crit ? "crit" : sk ? "skill" : mine ? "mine" : "damage";
+      if (numbers) this.fx.number(dst.head, kind, ev.crit ? `${ev.damage}!` : String(ev.damage), color);
+    }
+    if (!ev.kill && !dst.dead) dst.anim?.play("hit");
+  }
+
+  /**
+   * Sensação do golpe que encostou: pausa de impacto e flash no seu golpe; flash e tremor
+   * quando o golpe é em você (tremor só do chefe) e tremor leve no seu crítico.
+   */
+  private feel(ev: CombatEvent, src: View | undefined, dst: View, sk: SkillInfo | undefined, mine: boolean, onMe: boolean): void {
+    if (mine && src && src !== dst && ev.damage > 0) {
+      const s = ev.kill ? HIT_STOP.kill : ev.crit ? HIT_STOP.crit : sk ? HIT_STOP.skill : HIT_STOP.hit;
+      dst.anim?.hitStop(s);
+      // O atacante só congela se está no instante do golpe (corpo a corpo); quem soltou um
+      // projétil já está em outra pose quando ele chega.
+      if (Math.abs(performance.now() - src.swingImpact) < 120) src.anim?.hitStop(s);
+      this.fx.hitFlash(dst.meshes, ev.crit);
+      if (ev.crit) this.fx.shake(0.07, 0.18);
+    } else if (onMe && ev.damage > 0) {
+      this.fx.hitFlash(dst.meshes, false);
+      if (src?.boss) this.fx.shake(0.12, 0.25);
+    }
+  }
+
+  /** Efeito do impacto de cada skill (a receita de cada uma). */
+  private impactFx(quiet: boolean, ev: CombatEvent, src: View | undefined, dst: View, sk: SkillInfo | undefined, at: Vector3, from: Vector3, mine: boolean): void {
     switch (quiet ? "quiet" : sk?.fx) {
       case "quiet":
       case "m_rain":
+      case "m_inferno":
       case "m_meteor":
       case "m_lance":
       case "m_prison":
+      case "m_arcane":
       case "r_mark":
+      case "b_whirl": // 2 golpes por alvo: o giro já mostra o corte (sem faísca dobrada)
+      case "bb_carnage": // 3 golpes: idem
+      case "me_lance":
+      case "me_cata":
+      case "mo_rot":
+      case "mo_drain":
+      case "mo_abyss":
         break;
       case "r_flask":
       case "r_plague":
         this.fx.poisonSplash(dst.root.position.clone(), sk?.splash || 1.5, sk?.fx === "r_plague" ? new Color3(0.35, 0.55, 0.2) : new Color3(0.45, 0.9, 0.3));
         break;
       case "k_judg":
+      case "k_horizon":
       case "b_exec":
+      case "b_seismic":
+      case "kh_dawn":
+      case "bb_red":
         this.fx.brutalStrike(from, at, mine);
         this.fx.slam(dst.root.position, 1.8, new Color3(1, 0.85, 0.4), mine);
         break;
       case "k_charge":
+      case "bw_charge":
         this.fx.shieldBash(at, mine);
         break;
       case "r_twin":
       case "r_para":
+      case "r_fatal":
+      case "r_shadow":
+      case "rc_blades":
+      case "rc_sentence":
         this.fx.backstab(from, at, ev.crit);
         break;
       case "shield_bash":
@@ -1008,18 +1396,40 @@ export class EntityManager {
         this.fx.backstab(from, at, ev.crit);
         break;
       case "ice_nova":
+      case "m_zero":
         this.fx.frostHit(at);
         break;
       case "fireball":
         break;
       default:
-        if (!src || !isCaster(src.model)) this.fx.meleeHit(at, ev.crit);
+        // Faíscas de impacto (sistemas fixos) espirrando para longe de quem bateu.
+        if (!src || !isCaster(src.model)) this.fx.meleeHit(at, ev.crit, src ? from : undefined);
     }
-    let color = onMe ? "#ff6b5a" : ev.crit ? "#ffd34d" : mine ? "#ffffff" : "#e8e1d4";
-    if (sk && !onMe && !ev.crit) color = SKILL_NUMBER_COLOR[sk.fx] ?? color;
-    if (ev.damage === 0 && sk && sk.power === 0) return; // skill só de efeito (Frasco, Marca…)
-    this.fx.damageNumber(dst.head, ev.crit ? `${ev.damage}!` : String(ev.damage), color, ev.crit || !!sk);
-    if (!ev.kill && !dst.dead) dst.anim?.play("hit");
+  }
+
+  /**
+   * Rastro da arma de quem bate corpo a corpo, em volta do instante do impacto. A cor é a
+   * do tema da skill ou, no ataque básico, a da raridade da arma (guia de arte, 3.2).
+   */
+  private startTrail(src: View, impact: number, sk: SkillInfo | undefined): void {
+    const mine = src.id === this.localId;
+    // Dos outros, só perto de você (longe, o rastro tem poucos pixels e o pool é pequeno).
+    if (!mine && (this.distanceTo(src.id) ?? Infinity) > TRAIL_OTHERS_M) return;
+    if (src.hand === undefined) src.hand = this.findHand(src);
+    if (!src.hand) return;
+    const hex = (sk && skillFxColors(sk.fx)?.trail) || GRADE_COLOR[src.grade] || GRADE_COLOR[1];
+    const hand = src.hand;
+    this.fx.as(mine, () =>
+      this.fx.weaponTrail(hand, impact - TRAIL_BEFORE_MS, impact + TRAIL_AFTER_MS, Color3.FromHexString(hex).scale(0.8)),
+    );
+  }
+
+  /** Encaixe da arma na mão direita do modelo (null = sem modelo ou sem encaixe). */
+  private findHand(v: View): TransformNode | null {
+    const root = v.model3d?.root;
+    if (!root) return null;
+    const hand = root.getDescendants(false, (n) => n.name.split("#")[0] === "handslot.r")[0];
+    return hand instanceof TransformNode ? hand : null;
   }
 
   /** Mostra a vida guardada se nenhum golpe estiver mais a caminho (ex.: o golpe errou). */
@@ -1047,12 +1457,17 @@ export class EntityManager {
       const color = BOLT_COLOR[sk.fx] ?? new Color3(0.8, 0.8, 1);
       // O efeito no alvo (veneno, marca…) só aparece quando o projétil chega.
       dst.impactUntil = Math.max(dst.impactUntil, release + travel * 1000);
+      const local = ev.sourceId === this.localId || ev.targetId === this.localId;
       this.at(release, dst.id, () => {
         const a = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
         const b = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
-        this.fx.bolt(a, b, travel, color, () => {
-          if (sk.fx === "r_flask" || sk.fx === "r_plague") this.fx.poisonSplash(dst.root.position.clone(), sk.splash || 1.5, color);
-        });
+        gameAudio.cast(sk.fx, src.root.position, local);
+        this.fx.as(local, () =>
+          this.fx.bolt(a, b, travel, color, () => {
+            gameAudio.hit(sk.fx, false, false, dst.root.position, local);
+            if (sk.fx === "r_flask" || sk.fx === "r_plague") this.fx.poisonSplash(dst.root.position.clone(), sk.splash || 1.5, color);
+          }),
+        );
       });
       return;
     }
@@ -1062,13 +1477,24 @@ export class EntityManager {
     src.swingImpact = src.lastLand = at;
     src.lastSwing = now;
     this.castImpact.set(`${ev.sourceId}:${ev.skillId}`, { t: now, at });
-    this.at(at, src.id, () => this.castFx(src, sk, ev.sourceId === this.localId));
+    // Giros e pancadas corpo a corpo: o rastro da arma acompanha o golpe.
+    if (sk.target === SkillTarget.AREA && sk.power > 0 && !isCaster(src.model)) this.startTrail(src, at, sk);
+    this.at(at, src.id, () => {
+      const mine = ev.sourceId === this.localId;
+      this.fx.as(mine, () => {
+        // Marca no chão do tamanho real da área (biblioteca nova), por baixo da receita.
+        if (sk.target === SkillTarget.AREA) this.fx.areaMark(src.root.position, sk.range, sk.fx);
+        this.castFx(src, sk, mine);
+      });
+    });
   }
 
   /** Visual de uma skill em si mesmo ou em área. */
   private castFx(src: View, sk: SkillInfo, mine: boolean): void {
+    gameAudio.cast(sk.fx, src.root.position, mine);
     switch (sk.fx) {
       case "ice_nova":
+      case "m_zero":
         this.fx.iceNova(src.root.position, sk.range);
         break;
       case "fortress":
@@ -1084,18 +1510,36 @@ export class EntityManager {
         this.fx.shout(src, new Color3(1, 0.3, 0.2), sk.range);
         break;
       case "k_cry":
+      case "bw_cry":
         this.fx.shout(src, new Color3(1, 0.65, 0.25), 10);
+        break;
+      case "kb_defy":
+        this.fx.shout(src, new Color3(0.45, 0.65, 1), sk.range);
         break;
       case "b_roar":
         this.fx.shout(src, new Color3(0.7, 0.4, 0.9), sk.range);
-        if (mine) this.fx.shake(6);
+        if (mine) this.fx.shake(0.08);
         break;
       case "k_spin":
+      case "b_whirl":
+      case "bb_carnage":
         this.fx.whirl(src, sk.range, mine);
         break;
       case "b_quake":
       case "b_stomp":
+      case "b_stone":
+      case "bw_banner":
         this.fx.slam(src.root.position, sk.range, new Color3(1, 0.7, 0.35), mine);
+        break;
+      case "k_bulwark":
+      case "kb_last":
+        this.fx.slam(src.root.position, sk.range, new Color3(0.45, 0.65, 1), mine);
+        break;
+      case "kh_sun":
+        this.fx.slam(src.root.position, sk.range, new Color3(1, 0.85, 0.45), mine);
+        break;
+      case "r_miasma":
+        this.fx.poisonSplash(src.root.position.clone(), sk.range, new Color3(0.45, 0.9, 0.3));
         break;
       case "r_smoke":
         this.fx.smokeCloud(src.root.position.clone(), sk.range, (sk.effectMs || 6000) / 1000);
@@ -1132,7 +1576,7 @@ export class EntityManager {
     this.at(Math.max(now, v.impactUntil), v.id, () => {
       if (v.effects.get(ev.effect) !== ef || v.shownDead) return; // acabou ou foi renovado antes
       if (ev.effect === Effect.INVISIBLE) this.setGhost(v, true);
-      ef.visual = this.fx.effect(ev.effect, v, Math.max(0, ef.until - performance.now()));
+      this.fx.as(v.id === this.localId, () => (ef.visual = this.fx.effect(ev.effect, v, Math.max(0, ef.until - performance.now()))));
     });
   }
 
@@ -1212,6 +1656,7 @@ export class EntityManager {
       v.hp = 0;
       this.showDead(v, true);
       this.refreshHpBar(v);
+      gameAudio.death(v.model, v.kind === EntityKind.MONSTER, v.boss, v.root.position, id === this.localId);
     });
   }
 
@@ -1227,10 +1672,35 @@ export class EntityManager {
     v.maxHp = r.maxHp;
     v.server = { x: r.x, z: r.z };
     v.target = { x: r.x, z: r.z };
-    v.root.position.set(r.x, 0, r.z);
+    v.root.position.set(r.x, heightAt(r.x, r.z), r.z);
     if (r.id === this.localId) this.resetLocalPrediction();
     this.showDead(v, false);
     this.refreshHpBar(v);
+  }
+
+  /**
+   * O jogador abriu a conversa ou a loja de um NPC do remaster: ele se vira para o jogador e faz o gesto de
+   * cumprimento (clipe `buff`); alguns segundos depois volta a olhar para a praça. NPC de outro estilo: nada muda.
+   */
+  greetNpc(id: number): void {
+    const v = this.views.get(id);
+    if (v?.kind !== EntityKind.NPC || !v.anim || !remasterNpcModel(v.name)) return;
+    const me = this.localPosition();
+    if (me) {
+      v.faceYaw = Math.atan2(me.x - v.root.position.x, me.z - v.root.position.z);
+      v.greetUntil = performance.now() + 6000;
+    }
+    v.anim.play("buff");
+  }
+
+  /** Emote de um jogador: acenar toca uma vez; sentar e dançar ficam até ele andar ou atacar. */
+  emote(id: number, kind: EmoteKind): void {
+    const v = this.views.get(id);
+    if (!v?.anim || v.shownDead) return;
+    if (kind === EmoteKind.WAVE) v.anim.play("wave");
+    else if (kind === EmoteKind.SIT) v.anim.play("sit", { loop: true });
+    else if (kind === EmoteKind.DANCE) v.anim.play("dance", { loop: true });
+    else v.anim.endEmote();
   }
 
   onLevelUp(l: LevelUp): void {
@@ -1241,7 +1711,8 @@ export class EntityManager {
     v.hp = l.maxHp;
     this.refreshLabel(v);
     this.refreshHpBar(v);
-    this.fx.levelUp(v.root);
+    this.fx.as(l.id === this.localId, () => this.fx.levelUp(v.root));
+    gameAudio.levelUp(v.root.position, l.id === this.localId);
   }
 
   /** Chamado a cada frame. */
@@ -1274,38 +1745,82 @@ export class EntityManager {
       }
 
       const pos = v.root.position;
+      // Só escreve na posição quando ela muda: escrever (mesmo o mesmo valor) marca o nó
+      // como sujo, e aí o Babylon refaz a matriz de tudo que está embaixo dele no quadro.
+      // As aproximações suaves encostam no destino abaixo de 1 mm (invisível) e param.
       if (v.id === this.localId && this.localDriven && !v.dead) {
         // Cliente dirigindo: desenha a previsão (a câmera vai junto, sem trancos) mais o
         // resto de alguma correção, que some suavemente.
         const k = Math.exp(-LOCAL_SMOOTH_RATE * dt);
-        this.drawOffset.x *= k;
-        this.drawOffset.z *= k;
-        pos.x = v.server.x + this.drawOffset.x;
-        pos.z = v.server.z + this.drawOffset.z;
+        this.drawOffset.x = settle(this.drawOffset.x * k, 0);
+        this.drawOffset.z = settle(this.drawOffset.z * k, 0);
+        setIfChanged(pos, v.server.x + this.drawOffset.x, v.server.z + this.drawOffset.z);
       } else {
         // Aproxima suavemente a posição desenhada da posição extrapolada.
-        pos.x += (v.server.x - pos.x) * blend;
-        pos.z += (v.server.z - pos.z) * blend;
+        setIfChanged(pos, settle(pos.x + (v.server.x - pos.x) * blend, v.server.x), settle(pos.z + (v.server.z - pos.z) * blend, v.server.z));
       }
       if (v.id === this.localId) this.recordLocal(v);
 
-      const moving = dist > 0.05 && !v.dead;
-      if (moving) {
+      // Anda de verdade o que se vê andar: a velocidade vem da posição DESENHADA, não do destino do servidor (que chega
+      // antes de a posição desenhada alcançar e fazia o personagem escorregar tocando o parado, ou correr no lugar).
+      updateMotion(v, pos.x, pos.z, dt, v.dead);
+      const steering = dist > 0.05 && !v.dead;
+      const moving = this.legacyMove ? steering : v.walking;
+      if (v.id === this.localId) this.footsteps(v, moving, dt);
+      if (v.greetUntil && performance.now() > v.greetUntil) {
+        v.greetUntil = 0;
+        v.faceYaw = Math.atan2(-pos.x, -pos.z); // de volta para o centro da praça
+      }
+      if (steering) {
         v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
         v.faceYaw = null;
       } else if (v.faceYaw !== null) {
-        v.visual.rotation.y = lerpAngle(v.visual.rotation.y, v.faceYaw, 1 - Math.exp(-FACE_RATE * dt));
+        const yaw = lerpAngle(v.visual.rotation.y, v.faceYaw, 1 - Math.exp(-FACE_RATE * dt));
+        // Já virou: fixa o ângulo e para de girar (senão o nó fica sujo todo quadro).
+        if (Math.abs(lerpAngle(yaw, v.faceYaw, 1) - yaw) < 1e-3) {
+          v.visual.rotation.y = v.faceYaw;
+          v.faceYaw = null;
+        } else {
+          v.visual.rotation.y = yaw;
+        }
       }
+      if (v.bounds) this.moveBounds(v);
       if (v.anim) {
         // LOD de animação: quem está fora da tela ou longe não tem os ossos recalculados.
         let active = always;
         if (!active) {
-          const near = !cam || Vector3.DistanceSquared(cam, pos) < ANIM_DISTANCE * ANIM_DISTANCE;
-          active = near && (!planes || v.meshes.some((m) => m.isInFrustum(planes)));
+          const d2 = cam ? Vector3.DistanceSquared(cam, pos) : 0;
+          const near = d2 < ANIM_DISTANCE * ANIM_DISTANCE;
+          const far = !near && v.walking && d2 < ANIM_FAR_DISTANCE * ANIM_FAR_DISTANCE;
+          active = (near || far) && (!planes || (v.bounds ? v.bounds.isInFrustum(planes) : v.meshes.some((m) => m.isInFrustum(planes))));
+          // Entre 50 e 90 m anda a 15 Hz: o tempo parado é recuperado ao acordar (AnimController.catchUp).
+          if (active && far) {
+            v.animAcc += dt;
+            if (v.animAcc < ANIM_FAR_STEP) active = false;
+            else v.animAcc = 0;
+          }
         }
-        v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active);
+        // Andar acaba com o emote na hora (o aviso do servidor chega depois).
+        if (moving && v.anim.emoting) v.anim.endEmote();
+        v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active, this.legacyMove ? v.speed : v.vis);
       }
     }
+  }
+
+  /**
+   * Poeira nos passos do jogador local correndo: uma nuvem pequena a cada passo, alternando
+   * o pé (o Fx só desenha no médio e no alto). Invisível não levanta poeira.
+   */
+  private footsteps(v: View, moving: boolean, dt: number): void {
+    if (!moving || v.speed < DUST_MIN_SPEED || v.effects.has(Effect.INVISIBLE)) {
+      this.stepPhase = 0.6; // o primeiro passo depois de parar sai logo
+      return;
+    }
+    this.stepPhase += (v.speed * dt) / STEP_M;
+    if (this.stepPhase < 1) return;
+    this.stepPhase -= Math.floor(this.stepPhase);
+    this.stepSide = -this.stepSide;
+    this.fx.footDust(v.root.position, v.visual.rotation.y, this.stepSide);
   }
 
   /** Guarda a posição prevista do jogador local (para a reconciliação). */
@@ -1352,6 +1867,16 @@ export class EntityManager {
     }
   }
 
+  /** Todas as entidades, para as invariantes do cliente (net/invariants.ts, 1×/s). */
+  forEachProbe(cb: (e: EntityProbe) => void): void {
+    for (const v of this.views.values()) cb(v);
+  }
+
+  /** Nó raiz de cada entidade (medição de FPS, ?bench=1: separa o que é cenário do que é entidade). */
+  forEachRoot(cb: (e: { root: TransformNode; kind: EntityKind; name: string; local: boolean }) => void): void {
+    for (const v of this.views.values()) cb({ root: v.root, kind: v.kind, name: v.name, local: v.id === this.localId });
+  }
+
   /** Pontos que a câmera precisa enxergar (meio do corpo do jogador e do alvo). */
   focusPoints(): Vector3[] {
     const out: Vector3[] = [];
@@ -1360,6 +1885,16 @@ export class EntityManager {
       if (v) out.push(new Vector3(v.root.position.x, 1.1 * v.scale, v.root.position.z));
     }
     return out;
+  }
+
+  /** Estado de movimento de uma entidade neste quadro (testes no navegador: deslize = velocidade desenhada contra clipes). */
+  motionProbe(id: number): Record<string, number | boolean> | null {
+    const v = this.views.get(id);
+    if (!v) return null;
+    return {
+      x: v.root.position.x, z: v.root.position.z, vis: v.vis, walking: v.walking, speed: v.speed,
+      dist: Math.hypot(v.target.x - v.server.x, v.target.z - v.server.z), scale: v.scale, ...(v.anim?.debug() ?? {}),
+    };
   }
 
   /** Posição na tela (pixels CSS) do meio do corpo. Usado pelos testes no navegador. */
@@ -1389,6 +1924,26 @@ export class EntityManager {
       if (!best || d < best.dist) best = { id: v.id, dist: d, level: v.level };
     }
     return best;
+  }
+
+  /**
+   * Monstros vivos para a auto-caça (huntrules.ts): distância, vida, se está neutro agora
+   * (night = a hora do mundo), invisível e brigando com você. 4×/s no máximo.
+   */
+  huntCandidates(night: boolean): HuntCandidate[] {
+    const me = this.local;
+    if (!me) return [];
+    const now = performance.now();
+    const out: HuntCandidate[] = [];
+    for (const v of this.views.values()) {
+      if (v.kind !== EntityKind.MONSTER || v.dead) continue;
+      const inv = v.effects.get(Effect.INVISIBLE);
+      out.push({
+        id: v.id, name: v.name, hp: v.hp, dist: Vector3.Distance(me.root.position, v.root.position),
+        neutral: neutralNow(v, night), hidden: !!inv && inv.until > now, fightingMe: now - v.fightAt < FIGHT_MS,
+      });
+    }
+    return out;
   }
 
   /** Vira para o alvo do golpe (suave, no update). */
@@ -1431,9 +1986,40 @@ export class EntityManager {
 
   private attachModel(v: View): void {
     if (v.model3d || !this.models) return;
-    const inst = this.models.instantiate(v.model, String(v.id), undefined, v.look);
+    if (v.model === FERRY_MODEL) {
+      this.seatFerryman(v);
+      return;
+    }
+    // Remaster (padrão): os chefes com silhueta própria (Senhor dos Ossos, Ozrhal) têm modelo à parte.
+    const bossModel = v.boss ? remasterModelOf(v.model, true) : v.model;
+    // Remaster (padrão): NPC com modelo próprio (pelo nome; o servidor manda um herói).
+    const npcModel = v.kind === EntityKind.NPC ? remasterNpcModel(v.name) : null;
+    // Remaster: golem, chefes e NPCs baixam sob demanda; até chegar a entidade fica como cápsula (não o modelo de outro).
+    for (const m of new Set([npcModel, bossModel, v.model])) {
+      if (!m || !this.models.pending(m)) continue;
+      // Sem cápsula: a entidade fica invisível, pede o modelo na hora e aparece com fade quando ele chega.
+      if (!this.lazyWaits.has(v.id)) {
+        const p = this.models.ensure(m);
+        this.lazyWaits.set(v.id, p);
+        void p.then((ok) => {
+          if (this.lazyWaits.get(v.id) !== p) return;
+          this.lazyWaits.delete(v.id);
+          // O modelo falhou de vez: aí sim, a cápsula.
+          if (!ok && this.views.get(v.id) === v && !v.model3d && !v.capsule) v.capsule = this.createCapsule(v);
+        });
+      }
+      return;
+    }
+    // O visual do servidor (pele, cabelo, roupa) é de herói: só vale nos modelos de NPC que têm máscara de repintura.
+    const inst =
+      (npcModel && this.models.has(npcModel) ? this.models.instantiate(npcModel, String(v.id), undefined, npcModel === "npc_guarda" ? v.look : undefined) : null) ??
+      (bossModel !== v.model ? this.models.instantiate(bossModel, String(v.id), undefined, v.look) : null) ??
+      this.models.instantiate(v.model, String(v.id), undefined, v.look);
     if (!inst) return;
-    if (v.kind === EntityKind.PLAYER) inst.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
+    if (v.kind === EntityKind.PLAYER) {
+      inst.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
+      inst.setArmor(v.armor);
+    }
     inst.root.parent = v.visual;
     inst.root.scaling.scaleInPlace(v.scale);
     const meshes = inst.meshes();
@@ -1441,10 +2027,53 @@ export class EntityManager {
     this.setShadow(v, false);
     v.meshes = meshes;
     v.model3d = inst;
+    this.fixBounds(v);
     v.anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
+    v.anim.setBodyScale(v.scale);
+    v.anim.legacy = this.legacyMove;
+    v.hand = undefined; // modelo novo: procura o encaixe da mão de novo no próximo golpe
     v.capsule?.dispose();
     v.capsule = null;
     if (v.dead) this.showDead(v, true);
+    else if (this.lazyWaits.has(v.id)) this.fadeIn(v); // chegou depois de a entidade aparecer: entra aos poucos
+  }
+
+  /**
+   * Malhas com esqueleto: caixa fixa e generosa (cobre qualquer pose, inclusive deitado na
+   * morte), a mesma para todas, sem sincronizar com a matriz de cada uma (o Babylon refazia
+   * a caixa de cada malha a cada quadro em que a entidade anda). As armas seguem normais.
+   */
+  private fixBounds(v: View): void {
+    if (!v.bounds) {
+      const body = MODEL_BODY[v.model];
+      const h = (body?.height ?? 2.1) * v.scale;
+      const w = 0.85 * h; // deitado: o corpo inteiro para um lado
+      v.bounds = new BoundingInfo(new Vector3(-w, -0.3 * v.scale, -w), new Vector3(w, h + 0.5 * v.scale, w));
+    }
+    let any = false;
+    for (const m of v.meshes) {
+      if (!m.skeleton || (m.subMeshes?.length ?? 0) > 1) continue;
+      if (m.getBoundingInfo() === v.bounds) {
+        any = true;
+        continue;
+      }
+      m.doNotSyncBoundingInfo = true;
+      m.setBoundingInfo(v.bounds);
+      any = true;
+    }
+    if (!any) v.bounds = null;
+    v.boundsX = NaN; // reposiciona no próximo quadro
+  }
+
+  /** Leva a caixa fixa até onde a entidade está (só quando ela se mexeu). */
+  private moveBounds(v: View): void {
+    const p = v.root.position;
+    if (p.x === v.boundsX && p.y === v.boundsY && p.z === v.boundsZ) return;
+    v.boundsX = p.x;
+    v.boundsY = p.y;
+    v.boundsZ = p.z;
+    Matrix.TranslationToRef(p.x, p.y, p.z, v.boundsAt);
+    v.bounds!.update(v.boundsAt);
   }
 
   private createCapsule(v: View): Mesh {
@@ -1460,7 +2089,7 @@ export class EntityManager {
     return body;
   }
 
-  /** O clique usa a área invisível do add(); as malhas visíveis ficam de fora. */
+  /** O clique usa o cilindro do add() (world/pick.ts); as malhas ficam fora do picking. */
   private notPickable(meshes: AbstractMesh[]): void {
     for (const m of meshes) m.isPickable = false;
   }
@@ -1479,11 +2108,18 @@ export class EntityManager {
             : v.baseColor;
     v.clanText.text = v.clanName ? `‹${v.clanName}›` : "";
     v.clanText.isVisible = !!v.clanName;
+    // Os setters do TextBlock ignoram o mesmo valor: sem redesenho se nada mudou.
+    // Linha de baixo: a especialização e o título (texto fixo, só muda num PlayerStatus).
+    if (v.titleText) {
+      const line = [specInfo(v.spec)?.name ?? "", v.title ? `«${v.title}»` : ""].filter(Boolean).join(" · ");
+      v.titleText.text = line;
+      v.titleText.isVisible = !!line;
+    }
     const red = v.pvpState === PvpState.CHAOTIC;
     if (red && !v.pkRing) {
       const ring = MeshBuilder.CreateTorus(`pk${v.id}`, { diameter: 1.25, thickness: 0.05, tessellation: 32 }, this.scene);
       ring.parent = v.root;
-      ring.position.y = 0.035;
+      ring.position.y = 0.1;
       ring.material = this.ringMaterial(NAME_COLORS.chaotic, 0.55);
       ring.isPickable = false;
       v.pkRing = ring;
@@ -1523,6 +2159,13 @@ const BOLT_COLOR: Record<string, Color3> = {
   r_mark: new Color3(1, 0.2, 0.2),
   r_flask: new Color3(0.45, 0.95, 0.3),
   r_plague: new Color3(0.35, 0.6, 0.2),
+  m_arcane: new Color3(0.7, 0.45, 1),
+  mo_rot: new Color3(0.5, 0.75, 0.3),
+  mo_drain: new Color3(0.65, 0.4, 0.9),
+  mo_abyss: new Color3(0.75, 0.35, 1),
+  rh_knife: new Color3(0.85, 0.9, 0.95),
+  rh_net: new Color3(0.7, 0.85, 0.45),
+  rh_rain: new Color3(0.85, 0.9, 0.95),
 };
 
 const SKILL_NUMBER_COLOR: Record<string, string> = {
@@ -1538,6 +2181,26 @@ const SKILL_NUMBER_COLOR: Record<string, string> = {
   shield_bash: "#cfe0ff",
   brutal_strike: "#ff9a6a",
   backstab: "#e0b4ff",
+  k_horizon: "#ffe9a0",
+  b_seismic: "#ff7a5a",
+  b_whirl: "#ff9a8a",
+  m_inferno: "#ffb14a",
+  m_zero: "#9fe0ff",
+  m_arcane: "#d8b4ff",
+  r_fatal: "#ffd28a",
+  r_shadow: "#e0b4ff",
+  kh_dawn: "#ffe9a0",
+  bb_red: "#ff7a6a",
+  bb_carnage: "#ff9a8a",
+  me_lance: "#ffb14a",
+  me_cata: "#ffd08a",
+  mo_rot: "#c8a8ff",
+  mo_drain: "#d8b4ff",
+  mo_abyss: "#d8b4ff",
+  rc_blades: "#ffc0d0",
+  rc_sentence: "#ffd28a",
+  rh_knife: "#e8f0ff",
+  rh_rain: "#e8ffa0",
 };
 
 /** Modelos que atacam com magia à distância. */
@@ -1545,8 +2208,27 @@ function isCaster(model: string): boolean {
   return model === "mage" || model.includes("mage");
 }
 
+/** Configurações → Jogo → Números de dano. */
+function showDamage(): boolean {
+  return settings.get().showDamage;
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/** Valor de uma aproximação suave, já no destino quando falta menos de 1 mm. */
+function settle(v: number, target: number): number {
+  return Math.abs(target - v) < 1e-3 ? target : v;
+}
+
+/** Muda x/z só se mudaram (escrever no Vector3 marca o nó como sujo). */
+function setIfChanged(p: Vector3, x: number, z: number): void {
+  if (p.x !== x) p.x = x;
+  if (p.z !== z) p.z = z;
+  // Na altura do chão (o relevo é só visual: o servidor continua em x, z).
+  const y = heightAt(x, z);
+  if (p.y !== y) p.y = y;
 }
 
 function lerpAngle(a: number, b: number, t: number): number {

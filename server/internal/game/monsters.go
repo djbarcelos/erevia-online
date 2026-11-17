@@ -3,6 +3,7 @@ package game
 import (
 	"math"
 	"math/rand/v2"
+	"slices"
 )
 
 // MonsterDef descreve um tipo de monstro. Os atributos crescem por nível.
@@ -20,19 +21,40 @@ type MonsterDef struct {
 	Aggressive bool
 	XPBase     float64
 	Scale      float64 // tamanho visual (1 = normal)
+	// Tint: cor da variante ("#rrggbb", "" = a do modelo). O cliente tinge as malhas uma vez,
+	// quando o modelo carrega: variantes de elite reaproveitam os modelos que já existem.
+	Tint string
 	// BodyRadius: raio do corpo (m). Golpes e skills contam da borda do corpo, não do
 	// centro: em monstros grandes o atacante para encostado, não dentro das pedras.
 	// 0 = corpo de tamanho normal (ninguém mudou de alcance).
 	BodyRadius float64
 	Boss       bool // chefe (marcado no mapa)
+	Elite      bool // elite: mais forte que o comum (o aviso das habilidades dura mais)
+	// Habilidades com aviso no chão (abilities.go e zone/abilities.go).
+	Abilities []AbilityDef
 	// Raid boss: covil com coleira própria, fases e habilidades (zone/raid.go), recompensa
 	// dividida por dano e renascimento longo salvo no banco.
-	Raid        bool
+	Raid bool
+	// Chefe de campo (fieldboss.go): renascimento em minutos com janela, fases por vida,
+	// saque e XP por dano e túmulo. Não combina com Raid.
+	FieldBoss   *FieldBossDef
 	Immune      []EffectKind // efeitos que não pegam (raid: atordoar, enraizar…)
 	LeashRadius float64      // distância máxima do ponto de origem (0 = a padrão da zona)
 	// Renascimento do raid em segundos de relógio, sorteado entre os dois.
 	RespawnMin, RespawnMax float64
-	NoGear                 bool // nunca deixa cair equipamento (invocações)
+	NoGear                 bool     // nunca deixa cair equipamento (invocações)
+	Rare                   *RareDef // monstro raro (rares.go): nome dourado e saque garantido
+	// Papel na luta (archetypes.go e zone/archetypes.go). O zero é o bruto, o de sempre: os
+	// parâmetros em zero ganham os padrões do papel na carga dos dados.
+	Archetype Archetype
+	Arch      ArchParams
+	// Neutral: só ataca quem bateu nele, e a auto-caça do cliente pula (a não ser que o
+	// jogador marque a opção). NeutralByDay: neutro de dia e agressivo à noite.
+	Neutral, NeutralByDay bool
+	// BestiaryExtra: no bestiário, fica na família como extra (não trava a conclusão), como
+	// os raros e as invocações. Os monstros de papel são poucos por área: 500 abates de cada
+	// pediriam horas só deles.
+	BestiaryExtra bool
 	// Drops: moedas (por nível do monstro) e itens.
 	GoldChance       float64
 	GoldMin, GoldMax float64
@@ -49,6 +71,24 @@ var (
 	lootBoss = []LootEntry{{"broken_crown", 1, 1, 1}, {"shadow_essence", 1, 2, 4}, {"potion_hp_l", 1, 2, 3}, {"potion_mp_l", 1, 1, 2},
 		{"scroll_ench_weapon", 0.5, 1, 1}, {"scroll_ench_armor", 0.6, 1, 2},
 		{"scroll_ench_weapon_b", 0.15, 1, 1}, {"scroll_ench_armor_b", 0.2, 1, 1}}
+	// Brejo de Lamagris (14–20): o que cai de cada bicho do pântano. Os pergaminhos seguem o
+	// ritmo dos brutos da faixa (lootFighter).
+	lootBrejeiro = []LootEntry{{"brejeiro_scale", 0.4, 1, 2}, {"silver_reed", 0.2, 1, 1}, {"potion_hp_s", 0.1, 1, 2}, {"potion_mp_s", 0.06, 1, 1},
+		{"scroll_ench_armor", 0.015, 1, 1}, {"scroll_ench_weapon", 0.008, 1, 1},
+		{"scroll_ench_armor_b", 0.003, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+	lootToad = []LootEntry{{"frog_gland", 0.2, 1, 1}, {"silver_reed", 0.12, 1, 1}, {"black_mud", 0.25, 1, 2}, {"potion_hp_s", 0.08, 1, 2},
+		{"scroll_ench_armor", 0.015, 1, 1}, {"scroll_ench_weapon", 0.008, 1, 1},
+		{"scroll_ench_armor_b", 0.003, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+	lootMud = []LootEntry{{"black_mud", 0.4, 1, 2}, {"silver_reed", 0.1, 1, 1}, {"potion_mp_s", 0.08, 1, 1},
+		{"scroll_ench_armor", 0.012, 1, 1}, {"scroll_ench_weapon", 0.006, 1, 1}}
+	lootDrowned = []LootEntry{{"skull_cracked", 0.2, 1, 1}, {"black_mud", 0.2, 1, 1}, {"shadow_essence", 0.1, 1, 1}, {"potion_hp_s", 0.08, 1, 1},
+		{"scroll_ench_armor", 0.015, 1, 1}, {"scroll_ench_weapon", 0.008, 1, 1},
+		{"scroll_ench_armor_b", 0.003, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+	// Mãe-Lodo (chefe de campo, nível 21): materiais do Brejo garantidos e os épicos do grau C.
+	lootMother = append([]LootEntry{{"black_mud", 1, 3, 5}, {"frog_gland", 1, 2, 3}, {"potion_hp_l", 1, 2, 3}, {"potion_mp_l", 1, 1, 2},
+		{"scroll_ench_weapon", 0.5, 1, 1}, {"scroll_ench_armor", 0.6, 1, 2},
+		{"scroll_ench_weapon_b", 0.15, 1, 1}, {"scroll_ench_armor_b", 0.2, 1, 1}}, tierLoot(TierC, GradeEpic, 0.015)...)
+
 	// Raid: tudo garantido, menos os pergaminhos (os equipamentos vêm de gearDrops).
 	lootRaid = []LootEntry{{"raid_fragment", 1, 1, 1}, {"shadow_essence", 1, 5, 8}, {"potion_hp_l", 1, 4, 6}, {"potion_mp_l", 1, 3, 4},
 		{"scroll_ench_weapon", 0.8, 1, 2}, {"scroll_ench_armor", 1, 2, 3},
@@ -56,7 +96,45 @@ var (
 	lootGolem = []LootEntry{{"rune_core", 0.3, 1, 1}, {"potion_hp_s", 0.12, 1, 2}, {"potion_hp_l", 0.03, 1, 1},
 		{"scroll_ench_armor", 0.02, 1, 1}, {"scroll_ench_weapon", 0.01, 1, 1},
 		{"scroll_ench_armor_b", 0.004, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+
+	// Graus (tiers.go): os épicos de cada grau saem dos chefes. O Senhor dos Ossos (22) deixa os
+	// do C (e, menos, os do D); o Ozrhal, os do C e do B e as joias lendárias do B. A chance é
+	// por peça: ~24 peças × 1,5% ≈ uma épica a cada 3 abates.
+	lootBossLord = append(append(slices.Clone(lootBoss), tierLoot(TierC, GradeEpic, 0.015)...), tierLoot(TierD, GradeEpic, 0.005)...)
+	lootOzrhal   = append(append(append(append(slices.Clone(lootRaid), bridgeLootGrade(35, GradeRare, 0.15)...),
+		tierLoot(TierC, GradeEpic, 0.01)...), tierLoot(TierB, GradeEpic, 0.02)...), tierLoot(TierB, GradeLegendary, 0.1)...)
+
+	// Elites do 30 ao 40 (conteúdo provisório, tunnel#149): materiais melhores e o
+	// equipamento ponte (bridge.go). A chance é por peça: com 8 peças (4 classes × arma e
+	// armadura), cai ~1 peça a cada 30 a 40 abates.
+	lootAncient = append([]LootEntry{{"rune_core", 0.45, 1, 2}, {"potion_hp_l", 0.06, 1, 1},
+		{"scroll_ench_armor", 0.03, 1, 1}, {"scroll_ench_weapon", 0.015, 1, 1},
+		{"scroll_ench_armor_b", 0.006, 1, 1}, {"scroll_ench_weapon_b", 0.003, 1, 1}},
+		bridgeLoot(30, 0.004, 0.0004)...)
+	lootOssuary = append(append([]LootEntry{{"skull_cracked", 0.3, 1, 2}, {"shadow_essence", 0.25, 1, 1}, {"potion_mp_l", 0.05, 1, 1},
+		{"scroll_ench_armor", 0.03, 1, 1}, {"scroll_ench_weapon", 0.015, 1, 1},
+		{"scroll_ench_armor_b", 0.006, 1, 1}, {"scroll_ench_weapon_b", 0.003, 1, 1}},
+		bridgeLoot(30, 0.002, 0.0002)...), bridgeLoot(35, 0.002, 0.0002)...)
+	lootBroken = append([]LootEntry{{"shadow_essence", 0.2, 1, 2}, {"rune_core", 0.12, 1, 1}, {"potion_hp_l", 0.06, 1, 1},
+		{"potion_mp_l", 0.05, 1, 1}, {"scroll_ench_armor", 0.035, 1, 1}, {"scroll_ench_weapon", 0.018, 1, 1},
+		{"scroll_ench_armor_b", 0.007, 1, 1}, {"scroll_ench_weapon_b", 0.004, 1, 1}},
+		bridgeLoot(35, 0.004, 0.0004)...)
 )
+
+// Marca da Morte do Ozrhal (os testes do raid usam os números).
+const RaidMarkRadius, RaidMarkDelay, RaidMarkMult = 5.0, 5.0, 1.4
+
+// Habilidades do Ozrhal, por fase. A ordem é a de checagem a cada think (Onda, Chuva,
+// Marca), e os ids ligam cada uma ao relógio dela no raidState (zone/raid.go).
+var raidAbilities = []AbilityDef{
+	{ID: "wave", Look: LookWave, Shape: ShapeCircle, Target: AimSelf, Radius: 8, Delay: 2.5, Cooldown: 14, First: 8,
+		Mult: 1.6, Effect: &EffectDef{Kind: EffectSlow, Duration: 3, Value: 0.4}, MinPhase: 1, HitID: HitRaidWave},
+	{ID: "rain", Look: LookRain, Shape: ShapeCircle, Target: AimRandom, Count: 3, Radius: 4, Delay: 2, Cooldown: 12, First: 3,
+		Mult: 1, Effect: &EffectDef{Kind: EffectStun, Duration: 1}, MinPhase: 2, HitID: HitRaidRain},
+	{ID: "mark", Look: LookMark, Shape: ShapeCircle, Target: AimMark, Radius: RaidMarkRadius, Delay: RaidMarkDelay, Cooldown: 16, First: 4,
+		Mult: RaidMarkMult, OnMarked: &EffectDef{Kind: EffectDeathMark, Duration: RaidMarkDelay}, MinPhase: 3, HitID: HitRaidMark,
+		Warn: "Você foi marcado pela morte! Afaste-se do seu grupo antes que a marca exploda."},
+}
 
 var Monsters = map[string]*MonsterDef{
 	"skeleton_minion": {ID: "skeleton_minion", Name: "Esqueleto Lacaio", Model: "skeleton_minion",
@@ -74,10 +152,27 @@ var Monsters = map[string]*MonsterDef{
 	// Lento e muito resistente; bate forte e devagar.
 	"stone_golem": {ID: "stone_golem", Name: "Golem de Pedra", Model: "stone_golem",
 		HP: 180, HPLvl: 40, Atk: 14, AtkLv: 2.6, Def: 26, DefLv: 4, Range: 2.6, Interval: 2.4, Speed: 2.8, Aggressive: true, XPBase: 40, Scale: 1.25, BodyRadius: 1.0,
-		GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem},
+		GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem,
+		// Pancada em cone à frente: ~25% do dano da luta (4 golpes de 2,4 s + 1,5 a cada 10 s).
+		Abilities: []AbilityDef{{ID: "golem_slam", Shape: ShapeCone, Target: AimSelf, Radius: 5, Arc: 90,
+			Delay: 1.2, Cooldown: 10, First: 4, Mult: 1.5, Effect: &EffectDef{Kind: EffectSlow, Duration: 2, Value: 0.3}}}},
 	"bone_lord": {ID: "bone_lord", Name: "Senhor dos Ossos", Model: "skeleton_warrior",
 		HP: 400, HPLvl: 60, Atk: 14, AtkLv: 3, Def: 20, DefLv: 4, Range: 2.8, Interval: 1.8, Speed: 4, Aggressive: true, XPBase: 120, Scale: 1.6, Boss: true,
-		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootBoss},
+		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootBossLord,
+		// Chefe de campo com 3 fases (tunnel#138, roadmap 5.9), janela de 30 a 45 min.
+		// F1: Golpe Giratório, círculo de 4 m em volta dele (2 s de aviso: quem está colado
+		// sai). F2 (60%): chama 3 Guerreiros Esqueleto. F3 (25%): Marcha dos Mortos, linha de
+		// 12 m (1,5 s), e fúria. Cada golpe avisado vale ~25% do dano da luta.
+		FieldBoss: &FieldBossDef{RespawnMin: 30, RespawnMax: 45, Place: "na estrada sul", Phases: []FieldPhase{
+			{AtHP: 0.60, Say: "Senhor dos Ossos: \"Levantem, meus soldados!\"", Summon: "skeleton_warrior", SummonCount: 3},
+			{AtHP: 0.25, Say: "Senhor dos Ossos: \"A marcha dos mortos não para!\"", Enrage: true},
+		}},
+		Abilities: []AbilityDef{
+			{ID: "bone_spin", Shape: ShapeCircle, Target: AimSelf, Radius: 4,
+				Delay: 2, Cooldown: 10, First: 4, Mult: 1.8},
+			{ID: "bone_march", Shape: ShapeLine, Target: AimSelf, Length: 12, Width: 2.4, MinPhase: 3,
+				Delay: 1.5, Cooldown: 9, First: 3, Mult: 1.6},
+		}},
 	// Raid boss da Cripta Esquecida: um lich gigante. Imune a controle (menos provocar),
 	// preso ao covil e com habilidades por fase (zone/raid.go).
 	"ozrhal": {ID: "ozrhal", Name: "Ozrhal, o Rei Ossário", Model: "skeleton_mage",
@@ -85,11 +180,162 @@ var Monsters = map[string]*MonsterDef{
 		Aggressive: true, XPBase: 260, Scale: 2.6, BodyRadius: 1.2, Boss: true, Raid: true,
 		Immune:      []EffectKind{EffectStun, EffectRoot, EffectSlow, EffectBlind},
 		LeashRadius: 30, RespawnMin: 3 * 3600, RespawnMax: 4 * 3600,
-		GoldChance: 1, GoldMin: 120, GoldMax: 160, Loot: lootRaid},
+		GoldChance: 1, GoldMin: 120, GoldMax: 160, Loot: lootOzrhal,
+		Abilities: raidAbilities},
 	// Invocação do Ozrhal: não renasce e não deixa equipamento.
 	"bone_guard": {ID: "bone_guard", Name: "Guarda Ossário", Model: "skeleton_warrior",
 		HP: 120, HPLvl: 30, Atk: 12, AtkLv: 2.4, Def: 14, DefLv: 3, Range: 2.2, Interval: 1.6, Speed: 4.4, Aggressive: true, XPBase: 6, Scale: 1.15,
 		NoGear: true},
+
+	// ---- Do 30 ao 40: elites provisórias, com os modelos de hoje (escala e cor) ----
+	// Uns 15% mais resistentes que um golem do mesmo nível: a tabela teórica conta 25 s por
+	// abate para todos, e as habilidades (aviso de 1,5 s ou mais) fazem o resto.
+
+	// Fundo do Vale (30–35): golens mais velhos, cobertos de musgo e runas verdes.
+	"ancient_golem": {ID: "ancient_golem", Name: "Golem Ancestral", Model: "stone_golem", Tint: "#7fa898",
+		HP: 210, HPLvl: 46, Atk: 15, AtkLv: 2.8, Def: 27, DefLv: 4.2, Range: 2.8, Interval: 2.4, Speed: 2.9, Aggressive: true, XPBase: 46,
+		Scale: 1.55, BodyRadius: 1.25, Elite: true, GoldChance: 0.85, GoldMin: 3.5, GoldMax: 6.5, Loot: lootAncient,
+		Abilities: []AbilityDef{
+			// Pancada larga à frente, como a do golem, com mais alcance e aviso de elite.
+			{ID: "ancient_slam", Shape: ShapeCone, Target: AimSelf, Radius: 6, Arc: 100,
+				Delay: 1.6, Cooldown: 10, First: 4, Mult: 1.6, Effect: &EffectDef{Kind: EffectSlow, Duration: 2, Value: 0.35}},
+			// Tremor em volta: quem não sai do círculo fica atordoado 1 s.
+			{ID: "ancient_quake", Shape: ShapeCircle, Target: AimSelf, Radius: 6.5,
+				Delay: 2, Cooldown: 18, First: 9, Mult: 1.3, Effect: &EffectDef{Kind: EffectStun, Duration: 1}},
+		}},
+	// Vigília Ossária (33–38): a guarda e os devotos que cantam fora da Cripta.
+	"ossuary_knight": {ID: "ossuary_knight", Name: "Cavaleiro Ossário", Model: "skeleton_warrior", Tint: "#9d93b4",
+		HP: 160, HPLvl: 40, Atk: 16, AtkLv: 3, Def: 22, DefLv: 3.8, Range: 2.4, Interval: 1.5, Speed: 4.2, Aggressive: true, XPBase: 48,
+		Scale: 1.3, Elite: true, GoldChance: 0.8, GoldMin: 3.5, GoldMax: 6.5, Loot: lootOssuary,
+		// Investida em linha: sai da frente dele.
+		Abilities: []AbilityDef{{ID: "ossuary_charge", Shape: ShapeLine, Target: AimSelf, Length: 9, Width: 2.6,
+			Delay: 1.6, Cooldown: 12, First: 5, Mult: 1.8}}},
+	"ossuary_devotee": {ID: "ossuary_devotee", Name: "Devoto do Ossário", Model: "skeleton_mage", Tint: "#b07ad0",
+		HP: 130, HPLvl: 34, Atk: 18, AtkLv: 3.2, Def: 18, DefLv: 3.2, Range: 10, Interval: 2.0, Speed: 3.8, Magic: true, Aggressive: true, XPBase: 48,
+		Scale: 1.2, Elite: true, GoldChance: 0.8, GoldMin: 3.5, GoldMax: 6.5, Loot: lootOssuary,
+		// Maldição no chão de quem ele ataca: enfraquece o ataque por 4 s.
+		Abilities: []AbilityDef{{ID: "devotee_curse", Shape: ShapeCircle, Target: AimCurrent, Radius: 3.5,
+			Delay: 1.8, Cooldown: 11, First: 3, Mult: 1.4, Effect: &EffectDef{Kind: EffectWeaken, Duration: 4, Value: 0.15}}}},
+	// Confins Partidos (35–40): os cantos do mapa, onde a Partição rachou mais fundo.
+	"broken_reaper": {ID: "broken_reaper", Name: "Ceifador Partido", Model: "skeleton_rogue", Tint: "#c2675a",
+		HP: 150, HPLvl: 38, Atk: 16, AtkLv: 2.6, Def: 20, DefLv: 3.6, Range: 2.2, Interval: 1.1, Speed: 4.6, Aggressive: true, XPBase: 50,
+		Scale: 1.25, Elite: true, GoldChance: 0.85, GoldMin: 4, GoldMax: 7, Loot: lootBroken,
+		// Varrida em leque largo à frente.
+		Abilities: []AbilityDef{{ID: "reaper_sweep", Shape: ShapeCone, Target: AimSelf, Radius: 4.5, Arc: 160,
+			Delay: 1.5, Cooldown: 9, First: 4, Mult: 1.7}}},
+	"broken_arcanist": {ID: "broken_arcanist", Name: "Arcanista Partido", Model: "skeleton_mage", Tint: "#6fb3c8",
+		HP: 130, HPLvl: 34, Atk: 19, AtkLv: 3.3, Def: 18, DefLv: 3.2, Range: 11, Interval: 2.1, Speed: 3.8, Magic: true, Aggressive: true, XPBase: 50,
+		Scale: 1.2, Elite: true, GoldChance: 0.85, GoldMin: 4, GoldMax: 7, Loot: lootBroken,
+		// Gelo caindo em 2 jogadores da luta: deixa lento.
+		Abilities: []AbilityDef{{ID: "arcanist_frost", Shape: ShapeCircle, Target: AimRandom, Count: 2, Radius: 3.5,
+			Delay: 1.8, Cooldown: 13, First: 6, Mult: 1.3, Effect: &EffectDef{Kind: EffectSlow, Duration: 2.5, Value: 0.3}}}},
+	// ---- Arquétipos (tunnel#129): poucos de cada papel, com os modelos de hoje ----
+	// Variantes dos monstros da área, um pouco mais frágeis que o bruto do lado (o papel é a
+	// parte difícil). São extras no bestiário (BestiaryExtra) e ficam fora da conta do
+	// simulador de equilíbrio (balance/hunt.go), que só sabe lutar com brutos.
+
+	// Campos dos Ossos (6–12): lança lâminas de longe e recua quando você encosta.
+	"skeleton_thrower": {ID: "skeleton_thrower", Name: "Esqueleto Lançador", Model: "skeleton_rogue", Tint: "#c9b27a",
+		HP: 50, HPLvl: 16, Atk: 8, AtkLv: 2.0, Def: 7, DefLv: 1.8, Range: 10, Interval: 1.8, Speed: 3.8, Aggressive: true, XPBase: 16, Scale: 1,
+		Archetype: ArchArcher, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 2, GoldMax: 4, Loot: lootFighter},
+	// Campos dos Ossos: escondido até você chegar a 4,5 m; o primeiro golpe dói 50% a mais.
+	"skeleton_lurker": {ID: "skeleton_lurker", Name: "Esqueleto Espreitador", Model: "skeleton_rogue", Tint: "#5d6274",
+		HP: 55, HPLvl: 17, Atk: 9, AtkLv: 2.2, Def: 8, DefLv: 2, Range: 2, Interval: 1.2, Speed: 4.6, Aggressive: true, XPBase: 17, Scale: 1,
+		Archetype: ArchAmbusher, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 2, GoldMax: 4, Loot: lootFighter},
+	// Campos dos Ossos: um bando acampado. Neutro de dia e agressivo à noite; bater em um puxa todos.
+	"skeleton_raider": {ID: "skeleton_raider", Name: "Saqueador Ossudo", Model: "skeleton_minion", Tint: "#a8794f",
+		HP: 60, HPLvl: 18, Atk: 7, AtkLv: 1.8, Def: 10, DefLv: 2.4, Range: 2, Interval: 1.5, Speed: 4.2, XPBase: 15, Scale: 1.05,
+		Archetype: ArchPack, NeutralByDay: true, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 2, GoldMax: 4, Loot: lootMinion},
+	// Campos dos Ossos: corre até você e explode (círculo de 2,5 m, 1 s de aviso), ou explode ao morrer.
+	"skeleton_volatile": {ID: "skeleton_volatile", Name: "Ossada Instável", Model: "skeleton_minion", Tint: "#e0703a",
+		HP: 40, HPLvl: 12, Atk: 9, AtkLv: 2.2, Def: 6, DefLv: 1.5, Range: 1.8, Interval: 1.6, Speed: 4.8, Aggressive: true, XPBase: 14, Scale: 0.95,
+		Archetype: ArchExploder, BestiaryExtra: true, GoldChance: 0.6, GoldMin: 2, GoldMax: 4, Loot: lootMinion},
+	// Ermos Partidos (13–20): escudo grande à frente (60% a menos de dano físico de frente).
+	"skeleton_sentinel": {ID: "skeleton_sentinel", Name: "Sentinela Ossuda", Model: "skeleton_warrior", Tint: "#8fa3b8",
+		HP: 75, HPLvl: 22, Atk: 8, AtkLv: 2.0, Def: 14, DefLv: 3.2, Range: 2.2, Interval: 1.7, Speed: 3.6, Aggressive: true, XPBase: 20, Scale: 1.1,
+		Archetype: ArchShield, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 2.5, GoldMax: 4.5, Loot: lootFighter},
+	// Ermos Partidos: chama 2 Lacaios Erguidos a cada 20 s (no máximo 4), que morrem com ele.
+	"skeleton_necromancer": {ID: "skeleton_necromancer", Name: "Esqueleto Necromante", Model: "skeleton_mage", Tint: "#7fae6a",
+		HP: 50, HPLvl: 15, Atk: 9, AtkLv: 2.2, Def: 7, DefLv: 1.7, Range: 10, Interval: 2.2, Speed: 3.4, Magic: true, Aggressive: true, XPBase: 24, Scale: 1.05,
+		Archetype: ArchSummoner, Arch: ArchParams{Summon: "risen_minion"}, BestiaryExtra: true,
+		GoldChance: 0.7, GoldMin: 2.5, GoldMax: 4.5, Loot: lootMage},
+	// Invocação do Necromante: não renasce e não deixa saque.
+	"risen_minion": {ID: "risen_minion", Name: "Lacaio Erguido", Model: "skeleton_minion", Tint: "#9fbf8e",
+		HP: 30, HPLvl: 10, Atk: 5, AtkLv: 1.3, Def: 6, DefLv: 1.6, Range: 2, Interval: 1.6, Speed: 3.8, Aggressive: true, XPBase: 3, Scale: 0.9,
+		NoGear: true},
+	// Vale das Pedras Vivas (20–30): neutro; cura 15% da vida de um aliado abaixo de 50% a cada 8 s.
+	"moss_golem": {ID: "moss_golem", Name: "Golem de Musgo", Model: "stone_golem", Tint: "#8fbf7a",
+		HP: 140, HPLvl: 32, Atk: 10, AtkLv: 2.0, Def: 22, DefLv: 3.4, Range: 2.6, Interval: 2.6, Speed: 2.6, XPBase: 36, Scale: 1.1, BodyRadius: 0.9,
+		Archetype: ArchHealer, Neutral: true, BestiaryExtra: true, GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem},
+	// Vale das Pedras Vivas: ao morrer, vira 2 Cascalhos Vivos.
+	"rubble_golem": {ID: "rubble_golem", Name: "Golem de Cascalho", Model: "stone_golem", Tint: "#b39b7d",
+		HP: 150, HPLvl: 34, Atk: 13, AtkLv: 2.4, Def: 24, DefLv: 3.6, Range: 2.6, Interval: 2.4, Speed: 2.8, Aggressive: true, XPBase: 30, Scale: 1.3, BodyRadius: 1.0,
+		Archetype: ArchSplitter, Arch: ArchParams{SplitInto: "rubble_shard"}, BestiaryExtra: true,
+		GoldChance: 0.8, GoldMin: 3, GoldMax: 6, Loot: lootGolem},
+	// Pedaço do Golem de Cascalho (~30% da vida dele): não renasce e não deixa saque.
+	"rubble_shard": {ID: "rubble_shard", Name: "Cascalho Vivo", Model: "stone_golem", Tint: "#b39b7d",
+		HP: 45, HPLvl: 10, Atk: 7, AtkLv: 1.4, Def: 14, DefLv: 2.4, Range: 2.2, Interval: 2.0, Speed: 3.4, Aggressive: true, XPBase: 6, Scale: 0.7, BodyRadius: 0.5,
+		NoGear: true},
+
+	// ---- Brejo de Lamagris (tunnel#139, 14–20) ----
+	// Os modelos "frog" e "slime" são das famílias de monstro (tunnel#135) e "brejeiro" é do Brejo (tunnel#139). Antes do
+	// remaster padrão, o cliente usa um modelo reserva (client/src/world/remaster.ts, MODEL_FALLBACK).
+	//
+	// Brejeiros (homens-lagarto): neutros de dia, agressivos à noite, quando os afogados os deixam em pânico.
+	// Lanceiro: a matilha é o acampamento (o spawn): bater em um puxa os 4.
+	"brejeiro_lanceiro": {ID: "brejeiro_lanceiro", Name: "Brejeiro Lanceiro", Model: "brejeiro",
+		HP: 80, HPLvl: 24, Atk: 9, AtkLv: 2.2, Def: 13, DefLv: 3.2, Range: 3.2, Interval: 1.7, Speed: 4.0, XPBase: 20, Scale: 1.05,
+		Archetype: ArchPack, NeutralByDay: true, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 3, GoldMax: 5.5, Loot: lootBrejeiro},
+	// Xamã: cura um aliado abaixo de 50% e joga "Lama nos Olhos" (cegueira de 2 s) em quem ele ataca.
+	"brejeiro_xama": {ID: "brejeiro_xama", Name: "Brejeiro Xamã", Model: "brejeiro", Tint: "#7fb3a4",
+		HP: 60, HPLvl: 18, Atk: 10, AtkLv: 2.3, Def: 9, DefLv: 2.2, Range: 9, Interval: 2.2, Speed: 3.6, Magic: true, XPBase: 22, Scale: 1.05,
+		Archetype: ArchHealer, NeutralByDay: true, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 3, GoldMax: 5.5, Loot: lootBrejeiro,
+		Abilities: []AbilityDef{{ID: "xama_lama", Shape: ShapeCircle, Target: AimCurrent, Radius: 3.5,
+			Delay: 1.2, Cooldown: 12, First: 4, Mult: 0.8, Effect: &EffectDef{Kind: EffectBlind, Duration: 2, Value: 0.5}}}},
+	// Sapo-Boi: bruto que prende com a língua (linha de 8 m, 1 s de aviso). É o único bruto do Brejo: entra nas
+	// contas de caça do 14 ao 20 (a curva do Guerreiro Esqueleto, com uns 14% a mais de vida e um pouco menos de ataque).
+	"sapo_boi": {ID: "sapo_boi", Name: "Sapo-Boi", Model: "frog",
+		HP: 80, HPLvl: 25, Atk: 7, AtkLv: 1.7, Def: 12, DefLv: 3.0, Range: 2.4, Interval: 1.6, Speed: 3.8, Aggressive: true, XPBase: 17, Scale: 1.25, BodyRadius: 0.8,
+		GoldChance: 0.7, GoldMin: 2.5, GoldMax: 4.5, Loot: lootToad,
+		Abilities: []AbilityDef{{ID: "sapo_lingua", Shape: ShapeLine, Target: AimCurrent, Length: 8, Width: 1.6,
+			Delay: 1.0, Cooldown: 8, First: 3, Mult: 1.1, Effect: &EffectDef{Kind: EffectRoot, Duration: 1.5}}}},
+	// Lodo Vivo: ao morrer vira 2 Lodinhos (30% da vida); o golpe dá lentidão de 20% por 3 s.
+	"lodo_vivo": {ID: "lodo_vivo", Name: "Lodo Vivo", Model: "slime", Tint: "#a8794f",
+		HP: 70, HPLvl: 20, Atk: 8, AtkLv: 1.9, Def: 8, DefLv: 2.4, Range: 2, Interval: 1.6, Speed: 3.2, Aggressive: true, XPBase: 17, Scale: 1.2, BodyRadius: 0.7,
+		Archetype: ArchSplitter, Arch: ArchParams{SplitInto: "lodo_menor"}, BestiaryExtra: true,
+		GoldChance: 0.6, GoldMin: 2, GoldMax: 4, Loot: lootMud,
+		Abilities: []AbilityDef{{ID: "lodo_golpe", Shape: ShapeCircle, Target: AimCurrent, Radius: 2,
+			Delay: 1.0, Cooldown: 5, First: 2, Mult: 1.2, Effect: &EffectDef{Kind: EffectSlow, Duration: 3, Value: 0.2}}}},
+	// Lodinho (30% da vida do Lodo Vivo, e as invocações da Mãe-Lodo e da Velha Escamosa): não renasce e não deixa saque.
+	"lodo_menor": {ID: "lodo_menor", Name: "Lodinho", Model: "slime", Tint: "#a8794f",
+		HP: 24, HPLvl: 7, Atk: 5, AtkLv: 1.2, Def: 6, DefLv: 1.6, Range: 1.8, Interval: 1.6, Speed: 3.6, Aggressive: true, XPBase: 4, Scale: 0.7, BodyRadius: 0.4,
+		NoGear: true},
+	// Afogado: sai da água quando você chega a 4,5 m (o 1º golpe dói 50% a mais) e agarra por 1,5 s. Só à noite,
+	// no lugar de parte dos sapos. É um esqueleto com algas e verde-água.
+	"afogado": {ID: "afogado", Name: "Afogado", Model: "skeleton_warrior", Tint: "#6fa89a",
+		HP: 85, HPLvl: 25, Atk: 10, AtkLv: 2.3, Def: 11, DefLv: 2.8, Range: 2.0, Interval: 1.5, Speed: 4.2, Aggressive: true, XPBase: 21, Scale: 1.05,
+		Archetype: ArchAmbusher, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 3, GoldMax: 5, Loot: lootDrowned,
+		Abilities: []AbilityDef{{ID: "afogado_agarrao", Shape: ShapeCircle, Target: AimCurrent, Radius: 2.2,
+			Delay: 1.0, Cooldown: 10, First: 5, Mult: 1.0, Effect: &EffectDef{Kind: EffectRoot, Duration: 1.5}}}},
+	// Mãe-Lodo (chefe de campo, nível 21): no meio da lagoa de Vau Velho. Golfada em cone (lentidão de 30%), Maré de
+	// Lama (4 círculos em quem está na luta, com veneno) e Lodinhos a cada 25 s (até 3 vivos).
+	"mae_lodo": {ID: "mae_lodo", Name: "Mãe-Lodo", Model: "slime", Tint: "#6f8a4a",
+		HP: 520, HPLvl: 78, Atk: 16, AtkLv: 3.2, Def: 22, DefLv: 4, Range: 3.2, Interval: 2.0, Speed: 3.2, Aggressive: true, XPBase: 125, Scale: 2.8, BodyRadius: 1.6, Boss: true,
+		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootMother,
+		// Chefe de campo com 3 fases (janela de 60 a 90 min). F1: Golfada. F2 (66%): ela se
+		// divide em 3 Lodinhos; os que não morrerem em 30 s voltam e a curam em 20% (o DPS
+		// medido por um relógio). F3 (33%): a Maré de Lama.
+		FieldBoss: &FieldBossDef{RespawnMin: 60, RespawnMax: 90, Place: "na lagoa de Vau Velho", Phases: []FieldPhase{
+			{AtHP: 0.66, Say: "A Mãe-Lodo se parte em Lodinhos: matem-nos em 30 s ou eles voltam a curá-la!",
+				Summon: "lodo_menor", SummonCount: 3, ReturnAfter: 30, ReturnHeal: 0.20},
+			{AtHP: 0.33, Say: "A Maré de Lama sobe: saiam dos círculos!"},
+		}},
+		Abilities: []AbilityDef{
+			{ID: "mae_golfada", Shape: ShapeCone, Target: AimSelf, Radius: 7, Arc: 60,
+				Delay: 1.5, Cooldown: 9, First: 4, Mult: 1.6, Effect: &EffectDef{Kind: EffectSlow, Duration: 4, Value: 0.3}},
+			{ID: "mae_mare", Shape: ShapeCircle, Target: AimRandom, Count: 4, Radius: 3, MinPhase: 3,
+				Delay: 1.8, Cooldown: 16, First: 4, Mult: 1.3, Effect: &EffectDef{Kind: EffectPoison, Duration: 6, Value: 12}},
+		}},
 }
 
 // ImmuneTo informa se o efeito não pega no monstro.
@@ -134,7 +380,95 @@ type Spawn struct {
 	// O nível sobe com a profundidade: LevelMin na borda norte, LevelMax na borda sul.
 	Area   bool
 	Radius float64
-	Region string // nome da região (aparece no mapa)
+	// Região: o nome que aparece no mapa. Um disco (Area) ou setor com Region tem dono: os
+	// anéis das outras regiões não sorteiam monstros lá dentro (ver Owned).
+	Region string
+	// Setor do anel, em graus: o anel só sorteia entre AngleMin e AngleMax. 0° = leste (+X)
+	// e o ângulo cresce para o norte (+Z), o sentido de atan2(z, x) e anti-horário no mapa:
+	// 90° = norte, 180° = oeste, 270° = sul. Com AngleMin > AngleMax o setor cruza o 0°
+	// (340 → 20 é o leste, 40° de largura). Os dois iguais (0 e 0) = o anel inteiro.
+	AngleMin, AngleMax float64
+	// When: período em que o spawn existe. Na virada, os do outro período saem quando
+	// estão fora de combate e os deste entram no lugar (zone/spawnperiod.go).
+	When When
+}
+
+// When é o período em que um spawn existe.
+type When uint8
+
+const (
+	WhenAny   When = iota // sempre (o padrão)
+	WhenDay               // só de dia (some à noite)
+	WhenNight             // só à noite
+)
+
+// Active informa se o spawn existe no período (night = game.IsNight).
+func (w When) Active(night bool) bool {
+	return w == WhenAny || (w == WhenNight) == night
+}
+
+func (w When) String() string {
+	switch w {
+	case WhenDay:
+		return "de dia"
+	case WhenNight:
+		return "à noite"
+	}
+	return ""
+}
+
+// Sector informa se o spawn é um setor de anel (e não o anel inteiro).
+func (s Spawn) Sector() bool {
+	return !s.Fixed && !s.Area && s.AngleMin != s.AngleMax
+}
+
+// SectorSpan devolve o começo do setor em [0, 360) e a largura em (0, 360]: o setor vai
+// de start a start+span no sentido anti-horário (passando do 360 quando cruza o 0°).
+func (s Spawn) SectorSpan() (start, span float64) {
+	start = wrapDeg(s.AngleMin)
+	span = wrapDeg(s.AngleMax - s.AngleMin)
+	if span == 0 {
+		span = 360 // 0 → 360: o anel inteiro, mas declarado como setor
+	}
+	return start, span
+}
+
+// Owned informa se o spawn declara uma área com dono (disco ou setor com Region).
+func (s Spawn) Owned() bool {
+	return s.Region != "" && (s.Area || s.Sector())
+}
+
+// Contains informa se (x, z) está no disco ou setor do spawn, com uma folga em metros.
+func (s Spawn) Contains(x, z, margin float64) bool {
+	switch {
+	case s.Area:
+		return math.Hypot(x-s.X, z-s.Z) <= s.Radius+margin
+	case s.Sector():
+		r := math.Hypot(x, z)
+		if r < s.RMin-margin || r > s.RMax+margin {
+			return false
+		}
+		start, span := s.SectorSpan()
+		pad := margin / math.Max(r, 1) * 180 / math.Pi // a folga em graus naquele raio
+		return wrapDeg(AngleDeg(x, z)-start+pad) <= span+2*pad
+	}
+	return false
+}
+
+// AngleDeg é o ângulo de (x, z) em graus, em [0, 360), na convenção de Spawn.AngleMin.
+func AngleDeg(x, z float64) float64 {
+	return wrapDeg(math.Atan2(z, x) * 180 / math.Pi)
+}
+
+func wrapDeg(a float64) float64 {
+	a = math.Mod(a, 360)
+	if a < 0 {
+		a += 360
+	}
+	if a >= 360 { // -1e-15 + 360 arredonda para 360
+		a = 0
+	}
+	return a
 }
 
 // Covil do raid boss (a Cripta Esquecida, no nordeste do mapa).
@@ -150,11 +484,36 @@ type SpawnPoint struct {
 	Level   int
 	X, Z    float64
 	Respawn float64
+	When    When   // período do spawn de origem
+	Region  string // região do spawn de origem (a troca dia/noite é por região)
+	Group   int    // índice do spawn de origem na lista (a matilha é o grupo de spawn)
 }
 
-// DefaultSpawns: 3 anéis de caça + chefe + o Vale das Pedras Vivas (golens), no sul.
+// Áreas provisórias do 30 ao 40 (até as do docs/roadmap-areas.md): o fundo do Vale, a
+// Vigília em volta da Cripta e os três cantos vazios do mapa. Cada uma cabe no orçamento do
+// roadmap (no máximo 45 monstros por área e 18 no raio de 70 m). São discos com Region,
+// então têm dono: os anéis das outras regiões não sorteiam lá dentro.
+const (
+	// Vigília Ossária: dois grupos ao lado da Cripta, a 48 m do centro do covil (a coleira do
+	// Ozrhal é de 30 m e a percepção dos monstros, de até 11 m), longe da entrada.
+	vigilR, vigilFar, vigilNear = 8.0, 140.0, 72.0
+	// Confins Partidos: um disco em cada canto vazio (o nordeste é a Cripta).
+	cornerC, cornerR = 122.0, 16.0
+)
+
+// ownedMargin: folga (m) em volta das áreas com dono e do covil em que os anéis não sorteiam.
+const ownedMargin = 6.0
+
+// DefaultSpawns: 3 anéis de caça + chefe + o Vale das Pedras Vivas (golens, 20–30), no sul,
+// + as áreas do 30 ao 40.
+//
+// O id de cada monstro é a sua posição na lista expandida: spawn novo vai sempre para o
+// fim, e mudar Count de um spawn do meio muda o id de todos os que vêm depois. Para tirar
+// monstros de um pedaço do anel, declare a área (setor ou disco com Region): o anel sorteia
+// fora dela sem mudar a contagem. Numa região, os spawns WhenDay e WhenNight devem somar a
+// mesma quantidade (os noturnos trocam os do dia, não somam).
 func DefaultSpawns() []Spawn {
-	return []Spawn{
+	spawns := []Spawn{
 		{Monster: "skeleton_minion", Count: 30, RMin: 46, RMax: 74, LevelMin: 1, LevelMax: 5, Respawn: 20},
 		{Monster: "skeleton_warrior", Count: 12, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
 		{Monster: "skeleton_rogue", Count: 12, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
@@ -162,24 +521,93 @@ func DefaultSpawns() []Spawn {
 		{Monster: "skeleton_warrior", Count: 10, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
 		{Monster: "bone_lord", Count: 1, Fixed: true, X: 0, Z: -132, LevelMin: 22, Respawn: 300},
 		// No fim da lista para não mudar os ids dos monstros que já existiam.
-		{Monster: "stone_golem", Count: 12, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 25, Respawn: 60,
+		// Níveis 20 (entrada, ao norte) a 30 (fundo, ao sul): a caça do 25 ao 30 é a metade
+		// funda do vale. Mesma quantidade de golens (o mesmo pico de malhas no cliente), com
+		// renascimento um pouco mais rápido para caber mais gente.
+		{Monster: "stone_golem", Count: 12, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 30, Respawn: 45,
 			Region: "Vale das Pedras Vivas"},
 		// Raid boss no covil da Cripta Esquecida (o renascimento vem da def, em horas).
-		{Monster: "ozrhal", Count: 1, Fixed: true, X: RaidLairX, Z: RaidLairZ, LevelMin: 25},
+		{Monster: "ozrhal", Count: 1, Fixed: true, X: RaidLairX, Z: RaidLairZ, LevelMin: 35},
+		// Do 30 ao 40 (tunnel#149). Fundo do Vale: golens ancestrais na borda sul, do 30 (ao
+		// norte, onde acabam os golens de 30) ao 35 (na beira do mapa).
+		{Monster: "ancient_golem", Count: 8, Area: true, X: 0, Z: -300, Radius: 24, LevelMin: 30, LevelMax: 35, Respawn: 55,
+			Region: "Fundo do Vale"},
+		// Vigília Ossária (33–38): a leste e ao norte da Cripta.
+		{Monster: "ossuary_knight", Count: 4, Area: true, X: vigilFar, Z: vigilNear, Radius: vigilR, LevelMin: 33, LevelMax: 38, Respawn: 50,
+			Region: "Vigília Ossária"},
+		{Monster: "ossuary_devotee", Count: 3, Area: true, X: vigilFar, Z: vigilNear, Radius: vigilR, LevelMin: 33, LevelMax: 38, Respawn: 50,
+			Region: "Vigília Ossária"},
+		{Monster: "ossuary_knight", Count: 4, Area: true, X: vigilNear, Z: vigilFar, Radius: vigilR, LevelMin: 33, LevelMax: 38, Respawn: 50,
+			Region: "Vigília Ossária"},
+		{Monster: "ossuary_devotee", Count: 3, Area: true, X: vigilNear, Z: vigilFar, Radius: vigilR, LevelMin: 33, LevelMax: 38, Respawn: 50,
+			Region: "Vigília Ossária"},
+		// Confins Partidos (35–40): noroeste, sudoeste e sudeste.
+		{Monster: "broken_reaper", Count: 4, Area: true, X: -cornerC, Z: cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_arcanist", Count: 3, Area: true, X: -cornerC, Z: cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_reaper", Count: 4, Area: true, X: -cornerC, Z: -cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_arcanist", Count: 3, Area: true, X: -cornerC, Z: -cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_reaper", Count: 4, Area: true, X: cornerC, Z: -cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		{Monster: "broken_arcanist", Count: 3, Area: true, X: cornerC, Z: -cornerC, Radius: cornerR, LevelMin: 35, LevelMax: 40, Respawn: 50,
+			Region: "Confins Partidos"},
+		// Arquétipos (tunnel#129): poucos de cada papel, no fim para não mudar os ids. Campos dos
+		// Ossos (6–12): o Lançador, o Espreitador e a Ossada Instável no meio dos brutos do anel.
+		{Monster: "skeleton_thrower", Count: 3, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
+		{Monster: "skeleton_lurker", Count: 2, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
+		{Monster: "skeleton_volatile", Count: 2, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
+		// O acampamento dos Saqueadores, a sudoeste nos Campos: a matilha é este spawn (os 4 vêm juntos).
+		{Monster: "skeleton_raider", Count: 4, Area: true, X: -66, Z: -66, Radius: 5, LevelMin: 8, LevelMax: 10, Respawn: 40},
+		// Ermos Partidos (13–20): com os 20 do anel e os 21 dos Confins, 45 (o teto do roadmap).
+		{Monster: "skeleton_sentinel", Count: 2, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
+		{Monster: "skeleton_necromancer", Count: 2, RMin: 116, RMax: 140, LevelMin: 13, LevelMax: 20, Respawn: 40},
+		// Vale das Pedras Vivas (20–30): o curandeiro e o que divide, no meio dos golens.
+		{Monster: "moss_golem", Count: 2, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 30, Respawn: 45,
+			Region: "Vale das Pedras Vivas"},
+		{Monster: "rubble_golem", Count: 2, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 30, Respawn: 45,
+			Region: "Vale das Pedras Vivas"},
 	}
+	// Brejo de Lamagris (tunnel#139), Bosque Gris e Terras Mortas (tunnel#137): no fim da lista, sem mudar os ids de quem
+	// já existia.
+	spawns = append(spawns, brejoSpawns()...)
+	spawns = append(spawns, bosqueSpawns()...)
+	return append(spawns, terrasMortasSpawns()...)
 }
 
 // ExpandSpawns sorteia as posições (determinístico para a mesma semente).
 func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 	var out []SpawnPoint
+	var owned []Spawn // discos e setores com dono: os anéis das outras regiões ficam fora
 	for _, s := range spawns {
+		if s.Owned() {
+			owned = append(owned, s)
+		}
+	}
+	// blocked: o ponto do anel s cai no covil ou na área de outra região.
+	blocked := func(s Spawn, x, z float64) bool {
+		if math.Hypot(x-RaidLairX, z-RaidLairZ) <= RaidLairRadius+ownedMargin {
+			return true
+		}
+		for _, o := range owned {
+			if o.Region != s.Region && o.Contains(x, z, ownedMargin) {
+				return true
+			}
+		}
+		return false
+	}
+	for si, s := range spawns {
 		def := Monsters[s.Monster]
 		if def == nil {
 			continue
 		}
+		start, span := s.SectorSpan()
 		for i := 0; i < s.Count; i++ {
 			if s.Fixed {
-				out = append(out, SpawnPoint{Monster: def, Level: s.LevelMin, X: s.X, Z: s.Z, Respawn: s.Respawn})
+				out = append(out, SpawnPoint{Monster: def, Level: s.LevelMin, X: s.X, Z: s.Z, Respawn: s.Respawn,
+					When: s.When, Region: s.Region, Group: si})
 				continue
 			}
 			if s.Area {
@@ -189,23 +617,30 @@ func ExpandSpawns(spawns []Spawn, rng *rand.Rand) []SpawnPoint {
 				x, z := s.X+r*math.Cos(a), s.Z+r*math.Sin(a)
 				depth := (s.Z + s.Radius - z) / math.Max(1e-9, 2*s.Radius) // 0 na borda norte, 1 na sul
 				level := s.LevelMin + int(math.Round(depth*float64(s.LevelMax-s.LevelMin)))
-				out = append(out, SpawnPoint{Monster: def, Level: level, X: x, Z: z, Respawn: s.Respawn})
+				out = append(out, SpawnPoint{Monster: def, Level: level, X: x, Z: z, Respawn: s.Respawn,
+					When: s.When, Region: s.Region, Group: si})
 				continue
 			}
-			// Raio uniforme em área (sqrt) para não amontoar perto do centro do anel. Fora do
-			// covil do raid boss (sorteia de novo; só quem cairia lá dentro muda de lugar).
+			// Raio uniforme em área (sqrt) para não amontoar perto do centro do anel; o ângulo
+			// só dentro do setor, se houver. Fora do covil do raid boss e das áreas com dono de
+			// outras regiões (sorteia de novo; só quem cairia lá dentro muda de lugar).
 			var r, a float64
-			for range 20 {
+			for range 64 {
 				u := rng.Float64()
 				r = math.Sqrt(s.RMin*s.RMin + u*(s.RMax*s.RMax-s.RMin*s.RMin))
-				a = rng.Float64() * 2 * math.Pi
-				if math.Hypot(r*math.Cos(a)-RaidLairX, r*math.Sin(a)-RaidLairZ) > RaidLairRadius+6 {
+				if s.Sector() {
+					a = (start + rng.Float64()*span) * math.Pi / 180
+				} else {
+					a = rng.Float64() * 2 * math.Pi // a mesma conta de antes: as posições não mudam
+				}
+				if !blocked(s, r*math.Cos(a), r*math.Sin(a)) {
 					break
 				}
 			}
 			t := (r - s.RMin) / math.Max(1e-9, s.RMax-s.RMin)
 			level := s.LevelMin + int(math.Round(t*float64(s.LevelMax-s.LevelMin)))
-			out = append(out, SpawnPoint{Monster: def, Level: level, X: r * math.Cos(a), Z: r * math.Sin(a), Respawn: s.Respawn})
+			out = append(out, SpawnPoint{Monster: def, Level: level, X: r * math.Cos(a), Z: r * math.Sin(a), Respawn: s.Respawn,
+				When: s.When, Region: s.Region, Group: si})
 		}
 	}
 	return out

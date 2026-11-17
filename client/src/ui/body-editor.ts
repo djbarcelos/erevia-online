@@ -30,14 +30,16 @@ function stepper(label: string, list: { id: string; name: string }[], get: () =>
   return { root: el("div", "opt-row", el("span", "label", label), el("div", "opt-ctrl", prev, text, next)), render };
 }
 
-/** Fileira de cores: "Original" (0) e as da paleta (1..n). */
-function shadeRow(label: string, shades: Shade[], get: () => number, onPick: (i: number) => void) {
+/** Fileira de cores: "Original" (0), as da paleta (1..n) e as extras com índice próprio (Bestiário). */
+function shadeRow(label: string, shades: Shade[], get: () => number, onPick: (i: number) => void, extra: (Shade & { index: number })[] = []) {
   const row = el("div", "swatches body-swatches");
   row.setAttribute("role", "radiogroup");
   row.setAttribute("aria-label", label);
   const buttons: HTMLButtonElement[] = [];
+  const values: number[] = [];
   const add = (i: number, name: string, shade?: Shade) => {
     const b = el("button", shade ? "swatch shade" : "swatch original");
+    values.push(i);
     b.type = "button";
     if (shade) {
       b.style.setProperty("--t", shade.top);
@@ -56,17 +58,28 @@ function shadeRow(label: string, shades: Shade[], get: () => number, onPick: (i:
   };
   add(0, "Original");
   shades.forEach((s, i) => add(i + 1, s.name, s));
+  for (const s of extra) {
+    add(s.index, s.name, s);
+    buttons[buttons.length - 1].classList.add("swatch-extra");
+  }
   const name = el("span", "body-shade-name muted small");
   const render = () => {
     const v = get();
-    buttons.forEach((b, i) => b.setAttribute("aria-checked", String(i === v)));
-    name.textContent = v === 0 ? "Original" : (shades[v - 1]?.name ?? "");
+    buttons.forEach((b, i) => b.setAttribute("aria-checked", String(values[i] === v)));
+    name.textContent = v === 0 ? "Original" : (shades[v - 1]?.name ?? extra.find((s) => s.index === v)?.name ?? "");
   };
   render();
   return { root: el("div", "opt-block", el("span", "label body-label", label, name), row), render };
 }
 
-export function bodyEditor(pal: BodyPalettes, cls: string, value: BodyLook, onChange: (l: BodyLook) => void): BodyEditor {
+/** extraOutfits: cores de roupa do Bestiário já liberadas (só no barbeiro; a criação não tem). */
+export function bodyEditor(
+  pal: BodyPalettes,
+  cls: string,
+  value: BodyLook,
+  onChange: (l: BodyLook) => void,
+  extraOutfits: (Shade & { index: number })[] = [],
+): BodyEditor {
   let model = cls;
   let look = normalLook(model, value, pal);
   const root = el("div", "body-editor");
@@ -79,7 +92,7 @@ export function bodyEditor(pal: BodyPalettes, cls: string, value: BodyLook, onCh
   const face = stepper("Rosto e cabelo", heads, () => look.head || model, (id) => change({ head: id }));
   const skin = shadeRow("Pele", pal.skins, () => look.skin, (i) => change({ skin: i }));
   const hair = shadeRow("Cabelo", pal.hairs, () => look.hair, (i) => change({ hair: i }));
-  const outfit = shadeRow("Roupa", pal.outfits, () => look.outfit, (i) => change({ outfit: i }));
+  const outfit = shadeRow("Roupa", pal.outfits, () => look.outfit, (i) => change({ outfit: i }), extraOutfits);
   const hatOpts = [
     { id: "show", name: "Mostrar" },
     { id: "hide", name: "Esconder" },

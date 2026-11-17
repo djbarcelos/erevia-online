@@ -283,6 +283,57 @@
   box-shadow: 0 0 24px rgba(180, 108, 255, 0.25);
 }
 
+/* Monstro raro (named): nome dourado e o selo "RARO". */
+.t-name em.t-rare {
+  background: linear-gradient(180deg, #ffd96a, #b8861c);
+  color: #2a1c04;
+}
+
+.hud-target.rare .t-name b {
+  color: #ffcf4a;
+}
+
+.hud-target.rare {
+  border-color: rgba(255, 207, 74, 0.55);
+  box-shadow: 0 0 20px rgba(255, 207, 74, 0.2);
+}
+
+/* Papel do monstro na luta (tunnel#129): ícone pequeno depois do nome, a dica no mouse. */
+.t-name em.t-role {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: -3px;
+  margin-left: 6px;
+  padding: 1px 3px;
+  background: rgba(20, 16, 24, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #e8dcc8;
+  cursor: help;
+}
+
+.t-name em.t-role-healer {
+  color: #7fe0c0;
+}
+
+.t-name em.t-role-archer,
+.t-name em.t-role-exploder {
+  color: #ffb070;
+}
+
+.t-name em.t-role-shield {
+  color: #a8c4e8;
+}
+
+.t-name em.t-role-ambusher,
+.t-name em.t-role-summoner {
+  color: #c8a8ff;
+}
+
+.t-name em.t-role-neutral {
+  color: #e8e0a0;
+}
+
 .hud-target.dead {
   opacity: 0.6;
 }
@@ -552,6 +603,43 @@ button.mm-frame:focus-visible .mm-open {
   color: var(--warn);
 }
 
+/* Eventos do servidor (XP em dobro, invasão): selos pequenos embaixo do minimapa. Só texto,
+   sem animação: nada novo por quadro. */
+.hud-events {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  max-width: 184px;
+}
+
+.hud-events > span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(10, 8, 14, 0.75);
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px #000;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.ev-xp2 {
+  color: var(--gold-hi);
+  border-color: rgba(214, 180, 110, 0.6) !important;
+}
+
+.ev-inv {
+  color: #e8e0d4;
+}
+
+.ev-inv.active {
+  color: #ffb4a8;
+  border-color: rgba(220, 90, 70, 0.6) !important;
+}
+
 /* ---------- Missões e grupo ---------- */
 
 .hud-side {
@@ -600,12 +688,140 @@ section.party {
   display: grid;
   gap: 1px;
   text-align: left;
+  /* botão: clicar rastreia a missão */
+  border: 0;
+  border-left: 2px solid transparent;
+  margin: 0 0 0 -8px;
+  padding: 2px 0 2px 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.quest.tracked {
+  border-left-color: var(--gold);
+}
+
+/* Cabeçalho do painel: recolher à esquerda, "Diário" (J) à direita */
+.q-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hud-side .quests.collapsed > .q-panel-head {
+  display: flex;
+}
+
+.q-journal {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(10, 8, 14, 0.6);
+  color: var(--gold);
+  font: inherit;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  padding: 1px 8px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.q-journal:hover {
+  border-color: var(--line-strong);
+  color: var(--gold-hi);
+}
+
+.q-empty {
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.72rem;
+}
+
+/* Recém-aceita com o painel cheio: some sozinha se não for fixada (quest-pins.ts). A
+   barrinha que encolhe é uma animação de transform no compositor, sem JS por quadro. */
+.quest.temp {
+  position: relative;
+  border-left-color: var(--warn);
+  background: rgba(240, 198, 107, 0.07);
+}
+
+.quest.temp::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--warn);
+  transform-origin: left;
+  animation: q-temp var(--q-left, 8s) linear forwards; /* o que falta (hud.ts) */
+}
+
+@keyframes q-temp {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.quest.tracked b::before {
+  content: "◎ ";
+  color: var(--gold-hi);
 }
 
 .quest b {
   color: var(--warn);
   font-weight: 600;
   font-size: 0.82rem;
+}
+
+/* Título da missão com o botão "Ir" (questgo.ts) à direita */
+.q-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.quest .q-go {
+  padding: 1px 9px;
+  min-height: 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  pointer-events: auto;
+}
+
+/* Pílula do "Ir" (andando, pedra, "Caçar aqui"), acima da pílula da auto-caça */
+.go-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 128px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 4px 6px 4px 14px;
+  border-radius: 999px;
+  background: rgba(10, 8, 14, 0.82);
+  border: 1px solid var(--gold);
+  color: var(--gold-hi);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.go-pill > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.go-pill[hidden] {
+  display: none;
 }
 
 .q-step {
@@ -621,9 +837,53 @@ section.party {
   font-variant-numeric: tabular-nums;
 }
 
+.quest-list {
+  display: grid;
+  gap: 8px;
+}
+
+.q-step.done {
+  color: var(--dim);
+  text-decoration: line-through;
+}
+
 .quest small {
   color: var(--dim);
   font-size: 0.68rem;
+}
+
+/* Seta da missão rastreada na borda da tela (um elemento; quest-nav.ts mexe 5×/s). */
+.hud > .quest-arrow {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(20, 14, 6, 0.78);
+  border: 1.5px solid var(--gold);
+  color: var(--gold-hi);
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.quest-arrow::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-left: 11px solid var(--gold);
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  transform-origin: 0 0;
+  transform: rotate(var(--a, 0deg)) translate(25px, -8px);
 }
 
 .member {
@@ -930,6 +1190,54 @@ section.party {
 
 .hud-xp:hover > b {
   opacity: 1;
+}
+
+/* Vitalidade (tunnel#150): a parte da barra que ainda sai com a XP de monstro em dobro. */
+.hud-xp > s.xp-vit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--v, 0%);
+  width: var(--vit, 0%);
+  background: linear-gradient(180deg, rgba(140, 220, 255, 0.5), rgba(50, 130, 210, 0.4));
+  box-shadow: inset 1px 0 0 rgba(200, 240, 255, 0.7);
+  pointer-events: none;
+}
+
+/* Selo da vitalidade (e da recuperação) no quadro do personagem. */
+.me-vit {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #bfe9ff;
+  background: rgba(16, 52, 82, 0.75);
+  border: 1px solid rgba(120, 200, 255, 0.45);
+  cursor: help;
+}
+
+.me-vit.empty {
+  color: #f1d58e;
+  background: rgba(58, 42, 16, 0.75);
+  border-color: rgba(214, 180, 110, 0.45);
+}
+
+.me-vit[hidden] {
+  display: none;
+}
+
+.hud-screen.touch .me-vit {
+  top: 4px;
+  right: 6px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
 }
 
 /* ---------- Auto-caça, saque, morte, nível ---------- */
@@ -1487,6 +1795,12 @@ section.party {
   font-size: 0.7rem;
 }
 
+.hud-screen.touch .go-pill {
+  bottom: auto;
+  top: calc(100px + var(--safe-t));
+  font-size: 0.7rem;
+}
+
 .hud-screen.touch .loot-feed {
   right: calc(250px + var(--safe-r));
   bottom: calc(60px + var(--safe-b));
@@ -1518,6 +1832,10 @@ section.party {
 
   .hud-screen.touch .auto-pill {
     top: calc(178px + var(--safe-t));
+  }
+
+  .hud-screen.touch .go-pill {
+    top: calc(212px + var(--safe-t));
   }
 
   .hud-screen.touch .hud-side {

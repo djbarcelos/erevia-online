@@ -1,0 +1,53 @@
+<!doctype html>
+<!-- Página pública de novidades. O conteúdo vem de /novidades.json, gerado do CHANGELOG.md por scripts/build-changelog.mjs. -->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0810" />
+    <meta name="description" content="O que mudou no Erevia, versão por versão." />
+    <title>Novidades · Erevia</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/src/styles/legal.css" />
+    <link rel="stylesheet" href="/src/styles/news.css" />
+  </head>
+  <body>
+    <header class="legal-top">
+      <a class="legal-logo" href="/">EREVIA</a>
+      <nav aria-label="Páginas do Erevia">
+        <a href="/novidades" aria-current="page">Novidades</a>
+        <a href="/privacidade.html">Política de Privacidade</a>
+        <a href="/termos.html">Termos de Uso</a>
+        <a href="/">Voltar ao jogo</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Novidades</h1>
+      <p class="updated" id="news-updated">Carregando…</p>
+      <p class="lead">O que mudou no Erevia, da versão mais nova para a mais antiga.</p>
+
+      <div id="news-list" class="news-page" aria-live="polite"></div>
+      <noscript><p class="note">Ative o JavaScript para ver as novidades.</p></noscript>
+
+      <footer>
+        <p>Erevia · <a href="/privacidade.html">Política de Privacidade</a> · <a href="/termos.html">Termos de Uso</a> · <a href="/">Voltar ao jogo</a></p>
+      </footer>
+    </main>
+
+    <script type="module">
+      import { loadNews, newsDate, newsVersionEl } from "/src/news.ts";
+
+      const updated = document.getElementById("news-updated");
+      const list = document.getElementById("news-list");
+      loadNews().then((news) => {
+        if (!news) {
+          updated.textContent = "Não deu para carregar as novidades agora. Tente recarregar a página.";
+          return;
+        }
+        updated.textContent = `Última versão: ${newsDate(news.versions[0].date)}`;
+        list.append(...news.versions.map((v) => newsVersionEl(v, "h2")));
+      });
+    </script>
+  </body>
+</html>

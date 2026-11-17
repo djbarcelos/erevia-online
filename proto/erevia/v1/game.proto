@@ -33,7 +33,262 @@ message ClientMessage {
     StorageMove storage_move = 23;
     StorageGold storage_gold = 24;
     ChangeLook change_look = 25;
+    TradeCmd trade_cmd = 26;
+    Craft craft = 27;
+    ClientStats client_stats = 28;
+    FriendCmd friend_cmd = 29;
+    MailCmd mail_cmd = 30;
+    RankingRequest ranking_request = 31;
+    AchievementCmd achievement_cmd = 32;
+    ContractCmd contract_cmd = 42; // Contratos do quadro da praça: pedir, aceitar
+    ReputationCmd reputation_cmd = 43; // Reputação: pedir as facções e a loja, comprar
+    BestiaryCmd bestiary_cmd = 40; // Bestiário: pedir o estado (a janela abriu)
+    SpecCmd spec_cmd = 50;
+    MasteryCmd mastery_cmd = 54; // Maestria: pedir o estado, gastar ponto, redistribuir
+    AuctionCmd auction_cmd = 44; // Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, retirar do correio
+    UseGate use_gate = 60; // zonas: atravessar o portão para outro mapa
+    SubclassCmd subclass_cmd = 67; // Subclasse: falar com o Guardião das Sendas, escolher e trocar de classe
+    NpcTalk npc_talk = 45; // conversa com NPC: abrir, aceitar e entregar missão, perguntar
   }
+}
+
+// ---------- Zonas (vários mapas no mesmo servidor) ----------
+
+// Usa o portão (NPC com role NPC_ROLE_GATE) perto do jogador.
+message UseGate {
+  uint32 npc_id = 1;
+}
+
+// O personagem saiu desta zona pelo portão: o cliente mostra a tela de carregamento,
+// descarta o mapa atual e espera o Welcome da zona de destino (a mesma conexão).
+message ZoneChange {
+  string map = 1; // id do mapa de destino ("starter", "teste"...)
+  string title = 2; // nome do mapa ("Clareira de Testes")
+  float x = 3; // ponto de chegada
+  float z = 4;
+}
+
+// ---------- Maestria (depois do nível 30) ----------
+
+enum MasteryCmdKind {
+  MASTERY_CMD_UNSPECIFIED = 0;
+  MASTERY_CMD_GET = 1; // pedir a árvore e o estado (a janela abriu)
+  MASTERY_CMD_SPEND = 2; // gastar 1 ponto no nó `node`
+  MASTERY_CMD_RESPEC = 3; // devolver todos os pontos (grátis, 1 vez por dia)
+}
+
+message MasteryCmd {
+  MasteryCmdKind kind = 1;
+  string node = 2;
+}
+
+// Estado da Maestria (só para o dono). Sai ao entrar no 30, a cada XP ganha no 30, ao
+// morrer e quando a árvore muda. No 30 a barra de XP do HUD vira esta barra.
+message MasteryState {
+  bool active = 1; // nível máximo (open_level): a barra enche e os pontos podem ser gastos
+  uint32 level = 2; // pontos ganhos no total ("Maestria N")
+  uint32 free = 3; // pontos para gastar
+  uint64 xp = 4; // XP na barra atual
+  uint64 need = 5; // XP de uma barra cheia (1 ponto)
+  uint64 rested = 6; // bônus diário guardado: XP de barra que ainda enche rested_mult× mais rápido
+  uint64 rested_max = 7; // o máximo guardado (rested_days barras)
+  uint32 rested_mult = 8;
+  uint32 rested_days = 9;
+  repeated MasteryRank ranks = 10;
+  bool respec_ready = 11; // o Redistribuir de hoje está livre
+  uint32 max_level = 12; // teto da Maestria (a árvore inteira)
+  float teleport_discount = 13; // Viajante: desconto nas Pedras de Teleporte (0–1)
+  // Nível em que a Maestria abre (o máximo). Abaixo dele, quem já tem pontos (ganhos quando o
+  // máximo era 30) ainda gasta e redistribui, mas a barra não enche.
+  uint32 open_level = 14;
+}
+
+// Vitalidade (tunnel#150): XP bônus guardada que dobra a XP de monstro até acabar (no nível
+// máximo, a da barra de Maestria). Enche fora do jogo e parado na cidade. O servidor manda ao
+// entrar e quando muda (abate, subida de nível, enchimento na cidade a cada 1%).
+message VitalityState {
+  uint64 stored = 1; // XP bônus guardada (o bônus pago sai daqui)
+  uint64 cap = 2; // teto: ~1 nível da faixa (no máximo, uma barra de Maestria)
+  float mult = 3; // a XP de monstro sai mult× enquanto houver (2)
+  bool mastery = 4; // vale para a barra de Maestria (nível máximo)
+  float offline_per_hour = 5; // fração do teto que enche por hora fora do jogo
+  float town_per_hour = 6; // por hora online na cidade, sem combate
+  // Recuperação: a conta já tem um personagem no máximo; +catchup_mult na XP de monstro e de
+  // missão até o nível catchup_until (0 = não vale).
+  float catchup_mult = 7;
+  uint32 catchup_until = 8;
+  float mult_cap = 9; // teto do multiplicador da XP de monstro (noite, evento, recuperação e vitalidade)
+}
+
+message MasteryRank {
+  string node = 1;
+  uint32 rank = 2;
+}
+
+// A árvore da Maestria (o cliente pede ao abrir a janela e guarda).
+message MasteryTree {
+  repeated MasteryBranchInfo branches = 1;
+  repeated MasteryNodeInfo nodes = 2;
+  uint32 node_max = 3; // pontos por nó
+  float combat_cap = 4; // teto da soma dos bônus de combate com a árvore cheia (0,05)
+}
+
+message MasteryBranchInfo {
+  string name = 1;
+  string description = 2;
+  string color = 3; // "#rrggbb"
+}
+
+message MasteryNodeInfo {
+  string id = 1;
+  string name = 2;
+  uint32 branch = 3;
+  uint32 req = 4; // pontos no ramo para abrir
+  string icon = 5; // glifo (GLYPHS em client/src/ui/art.ts)
+  repeated string ranks = 6; // texto do efeito com 1..node_max pontos (retorno decrescente)
+  bool combat = 7; // entra no teto de combate
+}
+
+// ---------- Subclasse (classe principal no 30) ----------
+
+enum SubclassCmdKind {
+  SUBCLASS_CMD_UNSPECIFIED = 0;
+  SUBCLASS_CMD_TALK = 1; // falar com o Guardião das Sendas (npc_id): anda a missão e abre a janela
+  SUBCLASS_CMD_CHOOSE = 2; // escolher a subclasse class (missão concluída e vaga livre)
+  SUBCLASS_CMD_SWITCH = 3; // trocar a classe ativa para class (uma das do personagem)
+}
+
+message SubclassCmd {
+  SubclassCmdKind kind = 1;
+  uint32 npc_id = 2;
+  string class = 3;
+}
+
+// Uma classe do personagem (a principal ou uma subclasse) e o nível dela.
+message ClassLevel {
+  string class = 1;
+  uint32 level = 2;
+  bool main = 3; // a classe principal (a do corpo)
+  string spec = 4; // especialização dessa classe ("" = nenhuma)
+}
+
+// Classes do personagem. Sai ao entrar no jogo (npc_id 0, só atualiza), na conversa com o
+// Guardião (npc_id dele: abre a janela) e depois de escolher ou trocar de classe.
+message SubclassState {
+  uint32 npc_id = 1; // NPC da janela (0 = não abre a janela)
+  string main = 2; // classe principal
+  string active = 3; // classe ativa (skills, atributos, nível e XP são dela)
+  repeated ClassLevel classes = 4; // todas, a principal primeiro
+  bool can_choose = 5; // missão concluída e ainda há vaga: a janela mostra as classes para escolher
+  uint32 max_subclasses = 6;
+  uint32 cooldown_ms = 7; // falta para poder trocar de novo (0 = livre)
+  uint32 cooldown_total_ms = 8; // recarga da troca
+  bool bonus = 9; // Duas Sendas: uma subclasse chegou ao bonus_level
+  float bonus_xp = 10; // +XP para a classe mais baixa (0,05)
+  uint32 bonus_level = 11;
+  uint32 start_level = 12; // nível em que a subclasse começa
+  uint32 quest_level = 13; // nível da classe principal para a missão
+  // A classe ativa acabou de mudar: a árvore dela (como Welcome.skills e Welcome.branches).
+  bool switched = 14;
+  repeated SkillInfo skills = 15;
+  repeated SkillBranch branches = 16;
+}
+
+// ---------- Especialização (segunda classe, nível 20) ----------
+
+enum SpecCmdKind {
+  SPEC_CMD_UNSPECIFIED = 0;
+  SPEC_CMD_TALK = 1; // falar com a Mestra dos Caminhos (npc_id): anda a missão e abre a escolha
+  SPEC_CMD_CHOOSE = 2; // escolher o caminho spec (quem já tem um troca, pagando)
+}
+
+message SpecCmd {
+  SpecCmdKind kind = 1;
+  uint32 npc_id = 2;
+  string spec = 3;
+}
+
+// Janela da Mestra: os dois caminhos da classe (Welcome.specs e as skills com spec).
+message SpecChoice {
+  uint32 npc_id = 1;
+  string current = 2; // caminho atual ("" = ainda não escolheu: a escolha é de graça)
+  uint64 change_cost = 3; // moedas para trocar de caminho depois de escolher
+}
+
+// Uma especialização (segunda classe).
+message SpecInfo {
+  string id = 1;
+  string class = 2;
+  string name = 3;
+  string description = 4;
+  string color = 5; // "#rrggbb"
+  Attrs bonus = 6; // bônus passivo de atributos
+  string bonus_text = 7; // "+12 Constituição"
+  // Armas e mãos secundárias que a especialização usa; vazio = as da classe (Welcome.weapons
+  // descreve cada tipo de arma).
+  repeated string weapons = 8;
+  repeated string offhands = 9;
+}
+
+// ---------- Ranking, conquistas e títulos ----------
+
+// Pede o ranking (as três listas de uma vez). O servidor responde com Ranking.
+message RankingRequest {}
+
+enum AchievementCmdKind {
+  ACHIEVEMENT_CMD_UNSPECIFIED = 0;
+  ACHIEVEMENT_CMD_SET_TITLE = 1; // id = conquista cujo título usar ("" = sem título)
+}
+
+message AchievementCmd {
+  AchievementCmdKind kind = 1;
+  string id = 2;
+}
+
+// ---------- Bestiário ----------
+
+enum BestiaryCmdKind {
+  BESTIARY_CMD_UNSPECIFIED = 0;
+  BESTIARY_CMD_GET = 1; // pedir o bestiário inteiro (a janela abriu); a resposta é Bestiary full
+}
+
+message BestiaryCmd {
+  BestiaryCmdKind kind = 1;
+}
+
+// Amostra de desempenho do cliente (a cada ~60 s; o FPS é medido 1×/s, nunca por quadro).
+message ClientStats {
+  float fps_avg = 1;
+  float fps_low = 2; // média dos 10% piores segundos
+  string device = 3; // "mobile"/"desktop" + sistema (curto)
+  uint32 seconds = 4; // segundos cobertos pela amostra
+}
+
+// Criar um item com uma receita do Ferreiro (materiais + moedas).
+message Craft {
+  uint32 npc_id = 1;
+  string recipe_id = 2;
+}
+
+// ---------- Troca entre jogadores ----------
+
+enum TradeCmdKind {
+  TRADE_CMD_UNSPECIFIED = 0;
+  TRADE_CMD_REQUEST = 1; // convidar target_id para trocar (vira um Invite para ele)
+  TRADE_CMD_ADD_ITEM = 2; // oferecer o item do espaço slot da bolsa (count 0 = a pilha toda)
+  TRADE_CMD_REMOVE_ITEM = 3; // tirar da oferta o item do espaço slot da bolsa
+  TRADE_CMD_SET_GOLD = 4; // moedas oferecidas (gold)
+  TRADE_CMD_LOCK = 5; // travar a própria oferta
+  TRADE_CMD_CONFIRM = 6; // confirmar (só com as duas ofertas travadas)
+  TRADE_CMD_CANCEL = 7;
+}
+
+message TradeCmd {
+  TradeCmdKind kind = 1;
+  uint32 target_id = 2;
+  uint32 slot = 3;
+  uint32 count = 4;
+  int64 gold = 5;
 }
 
 // Visual do corpo. O valor zero é o visual original da classe.
@@ -272,7 +527,242 @@ message ServerMessage {
     Storage storage = 24;
     Announce announce = 25;
     BossStatus boss_status = 26;
+    QuestLog quest_log = 27;
+    TradeState trade = 28;
+    SocialUpdate social = 29;
+    Emote emote = 30;
+    Ranking ranking = 31;
+    Achievements achievements = 32;
+    ContractState contracts = 42; // contratos do dia e da semana (ao entrar, ao pedir e quando mudam)
+    ReputationState reputation = 43; // facções, graus e a loja de reputação
+    Bestiary bestiary = 40; // Bestiário: o catálogo (full) ou as entradas e famílias que mudaram
+    BestiaryMark bestiary_mark = 41; // aviso: um marco do bestiário ou uma família completa
+    SpecChoice spec_choice = 50;
+    EventStatus event_status = 52; // eventos: invasão da cidade e XP em dobro
+    MasteryState mastery = 54; // Maestria (nível máximo): barra, pontos e árvore do jogador
+    MasteryTree mastery_tree = 55; // a árvore da Maestria (resposta ao MASTERY_CMD_GET)
+    AuctionUpdate auction = 44; // Casa de leilões: janela, busca, meus anúncios e avisos
+    ZoneChange zone_change = 60; // saiu pelo portão: o próximo Welcome é o do outro mapa
+    VitalityState vitality = 65; // vitalidade e recuperação (ao entrar e quando mudam)
+    SubclassState subclass = 67; // Subclasse: as classes do personagem e a ativa (janela do Guardião das Sendas)
+    NpcDialog npc_dialog = 45; // a janela de conversa do NPC (resposta ao NpcTalk)
+    StonesKnown stones_known = 48; // pedras de teleporte descobertas (ao entrar e quando descobre uma)
   }
+}
+
+// Ranking calculado no banco a cada poucos minutos (o servidor guarda em memória).
+message Ranking {
+  repeated RankEntry level = 1; // top 50 por nível (desempate: XP)
+  repeated RankEntry pvp = 2; // top 50 por vitórias PvP
+  repeated ClanRankEntry clans = 3; // top 50 clãs pela soma dos níveis dos membros
+  int64 updated_at_ms = 4; // quando foi calculado (Unix, ms; 0 = ainda não calculado)
+  uint32 refresh_ms = 5; // intervalo entre os cálculos
+  // Posição do próprio personagem (e do clã dele) no último cálculo (0 = fora do ranking).
+  uint32 my_level_pos = 6;
+  uint32 my_pvp_pos = 7;
+  uint32 my_clan_pos = 8;
+}
+
+message RankEntry {
+  uint32 pos = 1;
+  uint64 character_id = 2;
+  string name = 3;
+  string class = 4;
+  uint32 level = 5;
+  uint32 pvp_kills = 6;
+  string clan_name = 7;
+  string title = 8;
+  uint32 mastery = 9; // nível de Maestria (0 = abaixo do 30 ou nenhum ponto)
+}
+
+message ClanRankEntry {
+  uint32 pos = 1;
+  uint64 id = 2;
+  string name = 3;
+  uint32 members = 4;
+  uint32 level_sum = 5;
+  float level_avg = 6;
+  string leader = 7;
+}
+
+// Conquistas do próprio personagem. Ao entrar vai o catálogo inteiro (full); depois, só
+// o que mudou (progresso, desbloqueio ou título escolhido).
+message Achievements {
+  bool full = 1;
+  repeated AchievementInfo list = 2; // full: todas; senão, só as que mudaram (id, count, unlocked)
+  string title_id = 3; // conquista cujo título está em uso ("" = nenhum)
+  string unlocked = 4; // nome da conquista que acabou de ser desbloqueada ("" = nenhuma)
+}
+
+// Bestiário (só para o dono). full: todas as entradas e famílias (ao entrar e na resposta
+// ao BESTIARY_CMD_GET); senão, só o que mudou (a entrada do monstro abatido e, se for o
+// caso, a família dele). Os campos de cada marco só vêm preenchidos depois do marco: antes
+// do primeiro abate a entrada é uma silhueta (id e modelo, sem nome).
+message Bestiary {
+  bool full = 1;
+  repeated BestiaryEntry entries = 2;
+  repeated BestiaryFamily families = 3;
+  float damage_bonus = 4; // bônus de dano do último marco (0,01 = +1%)
+}
+
+message BestiaryEntry {
+  string id = 1; // tipo de monstro
+  string family = 2; // id da família ("" = nenhuma)
+  string model = 3; // modelo (ícone e silhueta)
+  uint32 kills = 4;
+  repeated uint32 marks = 5; // abates de cada marco: 10, 100 e 500 (chefes e raros: 1, 1, 1)
+  uint32 mark = 6; // marcos atingidos (0–3)
+  bool boss = 7; // chefe, raid boss ou raro: 1 abate abre tudo e não dá bônus de dano
+  string name = 8; // "" = ainda não derrotado (silhueta)
+  // Marco 1: nível e vida (do menor ao maior nível derrotado).
+  uint32 level_min = 9;
+  uint32 level_max = 10;
+  uint32 hp_min = 11;
+  uint32 hp_max = 12;
+  // Marco 2: o que deixa cair.
+  repeated BestiaryDrop drops = 13;
+  float gold_chance = 14;
+  uint32 gold_min = 15; // moedas por abate, no menor e no maior nível derrotado
+  uint32 gold_max = 16;
+  bool gear = 17; // pode deixar equipamento
+  // Marco 3: bônus de dano contra este tipo (0 = nenhum).
+  float damage_bonus = 18;
+  uint32 family_need = 19; // abates que a entrada pede para completar a família
+}
+
+message BestiaryDrop {
+  string item_id = 1;
+  string name = 2;
+  float chance = 3;
+  uint32 min = 4;
+  uint32 max = 5;
+}
+
+message BestiaryFamily {
+  string id = 1;
+  string name = 2;
+  uint32 done = 3; // entradas completas para a família
+  uint32 total = 4;
+  bool complete = 5;
+  int64 completed_at_ms = 6;
+  string title_id = 7; // para AchievementCmd SET_TITLE
+  string title = 8;
+  uint32 outfit = 9; // cor de roupa exclusiva (BodyLook.outfit) liberada no barbeiro
+  string outfit_name = 10;
+}
+
+// Aviso de um marco (ou de uma família completa) para o cliente mostrar na tela.
+message BestiaryMark {
+  string id = 1; // monstro ("" = só a família)
+  string name = 2;
+  uint32 mark = 3; // marco atingido (1–3; 0 = só a família)
+  uint32 kills = 4;
+  string text = 5; // o que o marco abriu
+  string family = 6; // família completa agora ("" = nenhuma)
+}
+
+message AchievementInfo {
+  string id = 1;
+  string name = 2;
+  string text = 3; // o que fazer
+  string title = 4; // título que ela dá
+  bool unlocked = 5;
+  uint32 count = 6; // progresso (conquistas de contagem)
+  uint32 need = 7;
+  int64 unlocked_at_ms = 8;
+}
+
+// Janela de troca: enviada aos dois a cada mudança; open = false fecha a janela.
+message TradeState {
+  bool open = 1;
+  uint32 partner_id = 2;
+  string partner_name = 3;
+  TradeOffer mine = 4;
+  TradeOffer theirs = 5;
+}
+
+message TradeOffer {
+  repeated TradeItem items = 1;
+  int64 gold = 2;
+  bool locked = 3;
+  bool confirmed = 4;
+}
+
+message TradeItem {
+  uint32 slot = 1; // espaço na bolsa de quem oferece
+  string item_id = 2;
+  uint32 count = 3;
+  uint32 enchant = 4;
+}
+
+// Missões ativas do próprio personagem: ao entrar e sempre que o progresso muda.
+message QuestLog {
+  repeated QuestInfo quests = 1;
+  string completed = 2; // título da missão que acabou de ser concluída ("" = nenhuma)
+  // Concluídas (aba do Diário): só id, título e categoria, nada do texto. Vão inteiras no
+  // primeiro QuestLog da sessão e quando uma missão termina (done_full = true); nos outros
+  // QuestLog ficam vazias e o cliente guarda as últimas.
+  repeated QuestDone done = 3;
+  bool done_full = 4;
+  // Diárias: a próxima meia-noite de Brasília (quando as diárias renovam), em ms.
+  int64 daily_reset_ms = 5;
+}
+
+message QuestInfo {
+  string id = 1;
+  string title = 2;
+  string text = 3;
+  repeated QuestStepInfo steps = 4;
+  string reward = 5; // resumo da recompensa ("120 XP · 30 moedas")
+  QuestCategory category = 6; // grupo no Diário (QuestCategory, no fim do arquivo)
+  string region = 7; // região da linha de história ("Arredores"); vazio nas outras
+}
+
+// Onde fica um objetivo: o minimapa, o mapa e a seta da borda da tela apontam para lá.
+enum QuestPlaceKind {
+  QUEST_PLACE_KIND_NONE = 0; // sem lugar (usar skill, tomar poção)
+  QUEST_PLACE_KIND_HUNT = 1; // área de caça (círculo de centro x, z e raio radius)
+  QUEST_PLACE_KIND_NPC = 2; // um NPC (falar com ele)
+  QUEST_PLACE_KIND_GATE = 3; // portão da cidade
+  QUEST_PLACE_KIND_STONE = 4; // Pedra de Teleporte
+  QUEST_PLACE_KIND_SHOP = 5; // loja (NPC que vende)
+  QUEST_PLACE_KIND_SPOT = 6; // um lugar para visitar (chegou quando entra no raio)
+}
+
+message QuestStepInfo {
+  string text = 1;
+  uint32 count = 2;
+  uint32 need = 3;
+  // Lugar do objetivo (só nos que faltam). Calculado pelo servidor quando o QuestLog vai:
+  // ao mudar o passo e ao subir de nível; nunca por tick.
+  QuestPlaceKind place = 4;
+  float x = 5;
+  float z = 6;
+  float radius = 7; // metros: chegou quando está dentro
+  string place_name = 8; // rótulo no mapa ("Esqueleto Lacaio", "Ysolde", "Portão Leste")
+  // Matar: nomes dos monstros que contam (o "Caçar aqui" só mira neles). Vazio = qualquer
+  // monstro (ou o passo não é de caçar).
+  repeated string monsters = 9;
+}
+
+// ---------- Eventos (invasão da cidade e XP em dobro) ----------
+
+enum InvasionPhase {
+  INVASION_PHASE_NONE = 0;
+  INVASION_PHASE_WARNING = 1; // anunciada: começa em at_ms
+  INVASION_PHASE_ACTIVE = 2; // as ondas estão chegando; acaba por tempo em at_ms
+}
+
+// Estado dos eventos do servidor (indicador discreto no HUD). Vai logo depois do Welcome
+// (se houver algo ligado) e a cada mudança; durante a invasão, no máximo 1×/s.
+message EventStatus {
+  bool xp2 = 1; // XP de monstros em dobro
+  int64 xp2_until_ms = 2; // até quando (relógio do servidor; 0 = sem previsão)
+  InvasionPhase invasion = 3;
+  int64 invasion_at_ms = 4; // aviso: quando as ondas começam; ativa: o tempo limite
+  uint32 wave = 5; // onda atual (1…waves)
+  uint32 waves = 6;
+  uint32 alive = 7; // esqueletos vivos agora
 }
 
 // ---------- Raid boss ----------
@@ -307,6 +797,9 @@ message BossStatus {
   bool enraged = 11; // raid: fúria (abaixo de 20%)
   bool final_enrage = 12; // raid: fúria final (luta longa demais)
   int64 fight_start_ms = 13; // raid: início da luta (0 = parado)
+  // Chefe de campo (tunnel#132): a vida (fração, de 0 a 1) em que cada fase depois da 1 começa.
+  // Vazio no raid: a barra usa as marcas dele (70% e 40%).
+  repeated float phase_marks = 14;
 }
 
 enum TelegraphKind {
@@ -314,9 +807,19 @@ enum TelegraphKind {
   TELEGRAPH_KIND_WAVE = 1; // Onda de Ossos: em volta do chefe
   TELEGRAPH_KIND_RAIN = 2; // Chuva de Ossos: em cima de um jogador
   TELEGRAPH_KIND_MARK = 3; // Marca da Morte: segue o marcado e explode em volta dele
+  TELEGRAPH_KIND_STRIKE = 4; // habilidade de monstro comum ou chefe de campo (pancada no chão)
 }
 
-// Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro do círculo.
+// Forma do aviso. x, z é a origem: o centro (círculo e anel) ou o ponto de onde sai o
+// cone ou a linha, na direção angle.
+enum TelegraphShape {
+  TELEGRAPH_SHAPE_CIRCLE = 0; // raio radius
+  TELEGRAPH_SHAPE_CONE = 1; // raio radius e abertura total arc
+  TELEGRAPH_SHAPE_LINE = 2; // retângulo de length × width saindo de x, z
+  TELEGRAPH_SHAPE_DONUT = 3; // anel entre inner_radius e radius (o buraco é seguro)
+}
+
+// Aviso no chão: o golpe cai no fim, em quem ainda estiver dentro da forma.
 message Telegraph {
   uint32 id = 1;
   TelegraphKind kind = 2;
@@ -327,7 +830,13 @@ message Telegraph {
   uint32 source_id = 7;
   uint32 follow_id = 8; // segue esta entidade (Marca da Morte)
   bool resolved = 9; // o golpe caiu agora (em x, z)
-  bool cancelled = 10; // o chefe reiniciou ou morreu antes
+  bool cancelled = 10; // o monstro desistiu da luta ou morreu antes
+  TelegraphShape shape = 11;
+  float angle = 12; // direção do cone e da linha (rad, em Y: 0 = +Z, π/2 = +X)
+  float arc = 13; // cone: abertura total (rad)
+  float length = 14; // linha: comprimento (m)
+  float width = 15; // linha: largura (m)
+  float inner_radius = 16; // anel: raio do buraco seguro (m)
 }
 
 enum PvpState {
@@ -341,6 +850,10 @@ message PlayerStatus {
   uint32 id = 1;
   PvpState pvp_state = 2;
   string clan_name = 3;
+  string title = 4; // título escolhido (de uma conquista; "" = nenhum)
+  string spec = 5; // especialização (SpecInfo.id; "" = nenhuma)
+  string active_class = 6; // classe ativa (subclasse; "" = a do modelo)
+  uint32 level = 7; // nível da classe ativa (muda ao trocar de classe; 0 = não mudou)
 }
 
 // PvP do próprio personagem.
@@ -355,6 +868,7 @@ enum InviteKind {
   INVITE_KIND_UNSPECIFIED = 0;
   INVITE_KIND_PARTY = 1;
   INVITE_KIND_CLAN = 2;
+  INVITE_KIND_TRADE = 3;
 }
 
 // Alguém convidou você. Expira em expires_ms.
@@ -378,12 +892,20 @@ message PartyMember {
   float x = 9;
   float z = 10;
   bool dead = 11;
+  string map = 12; // em outro mapa: o nome dele ("" = no mesmo mapa que você; vida e posição não valem)
 }
 
 // Seu grupo (members vazio = sem grupo).
 message PartyState {
   uint32 leader_id = 1;
   repeated PartyMember members = 2;
+  // XP do grupo vista por você (tunnel#151), atualizada 1×/s. No abate contam os membros
+  // vivos, neste mapa, a até 40 m do monstro e que ajudaram (dano, cura ou buff) nos
+  // últimos 30 s; a janela mostra só pela proximidade de você.
+  uint32 xp_near = 3;        // membros vivos neste mapa a até 40 m de você (você incluído; 0 = você morto)
+  uint32 xp_bonus_pct = 4;   // bônus na XP total do abate com eles (+10% por membro além do primeiro)
+  uint32 xp_level_gap = 5;   // diferença entre o maior e o menor nível deles
+  uint32 xp_gap_cut_pct = 6; // quanto essa diferença corta da XP do grupo (0 = nada; 50 = metade)
 }
 
 message ClanMember {
@@ -452,6 +974,13 @@ message TeleportDest {
   float x = 3;
   float z = 4;
   uint32 price = 5;
+  string region = 6; // região da pedra (o que a janela mostra de uma pedra ainda não descoberta)
+}
+
+// Os destinos de teleporte que o jogador já descobriu a pé (ids de TeleportDest; a balsa
+// do Brejo vale sempre). Vai ao entrar e a cada pedra descoberta.
+message StonesKnown {
+  repeated uint32 ids = 1;
 }
 
 enum NpcRole {
@@ -459,6 +988,11 @@ enum NpcRole {
   NPC_ROLE_TELEPORT = 1;
   NPC_ROLE_STORAGE = 2;
   NPC_ROLE_BARBER = 3;
+  NPC_ROLE_MASTER = 4; // Mestra dos Caminhos (especialização)
+  NPC_ROLE_AUCTION = 5; // Leiloeiro (casa de leilões)
+  NPC_ROLE_GATE = 6; // portão para outro mapa (UseGate)
+  NPC_ROLE_SUBCLASS = 7; // Guardião das Sendas (subclasse)
+  NPC_ROLE_QUEST = 8; // contador de história: dá e recebe missões (NpcTalk)
 }
 
 // Atributos e skills aprendidas do jogador.
@@ -471,6 +1005,9 @@ message Progress {
   // O que +1 ponto em cada atributo muda agora (ordem: for, des, con, int, sab, esp).
   // As fórmulas são lineares nos atributos: dá para prever qualquer distribuição somando.
   repeated StatBlock per_point = 6;
+  string spec = 7; // especialização escolhida ("" = nenhuma); o bônus dela já está nos atributos
+  uint32 max_level = 8; // nível máximo dos jogadores
+  uint32 skill_point_max_level = 9; // último nível que dá ponto de skill (depois, só atributos)
 }
 
 // Atributos de combate (valores finais ou diferenças).
@@ -526,9 +1063,28 @@ message Welcome {
   ClanState clan = 19;
   EnchantRules enchant = 20;
   repeated BossStatus bosses = 21; // chefes fixos (vivos ou com a janela de renascimento)
+  repeated SpecInfo specs = 22; // as especializações de todas as classes
+  string map = 23; // id do mapa desta zona ("" ou "starter" = o mapa de sempre, /world.json)
+  string map_title = 24; // nome do mapa (minimapa e mapa do mundo)
+  repeated WeaponInfo weapons = 25; // os tipos de arma: alcance, intervalo, empunhadura
 }
 
-// Zona de caça: um anel ao redor da cidade, ou um ponto fixo (chefe).
+// Um tipo de arma (sword, axe, axe2h, staff, wand, daggers, bow, crossbow, crossbow2h). Alcance
+// e intervalo são os do ataque básico com a arma equipada (antes da Destreza).
+message WeaponInfo {
+  string type = 1;
+  string name = 2;
+  float range = 3; // metros
+  float interval = 4; // segundos entre ataques básicos
+  bool magic = 5; // o ataque básico usa MAtk/MDef
+  uint32 hands = 6; // 1 ou 2 (arma de 2 mãos ocupa a mão secundária)
+  bool dual = 7; // arma dupla: também ocupa a mão secundária
+  string anim = 8; // animação do ataque
+  string projectile = 9; // projétil ("" = corpo a corpo)
+}
+
+// Zona de caça: um anel (ou setor de anel) ao redor da cidade, um disco próprio ou um ponto
+// fixo (chefe).
 message MapZone {
   string name = 1; // nomes dos monstros
   float r_min = 2;
@@ -543,6 +1099,10 @@ message MapZone {
   float radius = 11;
   string region = 12; // nome da região ("Vale das Pedras Vivas")
   bool raid = 13; // raid boss (covil próprio)
+  // Setor de anel (r_min–r_max), em graus: 0° = leste (+x), crescendo para o norte (+z).
+  // angle_max > angle_min no setor (passa de 360 quando cruza o 0°); os dois 0 = anel inteiro.
+  float angle_min = 40;
+  float angle_max = 41;
 }
 
 message Spawn {
@@ -661,6 +1221,18 @@ message Appearance {
   uint32 weapon_grade = 4;
   uint32 weapon_enchant = 5;
   BodyLook look = 6;
+  ArmorLook armor = 7; // raridade das peças de armadura (remaster: muda o visual do corpo)
+}
+
+// Visual da armadura (tunnel#96): a raridade (Grade 1 a 5; 0 = peça vazia) de cada peça equipada. O cliente
+// escolhe o material do corpo pelo peito e liga elmo, capa e ombreiras pela raridade da peça.
+message ArmorLook {
+  uint32 chest = 1;
+  uint32 helm = 2;
+  uint32 cape = 3;
+  uint32 legs = 4;
+  uint32 hands = 5;
+  uint32 feet = 6;
 }
 
 // ---------- Tipos ----------
@@ -689,6 +1261,22 @@ message NpcInfo {
   repeated string stock = 2; // ids dos itens à venda
   NpcRole role = 3;
   repeated TeleportDest dests = 4; // pedras de teleporte: destinos
+  repeated RecipeInfo recipes = 5; // Ferreiro: o que dá para criar
+  string gate_to = 6; // portão: nome do mapa de destino
+  bool talk = 7; // conversa: o clique manda NpcTalk (o servidor responde com NpcDialog)
+}
+
+message RecipeInfo {
+  string id = 1;
+  string result_id = 2;
+  uint32 count = 3;
+  repeated RecipeMaterial materials = 4;
+  int64 gold = 5;
+}
+
+message RecipeMaterial {
+  string item_id = 1;
+  uint32 count = 2;
 }
 
 enum ItemKind {
@@ -758,9 +1346,34 @@ message ItemInfo {
   // Encaixes onde o item pode ir (0 arma, 1 mão secundária, 2 peito, 3 cabeça, 4 pernas,
   // 5 mãos, 6 pés, 7 capa, 8 colar, 9–10 brincos, 11–12 anéis). `slot` é o primeiro.
   repeated uint32 slots = 20;
-  string weapon_type = 21; // armas: sword, axe, staff, daggers
+  string weapon_type = 21; // armas: sword, axe, axe2h, staff, wand, daggers, bow, crossbow, crossbow2h
   ScrollKind scroll = 22;
   bool blessed = 23; // pergaminho abençoado: falhar não quebra (volta a +0)
+  // Graus de equipamento (tunnel#153). O grau sai do nível exigido; abaixo de tier_level a
+  // peça não se equipa, e de tier_level até req_level ela vale com a penalidade under_level.
+  uint32 tier = 24; // 0 sem grau, 1 D, 2 C, 3 B
+  uint32 tier_level = 25; // nível mínimo do grau
+  uint32 armor_weight = 26; // peças de conjunto: 1 pesada, 2 leve, 3 manto (0 = sem peso)
+  // O conjunto da peça (vazio = nenhum). Inteiro (tema, peças e bônus) só na primeira peça do
+  // conjunto; nas outras, só id e nome: o cliente junta pelo id.
+  ItemSetInfo set = 27;
+  ItemBonus under_level = 28; // o que vestir antes de req_level tira (uma vez, com uma ou mais peças); vazio = não se aplica
+  uint32 hands = 29; // armas: 1 ou 2 mãos (0 = não é arma)
+}
+
+// Conjunto de armadura (tunnel#153): as peças comuns, na ordem do corpo (a versão épica de
+// cada uma conta como ela), e os bônus por peças vestidas.
+message ItemSetInfo {
+  string id = 1;
+  string name = 2;
+  string theme = 3; // a escolha de jogo do conjunto, em uma frase
+  repeated string pieces = 4;
+  repeated ItemSetBonus bonuses = 5;
+}
+
+message ItemSetBonus {
+  uint32 pieces = 1; // a partir de quantas peças vale
+  ItemBonus bonus = 2;
 }
 
 enum EntityKind {
@@ -790,13 +1403,39 @@ message Entity {
   string weapon = 16; // modelo da arma (jogadores)
   string offhand = 17; // modelo da outra mão
   uint32 weapon_grade = 18;
-  string title = 19; // NPC: função (ex.: "Mercadora")
+  string title = 19; // NPC: função (ex.: "Mercadora"); jogador: título escolhido (conquista)
   string emblem = 20; // jogadores: cor do emblema (#rrggbb), pinta o nome e o anel no chão
   PvpState pvp_state = 21;
   string clan_name = 22;
   uint32 weapon_enchant = 23;
   BodyLook look = 24; // jogadores: visual do corpo
   bool raid = 25; // raid boss (barra no topo da tela)
+  string spec = 26; // jogadores: especialização (SpecInfo.id; "" = nenhuma)
+  string tint = 27; // monstros: cor da variante (#rrggbb; "" = a do modelo)
+  string active_class = 28; // jogadores: classe ativa (subclasse; "" = a do modelo, a principal)
+  ArmorLook armor = 29; // jogadores: raridade das peças de armadura equipadas
+  bool rare = 40; // monstro raro (named): nome dourado e selo no quadro do alvo
+  MonsterRole role = 41; // monstros: papel na luta e se é neutro (ausente = bruto)
+}
+
+// Papel do monstro na luta (arquétipo de IA, tunnel#129): o quadro do alvo mostra o ícone e
+// a dica, e a auto-caça pula os neutros. Ausente = bruto e não neutro (o de sempre).
+message MonsterRole {
+  MonsterArchetype archetype = 1;
+  bool neutral = 2; // só ataca quem bateu nele
+  bool neutral_by_day = 3; // neutro de dia e agressivo à noite (o cliente olha a hora do mundo)
+}
+
+enum MonsterArchetype {
+  MONSTER_ARCHETYPE_UNSPECIFIED = 0; // bruto: persegue e bate
+  MONSTER_ARCHETYPE_ARCHER = 1; // atirador: fica longe e recua quando o alvo encosta
+  MONSTER_ARCHETYPE_HEALER = 2; // curandeiro: cura um aliado ferido
+  MONSTER_ARCHETYPE_SUMMONER = 3; // invocador: chama lacaios
+  MONSTER_ARCHETYPE_AMBUSHER = 4; // emboscador: escondido até você chegar perto
+  MONSTER_ARCHETYPE_PACK = 5; // matilha: puxar um puxa o bando
+  MONSTER_ARCHETYPE_SHIELD = 6; // escudo frontal: toma menos dano de frente
+  MONSTER_ARCHETYPE_SPLITTER = 7; // dividir: ao morrer, vira dois menores
+  MONSTER_ARCHETYPE_EXPLODER = 8; // explosivo: explode com aviso no chão
 }
 
 message EntityState {
@@ -915,7 +1554,7 @@ message SkillInfo {
   bool effect_on_self = 15;
   float extra_crit = 16;
   // Árvore de skills
-  uint32 branch = 17; // 0–2 (Welcome.branches)
+  uint32 branch = 17; // 0–2 (Welcome.branches); 3 = ramo da especialização
   uint32 tier = 18; // 0–3
   uint32 max_rank = 19;
   bool passive = 20;
@@ -923,6 +1562,7 @@ message SkillInfo {
   uint32 parent_id = 22; // nó de cima no ramo (0 = raiz)
   repeated SkillRankInfo ranks = 23; // valores em cada rank (índice 0 = rank 1)
   float splash = 24; // raio em volta do alvo (0 = só o alvo)
+  string spec = 25; // especialização dona da skill ("" = árvore da classe); branch = 3
 }
 
 // Valores de uma skill num rank.
@@ -933,4 +1573,371 @@ message SkillRankInfo {
   uint32 effect_ms = 4;
   float effect_value = 5;
   string text = 6; // o que faz neste rank, para a dica
+}
+
+// ---------- Amigos, correio e emotes ----------
+
+enum FriendCmdKind {
+  FRIEND_CMD_UNSPECIFIED = 0;
+  FRIEND_CMD_ADD = 1; // name (pode estar offline) ou target_id (botão do quadro do alvo)
+  FRIEND_CMD_REMOVE = 2; // name ou target_id (id do personagem)
+  FRIEND_CMD_LIST = 3; // pede a lista com as posições de agora (janela aberta)
+}
+
+message FriendCmd {
+  FriendCmdKind kind = 1;
+  string name = 2;
+  uint32 target_id = 3;
+}
+
+enum MailCmdKind {
+  MAIL_CMD_UNSPECIFIED = 0;
+  MAIL_CMD_SEND = 1; // to + subject (opcional) + body
+  MAIL_CMD_LIST = 2; // caixa de entrada
+  MAIL_CMD_READ = 3; // mail_id: marcar como lida
+  MAIL_CMD_DELETE = 4; // mail_id
+}
+
+message MailCmd {
+  MailCmdKind kind = 1;
+  string to = 2;
+  string subject = 3;
+  string body = 4;
+  uint64 mail_id = 5;
+}
+
+// Um amigo (amizade de mão única: quem você segue). Online: posição atual (o cliente acha a região).
+message Friend {
+  uint32 character_id = 1;
+  string name = 2;
+  string class = 3;
+  uint32 level = 4;
+  bool online = 5;
+  float x = 6;
+  float z = 7;
+}
+
+message FriendList {
+  repeated Friend friends = 1;
+  uint32 max = 2;
+}
+
+message Mail {
+  uint64 id = 1;
+  string from_name = 2;
+  string subject = 3;
+  string body = 4;
+  int64 sent_at_ms = 5;
+  bool read = 6;
+  MailAttachment attachment = 7; // anexo (casa de leilões); vazio = só texto
+}
+
+// Caixa de entrada. listed = false: só os contadores (aviso de carta nova ou ao entrar).
+message MailBox {
+  repeated Mail mails = 1;
+  uint32 unread = 2;
+  uint32 total = 3;
+  uint32 max = 4;
+  bool listed = 5;
+  uint32 body_max = 6; // tamanho máximo do texto (caracteres)
+  uint32 subject_max = 7;
+}
+
+// Amigos e/ou correio (só o que mudou vem preenchido).
+message SocialUpdate {
+  FriendList friends = 1;
+  MailBox mail = 2;
+}
+
+enum EmoteKind {
+  EMOTE_KIND_NONE = 0; // acabou (andou, atacou ou morreu)
+  EMOTE_KIND_WAVE = 1; // acenar (uma vez)
+  EMOTE_KIND_SIT = 2; // sentar (até se mexer)
+  EMOTE_KIND_DANCE = 3; // dançar (até se mexer)
+}
+
+// Emote de um jogador, para quem está perto.
+message Emote {
+  uint32 id = 1;
+  EmoteKind kind = 2;
+}
+
+// ---------- Diário de missões (J) ----------
+
+// Grupo da missão no Diário (J).
+enum QuestCategory {
+  QUEST_CATEGORY_UNSPECIFIED = 0; // o cliente mostra como história
+  QUEST_CATEGORY_STORY = 1; // história
+  QUEST_CATEGORY_REGION = 2; // missões de uma região
+  QUEST_CATEGORY_DAILY = 3; // diárias
+  QUEST_CATEGORY_TUTORIAL = 4; // os primeiros passos
+}
+
+// Missão concluída: o título vem dos dados do servidor (não fica no save).
+message QuestDone {
+  string id = 1;
+  string title = 2;
+  QuestCategory category = 3;
+}
+
+// ---------- Contratos e reputação (nível máximo, tunnel#157) ----------
+// O quadro de contratos da praça (um NPC: ContractState.board_id) oferece 3 diários (caça
+// numa área, um chefe de campo e coleta de materiais) e 1 semanal, sorteados por personagem
+// e por dia (Brasília). Concluir dá moedas, XP (ou Maestria) e reputação com uma facção; a
+// reputação abre a loja da facção (só itens horizontais: títulos, capas, pergaminhos e
+// consumíveis).
+
+enum ContractCmdKind {
+  CONTRACT_CMD_UNSPECIFIED = 0;
+  CONTRACT_CMD_GET = 1; // pedir o estado (a janela abriu ou o dia virou)
+  CONTRACT_CMD_ACCEPT = 2; // aceitar `contract` (perto do quadro `npc_id`)
+}
+
+message ContractCmd {
+  ContractCmdKind kind = 1;
+  string contract = 2; // ContractInfo.id
+  uint32 npc_id = 3; // o quadro
+}
+
+enum ReputationCmdKind {
+  REPUTATION_CMD_UNSPECIFIED = 0;
+  REPUTATION_CMD_GET = 1; // pedir as facções e a loja (a janela abriu)
+  REPUTATION_CMD_BUY = 2; // comprar `offer` (perto do quadro `npc_id`)
+}
+
+message ReputationCmd {
+  ReputationCmdKind kind = 1;
+  string offer = 2; // RepOffer.id
+  uint32 npc_id = 3;
+}
+
+enum ContractSlot {
+  CONTRACT_SLOT_UNSPECIFIED = 0;
+  CONTRACT_SLOT_HUNT = 1; // diário: matar monstros de uma área
+  CONTRACT_SLOT_BOSS = 2; // diário: chefe de campo
+  CONTRACT_SLOT_COLLECT = 3; // diário: coletar materiais do saque
+  CONTRACT_SLOT_WEEKLY = 4; // semanal
+}
+
+enum ContractStatus {
+  CONTRACT_STATUS_UNSPECIFIED = 0;
+  CONTRACT_STATUS_OPEN = 1; // dá para aceitar no quadro
+  CONTRACT_STATUS_ACTIVE = 2; // aceito: o progresso anda
+  CONTRACT_STATUS_DONE = 3; // concluído (a recompensa já foi entregue)
+}
+
+message ContractInfo {
+  string id = 1;
+  string title = 2;
+  string text = 3; // o que fazer
+  ContractSlot slot = 4;
+  ContractStatus status = 5;
+  uint32 count = 6;
+  uint32 need = 7;
+  string place = 8; // onde ("Vale das Pedras Vivas")
+  string faction = 9; // FactionInfo.id
+  string reward = 10; // resumo ("600 moedas · 26.387 XP de Maestria · 120 de reputação")
+  int64 gold = 11;
+  int64 xp = 12; // XP (ou de Maestria, no nível máximo) para o nível de agora
+  uint32 rep = 13;
+}
+
+// Estado dos contratos do jogador. Sai ao entrar (com o quadro, para o clique abrir a
+// janela), ao pedir, ao aceitar e quando um contrato anda ou termina.
+message ContractState {
+  uint32 board_id = 1; // o NPC do quadro
+  uint32 min_level = 2; // nível para aceitar
+  int64 daily_reset_ms = 3; // próxima meia-noite de Brasília (Unix, ms)
+  int64 weekly_reset_ms = 4; // próxima segunda-feira, 0 h de Brasília
+  repeated ContractInfo contracts = 5; // os 3 diários de hoje e o semanal da semana
+  string completed = 6; // contrato que acabou de terminar (aviso no HUD)
+}
+
+message FactionInfo {
+  string id = 1;
+  string name = 2;
+  string text = 3; // quem são e onde a reputação sobe
+  string color = 4; // #rrggbb
+  uint32 points = 5;
+  uint32 grade = 6; // índice em ReputationState.grade_names (0 = neutro)
+  uint32 grade_start = 7; // pontos onde o grau atual começa
+  uint32 grade_next = 8; // pontos do próximo grau (0 = já é o máximo)
+}
+
+// Oferta da loja de uma facção: um item (item_id) ou um título (title).
+message RepOffer {
+  string id = 1;
+  string faction = 2;
+  uint32 grade = 3; // grau mínimo
+  string item_id = 4; // "" = título
+  uint32 count = 5;
+  int64 price = 6; // moedas
+  string title = 7; // o título que a compra dá
+  bool owned = 8; // título já comprado
+  string text = 9;
+}
+
+message ReputationState {
+  repeated FactionInfo factions = 1;
+  repeated string grade_names = 2; // neutro, amigável, honrado, reverenciado, exaltado
+  repeated uint32 grade_points = 3; // pontos de cada grau
+  repeated RepOffer offers = 4; // a loja (vem na resposta ao REPUTATION_CMD_GET e depois de comprar)
+  string grade_up = 5; // "Honrado com a Guarda de Vel'Aran" (aviso no HUD)
+}
+
+// ---------- Casa de leilões ----------
+
+// Anexo de uma carta do sistema (casa de leilões): moedas e/ou um item. Retirar põe na
+// bolsa (AUCTION_CMD_CLAIM); a carta não pode ser apagada antes.
+message MailAttachment {
+  string item_id = 1; // vazio = só moedas
+  uint32 count = 2;
+  uint32 enchant = 3;
+  int64 gold = 4;
+  bool claimed = 5; // já retirado
+}
+
+enum AuctionCmdKind {
+  AUCTION_CMD_UNSPECIFIED = 0;
+  AUCTION_CMD_OPEN = 1; // falou com o leiloeiro (npc_id): regras e meus anúncios
+  AUCTION_CMD_SEARCH = 2; // query
+  AUCTION_CMD_LIST = 3; // anunciar: slot (bolsa), count (0 = a pilha toda), price (total), hours
+  AUCTION_CMD_BUY = 4; // auction_id, price (o que o cliente viu)
+  AUCTION_CMD_CANCEL = 5; // auction_id
+  AUCTION_CMD_MINE = 6; // meus anúncios
+  AUCTION_CMD_CLAIM = 7; // mail_id: retirar o anexo da carta (0 = todos os que couberem)
+}
+
+enum AuctionSort {
+  AUCTION_SORT_PRICE_ASC = 0;
+  AUCTION_SORT_PRICE_DESC = 1;
+  AUCTION_SORT_NEWEST = 2;
+  AUCTION_SORT_ENDING = 3; // vence antes
+}
+
+// Filtros da busca (0/vazio = qualquer).
+message AuctionQuery {
+  string name = 1; // parte do nome do item (sem diferenciar acento e maiúsculas)
+  ItemKind kind = 2;
+  uint32 grade = 3; // raridade
+  uint32 min_level = 4; // nível exigido pelo item
+  uint32 max_level = 5;
+  int64 min_price = 6;
+  int64 max_price = 7;
+  bool my_class = 8; // só o que a minha classe usa
+  AuctionSort sort = 9;
+  uint32 page = 10; // a partir de 0
+}
+
+message AuctionCmd {
+  AuctionCmdKind kind = 1;
+  uint32 npc_id = 2; // o leiloeiro (abrir, buscar, anunciar, comprar e cancelar exigem estar perto)
+  AuctionQuery query = 3;
+  uint32 slot = 4;
+  uint32 count = 5;
+  int64 price = 6;
+  uint32 hours = 7;
+  uint64 auction_id = 8;
+  uint64 mail_id = 9;
+}
+
+enum AuctionStatus {
+  AUCTION_STATUS_ACTIVE = 0;
+  AUCTION_STATUS_SOLD = 1;
+  AUCTION_STATUS_CANCELLED = 2;
+  AUCTION_STATUS_EXPIRED = 3;
+}
+
+message AuctionListing {
+  uint64 id = 1;
+  string item_id = 2;
+  uint32 count = 3;
+  uint32 enchant = 4;
+  int64 price = 5; // total
+  string seller_name = 6;
+  int64 created_at_ms = 7;
+  int64 expires_at_ms = 8;
+  AuctionStatus status = 9;
+  string buyer_name = 10; // vendido: para quem
+  bool mine = 11;
+}
+
+// Regras (vêm ao abrir a janela).
+message AuctionRules {
+  uint32 max_listings = 1; // por conta
+  int64 min_price = 2;
+  int64 max_price = 3;
+  uint32 fee_percent = 4; // taxa do anúncio (não volta)
+  int64 fee_min = 5;
+  uint32 commission_percent = 6; // sai do que o vendedor recebe
+  repeated uint32 hours = 7; // prazos aceitos
+  uint32 page_size = 8;
+}
+
+// Só o que mudou vem preenchido.
+message AuctionUpdate {
+  bool open = 1; // abrir a janela (resposta ao OPEN)
+  uint32 npc_id = 2;
+  AuctionRules rules = 3;
+  bool searched = 4; // results/total/page são de uma busca
+  repeated AuctionListing results = 5;
+  uint32 total = 6;
+  uint32 page = 7;
+  bool mine_listed = 8; // mine/active são a lista dos meus anúncios
+  repeated AuctionListing mine = 9; // ativos e os últimos encerrados
+  uint32 active = 10; // anúncios ativos da conta
+  string notice = 11; // aviso (anunciado, vendido, comprado…); também sai no chat
+  uint64 gone_id = 12; // anúncio que saiu (comprado ou cancelado): o cliente tira da lista
+  uint32 pending = 13; // operações da casa de leilões ainda sem confirmação do banco
+  uint32 claimable = 14; // anexos no correio esperando para retirar (os que o servidor conhece)
+}
+
+// ---------- Conversa com NPCs (missões por região e diárias, tunnel#71) ----------
+// Clicar num NPC com talk = true manda NPC_TALK_OPEN. O servidor responde com NpcDialog: a
+// fala dele e as opções (aceitar e entregar missões, perguntar, o serviço do NPC e sair).
+// Tudo vem dos dados do servidor; o cliente só desenha. Cada opção escolhida volta como
+// NpcTalk, e o servidor confere de novo (NPC perto, missão disponível, passo cumprido).
+
+enum NpcTalkKind {
+  NPC_TALK_UNSPECIFIED = 0;
+  NPC_TALK_OPEN = 1; // clicou no NPC (também conta como "falar com")
+  NPC_TALK_ACCEPT = 2; // aceitar a missão quest_id
+  NPC_TALK_TURN_IN = 3; // entregar a missão quest_id (ou os itens que ela pede)
+  NPC_TALK_ASK = 4; // perguntar sobre o assunto topic
+}
+
+message NpcTalk {
+  uint32 npc_id = 1;
+  NpcTalkKind kind = 2;
+  string quest_id = 3;
+  string topic = 4;
+}
+
+enum DialogOptionKind {
+  DIALOG_OPTION_UNSPECIFIED = 0;
+  DIALOG_OPTION_ACCEPT = 1; // aceitar a missão quest_id
+  DIALOG_OPTION_TURN_IN = 2; // entregar a missão quest_id
+  DIALOG_OPTION_ASK = 3; // perguntar sobre topic
+  DIALOG_OPTION_SERVICE = 4; // o serviço do NPC (loja, armazém, contratos...): o cliente abre a janela de sempre
+  DIALOG_OPTION_LEAVE = 5; // sair da conversa
+}
+
+message DialogOption {
+  DialogOptionKind kind = 1;
+  string label = 2; // o texto do botão
+  string quest_id = 3;
+  string topic = 4;
+  string detail = 5; // aceitar: o que a missão pede, com um pouco de história
+  string reward = 6; // aceitar e entregar: a recompensa ("1.200 XP · 300 moedas")
+}
+
+message NpcDialog {
+  uint32 npc_id = 1;
+  string name = 2;
+  string title = 3;
+  string text = 4; // a fala do NPC
+  repeated DialogOption options = 5;
+  // Sem conversa agora (NPC de serviço sem missão para o jogador): o cliente abre o serviço
+  // direto, como antes das conversas.
+  bool service = 6;
 }

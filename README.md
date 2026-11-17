@@ -2,7 +2,7 @@
 
 MMORPG 3D no navegador. Cliente em **TypeScript + Babylon.js**, servidor em **Go**, comunicação por **WebSocket + Protobuf** e banco em **PostgreSQL**.
 
-**Produção:** https://erevia-production.up.railway.app (deploy automático a cada push na `main`).
+**Produção:** https://erevia-production.up.railway.app (deploy automático a cada push na `main`, depois que o CI passa).
 
 Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 
@@ -13,13 +13,164 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Pedras de Teleporte:** na praça e em acampamentos nas estradas (Arredores, Campos dos Ossos, Ermos Partidos), 20 a 160 moedas. Viajar leva 2 s; dano ou movimento cancelam. O **Pergaminho de Retorno** (Mercadora) leva à cidade em 5 s, com recarga de 30 s.
 - **Encantamento:** pergaminhos de Arma e de Armadura (Ferreiro e drops) sobem o item até **+10**. Até +3 é seguro; depois a chance cai de 70% a 40%, e falhar quebra o item. O pergaminho **abençoado** (só drop) só volta a +0. Cada nível acima de +3 vale o dobro. Armas +4 brilham dourado e +7 pulsam.
 - **Armazém:** Otto, o Guarda do Armazém, na praça: 60 espaços e moedas, compartilhados pelos personagens da conta. Arrastar da bolsa guarda; duplo clique retira.
+- **Som:** golpes (acerto, crítico, erro), skills por tipo, mortes, passos, interface (janelas, cliques, compra e venda, moedas, itens, nível, poção, encantamento), ambiente (floresta, cidade com o ferreiro, grilos à noite, vento nas terras mortas) e uma música por região (cidade, ermos, terras sombrias e a Cripta), trocando com crossfade. Segue os volumes e o "Sem som" de Configurações → Áudio na hora; no celular começa no primeiro toque. No máximo 8 efeitos juntos (ganham os mais perto/do próprio jogador), e só se ouve os outros até 25 m. Tudo CC0 (créditos em `client/public/audio/CREDITS.md`), ~3 MB, com música e ambiente carregados só ao entrar na região.
 - **Visual do personagem:** na criação, além da arma e do emblema, escolha o rosto e o cabelo (5 cabeças: Nobre, Selvagem, Sábio, Astuto e Andarilho, que qualquer classe pode usar), o tom de pele, a cor do cabelo e a cor da roupa (8 de cada, ou a original da classe) e se o elmo/gorro/chapéu aparece. Depois, Teodoro, o **Barbeiro** (ao norte do poço), muda o visual por 300 moedas, com prévia 3D. Todos veem o visual novo na hora.
+
+### Nível 40, a curva longa e o 5º degrau da árvore
+- O nível máximo agora é **40** (tunnel#149), com ~150 h de caça teórica até lá: ~3 h até o 10, ~15 h do 10 ao 20, ~40 h do 20 ao 30 e ~90 h do 30 ao 40. A XP de cada nível é a tabela `xpTable` de `server/internal/game/formulas.go`; a conta (abates e horas por nível, a 25 s por abate) está em [`docs/progressao.md`](docs/progressao.md), gerada do código. **Contratos de caça** (um por nível do 5 ao 39, gerados dos dados) dão ~30% da XP de cada faixa.
+- **Conversão:** a XP salva na curva de antes vira, ao carregar o personagem, a mesma fração do mesmo nível na curva nova (`characters.xp_curve`, migração 00019, e `game.ConvertXP`). Quem estava no 30 continua no 30 e começa o 30 → 31 do zero.
+- Caça do 20 ao 30 no **Vale das Pedras Vivas** (os golens vão do 20, na entrada, ao 30, no fundo). Do 30 ao 40, conteúdo provisório com os modelos de hoje (elites com cor própria e avisos no chão), até as áreas do `docs/roadmap-areas.md`: **Fundo do Vale** (Golem Ancestral, 30–35), **Vigília Ossária** ao lado da Cripta (Cavaleiro e Devoto do Ossário, 33–38) e **Confins Partidos** nos três cantos vazios (Ceifador e Arcanista Partido, 35–40). O Ozrhal passou a nível 35. Elas deixam cair o **equipamento ponte** (`game/bridge.go`): arma e armadura de cada classe nos níveis 30 (Rúnicas) e 35 (da Partição), comum e Desperta (raro), fora do sorteio por raridade.
+- Pontos de skill vão até o 30 (`game.SkillPointMaxLevel`); do 31 ao 40 só os 3 de atributo por nível. Morrer do 30 em diante tira 2% da XP do nível (antes, 4%). No **nível 20** a árvore (tecla K) ganha um 5º degrau, uma skill por ramo (3 por classe, até rank 3): Baluarte, Corte do Horizonte e Égide da Ordem (cavaleiro); Machadada Sísmica, Redemoinho Sangrento e Pele de Pedra (bárbaro); Inferno, Zero Absoluto e Rajada Arcana (mago); Golpe Fatal, Golpe das Sombras e Miasma (ladino).
+
+### Maestria (no nível máximo, 40)
+- No **40** a XP (de monstro, missão e invasão, com as regras de sempre: grupo, diferença de nível, noite e XP em dobro) enche a **barra de Maestria**, roxa, no lugar da barra de XP do HUD ("Maestria N"). Cada barra cheia dá **1 ponto**; uma barra custa 45.200.000 de XP, o mesmo que o 39 → 40 (`game.MasteryPointXP`). Quem ganhou pontos quando o máximo era 30 fica com eles e continua gastando e redistribuindo do 30 ao 39, mas só ganha pontos novos no 40. Morrer no 40 tira 2% da barra, sem tirar ponto (com karma, o dobro; para outro jogador ou defendendo a cidade, nada).
+- **Bônus diário** (como o Enlightenment do ESO): a primeira barra de cada dia (meia-noite de Brasília) sai **4× mais rápido**, e quem fica fora guarda até **7 dias**. A dica da barra mostra quanto ainda resta.
+- **Árvore** (aba **Maestria** da janela de skills, K, ou clique na barra): 3 ramos, 4 nós cada, até 5 pontos por nó com retorno decrescente (40%, 25%, 15%, 12% e 8% do total do nó); os nós do meio e do fim pedem 5 e 10 pontos no ramo. Teto: Maestria 60 (a árvore inteira).
+  - **Caça:** Alquimia de Campo (poções curam +20%), Bolsa Farta (+15% de moedas dos monstros), Olho do Coletor (15% de chance de 1 material a mais de monstros comuns; 5 pts), Instinto do Caçador (+2% de dano; 10 pts).
+  - **Sobrevivência:** Firmeza (atordoamento e lentidão −25%), Segunda Chance (−50% de perda da barra ao morrer), Fôlego (+40% de regeneração fora de combate; 5 pts), Couro Curtido (+1,5% de vida; 10 pts).
+  - **Utilidade:** Passo Leve (+4% de velocidade fora de combate, o teto), Viajante (Pedras de Teleporte −30%), Leitura Rápida (pedra e Pergaminho de Retorno −40% de tempo; 5 pts), Caminho de Casa (recarga do Pergaminho de Retorno −50%; 10 pts).
+  - **Teto de combate:** tudo o que mexe no combate (dano, defesa, vida, crítico, velocidade de ataque), com a árvore inteira, soma no máximo **5%** (hoje 3,5%; `TestMasteryCombatCap` e `TestMasteryCombatCapOnRealStats` travam).
+  - **Redistribuir:** grátis, 1 vez por dia.
+- O ranking de nível mostra a Maestria ao lado do nível (e ela desempata no mesmo nível). Cada ponto ganho vira um evento `mastery` na telemetria. Tudo fica salvo em `characters.mastery` e `characters.mastery_level` (migração 00017); nada roda por tick: só muda quando o jogador ganha XP, morre, gasta ou redistribui. GM: `/maestria xp N [Nome]` e `/maestria dia [Nome]` (simula a virada do dia). Dados em `server/internal/game/mastery.go`.
+
+### Vitalidade e recuperação do 2º personagem
+- **Vitalidade** (como a do Lineage 2 e o Rested XP do WoW): um estoque de XP bônus por personagem que **dobra a XP de monstro** até acabar; o bônus pago sai do estoque. Missão, contrato e invasão não dobram nem gastam. Teto: **1 nível da faixa** (`XPToNext(nível)`; no 40, uma barra de Maestria, para onde ela passa a valer). Ao subir de nível, o estoque (em XP) fica limitado ao teto novo.
+- **Enche fora do jogo:** 1,5% do teto por hora desde a última saída (`characters.last_seen_at`), calculado no login; cheia em ~67 h (~3 dias). **Na cidade** (área segura, sem invasão), online, vivo e fora de combate: também 1,5% por hora (um sistema barato a cada 10 s).
+- No 40 a vitalidade espera o bônus diário da Maestria acabar (os dois não se somam).
+- **Recuperação:** se a conta já tem um personagem no 40, os outros ganham **+50%** na XP de monstro e de missão até ficarem a 5 níveis do maior nível da conta (o 35). O nível da conta é lido uma vez, no login.
+- **Teto:** noite, XP em dobro, recuperação e vitalidade somam no máximo **×3** na XP de monstro; a recuperação entra primeiro e a vitalidade só paga (e gasta) o que cabe.
+- HUD: uma faixa azul sobre a barra de XP (ou de Maestria) mostra a parte que ainda sai em dobro, e um selo no quadro do personagem mostra o % (e o +50% da recuperação), com a dica "Vitalidade: X% (dobra a XP de monstro)" no hover ou no toque. O chat avisa ao entrar e quando a vitalidade acaba. Telemetria: fontes `vitality` e `catchup` em `v_xp_sources`. Salva em `characters.vitality` (migração 00051). GM: `/vitalidade N [Nome]` (N% do teto). Simulação: `go run ./cmd/balance -vitalidade` (1 h por dia leva ~52% do tempo de jogo de quem joga sem parar). Regras em `server/internal/game/vitality.go`.
+
+### Contratos e reputação (nível máximo)
+- **Quadro de Contratos:** Iselda, na praça, ao sul do poço (entre as tendas da Mercadora e do Ferreiro). Clicar nela abre a janela (aba **Contratos** e aba **Loja de reputação**); aceitar e comprar só perto dela. É para os 5 últimos níveis: a partir do **35** (`game.ContractMinLevel = MaxLevel − 5`, que sobe sozinho se o máximo subir). Não confundir com os contratos de caça por nível das missões: estes são os objetivos diários de quem já chegou lá. Todo dia há **3 diários**, um de cada vaga (**caça** numa área, **chefe de campo** e **coleta** de materiais), e **1 semanal** maior. Os diários renovam à **meia-noite de Brasília** e o semanal na **segunda-feira, 0 h**; o que foi aceito e não terminou some na virada. A janela mostra quanto falta para renovar.
+- **Sorteio:** determinístico por personagem e dia (`game.OfferedContracts`), sem nada salvo: o banco guarda só o que foi aceito. Os diários usam as três áreas do 30 ao 40: o **Fundo do Vale** (Golens Ancestrais, 30–35), a **Vigília Ossária** (Cavaleiros e Devotos, 33–38) e os **Confins Partidos** (Ceifadores e Arcanistas, 35–40). Cada dia tem uma **região do dia**, que roda pelas três (por onde começa depende do personagem): a caça é na região do dia, o chefe na seguinte e a coleta na outra. Então nenhuma vaga repete o contrato de ontem, e a caça e o chefe nunca enchem a coleta (as três vagas ficam em áreas diferentes, e a coleta só conta o saque de monstros que nasceram na área dela). Dentro da região, as opções rodam pelos dias daquela região. O semanal sai de 5 opções com uma permutação por ciclo, sem repetir o da semana anterior.
+- **Contratos** (dados em `server/internal/game/contracts.go`):
+  - **Dia do Fundo do Vale:** caça — 70 Golens Ancestrais, ou 45 do nível 32+; chefe — 30 capitães da Vigília (Cavaleiros e Devotos do nível 36+); coleta — 18 Essências Sombrias ou 8 Núcleos Rúnicos do saque dos Confins.
+  - **Dia da Vigília Ossária:** caça — 110 Cavaleiros e Devotos, ou 55 Devotos; chefe — 20 Partidos do nível 38+ nos Confins; coleta — 50 Núcleos Rúnicos do saque do Fundo.
+  - **Dia dos Confins Partidos:** caça — 60 Ceifadores e Arcanistas, ou 30 Arcanistas; chefe — 15 Golens Ancestrais do nível 34+ no Fundo; coleta — 50 Crânios Rachados ou 28 Essências Sombrias do saque da Vigília.
+  - **Semanais:** participar da morte de **Ozrhal** (Bastião); derrotar 2 **monstros raros** (Ossudo, Capitão Ossudo, Vossk ou Ômrun); defender a cidade em 2 invasões vencidas; vencer 3 jogadores em PvP (roxos ou com karma, nível 30+, de outra conta, cada um uma vez; matar quem não lutava não conta) (os três da Guarda); e 250 elites do 30 ao 40 (Bastião).
+  - Caça e chefe dão reputação com a facção da área (Fundo e Vigília: o Bastião; Confins: a Guarda); a coleta é sempre da Guarda.
+- **O que conta:** abate com XP (o de grupo também) de monstro que **nasceu** na área do contrato (invasores, invocações e o raid ficam de fora; o raid tem o seu gancho); a coleta conta o material **pego do chão** que caiu de um monstro da área (o item continua na bolsa; o que caiu de quem morreu com karma não conta). Nada roda por tick: o progresso anda nos ganchos do abate, do saque, do raid, da invasão e do PvP, só para quem aceitou.
+- **Recompensa:** moedas (2.000 a 2.500 nos diários, 10.000 a 12.000 no semanal), XP (2,5 a 3% da barra do nível; no 40, da barra de **Maestria**, 45,2 milhões; 10% no semanal) e reputação (120 a 150; 500 no semanal). 2,5% da barra são ~1,1 milhão de XP, uns 13 min de caça no 40 (o simulador dá ~5,1 milhões de XP por hora). Passa pela economia de sempre: ouro em `gold` (`contract`), XP na fonte `contract` de `v_xp_sources`. Ao concluir, o HUD mostra o aviso "Contrato concluído" e o chat traz a recompensa.
+- **Reputação** (`server/internal/game/reputation.go`) com 2 facções: a **Ordem do Bastião Cinzento** (Fundo do Vale, Vigília Ossária e a Cripta) e a **Guarda de Vel'Aran** (a cidade, os Confins Partidos, a coleta, os raros e os eventos). 5 graus: **neutro** (0), **amigável** (500), **honrado** (1.500), **reverenciado** (3.500) e **exaltado** (7.000, o teto). A reputação só sobe e nunca é gasta. A aba **Reputação** do Diário de missões (J) mostra o grau, a barra até o próximo, a escada dos graus e os contratos de hoje com o progresso.
+- **Loja de reputação** (no quadro): o grau abre as ofertas, que custam moedas, na escala do nível 40 (um elite do 35 ao 40 deixa ~180 moedas, ~50 mil por hora), e nunca menos do que a praça paga pelos itens. Só itens horizontais (`TestRepShopIsHorizontal`): poções e Pergaminhos de Retorno 20% mais baratos (amigável); pergaminhos de encantar 10% mais baratos e um título (honrado, 15.000); uma **capa** de cada facção com exatamente o poder do Manto das Cinzas, a capa épica do Ferreiro, mudando só o nome e a cor, que nunca cai de monstro (reverenciado, 30.000); um pergaminho abençoado e outro título (exaltado, 50.000). Os **títulos** (Vigia da Cripta, Mão do Bastião, Amigo da Guarda e Escudo de Vel'Aran) são conquistas que só a compra desbloqueia: escolha na janela Glória. As receitas de grau C (tunnel#153) e os cristais (tunnel#154) ainda não existem; o lugar deles está previsto no `RepOffer`, num comentário.
+- **Quanto rende por dia** (um jogador sozinho no 40, servidor vazio; números de `go run ./cmd/balance` e de `DefaultSpawns`):
+  - **O simulador:** do 30 ao 40 toda classe mata em 1,2 a 8 s (2,4 s de média no 35–40) e fica presa ao renascimento: ~280 abates por hora (~12,9 s por abate) com os monstros do próprio nível (±2). Cada abate no 40 dá 18.292 de XP; uma barra de Maestria são ~2.470 abates (~8,8 h).
+  - **Por área, contando qualquer nível dela** (renascimento médio = 1,5 × o base): Fundo do Vale, 8 golens a cada 82,5 s → **~10,3 s por abate**; Vigília, 2 grupos de 7 a cada 75 s, 96 m entre eles → **~7 s** indo de um ao outro; Confins, 3 grupos de 7 a 244 m um do outro → **~10,7 s** num grupo só. Só o topo da área (o "chefe"): os golens 34+ (~2,7 dos 8) saem a cada ~31 s; os elites 36+ da Vigília, a cada ~13 s; os Partidos 38+, a cada ~21 s.
+  - **Saque:** Núcleo Rúnico no Fundo 45% × 1–2 (0,68 por abate); na Vigília, Crânio Rachado 30% × 1–2 (0,45) e Essência Sombria 25%; nos Confins, Essência 20% × 1–2 (0,3) e Núcleo 12%.
+  - **Dia do Fundo:** caça 11,6–12,0 min (70 × 10,3 s; 45 × 15,5 s) + chefe 6,7 min (30 × 13,4 s) + coleta 10,7–11,9 min (60 a 67 abates nos Confins) + ~5 min de viagem entre o quadro e as três áreas = **34 a 36 min**.
+  - **Dia da Vigília:** caça 11,5–12,8 min (110 × 7 s; 55 Devotos × 12,5 s) + chefe 7 min (20 × 21 s) + coleta 12,7 min (74 golens no Fundo) + ~5 = **36 a 38 min**.
+  - **Dia dos Confins:** caça 10,7–12,5 min (60 × 10,7 s; 30 Arcanistas × 25 s) + chefe 7,7 min (15 × 31 s) + coleta 13 min (~111 abates na Vigília) + ~5 = **36 a 38 min**.
+  - As três vagas ficam em áreas diferentes, então a espera de uma não adianta a outra. O semanal soma de 2 a 6 min por dia (Ozrhal, 15 a 25 min em grupo; 2 invasões, ~10 min cada; 250 elites, ~42 min na semana; os raros e o PvP dependem de quando aparecem). Total: **36 a 44 min de objetivos novos por dia**, mais com outros jogadores disputando as mesmas áreas (todas já presas ao renascimento).
+- **Telemetria:** `contract_accept` e `contract_done` em `game_events` (ref = contrato; no `contract_done`, amount = moedas e extra com a vaga, a facção, a reputação ganha, a XP, o dia e a semana); a loja anota `gold` (`rep_shop`) e `item_in` (`how` = `rep_shop`). A view `v_contracts_daily` conta aceitos, concluídos e moedas por dia (Brasília) e contrato. Tudo fica salvo em `characters.contracts` e `characters.reputation` (migração 00032).
+- **Protocolo:** `ContractCmd` e `ReputationCmd` (campos 42 e 43 do `ClientMessage`), `ContractState` e `ReputationState` (42 e 43 do `ServerMessage`). GM: `/contrato andar N [Nome]` (soma N aos contratos aceitos), `/contrato dia [Nome]` (libera de novo os diários de hoje) e `/contrato rep bastion|guard N [Nome]`. Código em `server/internal/zone/contracts.go` e `client/src/ui/contracts.ts` (a aba do Diário em `client/src/ui/windows/reputation.ts`).
+
+### Criação de itens (Ferreiro)
+- A aba **Criar** do Ferreiro Bruno transforma materiais que caem dos monstros + moedas em equipamento que a loja não vende: 24 receitas, de raro (ossos e crânios dos esqueletos) a épico (Essência Sombria) e lendário (Núcleo Rúnico dos golens), mais pergaminhos de encantar (inclusive os abençoados). A lista mostra quanto você tem de cada material; o botão só liga quando dá.
+- O servidor confere materiais, moedas e espaço numa cópia da bolsa e só então aplica. Receitas em `server/internal/game/recipes.go`.
+
+### Troca entre jogadores
+- Selecione um jogador perto (até 8 m) e clique em **Trocar** no quadro do alvo; ele recebe o convite. Na janela de troca, arraste itens da bolsa (ou use "Oferecer na troca" no menu do item), ponha moedas, **trave** a oferta e, com as duas travadas, **confirme**. Qualquer mudança (inclusive usar um item oferecido) destrava as duas ofertas.
+- Nada sai da bolsa até a confirmação dos dois. Na hora, o servidor confere tudo de novo, monta as bolsas novas e aplica de uma vez, salvando os dois personagens na mesma transação. Se alguém sair, morrer, se afastar ou não tiver espaço, a troca é cancelada sem mexer em nada.
+
+### Casa de leilões (Severino, o Leiloeiro, ao sul do poço)
+- Falar com **Severino** abre a janela (no celular, em tela cheia) com três abas: **Comprar** (busca por parte do nome, sem diferenciar acento e maiúsculas, tipo, raridade, nível exigido, faixa de preço e "só o que a minha classe usa", com ordem e páginas de 20; comprar pede um segundo clique), **Vender** (um item da bolsa ou parte da pilha, preço total de 10 a 100.000.000 moedas e prazo de 12, 24 ou 48 h) e **Meus anúncios** (os ativos, com cancelar, os últimos encerrados e **Retirar tudo** do correio).
+- **Taxas:** anunciar custa **2% do preço (mínimo 10)**, que não volta; na venda a casa fica com **5%**. As duas saem da economia. Até **10 anúncios ativos por conta**. Moedas não se leiloam; hoje não existem itens de missão nem presos à conta (quando existirem, a regra fica em `auctionBlocked`, `server/internal/zone/auction.go`).
+- **Comprar:** as moedas saem na hora e o item vai para a bolsa; com a bolsa cheia, ele espera no correio. O vendedor recebe as moedas menos a comissão **pelo correio**, mesmo offline. Cancelar ou o prazo vencer devolve o item pelo correio (a taxa não volta).
+- **Correio com anexo** (o mínimo necessário): as cartas da Casa de Leilões trazem moedas e/ou um item, retirados com **Retirar** na carta (aba Correio) ou com Retirar tudo; antes disso a carta não pode ser apagada. Entre jogadores o correio continua só texto.
+- **Onde o item e as moedas ficam (nada duplica nem some).** A zona é a dona da bolsa, então tudo o que mexe nela vira uma *operação* (`AuctionOp`: anunciar, comprar, retirar) que vai junto do personagem no salvamento: o banco grava a bolsa nova e a operação na **mesma transação** (`store.SaveStatesAuction`). Até a zona saber que deu certo, a operação vai em todo salvamento do personagem (no estado recente de quem saiu, no pendente da fila cheia e no "último salvo" depois de um panic), e o banco a aplica **uma vez só** (`auction_ops`: personagem + id da operação; repetida, devolve o resultado guardado). Um estado com operação sem confirmação nunca é esquecido do `recent`. Assim, um estado gravado sem o item na bolsa sempre tem o anúncio junto, e uma queda antes de gravar não deixa nem um nem outro.
+  - *anunciar:* bolsa → custódia (`auctions`); se outro personagem da conta encheu o limite ao mesmo tempo, o item e a taxa voltam numa carta;
+  - *comprar:* a transação trava o anúncio (`FOR UPDATE`) e só vende se ele ainda está ativo, não tinha vencido no instante do clique e tem o preço que o comprador viu; aí marca vendido e cria as duas cartas (moedas para o vendedor, item para o comprador). Quem chega depois (outro comprador, o vencimento, um cancelamento) recebe as moedas de volta numa carta, que a zona retira sozinha. Dois compradores na mesma zona: o segundo é recusado na hora, sem pagar;
+  - *cancelar e vencer* só mexem no banco (anúncio → carta com o item); o vencimento roda a cada 30 s com `FOR UPDATE SKIP LOCKED`;
+  - *retirar:* a zona põe o anexo na bolsa e a transação marca a carta como retirada; a zona lembra o que já foi retirado na sessão (uma leitura velha da caixa não deixa retirar de novo).
+- Código: `server/internal/zone/auction.go` (regras, janela e operações), `server/internal/store/auction.go` (transações, migração 00033), `server/cmd/zone/auction.go` (ligação) e `client/src/ui/windows/auction.ts`. Testes: `zone/auction_test.go` (anunciar, comprar, cancelar, vencer, bolsa cheia, os dois compradores, comprar no instante em que vence, vendedor offline e a queda no meio, com o banco falso) e `store/auction_test.go` (as mesmas corridas no Postgres, com goroutines).
+
+### Amigos, correio e emotes (janela Social, tecla O)
+- **Amigos:** `/amigo Nome` (pode estar offline), o botão **Amigo +** no quadro do alvo ou a janela Social; `/amigo remover Nome` tira. A amizade é de mão única (como "seguir"), até 50 por personagem. A janela mostra quem está online, o nível e a região onde está (atualiza a cada 10 s com ela aberta); `/amigos` lista no chat quem está online. Quando um amigo entra no jogo, aparece um aviso no chat.
+- **Correio:** `/correio Nome texto` ou a aba Correio (com assunto opcional). Só texto entre jogadores (as cartas da [Casa de Leilões](#casa-de-leilões-severino-o-leiloeiro-ao-sul-do-poço) trazem anexos), até 200 caracteres; o destinatário pode estar offline e vê um aviso ao entrar (e um número no botão Social). Na caixa de entrada, abrir a carta marca como lida; dá para responder e apagar. Contra spam: 10 cartas por hora por remetente (apagar não devolve o limite) e 100 cartas guardadas por destinatário. Quem está silenciado não manda cartas.
+- **Emotes:** `/acenar`, `/sentar` e `/dancar` (ou `/dançar`), vistos por quem está a até 70 m. Sentar e dançar duram até o personagem andar, atacar ou morrer. Os modelos não têm clipes próprios: acenar usa o braço erguido da magia, dançar a conjuração em loop e sentar é uma pose montada no cliente com o fim do `Death_A` (pernas) e o `Idle_A` (tronco).
+- Amigos e cartas ficam nas tabelas `friends` e `mail`, gravadas por um worker (a zona nunca espera o banco).
+
+### Missões
+- **Tutorial dos primeiros 15 minutos** (8 missões em sequência): sair da cidade, derrotar Esqueletos Lacaios, usar skills, tomar uma poção, comprar na praça, chegar ao nível 4, viajar com uma Pedra de Teleporte e enfrentar os Campos dos Ossos. Cada uma dá XP, moedas e/ou itens; se a bolsa estiver cheia, a recompensa fica no chão, reservada para você.
+- O painel **Missões** fica à esquerda, abaixo do grupo, e mostra o progresso (passe o mouse para ver a história e a recompensa). Só personagens novos (abaixo do nível 5 e sem histórico) recebem o tutorial.
+- **Diário de missões (tecla J):** botão no painel Missões, na barra das janelas e no menu ☰ do celular. As ativas ficam agrupadas por categoria (história, região, diária e tutorial; `QuestDef.Category`, que vai no QuestInfo), cada uma com o texto, os passos com progresso, o lugar do passo, a recompensa e os botões **Rastrear**, **Fixar** e **Ir**. A aba **Concluídas** mostra só os títulos: o servidor manda id, título e categoria no primeiro QuestLog da sessão e quando uma missão termina, nunca o texto. O painel do HUD mostra só as **fixadas** (até 3) e a rastreada está sempre entre elas; missão nova entra sozinha se houver lugar, senão aparece por 8 s com **Fixar** e some. Fixar com o painel cheio tira a fixada mais antiga que não é a rastreada. A escolha fica no navegador por personagem (`erevia.questPins.<id>`) e sobrevive a relogar. A janela só existe aberta e o painel só redesenha com QuestLog ou fixação nova (`client/src/ui/quest-pins.ts`, testes em `client/tests`; `client/src/ui/windows/journal.ts`).
+- As missões são dados em `server/internal/game/quests.go` (objetivos: sair da cidade, matar monstros, usar skills, tomar poções, comprar, chegar a um nível, viajar). O servidor controla o progresso e salva no personagem (`characters.quests`).
+- **Onde fica cada objetivo:** cada passo pendente vai com um lugar (x, z, raio e tipo: área de caça, NPC, portão, Pedra de Teleporte ou loja), calculado pelo servidor só quando o QuestLog é enviado (ao mudar o passo e ao subir de nível, nunca por tick): matar → a área de spawn do monstro mais adequada ao nível e mais perto (no anel, o ponto na direção do jogador, longe do covil do raid); chegar a um nível → a melhor área de caça para o nível atual; falar, escolher o caminho ou comprar → o NPC (a loja mais perto que vende o item); sair da cidade → o portão mais perto; viajar → a Pedra de Teleporte da praça; usar skill e tomar poção → sem lugar. Uma missão de história pode fixar o lugar nos dados (`QuestStep.Place`). Código em `server/internal/game/questplace.go` e `server/internal/zone/questplace.go`.
+- **Missão rastreada:** clicar numa missão do painel (ou **Rastrear** no Diário) a rastreia (uma por vez, sempre entre as fixadas; sem escolha, a primeira fixada; a escolha fica no navegador). O minimapa e o mapa do mundo mostram a área de caça como um círculo dourado tracejado, o NPC, a loja, a Pedra de Teleporte ou o portão com um ícone e uma linha tracejada de você até lá (no minimapa, o ícone fica preso na borda quando o alvo está longe; no mapa, o painel lateral tem a missão rastreada e o clique centraliza nela). Fora de vista, uma **seta na borda da tela** aponta para o alvo com a distância em metros. Quando o passo termina, o alvo avança sozinho. Configurações → Jogo → **Marcadores de missão** desliga tudo. Custo: só os canvas 2D que já existiam (o minimapa a ~15×/s) e um elemento DOM para a seta, mexido no máximo 5×/s; nenhuma malha 3D (`client/src/ui/quest-nav.ts`).
+- **Ir e Caçar aqui:** cada missão do painel (e a rastreada no mapa do mundo) tem o botão **Ir**: o personagem anda sozinho até o lugar do passo, com o mesmo comando do clique no mapa (o servidor calcula o caminho e valida tudo). Para quando você mexe no movimento (WASD, joystick, clique no chão ou no mapa) ou ataca, quando chega (entra no raio do lugar) e quando leva dano (Configurações → Jogo → **Continuar andando se atacado**, desligado por padrão, deixa seguir). Numa área de caça aparece **Caçar aqui**: a auto-caça só com os monstros daquele passo (o QuestStepInfo leva os nomes em `monsters`), até o passo terminar; aí avisa no chat e para. Pelo F/AUTO a auto-caça continua igual. Lugar a mais de ~150 m com uma Pedra de Teleporte que encurte o caminho: a pílula oferece **Viajar pela Pedra (X moedas)**, que anda até a pedra e abre a janela com o destino destacado (quem escolhe é o jogador); depois da viagem, segue a pé. Contra bot: só com a janela do jogo em foco, e para depois de 5 minutos sem nenhuma tecla, clique ou toque de verdade. No cliente, um intervalo de 250 ms só enquanto o Ir está ativo, nada por quadro (`client/src/world/questgo.ts`, testes em `client/tests`, `npm run test:unit`).
+- **Caminhos longos:** o A* de 1 m usa uma grade de memória reaproveitada (antes eram mapas criados a cada busca: ~4× mais rápido e quase sem alocação), e pedidos de movimento acima de 40 m com obstáculo no meio entram numa fila de no máximo 2 caminhos por tick, um lugar por jogador (`server/internal/zone/pathqueue.go`). Com 50 jogadores pedindo o vale ao mesmo tempo, o pior tick caiu de ~49 ms para ~2 ms (`go test ./internal/zone -run x -bench TickLongPaths`).
+
+### Ranking, conquistas e títulos (tecla H)
+- A janela **Glória** (H ou o troféu no menu) tem duas abas. **Ranking:** top 50 de nível (desempate pela XP), de vitórias PvP e de clãs (soma dos níveis dos membros, com a média), mais a sua posição e a do seu clã. Um worker calcula no banco a cada 5 min (contas banidas ficam de fora) e a zona guarda em memória; a janela pede quando abre e guarda a resposta por 2 min. A zona nunca consulta o banco.
+- **Conquistas** (14, mais os 4 títulos da [loja de reputação](#contratos-e-reputação-nível-máximo); dados em `server/internal/game/achievements.go`): Primeiro Sangue, Primeiros Passos (tutorial), Quebra-Ossos (100 esqueletos), níveis 10, 20 e 30, O Senhor Caiu (Senhor dos Ossos), Regicida (participar da morte de Ozrhal), A Cidade Resiste (defender uma invasão vencida), Mão Firme (+7), Negócio Fechado (primeira troca), Forja Lendária (criar um lendário), Duelista (vitória PvP) e Caçador de Raros (os 4 monstros raros, cada um uma vez: `AchievementDef.Each`, com o progresso salvo como um conjunto de bits em `counts`). Andam com o que o servidor já valida (abate, nível, encantamento, troca, criação, missão, PvP, raid boss e invasão); quem já tinha cumprido (nível, vitórias, tutorial) ganha ao entrar. Desbloquear avisa no chat e com um toast.
+- Cada conquista dá um **título**: escolha na aba Conquistas e ele aparece sob o seu nome, em lilás, para todos (texto fixo no nome, que só muda quando você troca de título). Conquistas e título ficam salvos no personagem (`characters.achievements` e `characters.title`).
+
+### Bestiário (tecla B)
+- Uma **entrada por tipo de monstro** (janela **Bestiário**, B ou a caveira no menu). Antes do primeiro abate é uma silhueta, sem nome; depois aparecem o nome e o retrato, e cada marco abre mais: **10 abates** mostram o nível e a vida (do menor ao maior nível que você derrotou), **100** mostram o que ele deixa cair (itens com a chance, moedas e equipamento) e **500** dão **+1% de dano contra aquele tipo** (golpe e skills; teto `game.BestiaryDamageCap`). Chefes, o raid boss e os monstros raros abrem a entrada inteira com **1 abate** e não dão bônus.
+- **Quem conta:** os mesmos que levam a XP do abate (o grupo ou o jogador que causou mais dano, vivos a até 30 m e no máximo 9 níveis abaixo do mais alto), cada um com 1 abate inteiro, como as missões e as conquistas. No raid boss, todo mundo que causou dano e está na zona (até quem ficou sem XP por ter menos de 5% do dano).
+- **Famílias**, pelo modelo do monstro e pelo maior nível em que ele nasce no mapa (um monstro novo com o mesmo modelo entra sozinho na família da faixa dele): **Esqueletos** e **Golens** com o que só nasce até o nível 30, e **Esqueletos Ancestrais** (Cavaleiro e Devoto do Ossário, Ceifador e Arcanista Partidos, Ozrhal) e **Golens Ancestrais** (Golem Ancestral) com o que nasce acima disso, o conteúdo do 30 ao 40. Assim quem parou no 30 completa as de base, e o 40 abre famílias novas em vez de reabrir as antigas. Completar pede o último marco de cada entrada que **nasce sozinha no mapa**; os raros (aparição por sorte, com espera de 45 min e às vezes só à noite; ficam na família do hospedeiro) e as invocações (Guarda Ossário, Escudeiro Ossudo) são extras e não contam. Completar dá um **título** (Ceifador de Ossos, Quebra-Rochas, Algoz da Partição, Coração de Pedra Viva; escolha no Bestiário ou na Glória) e uma **cor de roupa exclusiva** no barbeiro (Marfim Ossário, Granito Rúnico, Violeta Ossário, Musgo Rúnico). A recompensa é visual de propósito: a bolsa é um vetor fixo de 40 espaços (`game.BagSize`) usado por armazém, troca, morte e invariantes, e um espaço a mais por personagem mexeria em tudo isso; a cor só passa pela validação do barbeiro (`Appearance.Outfit` 100 em diante, recusada na criação).
+- O bônus entra no **orçamento de poder** do simulador (`server/internal/balance/bestiary.go`, dentro do `TestPowerBudget`): no teto, ele não pode valer mais pontos de poder que a folga da arma típica do nível nem somar mais de 3% ao dano por segundo. Com +2% o veterano do 30 passava da folga (6,2 pontos contra 3,7), então o bônus é +1%.
+- Tudo fica salvo no personagem (`characters.bestiary`, migração 00031); um marco ou uma família completa avisam no chat e com um toast e viram eventos `bestiary` na telemetria. Protocolo: `BestiaryCmd` (ClientMessage 40), `Bestiary` e `BestiaryMark` (ServerMessage 40 e 41). Dados em `server/internal/game/bestiary.go`.
+
+### Eventos: invasão da cidade e XP em dobro
+- **Invasão:** em algumas noites (chance de `INVASION_CHANCE` a cada anoitecer, 15% por padrão, só com alguém online) ou com `/evento invasao` (GM), um aviso para todos (o mesmo banner do raid boss) diz que os esqueletos chegam em 2 minutos. Depois vêm **4 ondas** (12, 16, 20 e 22 esqueletos, a última com um Senhor dos Ossos de capitão), no nível médio de quem está perto da cidade (−1, +1 por onda). Eles nascem do lado de fora dos 4 portões, um por portão a cada 2 s, com **no máximo 20 vivos** de cada vez, e marcham para a praça brigando com quem encontram. Enquanto dura, as **estradas dos portões e a praça** deixam de ser zona segura para lutar com monstros; o resto da cidade continua seguro e o **PvP continua proibido** em toda a cidade (karma e flag não mudam). Morrer para um invasor não custa XP, e quem morre volta num canto seguro, não no meio da luta.
+- **Fim e recompensa:** acaba quando as ondas caem (vitória) ou em 8 minutos (os esqueletos recuam e somem). Os invasores não deixam saque no chão; no fim, cada defensor ganha XP (até 12% do nível) e moedas (até 50 + 50 por nível) proporcionais aos seus pontos (dano nos invasores + 25% da vida de cada um que derrubou) em relação a quem mais fez; na vitória, os 3 melhores ganham um pergaminho de encantar e todos os recompensados, a conquista **A Cidade Resiste** (título "Defensor de Vel'Aran"). Tempo esgotado paga metade e sem itens. A XP de cada abate continua normal (e dobra com a XP em dobro). Tudo vai para a telemetria (`invasion`, ouro e itens com origem `invasion`).
+- **XP em dobro:** a XP de monstros (inclusive grupo e raid) dobra nos dias de `XP2_DAYS` (sábado e domingo por padrão, no horário de Brasília) ou com `/evento xp2 horas` (GM, até 168 h); `/evento xp2 off` desliga, inclusive o horário do dia (até o fim da sequência de dias). Ligar e desligar avisa todos; enquanto dura, um selo **XP ×2** fica embaixo do minimapa (a invasão mostra ali a onda, os vivos e o tempo). O que o GM liga ou desliga fica na tabela `server_events` (migração 00016) e vale depois de um reinício.
+- **Desempenho:** sem invasão o tick não piora (`go test ./internal/zone -run x -bench TickCrowd`: ~2,7 → ~2,5 ms, porque a busca de alvo dos monstros agora descarta pela distância antes). Com a invasão no limite de 20 vivos e 100 dos 400 jogadores na praça, o tick sobe uns 0,25 ms (de ~4,0 para ~4,25 ms, num orçamento de 50 ms; `BenchmarkTickCrowdInvasion`). No cliente não há efeito novo: são os monstros de sempre, entregues pela AOI, e o selo do HUD só muda de texto 2×/s.
+- `/evento` mostra o estado; `/evento invasao agora` pula o aviso e `/evento invasao parar` encerra sem recompensa. Tudo fica no `gm_log`.
+
+### Monstros raros (named)
+- Um **raro** nasce no lugar de um monstro comum (o **hospedeiro**) quando ele renasce, com uma chance pequena (2–3%), e só onde e quando a condição deixa (período e parte de uma área). É o mesmo monstro (mesmo id e mesma casa), com **nível +2** (nunca abaixo do da tabela), **vida ×4**, **1,2× maior**, XP ×4, moedas garantidas ×2, o **nome dourado** (e o selo **RARO** no quadro do alvo; `Entity.rare`, campo 40) e um **saque garantido**. No renascimento seguinte ele volta a ser o hospedeiro.
+- **Um de cada no mundo e no mínimo 45 min** (relógio de parede) entre o fim de uma aparição e a próxima (morrer, adormecer na troca dia/noite do hospedeiro ou ir embora acabam a aparição; o raro noturno some no amanhecer, fora de combate). A hora fica na tabela dos chefes (`world_bosses`, id `rare:<raro>`, `respawn_at` = quando pode nascer de novo; sem migração nova): reiniciar o servidor não zera.
+- Ao nascer, quem está a até **60 m** lê no chat de sistema "Algo grande se move no bosque…" (cada raro tem o seu texto). Matar conta como o hospedeiro nas missões. Telemetria: `rare_spawn` (sem personagem, com a posição) e `rare_kill` (um por quem levou a XP) em `game_events`.
+- Os 4 primeiros (roadmap, tabela 5.9):
+
+| Raro | Hospedeiro (chance) | Condição | Mecânica | Saque garantido |
+|---|---|---|---|---|
+| Ossudo, o Teimoso (nível 6+) | Esqueleto Lacaio (3%) | Arredores (anel 46–74), sempre | levanta 1× ao morrer, com 30% da vida | 3 Crânios Rachados |
+| Capitão Ossudo (nível 14) | Esqueleto Guerreiro (2%) | Campos dos Ossos (anel 80–108), só à noite | "Formação!" a 50% da vida: 2 Escudeiros Ossudos com escudo (50% da vida, 20 s), uma vez por luta | Insígnia do Capitão e Elmo de Osso (raro, nível 13, 20%) |
+| Vossk, o Cinzento (nível 21+) | Esqueleto Mago (2%) | oeste dos Ermos (setor 135°–225°), só à noite | Chuva de Ossos mirim: 2 círculos de 3 m, 1,5 s de aviso | 2 Essências Sombrias |
+| Ômrun, Golem Ancião (nível 31+) | Golem de Pedra (2%) | metade sul do Vale das Pedras Vivas, sempre | pisão: anel de 3 a 7 m, 2,0 s de aviso (além da pancada do golem) | 2 Núcleos Rúnicos |
+
+- Os avisos no chão são as habilidades por dados (`MonsterDef.Abilities`, `zone/abilities.go`). Teste (só com `DEV_LOGIN`): `/raro` lista o estado de cada um; `/raro ossudo|capitao|vossk|omrun [ir]` transforma o hospedeiro livre mais perto, sem chance, condição nem espera (e "ir" leva você até ele). Código em `server/internal/game/rares.go` e `server/internal/zone/rares.go`.
+
+### Segunda classe (especialização, nível 20)
+- No **nível 20** chega a missão **A Encruzilhada**: falar com Ysolde, a **Mestra dos Caminhos** (praça, a leste do poço), abre a janela com os dois caminhos da classe, e escolher conclui a missão (1.000 moedas e 3 Pergaminhos de Retorno). Quem já passou do 20 recebe a missão ao entrar. A escolha é definitiva; trocar depois custa **50.000 moedas** e devolve os pontos das skills do caminho antigo.
+- Cada caminho dá um **bônus de atributos** e um ramo de **3 skills** nos níveis 20, 24 e 28 (embaixo da árvore, tecla K), feitas só com mecânicas que já existiam:
+  - Cavaleiro: **Bastião** (+12 Constituição: Desafio do Bastião, Vigor do Bastião, Último Bastião) ou **Arauto** (+12 Sabedoria: Martelo da Aurora, Bênção do Arauto, Sol Nascente).
+  - Bárbaro: **Sanguinário** (+12 Força: Golpe Rubro, Fúria Cega, Carnificina) ou **Caudilho** (+6 Força e +6 Constituição: Brado do Caudilho, Avanço do Caudilho, Estandarte de Guerra).
+  - Mago: **Elementalista** (+12 Inteligência: Lança Ígnea, Foco Elemental, Cataclismo) ou **Ocultista** (+6 Inteligência e +6 Espírito: Peste Sombria, Drenar Vontade, Marca do Abismo).
+  - Ladino: **Sicário** (+12 Destreza: Lâmina Oculta, Instinto Assassino, Sentença) ou **Caçador** (+6 Força e +6 Destreza: Faca de Arremesso, Rede de Caça, Chuva de Lâminas).
+- Todos veem: o nome do caminho aparece sob o nome do personagem (junto do título), no quadro do alvo (na cor do caminho) e na janela do personagem (C). Vai no `PlayerStatus`, que só sai quando alguém escolhe ou troca; os efeitos das skills novas reaproveitam as receitas de partículas que já existiam.
+- Dados em `server/internal/game/specs.go` e `spec_skills.go`; a escolha fica salva em `characters.spec` (migração 00015).
+
+### Subclasse (classe principal no 30)
+- Com a classe principal no **30** chega a cadeia **O Chamado das Sendas** (história, 3 passos) com **Edrian, o Guardião das Sendas** (praça, ao sul do poço): falar com ele, **A Prova das Duas Sendas** (30 Golens Ancestrais no Fundo do Vale; 5.000 moedas) e **O Juramento** (falar de novo; 3 Pergaminhos de Retorno). Depois do juramento, a janela dele mostra as outras 3 classes base: a escolhida vira a **subclasse** e começa no **nível 20**, com a XP no início do 20. A mesma classe da principal é recusada. Hoje dá para ter **1** subclasse (`game.MaxSubclasses`); a estrutura guarda até 3.
+- **Troca no Guardião:** a janela mostra as classes com o nível de cada uma e troca a classe ativa. Só vivo, fora de combate (5 s sem lutar e sem flag de PvP), sem troca de itens aberta e com **10 min** de recarga (vale entre sessões). Equipamento que a classe nova não usa (de outra classe ou de nível acima do dela) vai para a bolsa; sem espaço, a troca é recusada com mensagem. Os efeitos que o jogador pôs em si mesmo e as recargas das skills da classe de antes saem.
+- **Por classe:** nível, XP, skills aprendidas, barra de atalhos, atributos distribuídos e especialização (os pontos livres saem do nível e do que cada classe gastou). A especialização da subclasse é escolhida na Ysolde de graça (A Encruzilhada é do personagem). **Do personagem:** equipamento, bolsa, ouro, armazém, clã, karma, missões, conquistas, Maestria e aparência (o corpo é sempre o da principal).
+- **Bônus Duas Sendas** (com uma subclasse no 30): a conquista com o título **Duas Sendas** e **+5% de XP** para a classe ativa quando ela é a mais baixa (empate não conta). Não dá skills da outra classe. A XP vai sempre para a classe ativa; a Maestria segue igual (a barra só enche no 40, os pontos são do personagem).
+- Todos veem a classe ativa: no quadro do alvo (depois do nível), no grupo, no clã, nos amigos e na tela de personagens (com o nível de cada classe). O **ranking** usa o **maior nível entre as classes**, com a classe desse nível (trocar para a subclasse não derruba ninguém). O Edrian só existe no mapa principal, e as classes atravessam os portões junto com o personagem.
+- Dados em `server/internal/game/subclass.go`; zona em `server/internal/zone/subclass.go`; banco em `characters.classes` (JSONB, migração 00052): `characters.class` é a principal e as colunas de progressão são as da classe ativa. GM: `/subclasse passo|recarga [Nome]` e `/subclasse xp N [Nome]`.
+
+### Base para crescer (moderação, /bug, reconexão e CI)
+- **Comandos de GM** (contas com `accounts.gm`, ver [Moderação](#moderação)): `/gm` lista os comandos; `/kick Nome [motivo]`, `/mute Nome minutos [motivo]` e `/unmute Nome`, `/ban Nome [motivo]` (vale para a conta inteira, mesmo offline, e derruba quem está online) e `/unban Nome`, `/tp X Z`, `/goto Nome`, `/summon Nome`, `/give Nome item|moedas [qtd]`, `/anuncio texto`, `/online`, `/evento` (invasão e XP em dobro, ver [Eventos](#eventos-invasão-da-cidade-e-xp-em-dobro)), `/maestria xp N [Nome]` / `/maestria dia [Nome]` (teste da Maestria), `/contrato andar|dia|rep` (teste dos [contratos](#contratos-e-reputação-nível-máximo)) e `/vitalidade N [Nome]` (vitalidade em N% do teto). Para quem não é GM, eles aparecem como comando desconhecido. Toda ação fica no `gm_log`. O silêncio vale em todos os canais e continua depois de relogar.
+- **`/bug texto`:** qualquer jogador (mesmo silenciado), um a cada 30 s. Vai para `bug_reports` com o personagem, o nível, a posição, a versão do servidor (commit do deploy) e o navegador. O cliente manda junto o contexto (erros recentes, FPS, ping, região, hora do jogo, últimas mensagens do servidor) e um print pequeno da tela do jogo; no celular, **Configurações → Sobre → Relatar problema** faz o mesmo sem teclado (ver [/bug completo](#bug-completo)).
+- **Reconexão automática:** se a conexão cair, o jogo espera o servidor responder e volta sozinho ao mesmo personagem (desiste depois de 2 min com o servidor fora do ar ou de 5 recargas). Quem foi expulso ou banido não volta.
+- **CI:** cada push e pull request roda os testes no GitHub Actions (servidor com Postgres e `-race`, tipos e build do cliente, e o roteiro no navegador com Playwright). A Railway só publica a `main` com o CI verde.
+
+### Zonas: vários mapas no mesmo servidor (portão)
+- **Uma zona por mapa**, no mesmo processo (`zone.Manager`, `server/internal/zone/manager.go`): cada uma com o seu `world.json`, monstros, NPCs, pedras e goroutine, e dona de todo o estado de quem está nela. O login vai para a zona onde o personagem está (ou saiu há pouco, ou a gravada em `characters.zone`, migração 00050).
+- **Portão** (`gate.go`, NPC com `NPC_ROLE_GATE`): perto dele, o clique pede `UseGate`. A zona de origem tira o personagem, grava (já com a zona e o ponto de chegada do destino) e entrega o estado à outra zona, na mesma conexão: nunca nas duas zonas, nunca em nenhuma (invariante `zone_owner` e `Bus.check`). Morto, em troca ou em combate (10 s) não atravessa; canalização e convites pendentes são cancelados.
+- **O que é global** fica no barramento (`bus.go`): quem está online e onde, chat geral, sussurro, `/online`, amigos online e grupos. O grupo continua entre mapas (a janela mostra o mapa de cada um; a XP só divide entre quem está na mesma zona). Os comandos de GM sobre alguém em outro mapa rodam na zona dele. Clãs e armazém continuam na zona da cidade.
+- **Cliente:** o `ZoneChange` mostra a tela de carregamento, descarta a cena (entidades, cenário, minimapa) e o HUD e espera o `Welcome` do mapa novo (`/worlds/<id>.json` e os kits que ele pede). O painel F3 mostra as texturas da cena e do engine: depois de ir e voltar, malhas e texturas voltam ao mesmo número.
+- **Por enquanto** há só o mapa de sempre (`starter`) e a **Clareira de Testes** (`teste`, `client/scripts/build-maps.mjs`), ligada só com `DEV_LOGIN=true` ou `EREVIA_ZONES=teste`. Em produção o portão nem aparece. Para testar: `make server`, entrar e clicar no portão ao sul do poço da praça.
 
 ### Fase 3 e interface nova (Fases A–C)
 - **13 encaixes de equipamento:** cabeça, peito, pernas, mãos, pés, capa, arma, mão secundária, colar, 2 brincos e 2 anéis. Anéis e brincos vão no encaixe livre com duplo clique, ou no que você escolher arrastando; dá para trocar anel 1 ↔ anel 2 arrastando. Itens novos nas 4 raridades com bônus novos: precisão, esquiva, velocidade de movimento, de ataque e de conjuração, regeneração de vida e mana e dano crítico.
 - **Aparência na criação:** cada classe escolhe a arma inicial (ex.: espada ou lâmina curva para o cavaleiro; cajado, varinha ou cajado sombrio para o mago; três pares de lâminas para o ladino), o escudo (ou nada, e ele vai para a bolsa) e a cor do emblema. A arma é um item de verdade do kit. A cor pinta o nome e um anel no chão para todos verem, e a tela de seleção mostra cada personagem com o que tem nas mãos.
 - **Atributos com pontos livres (tecla C):** Força, Destreza, Constituição, Inteligência, Sabedoria e Espírito. Cada classe começa com a sua base e ganha 3 pontos por nível. A janela mostra a diferença exata antes de confirmar (vida, ataque, defesa, crítico, precisão, esquiva, velocidade de ataque e de conjuração, regeneração).
-- **Árvore de skills (tecla K):** 12 skills por classe em 3 ramos e 4 degraus (níveis 1, 5, 10 e 15), com ranks; 1 ponto por nível. Mecânicas: prender, veneno/queimadura/praga (dano por segundo), provocar, escudos, escudo de mana, invisibilidade, marca, imortal, cegueira, frenesi, enfraquecer, armadura de gelo, grito de guerra e estandarte para os aliados, aura de coragem, Piscar e Investida (teleporte), execução, golpes duplos, área em volta do alvo, roubo de vida e mais. Uma bolinha nos botões avisa quando há pontos para gastar.
+- **Árvore de skills (tecla K):** 15 skills por classe em 3 ramos e 5 degraus (níveis 1, 5, 10, 15 e 20), com ranks; 1 ponto por nível. Mecânicas: prender, veneno/queimadura/praga (dano por segundo), provocar, escudos, escudo de mana, invisibilidade, marca, imortal, cegueira, frenesi, enfraquecer, armadura de gelo, grito de guerra e estandarte para os aliados, aura de coragem, Piscar e Investida (teleporte), execução, golpes duplos, área em volta do alvo, roubo de vida e mais. Uma bolinha nos botões avisa quando há pontos para gastar.
 - **Barra de atalhos salva no servidor:** a mesma em qualquer computador ou celular.
 - **Interface nova** (protótipo aprovado em `/prototipo.html`, agora no jogo):
   - Telas de login e de personagens com o modelo 3D num pedestal (girar arrastando, zoom com a roda ou a pinça).
@@ -40,7 +191,7 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - **Colisão e caminho:** não dá para atravessar casas, muralhas, árvores e pedras grandes. O servidor calcula o caminho (A* numa grade de 1 m), então clicar do outro lado de uma casa faz o personagem contorná-la.
 - **Combate PvE:** a cidade (zona segura) fica no centro, cercada por 3 anéis de esqueletos (níveis 1 a 20) e pelo chefe *Senhor dos Ossos* (nível 22).
 - Clicar num monstro seleciona o alvo e ataca sozinho. As **teclas 1 e 2** usam as 2 skills da classe, com recarga e mana. Os efeitos incluem atordoar, lentidão e buffs.
-- **XP e nível** até 20. Os atributos crescem com o nível. Morrer custa cerca de 4% da XP do nível e o personagem volta à cidade.
+- **XP e nível** até 30 (era 20 até o 5º degrau da árvore). Os atributos crescem com o nível. Morrer custa cerca de 4% da XP do nível e o personagem volta à cidade.
 - Monstros vagam, atacam quem chega perto (os agressivos), perseguem até um limite e reaparecem depois de mortos.
 - Barras de vida, mana e XP, quadro do alvo, números de dano e efeitos de skill.
 - Login com **Google** ou **Discord** (OAuth + PKCE). A sessão fica num cookie HttpOnly.
@@ -49,7 +200,23 @@ Pesquisa e decisões de arquitetura: [RELATORIO.md](RELATORIO.md).
 - O personagem é salvo no banco ao sair, a cada 30 s, logo depois de comprar, vender ou pegar itens, e quando o servidor desliga.
 - Se o mesmo personagem entrar em outro lugar, a sessão antiga cai com um aviso.
 - O servidor decide tudo: movimento, limites do mapa, limite anti-spam e anti-flood. Clientes lentos são desconectados.
+- **Área de interesse:** cada jogador só recebe jogadores e monstros a até 70 m (com 10 m de folga) e os colegas de grupo em qualquer lugar. Quem entra no raio chega com um Spawn, quem sai some com um Despawn, e o snapshot de cada um leva só o que ele conhece. Chat, anúncios, chefes, NPCs e itens no chão continuam para todos. Isso deixa a banda por jogador quase constante com o número de jogadores (ver `cmd/loadbot`).
 - **Painel de desempenho:** tecla **F3** (ou `?debug=1` na URL) mostra tempo de frame, draw calls, malhas ativas e o tempo gasto em animação e na interface.
+- **Medição de FPS:** `?bench=1` na URL, ao entrar no mundo, leva a câmera por cada região, de dia e de noite, e no fim mostra uma tabela (FPS, tempo de frame, p95, CPU, draw calls, malhas e onde vai o tempo de CPU) com o botão **Copiar**. Leva uns 2 minutos; o personagem não sai do lugar. Serve para comparar antes e depois de cada mudança no cliente, no PC e no celular. A tabela também traz os contadores só do **cenário** (um quadro a mais por ponto, com as entidades escondidas), que não mudam de uma rodada para outra e são os que o CI compara ([linha de base](#medição-de-fps-no-ci)); `?bench=contadores` encurta a amostra de cada ponto (os FPS saem imprecisos).
+- **Spawns por setor, por período e com área própria** (`game.Spawn`, base das áreas novas do [roadmap](docs/roadmap-areas.md)): além de anel, ponto fixo e disco, um spawn pode ser um **setor de anel** (`AngleMin`/`AngleMax` em graus; 0° = leste/+X, crescendo para o norte/+Z, ou seja 90° = norte, 180° = oeste, 270° = sul; `AngleMin > AngleMax` cruza o 0°, como 340°→20°). Disco ou setor com `Region` tem **dono**: os anéis das outras regiões (e o covil do raid) não sorteiam monstros lá dentro, com 6 m de folga, e quem cairia lá muda de lugar sem mudar o id. Com `When` (`WhenDay`/`WhenNight`), na virada do dia os monstros do outro período que estão **fora de combate** saem do mundo (sem morrer, sem saque) e os do período novo entram no ponto de origem; quem está lutando fica até a luta acabar (ou morrer) e segura a vaga de um do período novo, que entra no mesmo segundo em que ele sai. A troca é por região, então com a mesma quantidade de dia e de noite em cada região a contagem de monstros fica igual. O id de cada monstro é a posição na lista: spawn novo vai sempre para o **fim** de `DefaultSpawns`. O mapa do mundo desenha o setor com nome e faixa (`MapZone.angle_min`/`angle_max`), o minimapa mostra o nome ao entrar e o mapa marca "(à noite)"/"(de dia)" nos monstros de um período só. Código em `server/internal/game/monsters.go` e `server/internal/zone/spawnperiod.go`.
+- **Qualidade gráfica (Configurações → Gráficos):** presets baixa, média e alta, escolhidos pelo aparelho na primeira vez (celular → baixa ou média; computador → alta) e aplicados na hora. Todos têm tons ACES e cor/névoa por região e hora; a baixa renderiza a 80% sem brilho nem SSAO, a média liga o brilho e a vinheta, a alta soma SSAO e FXAA. Para medir: `?bench=1&quality=baixa` (força o preset sem salvar) e `?bench=1&render=antigo` (o render de antes).
+
+## Privacidade e exclusão de conta (LGPD)
+- **Páginas legais:** [`/privacidade.html`](client/privacidade.html) e [`/termos.html`](client/termos.html), linkadas na tela de login e na de personagens. Por enquanto o responsável, o CNPJ, o e-mail (`contato@erevia.example`) e o foro são **fictícios** e precisam ser trocados pelos reais antes de abrir ao público.
+- **O que o banco guarda do login:** só o provedor, o id da conta nele e o nome de exibição (Google `openid profile`, Discord `identify`). Sem e-mail. O único cookie é o de sessão (`HttpOnly`); o chat não é gravado.
+- **Apagar a conta:** tela de personagens → **Conta** → digitar `APAGAR`. O servidor (`DELETE /api/account`, com `{"confirm":"APAGAR"}`, JSON e mesma origem como os outros pedidos de escrita) apaga numa transação a conta, identidades, sessões, personagens, itens, armazém e participação em clãs, e tira o nome dos personagens do registro dos raid bosses. O clã liderado por alguém da conta passa ao membro de cargo mais alto (o mais antigo no empate) ou é desfeito se ficar vazio; o banco não deixa apagar um líder sem isso (migração 00020). Depois a zona derruba quem estiver online com a conta (aviso "Esta conta foi apagada."), esquece o estado em memória e recusa um Join atrasado; salvamentos atrasados não acham a linha e não recriam nada.
+- **Telemetria e correio ao apagar:** os `game_events` da conta ficam anônimos (sem `account_id` e `character_id`), para as estatísticas agregadas continuarem. Um lote de eventos que chega depois da exclusão (ex.: o fim de sessão de quem foi derrubado) também entra anônimo: `InsertEvents` trava as contas do lote (`FOR KEY SHARE`) e zera as que não existem mais. As cartas enviadas ficam com quem recebeu, assinadas "Personagem apagado". O `gm_log` (moderação) é mantido. Os relatos de `/bug` da conta somem com ela, junto com o contexto e o print (cascata de `bug_reports`).
+- **Backups:** diário guardado 6 dias e semanal guardado 27 dias, então dados apagados podem ficar até 27 dias nas cópias. Se restaurar uma cópia, apague de novo as contas excluídas depois dela.
+
+## Novidades (changelog)
+- **Fonte:** [`CHANGELOG.md`](CHANGELOG.md), uma versão por dia (`## AAAA-MM-DD · Título`) com `### Novidades`, `### Melhorias` e `### Correções`, em linguagem de jogador. O formato está comentado no topo do arquivo.
+- **No jogo:** a janela **O que há de novo** abre sozinha uma vez quando a versão mais nova é diferente da última vista (guardada no navegador; sem storage, ela não abre). Reabre em Configurações → Sobre e no login. A página pública fica em [`/novidades`](client/novidades.html).
+- **Publicar uma versão:** `cd client && npm run changelog:draft` (PRs mergeados desde a última versão, via `gh`; ou `-- AAAA-MM-DD`), reescrever o rascunho para o jogador e colar no topo do `CHANGELOG.md`, rodar `npm run changelog` e versionar o `client/public/novidades.json` junto. O `npm run build` (e o Docker) também gera o json, e um erro de formato derruba o build.
 
 ## Requisitos
 Go 1.26+, Node 22+ e Docker.
@@ -71,30 +238,145 @@ Sem credenciais OAuth, use o **login de desenvolvimento** na tela inicial (`DEV_
 | `make proto` | Regera o código Go/TS depois de mudar `proto/erevia/v1/game.proto` |
 | `make build` | Binário do servidor e build do cliente |
 | `make docker` | Imagem de produção (a mesma que a Railway usa) |
+| `cd server && go run ./cmd/loadbot -bots 100 -duration 2m` (com `-plaza 12` os bots só passeiam pela praça, sem caçar: serve para medir o FPS do cliente com muita gente à vista) | Teste de carga: bots que entram pelo login de dev (servidor local com `DEV_LOGIN=true`), andam, caçam e falam; imprime banda e ping a cada 10 s. O servidor registra o custo do tick no log a cada 30 s ("tick stats") |
+| `cd server && go run ./cmd/loadbot -chaos -bots 50 -duration 10m -seed 317 -db $DATABASE_URL` | Teste de caos (ver [Teste de caos](#teste-de-caos)): ações válidas e inválidas de todo o protocolo, quedas no meio de tudo e conferência da economia; sai com código ≠ 0 se algo quebrou |
+| `cd server && go run ./cmd/balance` | Simulador de balanceamento: por classe, caminho e nível, com o equipamento típico +0 e +3, o dano por segundo, o tempo para matar e para morrer, a XP por hora e o tempo até o 30, com as fórmulas do pacote `game` (`-csv` para planilha, `-noite`). O orçamento de poder roda no `go test` (`internal/balance`); a leitura de hoje está em [docs/balanceamento-2026-11.md](docs/balanceamento-2026-11.md) |
+
+| `cd server && EREVIA_SOAK=10m go test ./internal/zone -run ZonesSoak -v -timeout 15m` | Teste longo das zonas: 50 bots atravessando o portão entre 2 zonas, com as invariantes ligadas (no CI roda 3 s) |
+| `make gm NAME=Fulano` | Torna GM a conta do personagem no banco local (relogue depois) |
+
+### Fuzz da entrada dos jogadores
+Um cliente pode mandar qualquer byte pelo WebSocket; nenhuma mensagem pode derrubar a zona, criar ouro ou item, nem tirar alguém do mapa. Três alvos de `go test -fuzz`:
+
+| Alvo | O que faz |
+|---|---|
+| `FuzzZoneBytes` (`internal/zone`) | Bytes → `proto.Unmarshal` em `ClientMessage` → zona (2 jogadores perto do NPC da mensagem, mapa real), mandada pelos dois, com ticks |
+| `FuzzZoneSemantic` (`internal/zone`) | Sequências de 30 mensagens de todos os tipos do oneof, montadas por reflexão com valores extremos (slots 0/255/2³²−1, quantidades 0 e máximas, ids que não existem ou de outra entidade, NaN/±Inf, textos enormes ou com controle, comandos de chat), com ticks entre elas |
+| `FuzzConnBytes` (`internal/net`) | Bytes pelo WebSocket de verdade (readJoin/readPump) até a zona rodando o próprio loop; cada entrada espera a resposta da zona |
+
+Depois de cada mensagem os alvos da zona conferem: `checkInvariants` (vida, mana, ouro, itens, posição, progressão, PvP, grupo, clã e troca; em teste dá panic); ouro + valor de venda dos itens (bolsa, equipamento, armazém, chão e, com o banco falso da casa de leilões, a custódia e os anexos do correio) nunca sobe, e nenhuma unidade de item aparece fora de compra, criação ou recompensa de missão; destino, caminho e itens no chão dentro do mapa; armazém válido; nenhuma mensagem que o cliente não consiga ler; nenhum erro no log (falha de serialização ou panic recuperado por `handleSafe`/`runSystem`; os alvos da zona chamam `handle` direto, sem o recover); nenhuma mensagem ou tick acima de 2 s.
+
+```bash
+cd server
+go test ./internal/zone -run '^$' -fuzz '^FuzzZoneSemantic$' -fuzztime 10m -parallel 4
+go test ./internal/zone -run '^$' -fuzz '^FuzzZoneBytes$' -fuzztime 10m -parallel 4
+go test ./internal/net -run '^$' -fuzz '^FuzzConnBytes$' -fuzztime 10m -parallel 4
+```
+Uma falha grava a entrada em `testdata/fuzz/<Alvo>/` e mostra a sequência de mensagens; `go test ./internal/zone -run '<Alvo>/<arquivo>'` repete. Commite o arquivo junto com a correção (o `go test` normal roda todo o corpus). O corpus inicial (uma mensagem válida de cada tipo) é gerado por `EREVIA_WRITE_FUZZ_CORPUS=1 go test ./internal/zone -run TestFuzzSeedCorpus`. Sem Go instalado: `docker run --rm -v "$PWD/server:/src" -w /src golang:1.26 go test ...`. O CI roda 10 s de cada alvo.
+
+## Testes de navegador (e2e)
+Em `e2e/` (pacote próprio, fora do build do cliente), com **Playwright** no Chromium headless e WebGL por software (SwiftShader). Pegam o que só quebra no navegador: tela branca, erro de JavaScript, botão que não faz nada, cena 3D que não carrega. Um roteiro de jogador novo, todo pelo mouse e pelo teclado: login de desenvolvimento pela tela inicial, personagem criado pela API, **Entrar no mundo**, cena 3D desenhada, fechar a janela "O que há de novo", andar com um clique no chão, abrir e fechar Configurações (Esc), Inventário (I), Personagem (C), Skills (K) e Mapa (M), comprar uma Poção de Mana Menor da Mercadora Lívia, sair da cidade pelo mapa até os Arredores, selecionar um monstro (Tab), usar a skill da tecla 1, tomar a poção (tecla 4), atacar com um clique e recarregar a página para voltar ao mesmo personagem, no mesmo lugar e com as mesmas moedas.
+
+- **Qualquer `pageerror`, `console.error` ou relatório para `POST /api/client-errors` reprova o teste.** A única exceção é o 401 de `/api/me` antes do login (lista em `e2e/tests/fixtures.ts`); um teste pode deixar passar mais algum com `problems.allow` (só a medição de FPS usa: o `low_fps` que o cliente relata ao rodar minutos a 2–3 FPS no SwiftShader). Os avisos "modelos 3D indisponíveis" e "cenário indisponível" também reprovam. `e2e/tests/guarda.spec.ts` confere o próprio guarda (um `throw` e um `console.error` de propósito precisam ser pegos).
+- **WebGL por software:** o Chromium roda com SwiftShader e com o canvas 2D na CPU (`--disable-accelerated-2d-canvas`: acelerado, as texturas que o cliente pinta travavam a página por mais de 30 s e o servidor derrubava a conexão). O teste entra com a qualidade gráfica salva como **Baixa**; a Alta (SSAO, FXAA) fica de fora. Se a página ainda travar e o cliente reconectar sozinho ao carregar o mundo, o teste espera uma vez e deixa um aviso no relatório.
+- **`?e2e=1`** liga no cliente (também no build de produção) o `window.__ereviaE2E`, **só de leitura**: posição do jogador, NPCs e monstros que o cliente conhece e onde cada um aparece na tela, para o teste saber onde clicar. Nada nele manda mensagem ao servidor; as ações são cliques e teclas de verdade.
+- **No CI**, o job **Navegador (Playwright)** sobe o Postgres, compila cliente e servidor, roda o servidor com `DEV_LOGIN=true` e `STATIC_DIR=client/dist` e joga o roteiro e a [medição de FPS](#medição-de-fps-no-ci). Se falhar, o artefato `e2e-falha` tem screenshot, vídeo, trace (`npx playwright show-trace trace.zip`) e o log do servidor.
+
+Para rodar localmente, suba o servidor com `DEV_LOGIN=true` servindo o cliente compilado (o teste usa o build de produção, não o Vite de desenvolvimento). O jeito mais simples é a imagem Docker, com o Postgres do `make db-up`:
+```bash
+docker build -t erevia-e2e .
+docker run -d --name erevia-e2e-srv -p 8087:8080 -e DEV_LOGIN=true -e PUBLIC_URL=http://localhost:8087 \
+  -e DATABASE_URL='postgres://erevia:erevia@host.docker.internal:5432/erevia?sslmode=disable' erevia-e2e
+cd e2e
+npm ci
+npx playwright install chromium        # uma vez (no Linux: --with-deps)
+E2E_BASE_URL=http://localhost:8087 npx playwright test
+E2E_BASE_URL=http://localhost:8087 E2E_CHANNEL=chrome npx playwright test   # com o Chrome instalado
+npx playwright show-report             # relatório, com o trace de uma falha
+```
+Sem `E2E_BASE_URL`, o teste usa `http://localhost:8080`. Cada execução cria uma conta e um personagem novos (`e2e…` / `Heroi…`, `bench…` / `Bench…`) no banco.
+
+### Medição de FPS no CI
+`e2e/tests/bench.spec.ts` roda no mesmo job, no mesmo servidor e no mesmo navegador do roteiro: entra com `?bench=contadores` e a qualidade **Baixa**, espera `window.__ereviaBench.done` e compara com a linha de base versionada **`e2e/bench-baseline.json`**. **Nunca FPS nem ms** (WebGL por software, máquina compartilhada): só contadores que não mudam de uma rodada para outra no headless. O que entra e a tolerância de cada um (em `e2e/tests/bench-compare.ts`):
+
+| O quê | Tolerância |
+|---|---|
+| Por região e hora, só o cenário (quadro com as entidades escondidas, o maior valor entre os pontos da região): draw calls, malhas ativas, malhas na cena | 10% |
+| Censo do cenário, por grupo de nome: malhas, malhas soltas (sem `freezeWorldMatrix`) e nós | 10% ou +2, o que for maior (grupos pequenos: 1 → 2 malhas seria +100%) |
+| Malhas e nós de **cada** entidade, por tipo (jogador, cada monstro e NPC) | 10% |
+
+Fica de fora porque oscila: os draw calls e as malhas ativas **com** as entidades (os monstros andam e entram e saem da área de interesse de ~70 m: de 3 a 9 de diferença por rodada nos Arredores e nos Campos dos Ossos), o total de malhas da cena com as entidades e quantas entidades de cada tipo há. Duas outras fontes de ruído foram corrigidas no cliente: na medição, as árvores translúcidas seguem o ponto medido (antes, a linha da câmera até o jogador, lá longe, apagava árvores conforme o lugar em que ele nasceu na praça) e terminam a transição antes do quadro do cenário, que também espera os shaders compilarem (a troca de noite para dia recompila alguns, e no SwiftShader isso leva segundos: a Cidade de dia oscilava de 112 a 115 draw calls); as cópias de árvore guardadas para reaproveitar e o `#número` dos nós `__root__` ficam fora do censo.
+
+Piorar mais que a tolerância reprova; melhorar não reprova, mas o relatório sugere atualizar a base. A tabela antes e depois vai para o **resumo do job** (`$GITHUB_STEP_SUMMARY`), e o artefato **`bench`** traz o relatório, o resultado completo e a base que aquela rodada gravaria (`bench-baseline.json`). A medição acrescenta uns **2 min** ao job (1,7–1,9 min por rodada aqui, num Windows carregado: entrar no mundo e 22 pontos, cada um com 1,5 s para assentar, meio segundo de amostra e um quadro só do cenário).
+
+**Atualizar a linha de base** (quando a mudança no número é de propósito, ou quando o relatório diz que melhorou), com o servidor no ar como acima:
+```bash
+cd e2e
+E2E_BASE_URL=http://localhost:8087 npm run bench:baseline   # grava e2e/bench-baseline.json
+git diff bench-baseline.json                                # o diff vai no PR, junto com a mudança
+```
+Ou baixe o `bench-baseline.json` do artefato `bench` do CI e copie para `e2e/`.
 
 ## Estrutura
 ```
 proto/erevia/v1/game.proto   mensagens cliente ↔ servidor
 server/
   cmd/zone/                  executável: HTTP + WebSocket + zona + arquivos do cliente
-  internal/api/              login (OAuth, dev), sessão, personagens
+  internal/api/              login (OAuth, dev), sessão, personagens, apagar a conta, portal de administração (admin.go)
   internal/store/            Postgres (pgx) + migrações SQL (goose)
   internal/game/             dados e fórmulas: classes, skills, monstros, itens, drops, dano, XP
   internal/world/            mapa embutido (world.json): colisão e caminhos (A*)
-  internal/zone/             simulação da zona: combate, PvP, IA, chat, inventário, drops, loja, grupo, clã, teleporte, encantamento, armazém (uma goroutine, tick 20 Hz)
+  internal/zone/             zonas (manager.go: uma por mapa; bus.go: o que é global; gate.go: o portão) e a simulação de cada uma: combate, PvP, IA, chat, inventário, drops, loja, grupo, clã, amigos, correio, emotes, teleporte, encantamento, armazém, casa de leilões (uma goroutine, tick 20 Hz)
   internal/net/              conexões WebSocket (read/write pumps)
   internal/pb/               código Go gerado (não editar)
 client/
-  src/ui/                    telas (login, personagens) e chat
+  privacidade.html, termos.html  páginas legais (estilo em src/styles/legal.css)
+  admin.html, src/admin/     portal de administração (/admin, só GM)
+  novidades.html             página pública /novidades (lê public/novidades.json)
+  src/ui/                    telas (login, personagens, conta) e chat
   src/world/                 cena, entidades, animações, efeitos, entrada
   scripts/build-models.mjs   personagens/monstros/animações a partir dos zips KayKit
   scripts/build-scenery.mjs  kits de cenário (um .glb por pacote)
   scripts/build-world.mjs    layout do mapa + colisores → public/world.json e server/internal/world/
+  scripts/build-maps.mjs     os outros mapas (Clareira de Testes) → public/worlds/ e server/internal/world/maps/
+  scripts/world-gen.mjs      motor do gerador do mapa (fases, sorteio por bioma, saída)
+  scripts/biomes/            um arquivo por bioma (ver [Como criar um bioma](#como-criar-um-bioma))
+  scripts/dungeons/          uma masmorra por arquivo (mesmo contrato do bioma) + kit-sizes.json do kit delas
+  scripts/build-dungeons.mjs as masmorras (Catacumbas) → public/worlds/ e server/internal/world/maps/ (o CI confere)
+  scripts/build-dungeon-kit.mjs  kit de cenario das masmorras (KayKit Dungeon Remastered, CC0) → public/models/env-catacumbas.glb
+  scripts/build-changelog.mjs  CHANGELOG.md → public/novidades.json (roda no npm run build)
+  scripts/changelog-draft.mjs  rascunho do changelog com os PRs mergeados (via gh)
   src/net/                   conexão com o servidor
   src/gen/                   código TS gerado (não editar)
+e2e/                         testes de navegador (Playwright): e2e/tests/jogo.spec.ts
 infra/docker-compose.yml     Postgres local
 Dockerfile, .railway/        publicação (Railway: infraestrutura como código)
 ```
+
+## Como criar um bioma
+O mapa (`world.json`) sai de `client/scripts/biomes/`: cada bioma é **um arquivo** `<id>.mjs`, e o `node scripts/build-world.mjs` (em `client/`) acha todos sozinho. Hoje são sete: `floresta.mjs` (a cidade, as estradas, a floresta em anéis e as montanhas da borda), `vale.mjs` (o Vale das Pedras Vivas, com a regra de transição e a pintura do chão), `cripta.mjs` (o covil do raid boss), `brejo.mjs` (o Brejo de Lamagris, a leste: pântano, a lagoa de Vau Velho com as partes fundas de colisor, o Posto do Barqueiro e as montanhas sem acesso), `terras-mortas.mjs` (a extensão das Terras Mortas, com o Bastião Cinzento e a Lápide do Último Regicida), `terras-mortas-nucleo.mjs` (o núcleo, em volta da Cripta) e `bosque-gris.mjs` (o setor noroeste, com a Toca do Corvo). O Brejo devolve no `build` a lagoa, as partes fundas e a ilha, que o relevo e a água do cliente leem do `world.json` (`terrain.ts`, `lakeOf`).
+
+Um bioma exporta:
+
+| Export | |
+|---|---|
+| `name` | Nome do bioma |
+| `seed` | Semente do sorteio, só dele (repetir a de outro bioma é erro): nada dos outros biomas muda de lugar |
+| `order` | Ordem entre os biomas (floresta 10, vale 20, cripta 30). Quem vem depois enxerga o que os de antes puseram |
+| `bounds` | `{ minX, maxX, minZ, maxZ }`. O mapa é a união dos `bounds` dos biomas: um bioma a leste de x = 150 cresce o mapa (e a colisão do servidor) para leste |
+| `build(ctx)` | Fase 1: o cenário. O que devolver entra na entrada do bioma em `biomes[]` do `world.json`, ao lado de `id`, `name` e `bounds` (o Vale devolve a borda ondulada) |
+| `lights(ctx)` | Fase 2: tochas, que evitam o que todos os biomas já puseram no chão |
+| `overlay(ctx)` | Fase 3: lugares que limpam a área (`ctx.clear(x, z, r)`) e se constroem por cima, como a Cripta |
+| `paint(g, bioma, h)` | Opcional: a camada do chão do bioma no cliente (`client/src/world/map-painter.ts` a acha pelo nome do arquivo). Fica no mesmo arquivo para a regra de transição (o `transition` do Vale) ser uma só no gerador e no chão |
+
+O bioma não importa nada. O `ctx` traz o sorteio do bioma (`rand`, `pick`, `between`, `scatter`), `place(k, x, z, rot, escala)`, `collide(x, z, r)`, `collideItem`, `torch`, `clear`, `sized`, `facing`, `alongX` e as listas `objects`, `colliders`, `torches`, `roads` e `taken` (as de todos os biomas). Um bioma mínimo:
+
+```js
+// client/scripts/biomes/clareira.mjs
+export const name = 'Clareira';
+export const seed = 20261201;
+export const order = 40;
+export const bounds = { minX: 150, maxX: 210, minZ: -150, maxZ: 60 };
+export function build(ctx) {
+  ctx.scatter(40, { x: [155, 205], z: [-140, 50], spacing: 4 }, (x, z) => {
+    const s = ctx.between(2.4, 3.2);
+    ctx.place(ctx.pick(['tree_1_a', 'tree_2_a']), x, z, ctx.rand() * 6.28, s);
+    ctx.collide(x, z, 0.3 * s);
+  });
+}
+```
+
+Depois de mexer num bioma, rode `node scripts/build-world.mjs` e commite os dois `world.json` (o do cliente e o do servidor). O CI roda o gerador e falha se o `world.json` commitado for diferente. O `npm run test:unit` confere que os biomas de hoje geram, no formato antigo (`biome`, só o Vale), byte a byte o mapa de antes da divisão em biomas; que o formato novo (`biomes[]`) tem os mesmos colisores, instâncias e pintura do chão; e que um bioma novo não muda nada do resto. Durante a transição, o cliente (`worldBiomes` em `world-data.ts`) e o servidor aceitam os dois formatos.
 
 ## Variáveis do servidor
 | Variável | Padrão | |
@@ -107,6 +389,13 @@ Dockerfile, .railway/        publicação (Railway: infraestrutura como código)
 | `DEV_LOGIN` | `false` | `true` libera o login sem senha (**só local**) |
 | `STATIC_DIR` | vazio | Pasta do cliente compilado (a imagem Docker define) |
 | `ALLOWED_ORIGINS` | `localhost:*,127.0.0.1:*` | Origens extras aceitas no WebSocket |
+| `DEBUG_INVARIANTS` | vazio | A zona confere o estado de cada jogador 1×/s e antes de salvar (vida e mana, ouro, pilhas, equipamento, nível e XP, posição, karma, grupo, clã e troca; ver `server/internal/zone/invariants.go`). Com `1` (e sempre nos testes), estado inválido é panic; sem ela, corrige o que é seguro e anota um evento `invariant` em `game_events` |
+| `INVASION_CHANCE` | `0.15` | Chance (0 a 1) de invasão da cidade a cada noite; `0` = só por GM |
+| `XP2_DAYS` | `sab,dom` | Dias de XP em dobro (horário de Brasília); vazio ou `nenhum` = só por GM |
+| `EREVIA_ZONES` | vazio | Mapas além do principal, separados por vírgula (hoje só `teste`). Com `DEV_LOGIN=true` o `teste` já liga |
+| `EREVIA_DUNGEONS` | vazio (todas ligadas) | Masmorras instanciadas (a porta da Catacumbas, na igreja da cidade). `off` ou `nenhuma` tira a porta; senao, ids separados por virgula (hoje so `catacumbas`). Com `DEV_LOGIN=true`, o comando `/catacumbas` entra sem a porta |
+| `ALERT_WEBHOOK_URL` | vazio | Webhook do Discord dos [alertas](#alertas-no-discord). **Segredo**: só na variável da Railway, nunca no git. Vazio = os alertas só vão para o log |
+| `ALERT_SPIKE_N` | `50` | Pico de erros: avisa com mais de N ocorrências de um mesmo erro em 5 min |
 
 ## Railway
 Projeto com dois serviços no ambiente `production`:
@@ -116,3 +405,248 @@ Projeto com dois serviços no ambiente `production`:
 URLs de retorno do OAuth em produção:
 - `https://erevia-production.up.railway.app/api/auth/google/callback`
 - `https://erevia-production.up.railway.app/api/auth/discord/callback`
+
+O serviço **erevia** espera o CI do GitHub antes de publicar (`checkSuites: true` em `.railway/railway.ts`; no painel, "Wait for CI").
+
+## Moderação
+GM é um campo da conta, marcado direto no banco (no painel da Railway: Postgres → Data, ou `psql`). O jogador precisa relogar para virar GM.
+
+```sql
+-- Tornar GM a conta dona do personagem "Nome"
+UPDATE accounts SET gm = true WHERE id = (SELECT account_id FROM characters WHERE lower(name) = lower('Nome'));
+
+-- Relatos de /bug ainda abertos, e marcar um como resolvido
+SELECT id, at, character_name, level, x, z, version, text FROM bug_reports WHERE NOT resolved ORDER BY at DESC;
+UPDATE bug_reports SET resolved = true WHERE id = 1;
+
+-- Últimas ações de GM
+SELECT at, gm_name, command, target, detail FROM gm_log ORDER BY at DESC LIMIT 50;
+
+-- /bug completo: o contexto do cliente e se tem print
+SELECT b.id, b.at, b.character_name, b.text, b.context->>'region' AS regiao, b.context->'fps' AS fps,
+       b.context->'invariants' AS invariantes, s.report_id IS NOT NULL AS tem_print
+FROM bug_reports b LEFT JOIN bug_report_shots s ON s.report_id = b.id ORDER BY b.at DESC LIMIT 20;
+```
+
+### /bug completo
+O relato feito pelo jogo (`/bug texto` no chat ou **Configurações → Sobre → Relatar problema**, uma caixinha para quem joga no celular sem teclado) leva o contexto do cliente e um print da tela do jogo (só o canvas 3D, sem a interface). Código: `client/src/ui/bug-report.ts`, `server/internal/api/bug_reports.go` e `server/internal/zone/bugreport.go`.
+
+1. `POST /api/bug-reports` com `{"text", "characterId", "context"}` (JSON até 40 KB; texto até 1000 caracteres; contexto: um objeto de até 32 KB). A zona confere, pelo canal, que o personagem está online e é da conta da sessão, aplica as regras do `/bug` do chat (8 caracteres no mínimo e um a cada 30 s, contado junto nos dois caminhos) e carimba nome, nível, posição, versão e navegador; a API grava e responde `201 {"id": N}`. Erros: 400 (curto ou contexto inválido), 409 (personagem fora do jogo), 413, 429 (intervalo, com `Retry-After`) e 503 (zona ocupada).
+2. `POST /api/bug-reports/{id}/shot` com o JPEG cru (`Content-Type: image/jpeg`, até 100 KB e 1280 px no lado maior; o cliente manda 640 px no lado maior, qualidade 0,6, abaixo de 80 KB). Só a conta dona, um print por relato (409 no segundo) e até 10 min depois do relato; relato de outra conta, inexistente ou vencido dão o mesmo 404. Responde 204.
+3. Limite por conta: 3 relatos e 3 prints de uma vez, depois 1 a cada 30 s (429).
+4. Servidor sem a rota, fora do ar ou com a zona ocupada: o cliente cai no `/bug` do chat (só o texto, como antes). Clientes antigos e bots continuam usando o chat.
+
+**Por que o HTTP faz o relato inteiro** (e não o chat responder com o id): o id volta direto na resposta, sem mudar o protocolo do jogo nem casar mensagens do chat com pedidos HTTP, e o dono do relato é a sessão do cookie, a mesma que autoriza o print. A zona continua sendo a única que lê o estado do jogador (pelo canal, com prazo).
+
+**Onde fica:** o contexto em `bug_reports.context` (JSONB, migração 00026; `NULL` nos relatos pelo chat). O print em `bug_report_shots` (`report_id`, `at`, `width`, `height`, `jpeg`), à parte para as listagens não arrastarem o JPEG. Os dois somem com a conta (cascata de `bug_reports.account_id`). O portal lê o print em `GET /api/admin/bug-reports/{id}/shot` (atrás do `AdminOnly`: quem não é GM vê 404; `image/jpeg`, `no-store`); no código, `store.BugReportShot(id)` e `store.BugReportContext(id)`.
+
+**Formato do contexto** (`v: 1`; campos novos podem aparecer, e quem lê ignora o que não conhece):
+
+| Campo | O quê |
+|---|---|
+| `v` | Versão do formato (1) |
+| `client` | Commit do build do cliente (`dev` local) |
+| `at` | Hora do navegador (ISO 8601) |
+| `fps` | `{avg, min, samples}`: média e mínimo do último minuto, 1 amostra por segundo (`samples` < 60 logo depois de entrar) |
+| `ping` | Último ping, em ms |
+| `region`, `x`, `z` | Região e posição do personagem (`null` se não havia) |
+| `gameTime` | `{phase, hour, night}`: fase do ciclo (0–1), hora do jogo (`"14:10"`) e se é noite |
+| `screen` | `{w, h, dpr, touch, quality, shadows, viewDistance}`: janela, densidade, toque e gráficos |
+| `players` | Jogadores na tela |
+| `invariants` | Regras das [invariantes do cliente](#invariantes-do-cliente) quebradas na sessão |
+| `errors` | Os últimos 20 erros e avisos da sessão (`recentClientErrors()`): `{level, kind, message, at, count, stack?, extra?}`, com a stack nas 3 primeiras linhas e o `extra` até 600 caracteres (cortados se o contexto passar de 30 KB) |
+| `messages` | As últimas 30 mensagens recebidas do servidor, da mais velha à mais nova: `{t, type, id?, n?}`, com `t` em segundos antes do relato (negativo), `type` o tipo da mensagem (`spawn`, `selfStats`, `chat`…; do snapshot, só `snapshot.deaths`, `.revives`, `.levelUps` e `.telegraphs`), `id` da entidade quando a mensagem tem um e `n` repetições seguidas. Só tipos e ids: nunca o texto do chat nem quem falou |
+
+## Erros do cliente
+Todo erro de JavaScript no navegador de um jogador chega à tabela `client_errors` (`client/src/net/errors.ts` → `POST /api/client-errors`): `window.onerror`, promessas rejeitadas sem tratamento, perda do contexto WebGL, mensagens do servidor que não decodificam e modelos 3D que não carregam. Erros iguais (mensagem + primeira linha da stack) viram **uma linha por versão** do cliente, com a contagem, a primeira e a última vez, e o contexto da última ocorrência (navegador, conta, personagem, região, posição, FPS e ping). O cliente manda em lote a cada 10 s ou ao esconder/fechar a aba, no máximo 20 erros distintos por sessão; o servidor aceita até 30 lotes por minuto por IP e por conta. Apagar a conta tira a conta e o personagem das linhas dela.
+
+```sql
+-- Os erros que mais aconteceram nos últimos 7 dias
+SELECT id, kind, count, last_seen, left(version, 7) AS versao, region, message
+FROM client_errors WHERE last_seen > now() - interval '7 days' ORDER BY count DESC LIMIT 30;
+
+-- Tudo de um erro (stack, navegador, onde estava)
+SELECT * FROM client_errors WHERE id = 42;
+
+-- Erros novos da versão em produção
+SELECT id, kind, count, message FROM client_errors WHERE version = '<commit>' ORDER BY first_seen DESC;
+```
+
+**Traduzir a stack** (os `.js` são minificados): o build gera sourcemaps escondidos (`build.sourcemap: "hidden"`, sem o comentário no `.js`). Eles nunca são servidos: a imagem Docker os tira de `/app/public` (ficam só no estágio `client`, em `/app/sourcemaps`) e o servidor responde 404 a qualquer `*.map`. O script `client/scripts/resolve-stack.mjs` traduz para `arquivo:linha:coluna` do código-fonte:
+
+```bash
+cd client
+# Os .map da versão do erro (coluna version): o mesmo build do Dockerfile, no mesmo commit
+git checkout <version>
+docker build --build-arg RAILWAY_GIT_COMMIT_SHA=<version> --target client -t erevia-maps ..
+docker create --name erevia-maps erevia-maps && docker cp erevia-maps:/app/sourcemaps ./maps && docker rm erevia-maps
+
+node scripts/resolve-stack.mjs --maps maps --id 42          # pela linha da tabela (precisa de psql)
+PSQL="docker exec -i erevia-postgres-1 psql -U erevia -d erevia" node scripts/resolve-stack.mjs --maps maps --hash 1a2b3c…
+node scripts/resolve-stack.mjs --maps maps < stack.txt      # stack colada
+node scripts/resolve-stack.mjs < stack.txt                  # com os .map de um `npm run build` local (client/dist)
+```
+Os nomes dos `.js` levam o hash do conteúdo: se o arquivo da stack não estiver na pasta dos maps, o build é outro, e o script avisa (e tenta o de mesmo nome base).
+
+Para o código do jogo relatar algo: `reportClientError(kind, mensagem, extra?, erro?)` (vai ao servidor), `reportClientWarning(kind, mensagem, extra?)` (só em memória) e `recentClientErrors()` (os últimos 20 erros e avisos da sessão, para anexar ao /bug).
+
+### Invariantes do cliente
+O cliente percebe quando mostra algo impossível e relata com `reportClientError("client_invariant", regra, contexto)` (`client/src/net/invariants.ts`): a regra é a `message` em `client_errors` e o contexto vai no `extra`. As checagens rodam 1×/s num `setInterval` (fora do render; o HUD é conferido quando o `SelfStats` chega), e cada regra é relatada **uma vez por sessão**. As quebradas também vão no `/bug` (`invariants` do contexto).
+
+| Regra | Quando | Contexto (`extra`) |
+|---|---|---|
+| `hud_hp` / `hud_mp` | Vida ou mana acima do máximo, negativa ou não numérica | valor, máximo, nível, morto |
+| `hud_xp` | XP antes do começo do nível ou depois do próximo | XP, começo e fim da faixa, nível |
+| `entity_duplicate_id` | Spawn de um id que já está na tela | id, tipo, se é o próprio jogador |
+| `entity_no_mesh` | Entidade sem nenhuma malha viva em duas checagens seguidas | id, tipo, malhas |
+| `entity_bad_position` | Posição NaN ou Infinity | id, tipo, x, y, z |
+| `monster_dead_moving` | Monstro morto que andou mais de 1 m entre duas checagens | id, de onde, para onde |
+| `entity_server_drift` | Entidade a mais de 6 m de onde o servidor a põe (o último estado, andando até o destino como no Go) por mais de 2 s | id, distância, desenhada × servidor, idade do snapshot |
+| `camera_bad_target` | Alvo, posição ou ângulos da câmera NaN/Infinity | alvo, posição, ângulos |
+| `camera_below_ground` | Alvo ou posição da câmera abaixo do chão (y < −0,5) | alvo, posição |
+| `low_fps` | FPS abaixo de 15 por mais de 10 s (com a aba visível) | FPS, segundos, último minuto, região, entidades, jogadores, monstros, draw calls de um quadro, malhas ativas, qualidade, escala |
+| `texture_failed` | Textura que não carregou (qualquer uma, inclusive as de dentro dos .glb) | url, erro |
+| `glb_failed` | .glb que não carregou e que ninguém relatava (o saco do saque) | url, erro |
+
+Os .glb de personagens, armas e animações (`models.ts`) e o cenário continuam saindo como `kind = 'model'` e não entram de novo aqui. Os draw calls do `low_fps` são contados só naquele quadro (o contador do engine, sem `SceneInstrumentation` ligada o tempo todo).
+
+**Provocar cada regra (desenvolvimento):** com `npm run dev`, no console do jogo: `__erevia.invariants.rules` lista as regras, `__erevia.invariants.provoke("hud_hp")` provoca uma, `provokeAll()` provoca todas e `broken()` diz quais já foram relatadas. Cada uma passa pelo caminho de verdade da checagem: dados de mentira na entrada (`SelfStats`, spawn repetido, entidade sem malha, em NaN, morta andando ou longe do servidor, FPS lido como 5 por 13 s) ou uma falha real (textura e .glb que não existem; câmera com NaN só durante a checagem, sem chegar a desenhar). `window.__erevia` só existe em `import.meta.env.DEV`.
+
+```sql
+-- Invariantes do cliente quebradas na última semana
+SELECT message AS regra, count, last_seen, left(version, 7) AS versao, region, extra
+FROM client_errors WHERE kind = 'client_invariant' AND last_seen > now() - interval '7 days' ORDER BY count DESC;
+```
+
+## Portal de administração
+`/admin` é o portal dos GMs, no mesmo servidor e no visual do jogo. Seções:
+
+- **Início:** online agora, versão no ar, uptime, contas, personagens e relatos de /bug nas últimas 24 h (com os abertos), e as últimas ações de GM.
+- **Relatos** (`client/src/admin/reports.ts`, `server/internal/api/admin_reports.go`): os relatos de /bug com filtro (abertos/resolvidos, versão, região pela `erevia_region` e texto), o detalhe com a posição no mapa do jogo (o mesmo desenho do mapa do cliente, `world/map-painter.ts`), versão, navegador, o print da tela do jogo (`GET /api/admin/bug-reports/{id}/shot`) e o contexto do cliente do [/bug completo](#bug-completo) (e qualquer coluna que outra migração acrescentar a `bug_reports`), o botão **Marcar como resolvido** (com nota, quem e quando; reabrir também vale; as duas vão para o `gm_log`) e o **Copiar como task** (objetivo, posição, versão, navegador e passos, em Markdown). O menu mostra quantos relatos estão abertos. A aba **Erros do navegador** lista os erros de `client_errors` mais frequentes do período (juntando as versões do mesmo erro), por versão, com a stack e o comando do `resolve-stack.mjs` para traduzi-la (ver [Erros do cliente](#erros-do-cliente)).
+- **Métricas** (`metrics.ts`, `admin_metrics.go`): **ao vivo** (a cada 5 s, pela zona com `askZone`): online no total e por região, monstros vivos, itens no chão, tick médio e pior tick do último período de 30 s (o mesmo do log "tick stats"), e a versão no ar. **Gráficos** do período escolhido (24 h, 7, 30 ou 90 dias): quem jogou por dia, ouro que entrou e saiu e por origem, itens que entraram e saíram, tempo até cada nível, mortes por região, onde as pessoas param, FPS por região e aparelho e os erros do servidor (`server_error`, `slow_tick`, `db_error` e `invariant`) por dia e por grupo. São as contas das views da [Telemetria](#telemetria), só no período.
+- **Progressão:** as tabelas de [docs/progressao.md](docs/progressao.md) (`GET /api/admin/progression`; ver [Telemetria](#telemetria)).
+- **Economia** (`economy.ts`, `admin_economy.go`): ouro em circulação (bolsas + armazéns) e a evolução diária; **itens**: quantos existem hoje (bolsas, equipamento e armazéns) contra entrou − saiu na telemetria (todo o histórico) + o teto do kit inicial, com os suspeitos de duplicação primeiro; **dias fora da curva** (personagem que ganhou num dia 10× a média dos outros do mesmo nível ±1, com pelo menos 500 moedas ou 30 itens); o **histórico de um personagem** (ouro e itens por dia e de onde vieram); e o **registro de GM** (`gm_log`) com filtro por GM, comando, alvo, texto e período.
+
+**Como a duplicação aparece:** para cada item, *sobra = existe − (entrou − saiu + kit)*. Troca entre jogadores e armazém só mudam o item de lugar (não geram evento nem mudam a conta). Sobra **negativa** é normal (poções bebidas, pergaminhos usados, itens que somem do chão ou com personagens apagados não geram evento). Sobra **positiva** é item que apareceu sem passar pela telemetria. Limites: o kit inicial é um teto (cada arma que a classe oferece conta para todos); saídas dos últimos 2 min ficam de fora (o personagem salva a cada 30 s); itens de antes da telemetria (00011) e eventos descartados com a fila cheia também aparecem como sobra; e um item que caiu no PvP e foi pego por outro conta como entrada de novo (esconde, não acusa). Itens e moedas na casa de leilões (anúncios ativos e anexos do correio não retirados) contam como saída (`auction_sale`, `auction_buy`) até alguém retirar (`auction_buy`, `auction_sale`, `auction_return`), então não viram sobra. O ouro segue a mesma conta (com o ouro inicial de cada personagem).
+
+**Desempenho:** as consultas de gráficos e economia ficam 1 minuto em cache no servidor (pedidos iguais ao mesmo tempo esperam a mesma consulta) e o rodapé de cada painel mostra quanto cada uma levou. A migração 00028 cria os índices que as cobrem (index-only scans). Para medir com uma semana de eventos sintéticos (1 milhão de linhas): `ADMIN_PERF=1 go test ./internal/store -run TestAdminPanelsPerf -v` (com `TEST_DATABASE_URL`); cada consulta tem de levar menos de 200 ms.
+
+**Jogadores** (`#jogadores`; código em `client/src/admin/players.ts`, `server/internal/api/admin_players.go`, `server/internal/zone/admin_actions.go` e `server/internal/store/admin_players.go`):
+- **Busca** por parte do nome do personagem, id do personagem ou da conta, ou identidade (o id do Google/Discord, `google:123…`, ou o nome no provedor), com online e offline juntos; sem busca, a lista de quem está online agora (com a região).
+- **Ficha** (`#jogadores/<id>`): nível e XP, moedas, região e posição, vida e mana (online), karma, PKs e vitórias PvP, classe e especialização, título, clã e cargo, grupo, inventário (equipado e bolsa) e armazém, missões ativas (com o progresso) e concluídas, conquistas, as últimas sessões e eventos de `game_events`, a conta (identidades, criação, último login, banimento, silêncio, os outros personagens) e o **histórico de moderação** (o `gm_log` do jogo e do portal contra qualquer personagem da conta). Com o personagem online ou que saiu há pouco, os dados vêm da zona (mais novos que o banco); a ficha diz de onde vieram.
+- **Ações:** expulsar (só online), silenciar por N minutos e tirar o silêncio, banir e desbanir (com motivo obrigatório), teleportar (X, Z; a cidade é 0, 0), dar e tirar item (tira da bolsa e, se faltar, do equipamento) e moedas, marcar e desmarcar GM (não dá para se banir nem tirar o próprio GM). O motivo vai para o jogador quando ele vê a mensagem e para o `gm_log`; um pedido que falhou fica registrado como `portal:<ação>:falhou`.
+- **Onde a ação acontece (nada duplica nem se perde):** quem decide é a zona, dona do estado (`zone.AdminEdit`):
+  - *online*: na memória, e o personagem é salvo na hora com `save_seq` novo (um panic depois não volta ao estado de antes);
+  - *saiu há pouco* (o `recent` da zona, 10 min): relogar usa a memória antes do banco, então a ação muda esse estado e o salva com `save_seq` novo; mexer no banco aí seria perdido (dar) ou duplicado (tirar) no próximo login;
+  - *offline*: a zona **trava** o personagem e a API faz a transação no banco (linha com `FOR UPDATE`, itens pelas mesmas regras da bolsa, `save_seq = GREATEST(…)` e a telemetria `gm` na mesma transação). Durante a trava, entrar com o personagem é recusado; depois, um login que leu o banco **antes** da mudança (o WebSocket anota a hora da leitura, `JoinInfo.LoadedAt`) também é recusado sem `Kicked`, e o cliente reconecta e lê de novo. A trava vence sozinha em 30 s se a API sumir.
+  - Silenciar, banir e GM vão primeiro para o banco (é de onde o login lê) e depois a zona aplica em quem está online da conta, com a mesma recusa para um login lido antes.
+  - Se a zona pegou o pedido e não respondeu em 10 s, a resposta é "não confirmado: confira a ficha antes de repetir" (nunca "falhou", que levaria a repetir e duplicar).
+
+**Operação** (`#operacao`; `client/src/admin/ops.ts`, `server/internal/api/admin_ops.go`, `server/internal/zone/admin_ops.go`), tudo pela zona e no `gm_log`:
+- **Anúncio para todos** (banner e linha dourada no chat), na hora ou **agendado** (30 s a 30 dias; fica em `scheduled_announcements`, migração 00027, e volta à fila depois de um reinício). Os agendados aparecem com o botão de cancelar.
+- **Aviso de manutenção:** "o servidor reinicia em N min" para todos, repetido em 60, 30, 15, 10, 5, 3, 2 e 1 min, 30 e 10 s; quem entra durante a contagem também é avisado; cancelar avisa todos. Não reinicia sozinho: é o aviso antes do deploy (e só existe na memória: o reinício o encerra).
+- **Eventos:** invasão (anunciar com 2 min, começar agora, parar sem recompensa) e XP em dobro por N horas ou desligar (os mesmos do `/evento`), com a **agenda dos automáticos**: os dias de `XP2_DAYS` e a próxima janela, o próximo anoitecer e a chance de invasão (`INVASION_CHANCE`).
+- **Chefes:** vivo (vida, fase do raid, fúria, há quanto tempo em luta) ou morto (a hora exata do renascimento, a janela mostrada no mapa e quando morreu), e **renascer agora** (o raid fica salvo como "renasce agora", para um reinício não o esconder de novo).
+
+**Como abrir:**
+1. Entre no jogo uma vez com a conta (Google, Discord ou, local, o login de desenvolvimento) e crie um personagem.
+2. Marque a conta como GM (o mesmo campo dos comandos de GM, ver [Moderação](#moderação)): `UPDATE accounts SET gm = true WHERE id = (SELECT account_id FROM characters WHERE lower(name) = lower('Nome'));` ou, local, `make gm NAME=Nome`.
+3. Abra `https://…/admin` no mesmo navegador. No portal vale na hora (a checagem é a cada pedido); no jogo, depois de relogar. Para tirar: `gm = false`.
+
+**Segurança:**
+- **Só GM, e o resto vê 404:** um middleware único (`AdminOnly`, em `server/internal/api/admin.go`) confere a sessão, se a conta é GM e se não está banida em toda rota de `/api/admin/*`, na página (`/admin`, `/admin/…`, `/admin.html`) e nos arquivos dela (`/assets/admin/`). Quem não é GM ou não está logado recebe o mesmo 404 de um caminho qualquer que não existe (por isso caminhos desconhecidos agora dão 404 em vez de cair no `index.html`).
+- **O que fica público:** só o que o jogo já usa (as fontes Cinzel e o polyfill de módulos do Vite). O código e o CSS do portal saem em `assets/admin/` (ver `client/vite.config.ts`), e nenhum arquivo público menciona o portal.
+- **Escrita:** todo pedido que muda algo exige o cabeçalho `X-Erevia-Admin: 1`, JSON e a mesma origem (contra CSRF), tem limite por conta (leitura: 60 de uma vez e 2/s; escrita: 10 de uma vez e 1 a cada 2 s) e vai para o `gm_log` com o comando `portal:…`, a conta e o nome do GM e o alvo.
+- Respostas do portal com `Cache-Control: no-store`, `X-Frame-Options: DENY`, CSP e `nosniff`. O log do servidor guarda só conta, método, rota e status (nada de corpo, cookie ou query).
+- **Jogadores online:** o portal nunca mexe no estado da zona nem grava no banco um personagem que está em memória; pede à zona pelo canal e espera a resposta com prazo (`askZone` em `server/internal/zone/admin.go` para leitura; `askZoneAction` em `admin_actions.go` para as ações, que depois de entregues esperam a resposta em vez de desistir).
+
+A versão no ar vem de `RAILWAY_GIT_COMMIT_SHA` (a Railway define; local aparece `dev`).
+
+## Telemetria
+O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem travar a zona): ouro que entra e sai (e de onde), itens que entram e saem do jogo, abates, mortes, subidas de nível, sessões, os monstros raros (`rare_spawn` e `rare_kill`, com `ref` = o raro) e o FPS dos jogadores (o cliente mede 1×/s e manda a média a cada 60 s, com o tipo de aparelho). O "painel" são views prontas; abra na aba **Data** do Postgres da Railway ou com `psql`:
+
+| View | Mostra |
+|---|---|
+| `v_gold_daily` | Ouro que entrou e saiu por dia e por origem (loot, venda, missão, loja, criação, teleporte…) |
+| `v_level_times` | Minutos médios para chegar a cada nível |
+| `v_deaths_by_region` | Mortes por região e por quem matou |
+| `v_quit_level` | Último nível de quem não joga há mais de 7 dias |
+| `v_fps` | FPS médio e dos piores momentos, por região e tipo de aparelho |
+| `v_items_daily` | Itens que entraram e saíram do jogo por dia (para caçar duplicação) |
+| `v_level_playtime` | Tempo **de jogo** (soma das sessões) para passar de cada nível, por classe: média, mediana e p75 |
+| `v_xp_sources` | XP por fonte (monstro, grupo, noite, XP em dobro, missão, invasão, morte, vitalidade, recuperação) e por faixa de nível |
+| `v_level_kills_deaths` | Abates e mortes por nível do jogador |
+| `v_gold_per_hour` | Ouro ganho e gasto por hora de jogo, por faixa |
+| `v_level_reached` | Funil: quantos chegaram a cada nível e quantos pararam nele |
+| `v_contracts_daily` | Contratos do quadro aceitos e concluídos por dia (Brasília), com as moedas pagas |
+
+**Masmorras** (`kind = 'dungeon'`, uma linha por cópia ao fechar): `ref` = a masmorra, `amount` = a duração em segundos e `extra` = mortes (`deaths`), jogadores que entraram (`players`), se o chefe caiu (`boss_down`) e em quantos segundos (`boss_seconds`), baús abertos (`chests`) e o motivo do fim (`reason`: `vazia` ou `tempo`). Por jogador: `dungeon_chest` (o baú do dia, `amount` = moedas) e `dungeon_stairs`. Exemplo: `SELECT date_trunc('day', at) AS dia, count(*) AS copias, avg(amount)::int AS seg, sum((extra->>'deaths')::int) AS mortes FROM game_events WHERE kind = 'dungeon' GROUP BY 1 ORDER BY 1 DESC;`
+
+**Progressão** ([docs/progressao.md](docs/progressao.md)): a XP ganha não vai uma linha por abate; a zona soma por personagem, nível e fonte e grava um evento `xp` a cada minuto, ao subir e ao sair. Ao desligar, a zona fecha a sessão de quem está online antes de a telemetria esvaziar a fila (senão todo deploy perderia o tempo de jogo). As consultas prontas estão em `server/internal/store/queries/progressao.sql`, e as tabelas aparecem no portal em `/admin#progressao`.
+
+**Erros do servidor** (também em `game_events`, no máximo 1 linha por grupo a cada minuto, com a contagem acumulada em `amount`): `server_error` é um panic recuperado (a zona segue e só o jogador da mensagem cai; `ref` = hash da stack, `extra` com onde, jogador, mensagem, stack e versão), `slow_tick` é um tick acima de 50 ms (`extra.systems` = os sistemas mais lentos) e `db_error` é uma falha ao gravar no banco (`ref` = operação). Exemplo: `SELECT kind, ref, sum(amount) AS vezes, max(at) AS ultima, max(extra->>'where') AS onde, max(extra->>'version') AS versao FROM game_events WHERE kind IN ('server_error', 'slow_tick', 'db_error') AND at > now() - interval '1 day' GROUP BY 1, 2 ORDER BY 3 DESC;`
+
+## Teste de caos
+`cmd/loadbot -chaos` procura duplicação de itens, estados impossíveis e panics que nenhum teste unitário pensou. Cada bot sorteia, a cada passo (300 ms), uma ação de todo o `ClientMessage`: andar (também para NaN e infinito), atacar, skills, pegar do chão, mover, usar, destruir, comprar, vender e encantar itens, armazém (itens e moedas), troca entre jogadores, grupo, clã, convites, teleporte, criação, barbeiro, atributos, skills, atalhos, especialização, amigos, correio, casa de leilões (ir até o Leiloeiro, abrir, buscar, anunciar, comprar o anúncio mais barato de outro bot, então dois bots disputam o mesmo, comprar e cair, anunciar e cair, cancelar, meus anúncios e retirar do correio), ranking, título, chat (com comandos) e FPS. Uma parte é inválida de propósito: espaços fora da faixa, quantidades 0 ou enormes, ids que não existem, nomes e textos estranhos, bytes que não são protobuf, mensagem maior que o limite. Os **combos** mandam várias mensagens seguidas sem esperar resposta (vender e encantar o mesmo espaço, oferecer na troca e guardar no armazém, comprar e cair, confirmar a troca e fechar a aba, convidar para o clã e desfazê-lo), e os bots **caem e voltam** (fechando, abruptamente ou relogando por cima da sessão antiga).
+
+Antes de jogar, o caos cria personagens novos (prefixo `Cx…` a cada rodada) e, direto no banco (`-db`), dá a cada um nível, moedas, pergaminhos, materiais, equipamento e armazém, para clã, encantamento e criação passarem da primeira checagem. Aí tira o saldo inicial (moedas na bolsa e no armazém, itens na bolsa, no equipamento e no armazém) e, no fim, com todos fora e os salvamentos gravados (`-settle`), confere: **saldo final = inicial + entradas − saídas** da telemetria (`gold`, `item_in`, `item_out` em `game_events`). E confere a **custódia da casa de leilões**: por item, *anunciado (`auction_sale`) − retirado (`auction_buy` + `auction_return`) = anúncios ativos + anexos não retirados*; em moedas, *compras (`auction_buy`) + taxas devolvidas com anúncio recusado − retiradas (`auction_sale` + `auction_return`) = anexos de moedas não retirados + comissão*. (Os bots só compram de vendedores da própria rodada, para a conta fechar entre eles.)
+
+**Reprodutível:** com a mesma `-seed`, a sequência de escolhas é a mesma (6 sorteios por passo, sempre, e o tipo da ação só depende deles); os parâmetros se aplicam ao estado que o bot vê. A contagem de ações por tipo e a **assinatura das escolhas** no relatório são iguais entre rodadas com a mesma semente, mesmo com a rede em outro ritmo.
+
+O relatório traz as ações por tipo, os comandos enviados (com `!` nos inválidos), sessões, erros e kicks, as invariantes, `server_error` e `db_error` da rodada (consulta em `game_events`), linhas de panic/invariante do log do servidor (`-serverlog arquivo`) e a conferência da economia, item a item, com de onde veio cada entrada e saída. Sai com código ≠ 0 se houver panic, invariante, erro do banco, kick por erro no servidor, servidor fora do ar no fim ou economia que não fecha.
+
+Localmente (servidor com `DEV_LOGIN=true DEBUG_INVARIANTS=1`, para uma invariante quebrada derrubar o processo e aparecer no log):
+```bash
+cd server
+DEV_LOGIN=true DEBUG_INVARIANTS=1 go run ./cmd/zone > /tmp/server.log 2>&1 &
+go run ./cmd/loadbot -chaos -bots 50 -duration 10m -seed 317 \
+  -url http://127.0.0.1:8080 -db "$DATABASE_URL" -serverlog /tmp/server.log
+```
+O job **Caos noturno** (`.github/workflows/nightly.yml`) faz isso toda noite com Postgres 17 e a semente do dia do ano (`date +%j`), e também roda à mão (Actions → Caos noturno → Run workflow, com semente e duração opcionais). O relatório vai para o resumo do job, e o log do servidor e a saída do caos ficam nos artefatos. Para reproduzir uma noite que falhou, rode o comando acima com a semente dela.
+
+Saídas de item na telemetria (`item_out`, `extra.how`): `sell`, `destroy`, `craft`, `enchant_break` (o item quebrou), `enchant` (o pergaminho gasto), `use` (poção), `return` (pergaminho de retorno) e `pk_drop` (caiu de quem morreu com karma; quem pegar conta como `item_in` `loot`).
+
+Casa de leilões (`gold` com `ref`, `item_in`/`item_out` com `extra.how`; gravados **na mesma transação** da operação, nunca duas vezes): `auction_fee` (a taxa do anúncio, que sai), `auction_sale` (o item anunciado sai da bolsa; as moedas da venda entram ao retirar do correio), `auction_buy` (as moedas da compra saem; o item comprado entra ao retirar) e `auction_return` (item devolvido por cancelamento, vencimento ou anúncio recusado, e as moedas de uma compra que não deu certo, ao retirar). O que está em custódia ou num anexo ainda não retirado conta como "saiu" (fora das bolsas e dos armazéns), então a auditoria do portal e a conferência do caos fecham sem mudar a conta; a comissão é a diferença entre o que o comprador pagou e o que o vendedor recebe (fica em `auctions.commission`).
+## Alertas no Discord
+O servidor avisa num canal do Discord o que precisa de atenção. Um worker próprio (`server/internal/alerts`), fora da zona, lê o banco a cada minuto e manda um embed em português, com cor por gravidade e o link para a seção do portal (`PUBLIC_URL` + `/admin#…`):
+
+| Aviso | Quando | Cor |
+|---|---|---|
+| Erro novo no servidor | Um hash de `server_error` que nunca apareceu antes | vermelho |
+| Erro novo no navegador | Um hash de `client_errors` que nunca apareceu antes (em versão nenhuma) | laranja |
+| Pico de erros | Mais de `ALERT_SPIKE_N` ocorrências de um mesmo erro em 5 min (servidor, banco ou navegador) | vermelho |
+| Invariante quebrada | A primeira quebra de cada regra no dia (horário de Brasília) | amarelo |
+| Tick lento | O p95 do tick acima de 50 ms por 2 min (mais de 5% dos ticks acima de 50 ms, pelos `slow_tick`) | laranja |
+| Servidor no ar | Cada subida, com a versão (`RAILWAY_GIT_COMMIT_SHA`): deploy (outra versão), reinício ou queda (mesma versão, e o anterior não desligou normalmente). Sai 90 s depois de subir, quando o servidor anterior já desligou | verde, azul ou vermelho |
+| Relato de bug | Cada `/bug`, com o texto, o personagem, a posição, a região e a versão | azul |
+
+- **Limite:** no máximo 1 aviso por tipo e chave (o erro, a regra, a conta do `/bug`, a versão) a cada 15 min. O seguinte diz quantos o limite segurou. Os `/bug` da mesma conta esperam o limite e saem juntos; numa enxurrada de erros novos, 5 têm aviso próprio e o resto vai num resumo.
+- **Já visto:** fica na tabela `alert_state` (migração 00029) e vale depois de um reinício. Na primeira vez, tudo o que já existia conta como visto (nada de enxurrada de avisos antigos).
+- **Robustez:** timeout de 10 s por envio, nova tentativa em erro de rede e 5xx, e no 429 do Discord espera o `retry_after` pedido (até 30 s; mais que isso, tenta na verificação seguinte). A zona nunca espera pelos alertas, e um panic no worker vira `server_error` e ele recomeça.
+- Texto de jogador (o `/bug`) não formata, não vira link e não menciona ninguém (`@everyone` não chama).
+
+**Como configurar:**
+1. No Discord, no canal dos alertas: **Configurações do canal → Integrações → Webhooks → Novo webhook**. Dê um nome (ex.: Erevia) e clique em **Copiar URL do webhook**.
+2. Na Railway, no serviço **erevia** → **Variables**, crie `ALERT_WEBHOOK_URL` com a URL copiada (e, se quiser, `ALERT_SPIKE_N`). A Railway publica de novo, e o aviso "Servidor no ar" chega ao canal em uns 2 min.
+3. A URL tem o token do webhook: não ponha no git, num print nem no board. O servidor nunca a escreve no log. Se vazar, apague o webhook no Discord e crie outro.
+
+Local, sem a variável, cada aviso vai para o log como `alerta (sem ALERT_WEBHOOK_URL)`. Para testar com um canal de verdade, ponha a URL em `ALERT_WEBHOOK_URL` no `.env` (que não vai para o git) e rode `make server`.
+
+```sql
+-- O que os alertas já avisaram (pico, invariante do dia, tick lento, /bug por conta, subidas)
+SELECT kind, key, sent_at, suppressed, pos, info FROM alert_state WHERE kind <> 'seen' ORDER BY sent_at DESC LIMIT 50;
+```
+
+## Pipeline de arte (remaster)
+**O remaster é o visual padrão do jogo** (heróis, monstros, chefes, NPCs, armas e armaduras por raridade, cidade, natureza, chão e animações). `?remaster=0` desliga, para comparar e depurar (jogo de antes, com modelos KayKit). `?render=antigo` é outro eixo: desliga só o render novo (tons, gradação, vento, água, nuvens, relevo do chão), com a arte que estiver ativa; `?remaster=0&render=antigo` reproduz o jogo de antes das duas mudanças. O e2e e o CI testam o remaster, porque é o que o jogador recebe.
+Ferramentas open source: **Blender**, **blender-mcp** (o Claude Code controla o Blender, com `DISABLE_TELEMETRY=true`) e a skill **blender-image-to-3d** (referência → asset pronto para jogo). A regra de todo asset novo é o [guia de arte](docs/guia-de-arte.md).
+
+1. **Folhas de referência:** `/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python tools/art/reference_sheets.py -- docs/arte`
+2. **Modelar:** a skill blender-image-to-3d no Claude Code, a partir das folhas, até o GLB com LOD0/1/2 (nós com sufixo `_LOD1`/`_LOD2`).
+3. **Importar:** `cd client && node scripts/import-asset.mjs <arquivo.glb> <personagem|arma|monstro|chefe|cenario> [nome]`. Ele limpa e otimiza o GLB, confere o orçamento do guia (triângulos por LOD, textura, materiais, ossos) e só copia para `public/models` se couber. Se o Blender não trouxe `_LOD1`/`_LOD2`, gera os dois (simplify do meshoptimizer, nas proporções do guia, compartilhando os vértices do LOD0) e comprime as texturas para **KTX2/Basis** (UASTC, encoder em wasm do pacote `ktx2-encoder`, nada instalado no sistema). Opções: `--check` só confere; `--force` copia mesmo fora do orçamento; `--no-lod`; `--no-ktx2`; `--etc1s` (KTX2 menor e pior); `--variantes=<regex>` (nós que o jogo esconde, como cabeças alternativas, contam só a maior). O arquivo entra em `client/scripts/assets-manifest.json`.
+4. **Orçamento no CI:** `npm run check:assets` (passo no job do cliente) lê todo GLB de `public/models` e falha se passar do guia. A categoria de cada arquivo está em `client/scripts/assets-manifest.json`; arquivo sem entrada falha. Os modelos KayKit que já estouram ficam em `excecoes`, com o teto de hoje e o motivo (crescer falha; exceção sem uso também falha, a lista só encolhe). Os limites ficam em `client/scripts/lib/asset-budget.mjs`, junto com o guia.
+5. **No jogo:** `client/src/world/assets.ts` aponta o decodificador de KTX2 para o próprio site (`public/ktx2`, gerado no build por `scripts/build-ktx2-decoder.mjs`) e `applyLods` liga os nós `_LOD1`/`_LOD2` ao LOD do Babylon (20 m e 35 m). `e2e/tests/assets.spec.ts` carrega um GLB gerado pelo import num navegador real e confere textura, LOD e desenho. Pendentes: atlas por família de assets e carregamento progressivo no celular (#65).
+
+### Prints de regressão visual
+`e2e/tests/shots.spec.ts` entra com `?shots=1` (câmera parada, relógio fixado, entidades e HUD escondidos) e tira prints da praça de dia, praça de noite, Arredores e Vale. O CI publica o artefato **prints** (14 dias) para olhar a olho em PRs que mexem em arte ou luz. **Não há comparação com base:** duas rodadas no SwiftShader diferiram em ~1,7–2% dos pixels por mais de 16 níveis (e em 19–37% por qualquer diferença), então um limite de pixels daria falso alarme. `SHOTS_COMPARE=1` liga a comparação (bases em `e2e/tests/shots.spec.ts-snapshots`, tolerância `SHOTS_TOLERANCE`) para testar numa GPU real.
+

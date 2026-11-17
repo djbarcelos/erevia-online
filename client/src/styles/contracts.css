@@ -1,0 +1,351 @@
+/* ---------- Quadro de Contratos e reputação (ui/contracts.ts, aba Reputação do Diário) ---------- */
+
+.shop-panel.ct-panel {
+  width: 420px;
+  max-height: calc(100dvh - 150px);
+}
+
+.ct-body {
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.ct-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ct-section h3 {
+  margin: 0;
+  color: var(--gold);
+  font-family: var(--font-title);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ct-reset {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.ct-note {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
+  background: rgba(232, 207, 138, 0.06);
+  border: 1px solid rgba(232, 207, 138, 0.16);
+}
+
+.ct-note.warn {
+  color: var(--warn);
+}
+
+.ct-card {
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 3px solid var(--line);
+}
+
+.ct-card.active {
+  border-left-color: var(--gold);
+}
+
+.ct-card.done {
+  border-left-color: var(--ok);
+  opacity: 0.82;
+}
+
+.ct-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+
+.ct-slot {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold-hi);
+  border: 1px solid var(--line);
+  background: rgba(214, 180, 110, 0.1);
+}
+
+.ct-slot.slot-2 {
+  color: #ffb08a;
+  border-color: rgba(255, 140, 90, 0.4);
+  background: rgba(255, 120, 70, 0.1);
+}
+
+.ct-slot.slot-3 {
+  color: #9fe0b0;
+  border-color: rgba(110, 210, 140, 0.4);
+  background: rgba(90, 200, 120, 0.1);
+}
+
+.ct-slot.slot-4 {
+  color: #d9b8ff;
+  border-color: rgba(180, 108, 255, 0.45);
+  background: rgba(180, 108, 255, 0.12);
+}
+
+.ct-faction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.74rem;
+  color: var(--text);
+}
+
+.ct-faction b {
+  font-weight: 600;
+  color: var(--fc, var(--gold-hi));
+}
+
+.ct-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--fc, var(--gold));
+  box-shadow: 0 0 6px var(--fc, var(--gold));
+}
+
+.ct-title {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+
+.ct-check {
+  color: var(--ok);
+}
+
+.ct-text {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.ct-place {
+  color: var(--dim);
+  font-size: 0.72rem;
+}
+
+.ct-place b {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.ct-reward {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ct-reward .jr-chip.rep {
+  color: #d9b8ff;
+}
+
+.ct-accept {
+  justify-self: start;
+  min-width: 110px;
+}
+
+.ct-state {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.ct-state.ok {
+  color: var(--ok);
+}
+
+/* Loja */
+
+.ct-shop-faction {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.ct-rep-bar > i {
+  --a: var(--fc, var(--xp-a));
+  --b: color-mix(in srgb, var(--fc, var(--xp-b)) 45%, #000);
+}
+
+.ct-offer {
+  grid-template-columns: 44px 1fr auto;
+}
+
+.ct-offer.locked {
+  opacity: 0.55;
+}
+
+.ct-offer.poor .shop-price {
+  color: var(--bad);
+}
+
+.ct-grade {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.ct-grade.need {
+  color: var(--warn);
+}
+
+.ct-title-icon {
+  display: grid;
+  place-items: center;
+  color: #d9b8ff;
+}
+
+/* Aba Reputação do Diário */
+
+.ct-rep-faction {
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.ct-ladder {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.ct-step {
+  display: grid;
+  justify-items: center;
+  padding: 4px 2px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  color: var(--dim);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ct-step b {
+  font-weight: 600;
+}
+
+.ct-step.on {
+  color: var(--gold-hi);
+  border-color: var(--line-strong);
+  background: rgba(214, 180, 110, 0.1);
+}
+
+@media (max-width: 767px), (max-height: 520px) {
+  .shop-panel.ct-panel {
+    width: auto;
+    max-height: 72dvh;
+  }
+
+  .ct-text {
+    font-size: 0.74rem;
+  }
+
+  .ct-step {
+    font-size: 0.6rem;
+  }
+}
+
+/* Aviso do HUD: contrato concluído ou grau novo */
+
+.ct-notice {
+  position: fixed;
+  z-index: 60;
+  top: calc(84px + var(--safe-t, 0px));
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 260px;
+  max-width: min(92vw, 460px);
+  padding: 9px 18px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: linear-gradient(180deg, rgba(40, 32, 18, 0.96), rgba(18, 14, 24, 0.96));
+  box-shadow: var(--shadow), 0 0 24px rgba(214, 180, 110, 0.25);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -10px);
+  transition:
+    opacity 0.35s var(--ease),
+    transform 0.35s var(--ease);
+}
+
+.ct-notice.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.ct-notice-kicker {
+  color: var(--gold);
+  font-family: var(--font-title);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ct-notice b {
+  color: var(--gold-hi);
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+}
+
+.ct-notice small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+@media (max-width: 767px) {
+  .ct-notice {
+    top: calc(150px + var(--safe-t, 0px));
+    min-width: 0;
+    width: calc(100vw - 32px);
+  }
+}
+
+/* Nomes inteiros na loja ("Pergaminho de Encantar Armadura" não pode virar "…Arma…"). */
+.ct-offer .shop-name strong {
+  white-space: normal;
+  overflow: visible;
+}
+
+/* No título do grupo do Diário, o selo da facção quebra como texto (o grau fica junto). */
+.jr-group-title .ct-faction {
+  display: inline;
+  font-size: inherit;
+  color: inherit;
+}
+
+.jr-group-title .ct-dot {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.ct-faction b {
+  white-space: nowrap;
+}

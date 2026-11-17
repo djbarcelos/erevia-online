@@ -16,10 +16,10 @@
   z-index: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
   grid-template-rows: 1fr auto;
-  gap: 32px 6vw;
-  padding: 48px 7vw 24px;
+  gap: 24px 5vw;
+  padding: 40px 6vw 0;
   align-items: center;
 }
 
@@ -27,7 +27,7 @@
   display: grid;
   gap: 28px;
   justify-items: start;
-  max-width: 440px;
+  max-width: 680px;
   width: 100%;
 }
 
@@ -77,16 +77,20 @@
 
 .login-card {
   width: 100%;
-  padding: 26px 24px;
+  padding: 30px 28px 24px;
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .card-title {
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
+  text-align: center;
+  color: var(--gold-hi);
+  padding-bottom: 12px;
+  background: linear-gradient(90deg, transparent, var(--gold) 50%, transparent) bottom / 70% 1px no-repeat;
 }
 
 .stack {
@@ -95,11 +99,12 @@
 }
 
 .btn-social {
+  --h: 48px;
   text-transform: none;
   letter-spacing: 0.02em;
   font-family: var(--font-ui);
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: 700;
+  font-size: 1.05rem;
   justify-content: flex-start;
   gap: 12px;
 }
@@ -111,15 +116,15 @@
 }
 
 .btn-social.google {
-  background: #f4f2ee;
-  color: #1d1b22;
-  border-color: #fff;
+  background: var(--gold-grad);
+  color: var(--on-gold);
+  border-color: var(--gold-glow);
 }
 
 .btn-social.discord {
-  background: linear-gradient(180deg, #6876f2, #4752c4);
-  border-color: #8b96ff;
-  color: #fff;
+  background: var(--bg-3);
+  border-color: var(--line-strong);
+  color: var(--text);
 }
 
 .btn.loading {
@@ -239,42 +244,53 @@
 }
 
 .login-news {
-  padding: 22px;
   display: grid;
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 22px;
   align-self: center;
+  width: 100%;
 }
 
 .login-news > .title {
-  font-size: 1rem;
-  letter-spacing: 0.14em;
+  grid-column: 1 / -1;
+  font-size: 0.82rem;
+  letter-spacing: 0.3em;
   text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* Reabre a janela "O que há de novo" (ui/windows/whatsnew.ts). */
+.login-news > .news-all {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .news-item {
   display: grid;
+  align-content: start;
   gap: 4px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
+  padding: 0 0 0 12px;
+  border-left: 1px solid var(--line-strong);
 }
 
 .news-item:last-child {
-  border-bottom: 0;
+  border-left: 1px solid var(--line-strong);
   padding-bottom: 0;
 }
 
 .news-item h3 {
   margin: 0;
-  font-size: 0.96rem;
+  font-size: 0.86rem;
   font-family: var(--font-title);
-  color: var(--text);
+  letter-spacing: 0.04em;
+  color: var(--gold-hi);
 }
 
 .news-item p {
   margin: 0;
   color: var(--muted);
   font-size: 0.84rem;
-  line-height: 1.45;
+  line-height: 1.35;
 }
 
 .news-meta {
@@ -312,9 +328,30 @@
   flex-wrap: wrap;
   gap: 6px 24px;
   justify-content: center;
-  font-size: 0.72rem;
+  align-items: center;
+  align-self: end;
+  font-size: 0.85rem;
   color: var(--dim);
-  padding-bottom: 56px;
+  margin: 0 -6vw;
+  padding: 12px 6vw;
+  background: linear-gradient(0deg, rgba(15, 14, 22, 0.92), rgba(15, 14, 22, 0.7));
+  border-top: 1px solid var(--line);
+}
+
+.srv-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.srv-status .srv-dot {
+  display: block;
+}
+
+.srv-status.down .srv-dot {
+  background: var(--bad);
+  box-shadow: 0 0 8px var(--bad);
 }
 
 @media (max-width: 900px) {
@@ -336,13 +373,36 @@
     text-align: center;
   }
 
-  .logo-crest {
-    margin: 0 0 10px;
-  }
-
   .login-news {
     max-width: 440px;
     width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  /* Celular: marca, depois o painel de entrada e só então as novidades. */
+  .login-main {
+    display: contents;
+  }
+
+  .login-logo {
+    order: 1;
+  }
+
+  .login-card {
+    order: 2;
+    max-width: 440px;
+  }
+
+  .login-news {
+    order: 3;
+  }
+
+  .login-foot {
+    order: 4;
+  }
+
+  .logo-over {
+    justify-content: center;
   }
 
   .login-foot {
@@ -500,7 +560,7 @@
   position: absolute;
   z-index: 2;
   top: 76px;
-  bottom: 104px;
+  bottom: 128px;
   width: 340px;
   padding: 18px;
   overflow-y: auto;
@@ -519,9 +579,12 @@
 
 .panel-title {
   font-size: 0.95rem;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   font-weight: 700;
+  color: var(--gold-hi);
+  padding-bottom: 8px;
+  background: linear-gradient(90deg, var(--gold), transparent) bottom / 100% 1px no-repeat;
 }
 
 .panel-subtitle {
@@ -545,11 +608,12 @@
   --cc: var(--gold);
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px;
+  gap: 12px;
+  padding: 10px 14px 10px 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.35);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(42, 38, 56, 0.7), rgba(23, 21, 31, 0.8));
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
   text-align: left;
   transition:
     border-color 0.15s,
@@ -557,9 +621,9 @@
 }
 
 .roster-slot[aria-pressed="true"] {
-  border-color: var(--cc);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cc) 22%, transparent), rgba(0, 0, 0, 0.35));
-  box-shadow: inset 3px 0 0 var(--cc);
+  border-color: var(--gold);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cc) 26%, #221f2c), rgba(34, 31, 44, 0.9));
+  box-shadow: inset 3px 0 0 var(--gold), inset 0 0 0 1px rgba(246, 228, 180, 0.15);
 }
 
 .roster-slot:hover {
@@ -568,66 +632,99 @@
 
 .roster-crest,
 .cc-crest {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 52px;
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 50%;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
   font-family: var(--font-title);
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   color: #160f05;
   background: radial-gradient(circle at 35% 30%, #fff, var(--cc) 55%, color-mix(in srgb, var(--cc) 50%, #000));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--cc) 40%, transparent);
 }
 
 /* Anel na cor do emblema do personagem. */
+/* Filete na cor do emblema do personagem, em volta do selo. */
 .roster-slot:not(.empty) .roster-crest {
-  outline: 2px solid var(--emblem, transparent);
-  outline-offset: 2px;
+  background:
+    radial-gradient(circle at 35% 30%, #fff, var(--cc) 55%, color-mix(in srgb, var(--cc) 50%, #000)) center / calc(100% - 5px) calc(100% - 5px) no-repeat,
+    var(--emblem, var(--gold));
 }
 
 .roster-info {
   display: grid;
   gap: 1px;
-  font-size: 0.82rem;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
   color: var(--muted);
+}
+
+.roster-lvl {
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+}
+
+.roster-lvl small {
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.roster-lvl b {
+  font-family: var(--font-title);
+  font-size: 1.7rem;
+  color: var(--gold-hi);
 }
 
 .roster-info b {
   color: var(--text);
-  font-size: 1rem;
+  font-size: 1.02rem;
   font-family: var(--font-title);
+  letter-spacing: 0.03em;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .roster-info small {
   color: var(--dim);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
 }
 
 .roster-slot.empty {
   justify-content: center;
   border-style: dashed;
+  border-color: var(--line-strong);
   color: var(--muted);
   min-height: 66px;
+  background: transparent;
 }
 
 .char-foot {
   position: absolute;
   z-index: 3;
   left: 50%;
-  bottom: 22px;
+  bottom: 24px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 14px 12px 22px;
-  border-radius: 8px;
-  background: rgba(8, 7, 12, 0.7);
-  border: 1px solid var(--line);
-  backdrop-filter: blur(6px);
   max-width: calc(100vw - 32px);
+}
+
+/* Brilho dourado do botão principal (o filtro fica no pai: o clip-path do botão cortaria a sombra). */
+.select-foot {
+  filter: drop-shadow(0 0 14px rgba(214, 180, 110, 0.35));
+}
+
+.create-foot {
+  padding: 12px 14px 12px 18px;
+  background: linear-gradient(180deg, rgba(34, 31, 44, 0.94), rgba(23, 21, 31, 0.96));
+  border: 1px solid var(--line-strong);
 }
 
 .foot-info {
@@ -641,10 +738,13 @@
 }
 
 .btn-play {
-  --h: 50px;
-  padding: 0 32px;
-  font-size: 1rem;
+  --h: 54px;
+  padding: 0 44px;
+  font-size: 1.05rem;
   font-weight: 700;
+  letter-spacing: 0.22em;
+  border-radius: 0;
+  clip-path: polygon(18px 0, calc(100% - 18px) 0, 100% 50%, calc(100% - 18px) 100%, 18px 100%, 0 50%);
 }
 
 .char-screen[data-mode="select"] .create-panel,
@@ -676,8 +776,9 @@
   align-items: center;
   padding: 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.35);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(42, 38, 56, 0.7), rgba(23, 21, 31, 0.8));
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
   text-align: left;
 }
 
@@ -990,8 +1091,14 @@
     flex-wrap: wrap;
   }
 
-  .select-foot .foot-info {
-    flex: 1;
+  .create-foot {
+    background: linear-gradient(180deg, #221f2c, #17151f);
+  }
+
+  .select-foot {
+    filter: none;
+    justify-content: center;
+    background: linear-gradient(180deg, rgba(34, 31, 44, 0.96), rgba(23, 21, 31, 0.98));
   }
 
   .select-foot .btn-play {
@@ -1084,10 +1191,6 @@
     --h: 42px;
     padding: 0 16px;
     font-size: 0.86rem;
-  }
-
-  .select-foot .foot-info {
-    display: none;
   }
 
   .select-foot .btn-play {

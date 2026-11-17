@@ -1,8 +1,23 @@
 import type { AnimationGroup, Node } from "@babylonjs/core";
+import { stepRatios } from "./motion";
 import type { AnimRole } from "./models";
 
+/**
+ * Mapa papel -> clipe que avisa quando é trocado de conjunto (o bárbaro com arma de duas mãos passa a usar
+ * parado, andar e correr com as duas mãos juntas): o AnimController recomeça com os clipes novos.
+ */
+export class RoleMap extends Map<AnimRole, AnimationGroup> {
+  onChange: (() => void) | null = null;
+  /**
+   * Velocidade natural dos clipes de andar e correr (m/s do mundo, com a escala do modelo): a que o pé de apoio
+   * percorre para trás em relação ao quadril. O clipe toca a `velocidade real / natural` para o pé não deslizar.
+   * Sem isto (golem de código), vale a regra antiga (RUN_ANIM_SPEED).
+   */
+  footSpeeds: { walk?: number; run: number } | undefined;
+}
+
 /** Velocidade das transições de peso da locomoção (1/s). */
-const BLEND_RATE = 10;
+const BLEND_RATE = 14;
 /** Entrada de uma ação (1/s): ~95% em 0,15 s. */
 const ACTION_IN_RATE = 20;
 /** Saída de uma ação que terminou ou foi trocada (s), em curva suave (começa e termina devagar). */
@@ -19,16 +34,22 @@ export interface PlayOpts {
    * golpe encostar `lead` segundos depois (o servidor já decidiu o dano quando o pacote chega).
    */
   lead?: number;
+  /** Repete até outra ação (ou endEmote) tomar o lugar: dançar e sentar. */
+  loop?: boolean;
 }
 
 /**
  * Controla as animações de um personagem em duas camadas:
  * - locomoção: parado ↔ correndo, sempre tocando, misturadas por peso;
- * - ação: ataque/skill/apanhar/morrer, toca uma vez por cima e devolve o corpo aos poucos.
+ * - ação: ataque/skill/apanhar/morrer, toca uma vez por cima e devolve o corpo aos poucos
+ *   (os emotes de dançar e sentar repetem até endEmote ou outra ação).
  * A morte segura a pose final até o personagem reviver.
  */
 export class AnimController {
   private runWeight = 0;
+  /** 0 = correr, 1 = andar (só modelos com clipe "walk": o remaster). */
+  private walkMix = 0;
+  private walkRatio = 1;
   private actionWeight = 0;
   private action: AnimationGroup | null = null;
   private actionDone = true;
@@ -47,6 +68,38 @@ export class AnimController {
   private actionSpeed = 1;
   /** Sem cena para esperar o próximo quadro (não deveria acontecer): volta à pose na hora. */
   private deferReset = false;
+  /** A ação atual repete (emote de dançar ou sentar). */
+  private looping = false;
+  /** Pausa de impacto: segundos que ainda faltam com a pose congelada (só este personagem). */
+  private stopLeft = 0;
+  /** Velocidade da corrida no último quadro (para devolver depois da pausa). */
+  private runRatio = 1;
+  /**
+   * LOD de animação: false = fora da tela ou longe. Os grupos ficam pausados (pose
+   * congelada) e as ações não tocam: nada de stop()/start(), que varrem todas as animações
+   * ativas da cena no Babylon.
+   */
+  private active = true;
+  /** Grupos distintos do personagem (ataque e skill podem ser o mesmo clipe). */
+  private groups!: AnimationGroup[];
+  /** Grupos pausados ao sair de cena, retomados ao voltar. */
+  private paused: AnimationGroup[] = [];
+  /** Morte ou emote em loop pedidos fora de cena: tocam ao voltar (a morte já no fim). */
+  private deferred: { role: AnimRole; opts: PlayOpts } | null = null;
+  /** Uma ação foi cortada fora de cena: volta à pose de descanso antes de retomar. */
+  private resetOnWake = false;
+  /** Pausas do parado ("idle breaks": olhar em volta, alongar, gesto): tocam de vez em quando, com tempo e fase próprios. */
+  private breaks!: AnimationGroup[];
+  private resetHooked = false;
+  /** Tempo (s) que os clipes ficaram pausados desde a última vez que animaram. */
+  private asleepFor = 0;
+  /** Escala do corpo (monstros grandes dão passos maiores): multiplica as velocidades naturais dos clipes. */
+  private bodyScale = 1;
+  /** Só para medir o "antes" (?legacymove=1): velocidade do clipe pela constante antiga e mistura mais lenta. */
+  legacy = false;
+  private breakGroup: AnimationGroup | null = null;
+  private breakW = 0;
+  private breakTimer = 0;
 
   /**
    * resetPose: devolve os ossos à pose de descanso quando uma ação sai.
@@ -57,11 +110,62 @@ export class AnimController {
     private resetPose: () => void = () => {},
     private impacts: Partial<Record<AnimRole, number>> = {},
   ) {
+    this.start();
+    if (anims instanceof RoleMap) anims.onChange = () => this.rebind();
+  }
+
+  /** O conjunto de clipes mudou: para tudo o que tocava e recomeça com os clipes novos (parado, andar e correr). */
+  setBodyScale(s: number): void {
+    this.bodyScale = s > 0 ? s : 1;
+  }
+
+  /** Pesos e velocidades dos clipes de locomoção (para medir o deslize nos testes no navegador). */
+  debug(): { idle: number; run: number; walk: number; runRatio: number; walkRatio: number; action: number; runNat: number } {
+    return {
+      idle: this.anims.get("idle")?.weight ?? 0,
+      run: this.anims.get("run")?.weight ?? 0,
+      walk: this.anims.get("walk")?.weight ?? 0,
+      runRatio: this.anims.get("run")?.speedRatio ?? 0,
+      walkRatio: this.anims.get("walk")?.speedRatio ?? 0,
+      action: this.actionWeight,
+      runNat: this.anims instanceof RoleMap && this.anims.footSpeeds ? this.anims.footSpeeds.run * this.bodyScale : 0,
+    };
+  }
+
+  private rebind(): void {
+    for (const g of this.groups) g.stop();
+    for (const f of this.fading) f.g.stop();
+    this.fading.length = 0;
+    this.action = null;
+    this.actionDone = true;
+    this.actionWeight = 0;
+    this.looping = false;
+    this.holding = false;
+    this.frozen = false;
+    this.breakGroup = null;
+    this.breakW = 0;
+    this.paused.length = 0;
+    this.queueReset();
+    this.start();
+  }
+
+  private start(): void {
+    const anims = this.anims;
+    this.groups = [...new Set(anims.values())];
+    this.breaks = (["break1", "break2", "break3"] as const).map((r) => anims.get(r)).filter((g): g is AnimationGroup => !!g);
+    // Cada personagem começa numa fase e num tempo próprios (ninguém respira ou olha em volta junto com o vizinho).
+    this.breakTimer = BREAK_MIN_S + Math.random() * (BREAK_MAX_S - BREAK_MIN_S);
     const idle = anims.get("idle");
     const run = anims.get("run");
+    const walk = anims.get("walk");
+    if (walk) {
+      walk.weight = 0;
+      walk.start(true);
+    }
     if (idle) {
       idle.weight = 1;
       idle.start(true);
+      idle.goToFrame(idle.from + Math.random() * (idle.to - idle.from));
     }
     if (run) {
       run.weight = 0;
@@ -69,7 +173,8 @@ export class AnimController {
     }
     const target = [...anims.values()][0]?.targetedAnimations[0]?.target as Node | undefined;
     const scene = target?.getScene?.();
-    if (scene && target) {
+    if (scene && target && !this.resetHooked) {
+      this.resetHooked = true;
       this.deferReset = true;
       const obs = scene.onBeforeAnimationsObservable.add(() => {
         if (target.isDisposed()) {
@@ -123,6 +228,23 @@ export class AnimController {
     const speed = opts.speed ?? 1;
     const start = this.startAt(role, opts.lead);
     const impact = this.impacts[role];
+    const lands = impact !== undefined && opts.lead !== undefined ? (impact - start) / speed : 0;
+    if (!this.active) {
+      // Fora de cena: golpe, apanhar e acenar não aparecem; a morte e o emote em loop ficam
+      // para quando voltar. O instante do impacto é o mesmo (o combate agenda por ele).
+      // Um emote que estava pausado sai: a ação nova toma o lugar dele, como em cena.
+      if (this.action && !this.holding) {
+        this.action.stop();
+        this.action = null;
+        this.actionWeight = 0;
+        this.actionDone = true;
+        this.resetOnWake = true;
+      }
+      this.deferred = opts.hold || opts.loop ? { role, opts } : null;
+      this.holding = !!opts.hold;
+      this.looping = !!opts.loop;
+      return lands;
+    }
     // A ação anterior sai aos poucos (sem estalo de pose). Se é o mesmo clipe, reinicia
     // com o peso que já tinha.
     let weight = 0;
@@ -140,13 +262,16 @@ export class AnimController {
     this.actionDone = false;
     this.frozen = false;
     this.holding = !!opts.hold;
+    this.looping = !!opts.loop;
     this.actionSpeed = speed;
     g.speedRatio = speed;
     // Toca em loop para o grupo não ser removido ao terminar; na primeira volta, para no
     // último quadro. A morte fica assim; as outras ações devolvem o corpo à locomoção.
     g.start(true, speed, g.from + start * fps(g), g.to);
+    // Dentro de uma pausa de impacto, a ação nova espera a pausa acabar (o "apanhar" do alvo).
+    if (this.stopLeft > 0) g.speedRatio = 0;
     g.onAnimationGroupLoopObservable.addOnce(() => {
-      if (this.action !== g) return;
+      if (this.action !== g || this.looping) return;
       if (this.holding) {
         g.goToFrame(g.to);
         g.pause();
@@ -157,12 +282,55 @@ export class AnimController {
         this.actionDone = true;
       }
     });
-    return impact !== undefined && opts.lead !== undefined ? (impact - start) / speed : 0;
+    return lands;
+  }
+
+  /** Um emote em loop (dançar, sentar) está tocando. */
+  get emoting(): boolean {
+    return this.looping && (this.action !== null || this.deferred !== null);
+  }
+
+  /** Acaba o emote em loop: o corpo volta à locomoção aos poucos. */
+  endEmote(): void {
+    if (!this.looping) return;
+    this.looping = false;
+    this.deferred = null;
+    if (this.action) this.fadeOut(this.action, this.actionWeight);
+    this.action = null;
+    this.actionWeight = 0;
+  }
+
+  /**
+   * Pausa de impacto (hit stop): congela as animações deste personagem por `seconds` (40–80
+   * ms). Só a pose para: o personagem continua andando, o jogo e a rede seguem normais.
+   */
+  hitStop(seconds: number): void {
+    if (this.holding || seconds <= 0) return;
+    this.stopLeft = Math.max(this.stopLeft, seconds);
+    for (const g of this.anims.values()) g.speedRatio = 0;
+  }
+
+  /** Fim da pausa: cada clipe volta à velocidade que tinha. */
+  private resume(): void {
+    this.stopLeft = 0;
+    const idle = this.anims.get("idle");
+    const run = this.anims.get("run");
+    if (idle) idle.speedRatio = 1;
+    for (const g of this.breaks) g.speedRatio = 1;
+    if (run) run.speedRatio = this.runRatio;
+    const walk = this.anims.get("walk");
+    if (walk) walk.speedRatio = this.walkRatio;
+    // Ação parada no fim (ou saindo de cena) fica parada; a que ainda toca volta a andar.
+    // (A morte que começou durante a pausa também volta; a já congelada no fim, não.)
+    if (this.action && !this.actionDone && !this.frozen) this.action.speedRatio = this.actionSpeed;
   }
 
   /** Volta ao normal (ao reviver). */
   reset(): void {
+    if (this.stopLeft > 0) this.resume();
+    this.deferred = null;
     this.holding = false;
+    this.looping = false;
     this.frozen = false;
     this.actionDone = true;
     this.action?.stop();
@@ -188,20 +356,113 @@ export class AnimController {
   }
 
   /**
-   * active = false (fora da tela ou longe): todos os pesos vão a 0 e o Babylon deixa de
-   * calcular as animações; o esqueleto fica congelado na última pose até voltar.
+   * Saiu de cena: a ação de um instante acaba ali (sem voltar à pose, que ainda pode estar
+   * na tela de longe) e os grupos que tocam são pausados. Morte e emote em loop só pausam.
    */
-  update(dt: number, moving: boolean, runSpeedRatio: number, active = true): void {
+  private sleep(): void {
+    const a = this.action;
+    if (a && !this.holding && !this.looping) {
+      a.stop();
+      this.action = null;
+      this.actionWeight = 0;
+      this.actionDone = true;
+      this.resetOnWake = true;
+    }
+    for (const f of this.fading) f.g.stop();
+    if (this.fading.length) this.resetOnWake = true;
+    this.fading.length = 0;
+    for (const g of this.groups) {
+      if (!g.isPlaying) continue;
+      g.pause();
+      this.paused.push(g);
+    }
+  }
+
+  /** Voltou para a cena: retoma os grupos e toca o que ficou pendente. */
+  /**
+   * Quem acordou depois de `seconds` parado (fora da tela, ou longe e animado a 15 Hz) retoma o passo na fase certa:
+   * os clipes de locomoção avançam o tempo que ficaram pausados, senão o pé tocaria devagar e deslizaria.
+   */
+  private catchUp(seconds: number): void {
+    if (seconds <= 0) return;
+    for (const g of [this.anims.get("idle"), this.anims.get("run"), this.anims.get("walk"), this.breakGroup]) {
+      const a = g?.animatables[0];
+      if (!g || !a || !g.isPlaying) continue;
+      const span = g.to - g.from;
+      if (span <= 0) continue;
+      const moved = (a.masterFrame - g.from + seconds * fps(g) * g.speedRatio) % span;
+      g.goToFrame(g.from + (moved < 0 ? moved + span : moved));
+    }
+  }
+
+  private wake(): void {
+    if (this.resetOnWake) {
+      this.resetOnWake = false;
+      this.queueReset();
+    }
+    for (const g of this.paused) g.restart(); // grupo parado nesse meio-tempo não volta
+    this.paused.length = 0;
+    this.catchUp(this.asleepFor);
+    this.asleepFor = 0;
+    const d = this.deferred;
+    if (!d) return;
+    this.deferred = null;
+    this.holding = false;
+    this.looping = false;
+    this.play(d.role, d.opts);
+    const g = this.action;
+    if (d.opts.hold && g) {
+      // Morreu fora de cena: aparece já caído (último quadro), sem a queda.
+      this.actionWeight = 1;
+      g.weight = 1;
+      g.goToFrame(g.to);
+      g.pause();
+      this.frozen = true;
+    }
+  }
+
+  /**
+   * active = false (fora da tela ou longe): os grupos pausam e o esqueleto fica congelado
+   * na última pose até voltar (ver sleep/wake).
+   */
+  update(dt: number, moving: boolean, runSpeedRatio: number, active = true, speed = Infinity): void {
+    const fs = this.anims instanceof RoleMap && !this.legacy ? this.anims.footSpeeds : undefined;
+    let walkTarget = speed < WALK_BELOW ? 1 : 0;
+    if (fs) {
+      // Pé no chão: o clipe toca na velocidade em que o personagem anda de verdade (speed = velocidade desenhada).
+      const runNat = fs.run * this.bodyScale;
+      const walkNat = (fs.walk ?? 0) * this.bodyScale;
+      const r = stepRatios(speed, runNat, walkNat);
+      this.runRatio = r.run;
+      this.walkRatio = r.walkRatio;
+      walkTarget = r.walk ? 1 : 0;
+    } else {
+      this.runRatio = runSpeedRatio;
+      this.walkRatio = Math.min(1.5, Math.max(0.5, speed / WALK_ANIM_SPEED));
+    }
+    if (active !== this.active) {
+      this.active = active;
+      if (active) this.wake();
+      else this.sleep();
+    }
+    if (this.stopLeft > 0) {
+      // Pausa de impacto: pose e pesos ficam como estão até ela acabar.
+      this.stopLeft -= dt;
+      if (this.stopLeft > 0) return;
+      this.resume();
+    }
     if (!active) {
-      for (const g of this.anims.values()) g.weight = 0;
+      this.asleepFor += dt;
       return;
     }
-    const k = 1 - Math.exp(-BLEND_RATE * dt);
+    const k = 1 - Math.exp(-(this.legacy ? 10 : BLEND_RATE) * dt);
     this.runWeight += ((moving && !this.holding ? 1 : 0) - this.runWeight) * k;
+    // Devagar (monstros, lentidão): clipe de andar, senão o personagem "corre" em câmera lenta.
+    this.walkMix += (walkTarget - this.walkMix) * k;
     // A ação chega ao fim no próximo quadro: para ali (velocidade 0, ainda na mistura). Em
     // loop o Babylon voltaria ao primeiro quadro, e o corpo pularia para o começo do golpe.
     const a = this.action;
-    if (a && !this.actionDone && !this.holding) {
+    if (a && !this.actionDone && !this.holding && !this.looping) {
       const frame = a.animatables[0]?.masterFrame ?? a.from;
       if (frame + this.actionSpeed * fps(a) * dt * 1.5 >= a.to) {
         a.speedRatio = 0;
@@ -244,15 +505,54 @@ export class AnimController {
     const run = this.anims.get("run");
     // Peso exatamente 0 faz o Babylon pular a animação (não calcula os ossos). As misturas
     // convergem exponencialmente e nunca chegam a 0 sozinhas, então zeramos as sobras.
-    if (idle) idle.weight = snap(loco * (1 - this.runWeight));
+    // Pausas do parado: só com o corpo parado, sem ação; entram e saem suaves, e o clipe acaba antes do fim.
+    const standing = loco > 0.9 && this.runWeight < 0.05;
+    let breakTarget = 0;
+    if (this.breakGroup) {
+      const frame = this.breakGroup.animatables[0]?.masterFrame ?? this.breakGroup.from;
+      const left = (this.breakGroup.to - frame) / fps(this.breakGroup);
+      breakTarget = standing && left > 0.5 && this.breakGroup.isPlaying ? 1 : 0;
+      this.breakW += (breakTarget - this.breakW) * (1 - Math.exp(-6 * dt));
+      if (breakTarget === 0 && this.breakW < 0.02) {
+        this.breakGroup.stop();
+        this.breakGroup = null;
+        this.breakW = 0;
+        this.breakTimer = BREAK_MIN_S + Math.random() * (BREAK_MAX_S - BREAK_MIN_S);
+      }
+    } else if (this.breaks.length && standing) {
+      this.breakTimer -= dt;
+      if (this.breakTimer <= 0) {
+        this.breakGroup = this.breaks[Math.floor(Math.random() * this.breaks.length)];
+        this.breakGroup.weight = 0.001;
+        this.breakGroup.start(false);
+        this.breakW = 0;
+      }
+    }
+    const bw = this.breakGroup ? this.breakW : 0;
+    if (this.breakGroup) this.breakGroup.weight = Math.max(loco * (1 - this.runWeight) * bw, 0.001);
+    if (idle) idle.weight = snap(loco * (1 - this.runWeight) * (1 - bw));
+    const walk = this.anims.get("walk");
+    const walkW = walk ? this.walkMix : 0;
     if (run) {
-      run.weight = snap(loco * this.runWeight);
-      run.speedRatio = runSpeedRatio;
+      run.weight = snap(loco * this.runWeight * (1 - walkW));
+      run.speedRatio = this.runRatio;
+    }
+    if (walk) {
+      walk.weight = snap(loco * this.runWeight * walkW);
+      walk.speedRatio = this.walkRatio;
     }
     if (this.action) this.action.weight = Math.max(this.actionWeight, 0.001);
     for (const f of this.fading) f.g.weight = f.w;
   }
 }
+
+/** Velocidade (m/s) abaixo da qual o personagem anda em vez de correr, e a que o clipe de andar casa com o chão. */
+const WALK_BELOW = 3.4;
+const WALK_ANIM_SPEED = 1.9;
+
+/** Intervalo (s) entre as pausas do parado. */
+const BREAK_MIN_S = 8;
+const BREAK_MAX_S = 20;
 
 function snap(w: number): number {
   return w < 0.01 ? 0 : w > 0.99 ? 1 : w;

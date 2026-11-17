@@ -18,34 +18,41 @@
   --panel-soft: rgba(9, 10, 16, 0.74);
   --glass: rgba(9, 10, 16, 0.6);
 
-  /* Ouro: molduras, títulos, destaques */
+  /* Ouro: o único acento (molduras, títulos, destaques) */
   --gold: #d6b46e;
-  --gold-hi: #f3d995;
-  --gold-lo: #8a6a32;
-  --line: rgba(214, 180, 110, 0.26);
-  --line-strong: rgba(214, 180, 110, 0.6);
+  --gold-hi: #f0d79a;
+  --gold-glow: #f6e4b4;
+  --gold-lo: #a9843f;
+  --gold-deep: #b8944c;
+  --gold-shadow: #6b5428;
+  --gold-grad: linear-gradient(180deg, #f0d79a 0%, #d6b46e 52%, #b8944c 100%);
+  --line: rgba(214, 180, 110, 0.22);
+  --line-strong: rgba(214, 180, 110, 0.45);
 
   /* Texto */
-  --text: #ece6da;
-  --muted: #a39cb0;
-  --dim: #6f6880;
+  --text: #efe6d4;
+  --muted: #c9bda6;
+  --dim: #9d917c;
+  --on-gold: #1b1712;
 
   /* Recursos */
-  --hp-a: #e2483a;
-  --hp-b: #8e1d17;
-  --mp-a: #4c9cff;
-  --mp-b: #1c3f8e;
-  --xp-a: #f0d080;
-  --xp-b: #9c7630;
+  --hp-a: #e0574f;
+  --hp-b: #a8302a;
+  --mp-a: #5c95ec;
+  --mp-b: #2c5fb4;
+  --xp-a: #b8944c;
+  --xp-b: #f0d79a;
+  --danger-line: rgba(201, 65, 58, 0.6);
+  --danger-text: #ff9f94;
 
   /* Estados */
   --ok: #6fd38a;
-  --bad: #ff6b5b;
+  --bad: #ff7a6b;
   --warn: #f0c66b;
   --whisper: #e59ae8;
   --party: #7fd0ff;
 
-  /* Raridade dos itens */
+  /* Raridade dos itens (client/src/ui/items.ts) */
   --r-common: #b9b4c2;
   --r-uncommon: #5fd17a;
   --r-rare: #4f9dff;
@@ -56,9 +63,19 @@
   --font-ui: Barlow, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-cond: "Barlow Semi Condensed", Barlow, system-ui, sans-serif;
 
-  --radius: 6px;
-  --radius-lg: 10px;
+  /* Espaçamento, raios e cantos chanfrados */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --radius: 4px;
+  --radius-lg: 8px;
+  --chamfer: 10px;
+  --chamfer-lg: 14px;
   --shadow: 0 14px 44px rgba(0, 0, 0, 0.65);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.45);
+  --glow-gold: 0 0 18px rgba(214, 180, 110, 0.28);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
   /* Escala da interface (Configurações → Gráficos) e tamanho mínimo de toque */
@@ -79,7 +96,30 @@
   --touch: 46px;
 }
 
-/* Corner ornaments: 8 traços dourados formando "L" nos quatro cantos. */
+/*
+ * Cantos chanfrados: o clip-path corta os quatro cantos e a diagonal de cada corte é desenhada
+ * com um degradê fino (a borda de 1px não segue o corte). Usar em .frame e em quem precisar.
+ */
+:root {
+  --chamfer-clip: polygon(
+    var(--chamfer) 0,
+    calc(100% - var(--chamfer)) 0,
+    100% var(--chamfer),
+    100% calc(100% - var(--chamfer)),
+    calc(100% - var(--chamfer)) 100%,
+    var(--chamfer) 100%,
+    0 calc(100% - var(--chamfer)),
+    0 var(--chamfer)
+  );
+  --chamfer-line: var(--line-strong);
+  --chamfer-corners:
+    linear-gradient(135deg, transparent calc(50% - 0.8px), var(--chamfer-line) 50%, transparent calc(50% + 0.8px)) top left / var(--chamfer) var(--chamfer) no-repeat,
+    linear-gradient(45deg, transparent calc(50% - 0.8px), var(--chamfer-line) 50%, transparent calc(50% + 0.8px)) top right / var(--chamfer) var(--chamfer) no-repeat,
+    linear-gradient(135deg, transparent calc(50% - 0.8px), var(--chamfer-line) 50%, transparent calc(50% + 0.8px)) bottom right / var(--chamfer) var(--chamfer) no-repeat,
+    linear-gradient(45deg, transparent calc(50% - 0.8px), var(--chamfer-line) 50%, transparent calc(50% + 0.8px)) bottom left / var(--chamfer) var(--chamfer) no-repeat;
+}
+
+/* Ornamento de cantos em "L" (painel de administração). */
 :root {
   --corners:
     linear-gradient(var(--gold), var(--gold)) top left / 14px 2px no-repeat,

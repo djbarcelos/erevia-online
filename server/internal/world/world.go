@@ -4,11 +4,11 @@
 package world
 
 import (
-	"container/heap"
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"math"
+	"sync"
 )
 
 //go:embed world.json
@@ -19,7 +19,7 @@ const AgentRadius = 0.4
 
 const (
 	cellSize     = 1.0    // metros por célula da grade de caminhos
-	maxExpanded  = 120000 // o mapa vai até o Vale das Pedras Vivas: caminhos longos
+	maxExpanded  = 260000 // o mapa vai do Vale das Pedras Vivas ao Brejo (480 × 480 m): caminhos longos
 	sampleStep   = 0.5    // passo da checagem de linha reta (m)
 	bucketSize   = 4.0    // balde espacial para a checagem exata de colisão
 	cellClearPad = 0.3    // folga extra ao marcar células bloqueadas (caminhos não raspam)
@@ -61,17 +61,24 @@ type World struct {
 	Size       float64
 	Bounds     Bounds
 	SafeRadius float64
-	colliders  []Collider
-	buckets    map[[2]int][]int
-	nx, nz     int    // células em X e em Z
-	blocked    []bool // grade nx×nz para o A*
+	// Dungeon: os dados da masmorra (nil nos mapas abertos). Ver dungeon.go.
+	Dungeon   *Dungeon
+	colliders []Collider
+	buckets   map[[2]int][]int
+	nx, nz    int       // células em X e em Z
+	blocked   []bool    // grade nx×nz para o A*
+	pool      sync.Pool // *astarScratch: memória do A* reaproveitada (seguro entre goroutines)
 }
 
+// fileFormat é o que o servidor lê do world.json. Os biomas (`biomes[]`, ou o `biome`
+// único do formato antigo) só servem ao cliente, que pinta o chão com eles: a colisão
+// e os limites vêm dos campos de cima, iguais nos dois formatos.
 type fileFormat struct {
 	Size       float64    `json:"size"`
 	Bounds     *Bounds    `json:"bounds"`
 	SafeRadius float64    `json:"safeRadius"`
 	Colliders  []Collider `json:"colliders"`
+	Dungeon    *Dungeon   `json:"dungeon"`
 }
 
 func (c *Collider) UnmarshalJSON(b []byte) error {
@@ -83,25 +90,50 @@ func (c *Collider) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Os outros mapas (maps/<id>.json, gerados por client/scripts/build-maps.mjs).
+//
+//go:embed maps/*.json
+var embeddedMaps embed.FS
+
+// StarterMap é o id do mapa principal (world.json): o Vale de Vel'Aran.
+const StarterMap = "starter"
+
 // Load lê o mapa embutido no binário.
-func Load() (*World, error) {
+func Load() (*World, error) { return parse(embedded) }
+
+// LoadMap lê um mapa pelo id ("starter" ou "" = o principal; senão maps/<id>.json).
+func LoadMap(id string) (*World, error) {
+	if id == "" || id == StarterMap {
+		return Load()
+	}
+	data, err := embeddedMaps.ReadFile("maps/" + id + ".json")
+	if err != nil {
+		return nil, fmt.Errorf("mapa %q: %w", id, err)
+	}
+	return parseNamed(id+".json", data)
+}
+
+func parse(data []byte) (*World, error) { return parseNamed("world.json", data) }
+
+func parseNamed(name string, data []byte) (*World, error) {
 	var f fileFormat
-	if err := json.Unmarshal(embedded, &f); err != nil {
-		return nil, fmt.Errorf("world.json: %w", err)
+	if err := json.Unmarshal(data, &f); err != nil {
+		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 	if f.Size <= 0 {
-		return nil, fmt.Errorf("world.json: size inválido")
+		return nil, fmt.Errorf("%s: size inválido", name)
 	}
 	b := Square(f.Size)
 	if f.Bounds != nil {
 		b = *f.Bounds
 		if b.MaxX <= b.MinX || b.MaxZ <= b.MinZ {
-			return nil, fmt.Errorf("world.json: bounds inválido")
+			return nil, fmt.Errorf("%s: bounds inválido", name)
 		}
 	}
 	w := NewBounds(b, f.Colliders)
 	w.Size = f.Size
 	w.SafeRadius = f.SafeRadius
+	w.Dungeon = f.Dungeon
 	return w, nil
 }
 
@@ -270,18 +302,81 @@ func (w *World) inGrid(x, z int) bool { return x >= 0 && z >= 0 && x < w.nx && z
 
 // ---------- A* (8 direções, sem cortar quinas) ----------
 
-type node struct {
-	cell int
+// openNode é uma célula na fila do A* (por valor: nada de ponteiro por nó).
+type openNode struct {
+	cell int32
 	f    float64
-	idx  int
 }
-type openSet []*node
 
-func (o openSet) Len() int           { return len(o) }
-func (o openSet) Less(i, j int) bool { return o[i].f < o[j].f }
-func (o openSet) Swap(i, j int)      { o[i], o[j] = o[j], o[i]; o[i].idx = i; o[j].idx = j }
-func (o *openSet) Push(x any)        { n := x.(*node); n.idx = len(*o); *o = append(*o, n) }
-func (o *openSet) Pop() any          { old := *o; n := old[len(old)-1]; *o = old[:len(old)-1]; return n }
+// astarScratch é a memória de uma busca, reaproveitada entre buscas: uma grade inteira
+// de g e de pai, e um carimbo por busca que diz se a célula já foi vista (ou fechada)
+// nesta busca, sem precisar limpar nada. Antes eram mapas criados a cada busca, e um
+// caminho longo (dezenas de milhares de células) gastava mais com alocação e GC do que
+// com o A* em si.
+type astarScratch struct {
+	stamp  uint32
+	seen   []uint32 // seen[c] == stamp: g[c] e parent[c] valem nesta busca
+	closed []uint32 // closed[c] == stamp: já expandida
+	g      []float64
+	parent []int32
+	open   []openNode
+}
+
+func (w *World) scratch() *astarScratch {
+	if s, ok := w.pool.Get().(*astarScratch); ok {
+		return s
+	}
+	n := w.nx * w.nz
+	return &astarScratch{seen: make([]uint32, n), closed: make([]uint32, n), g: make([]float64, n), parent: make([]int32, n)}
+}
+
+func (s *astarScratch) begin() {
+	s.stamp++
+	if s.stamp == 0 { // deu a volta: limpa os carimbos uma vez
+		clear(s.seen)
+		clear(s.closed)
+		s.stamp = 1
+	}
+	s.open = s.open[:0]
+}
+
+// push e pop: heap binário de mínimo por f.
+func (s *astarScratch) push(n openNode) {
+	s.open = append(s.open, n)
+	i := len(s.open) - 1
+	for i > 0 {
+		p := (i - 1) / 2
+		if s.open[p].f <= s.open[i].f {
+			break
+		}
+		s.open[p], s.open[i] = s.open[i], s.open[p]
+		i = p
+	}
+}
+
+func (s *astarScratch) pop() openNode {
+	o := s.open
+	top := o[0]
+	last := len(o) - 1
+	o[0] = o[last]
+	o = o[:last]
+	for i := 0; ; {
+		l, r, m := 2*i+1, 2*i+2, i
+		if l < len(o) && o[l].f < o[m].f {
+			m = l
+		}
+		if r < len(o) && o[r].f < o[m].f {
+			m = r
+		}
+		if m == i {
+			break
+		}
+		o[i], o[m] = o[m], o[i]
+		i = m
+	}
+	s.open = o
+	return top
+}
 
 var dirs = [8][3]float64{
 	{1, 0, 1}, {-1, 0, 1}, {0, 1, 1}, {0, -1, 1},
@@ -294,27 +389,29 @@ func (w *World) astar(start, goal int) []int {
 		dx, dz := float64(abs(c%w.nx-gx)), float64(abs(c/w.nx-gz))
 		return math.Max(dx, dz) + (math.Sqrt2-1)*math.Min(dx, dz)
 	}
-	g := map[int]float64{start: 0}
-	parent := map[int]int{}
-	closed := map[int]bool{}
-	open := &openSet{}
-	heap.Push(open, &node{cell: start, f: h(start)})
+	s := w.scratch()
+	defer w.pool.Put(s)
+	s.begin()
+	st := s.stamp
+	s.seen[start], s.g[start], s.parent[start] = st, 0, -1
+	s.push(openNode{cell: int32(start), f: h(start)})
 	best, bestH := start, h(start)
 
-	for expanded := 0; open.Len() > 0 && expanded < maxExpanded; expanded++ {
-		cur := heap.Pop(open).(*node).cell
+	for expanded := 0; len(s.open) > 0 && expanded < maxExpanded; expanded++ {
+		cur := int(s.pop().cell)
 		if cur == goal {
 			best = goal
 			break
 		}
-		if closed[cur] {
+		if s.closed[cur] == st {
 			continue
 		}
-		closed[cur] = true
+		s.closed[cur] = st
 		if hc := h(cur); hc < bestH {
 			best, bestH = cur, hc
 		}
 		cx, cz := cur%w.nx, cur/w.nx
+		gc := s.g[cur]
 		for _, d := range dirs {
 			nx, nz := cx+int(d[0]), cz+int(d[1])
 			if !w.inGrid(nx, nz) || w.blocked[nz*w.nx+nx] {
@@ -324,13 +421,12 @@ func (w *World) astar(start, goal int) []int {
 				continue // não corta quinas
 			}
 			next := nz*w.nx + nx
-			ng := g[cur] + d[2]
-			if old, ok := g[next]; ok && ng >= old {
+			ng := gc + d[2]
+			if s.seen[next] == st && ng >= s.g[next] {
 				continue
 			}
-			g[next] = ng
-			parent[next] = cur
-			heap.Push(open, &node{cell: next, f: ng + h(next)})
+			s.seen[next], s.g[next], s.parent[next] = st, ng, int32(cur)
+			s.push(openNode{cell: int32(next), f: ng + h(next)})
 		}
 	}
 
@@ -338,11 +434,11 @@ func (w *World) astar(start, goal int) []int {
 	var path []int
 	for c := best; c != start; {
 		path = append(path, c)
-		p, ok := parent[c]
-		if !ok {
+		p := s.parent[c]
+		if p < 0 {
 			break
 		}
-		c = p
+		c = int(p)
 	}
 	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
 		path[i], path[j] = path[j], path[i]

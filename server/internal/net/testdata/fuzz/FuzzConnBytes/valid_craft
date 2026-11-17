@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\xda\x01\x18\b\x81\x80\x80\x80\x02\x12\x10craft_ench_armor")

@@ -5,7 +5,8 @@ const MAX_LINES = 100;
 /**
  * Painel de chat. Enter abre/envia, Esc fecha.
  * Comandos: /w Nome texto (sussurro), /r texto (responde ao último sussurro),
- * /g texto (grupo), /convidar Nome (grupo).
+ * /g texto (grupo), /convidar Nome (grupo). Os outros (/amigo, /correio, os emotes
+ * /acenar, /sentar, /dancar, /bug e os de GM) vão para o servidor, que responde no chat.
  * Todo texto entra com textContent: nada vindo da rede vira HTML.
  */
 export class Chat {
@@ -14,6 +15,10 @@ export class Chat {
   private lastWhisperFrom = "";
   /** /convidar Nome (grupo). */
   onPartyInvite: (name: string) => void = () => {};
+  /** /bug texto: o relato completo (ui/bug-report.ts). Sem ele, vai ao servidor pelo chat. */
+  onBug: ((text: string) => void) | null = null;
+  /** Troca de mapa: o chat velho para de ouvir o Enter (e não segura o HUD velho). */
+  dispose: () => void;
 
   constructor(
     root: HTMLElement,
@@ -34,12 +39,14 @@ export class Chat {
         this.input.blur();
       }
     });
-    window.addEventListener("keydown", (ev) => {
+    const onEnter = (ev: KeyboardEvent) => {
       if (ev.key === "Enter" && document.activeElement !== this.input && !root.hidden) {
         ev.preventDefault();
         this.input.focus();
       }
-    });
+    };
+    window.addEventListener("keydown", onEnter);
+    this.dispose = () => window.removeEventListener("keydown", onEnter);
     // Clicar no nome de alguém prepara um sussurro.
     this.log.addEventListener("click", (ev) => {
       const name = (ev.target as HTMLElement).dataset.name;
@@ -132,13 +139,17 @@ export class Chat {
         // Comandos de teste do raid boss (o servidor só aceita em desenvolvimento).
         case "/raid":
           return this.onSend(raw, "");
+        case "/bug":
+          if (this.onBug) return this.onBug(rest.join(" "));
+          return this.onSend(raw, "");
         case "/convidar":
         case "/invite": {
           if (!rest[0]) return this.system("Uso: /convidar Nome");
           return this.onPartyInvite(rest[0]);
         }
         default:
-          return this.system(`Comando desconhecido: ${cmd}`);
+          // Os comandos de GM: quem decide é o servidor (responde no canal de sistema).
+          return this.onSend(raw, "");
       }
     }
     this.onSend(raw, "");

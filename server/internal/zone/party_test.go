@@ -2,7 +2,6 @@ package zone
 
 import (
 	"fmt"
-	"math"
 	"testing"
 
 	"erevia/server/internal/game"
@@ -12,7 +11,9 @@ import (
 // named entra com um nome próprio (os auxiliares antigos repetem o nome por classe).
 func named(z *Zone, id uint32, name, class string, x, zz float64) (*entity, *fakePeer) {
 	peer := &fakePeer{}
-	z.handle(joinEvent{info: JoinInfo{ID: id, Name: name, Class: class, X: x, Z: zz, Items: game.StarterKit(class), Peer: peer}})
+	z.handle(joinEvent{info: JoinInfo{ID: id, Name: name, Class: class, X: x, Z: zz, Items: game.StarterKit(class), Peer: peer,
+		// Como quem já tinha personagem antes das descobertas: as 5 pedras do mapa principal.
+		Discovered: game.DiscoveryState{Stones: game.LegacyStoneKeys}}})
 	return z.players[id], peer
 }
 
@@ -148,63 +149,8 @@ func TestPartyLimitAndLogout(t *testing.T) {
 	}
 }
 
-func TestPartySharesMonsterXP(t *testing.T) {
-	z := newCombatZone(fixed("skeleton_warrior", 8, 40, 0))
-	m := z.onlyMonster()
-	a, _ := named(z, 1, "Ana", "knight", 38, 0)
-	b, _ := named(z, 2, "Beto", "mage", 39, 1)
-	far, _ := named(z, 3, "Longe", "rogue", 90, 0)
-	atLevel(z, a, 8)
-	atLevel(z, b, 6)
-	atLevel(z, far, 8)
-	makeParty(z, a, b, far)
-	xa, xb, xf := a.pl.xp, b.pl.xp, far.pl.xp
-
-	m.mon.hate[a.id] = 50
-	z.damage(a, m, m.hp+10, nil)
-
-	total := float64(game.MonsterXP(m.mon.def, 8, 8)) * partyBonus[1]
-	wantA := int64(math.Round(total * 8 / 14))
-	wantB := int64(math.Round(total * 6 / 14))
-	if a.pl.xp-xa != wantA || b.pl.xp-xb != wantB {
-		t.Fatalf("xp a=%d (want %d) b=%d (want %d)", a.pl.xp-xa, wantA, b.pl.xp-xb, wantB)
-	}
-	if far.pl.xp != xf {
-		t.Fatal("members farther than 30 m get no XP")
-	}
-}
-
-func TestPartyLevelGapAndTopDamageGroup(t *testing.T) {
-	z := newCombatZone(fixed("skeleton_warrior", 8, 40, 0), fixed("skeleton_warrior", 8, 40, 6))
-	ms := []*entity{}
-	for _, m := range z.monsters {
-		ms = append(ms, m)
-	}
-	hi, _ := named(z, 1, "Alto", "knight", 38, 2)
-	lo, _ := named(z, 2, "Baixo", "mage", 39, 2)
-	atLevel(z, hi, 16)
-	atLevel(z, lo, 6) // 10 abaixo: fica sem XP
-	makeParty(z, hi, lo)
-	xl := lo.pl.xp
-	ms[0].mon.hate[hi.id] = 10
-	z.damage(hi, ms[0], ms[0].hp+10, nil)
-	if lo.pl.xp != xl {
-		t.Fatal("members more than 9 levels below the highest get no XP")
-	}
-
-	// Quem causou mais dano leva a XP, mesmo sem dar o último golpe.
-	solo, _ := named(z, 3, "Solo", "rogue", 39, 6)
-	thief, _ := named(z, 4, "Ladrao", "rogue", 39, 7)
-	atLevel(z, solo, 8)
-	atLevel(z, thief, 8)
-	xs, xt := solo.pl.xp, thief.pl.xp
-	ms[1].mon.hate[solo.id] = 500
-	ms[1].mon.hate[thief.id] = 5
-	z.damage(thief, ms[1], ms[1].hp+10, nil)
-	if solo.pl.xp == xs || thief.pl.xp != xt {
-		t.Fatal("XP goes to whoever dealt the most damage, not the last hit")
-	}
-}
+// A XP do grupo (bônus, distância, ajuda, diferença de nível e crédito pelo dano) está em
+// party_xp_test.go.
 
 func TestPartyLootReservationAndGoldSplit(t *testing.T) {
 	z := newCombatZone()

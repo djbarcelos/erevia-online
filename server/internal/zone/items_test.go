@@ -94,10 +94,13 @@ func TestEquipRules(t *testing.T) {
 	if !peer.systemContains("classe") || inv.equip[game.SlotWeapon].def.ID != "staff_common" {
 		t.Fatal("mage must not equip a sword")
 	}
+	// Graus (tunnel#153): no 1 o cajado do 6 entra (é do mesmo grau), com a penalidade de nível.
+	acc := p.stats.Accuracy
 	z.useItem(p, placeBag, 6)
-	if !peer.systemContains("nível") {
-		t.Fatal("level 1 must not equip a level 6 item")
+	if inv.equip[game.SlotWeapon].def.ID != "staff_good" || !peer.systemContains("pede o nível 6") || p.stats.Accuracy != acc-100 {
+		t.Fatal("level 1 equips a level 6 item with the level penalty")
 	}
+	z.useItem(p, placeBag, 6) // volta o cajado inicial
 
 	p.level = 6
 	matk := p.stats.MAtk
@@ -154,8 +157,9 @@ func TestLootReservedForTopDamageThenFree(t *testing.T) {
 	b, peerB := joinKit(z, 2, "rogue", 42, 0, 0)
 	m.mon.hate[b.id] = 500
 	m.mon.hate[a.id] = 10
-	z.kill(m, a)          // A deu o último golpe, mas B causou mais dano
-	m.mon.respawnAt = 1e9 // o chefe não volta durante o teste
+	z.raidCredit(m, b, 500) // o chefe de campo divide por dano (raid.go)
+	z.raidCredit(m, a, 10)
+	z.kill(m, a) // A deu o último golpe, mas B causou mais dano
 
 	if len(z.ground) == 0 {
 		t.Fatal("boss must drop loot")
@@ -291,7 +295,7 @@ func TestLootAndXPArriveAfterDeathSnapshot(t *testing.T) {
 	z := newCombatZone(fixed("bone_lord", 22, 40, 0)) // o chefe sempre deixa itens
 	m := z.onlyMonster()
 	a, peer := joinKit(z, 1, "knight", 38, 0, 0)
-	m.mon.respawnAt = 1e9
+	z.raidCredit(m, a, 100)
 	z.kill(m, a)
 	z.update(0.05)
 

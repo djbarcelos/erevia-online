@@ -56,6 +56,8 @@ func (z *Zone) onItem(e itemEvent) {
 		z.enchant(p, int(m.ScrollSlot), int(m.Place), int(m.Slot))
 	case *pb.ChangeLook:
 		z.changeLook(p, m.NpcId, m.Look)
+	case *pb.Craft:
+		z.craft(p, m.NpcId, m.RecipeId)
 	}
 }
 
@@ -67,6 +69,7 @@ func (z *Zone) inventoryChanged(p *entity, gearChanged bool) {
 	}
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Inventory{Inventory: inventoryPB(&p.pl.inv)}})
 	z.saveSoon(p)
+	z.tradeInventoryChanged(p)
 }
 
 func (z *Zone) saveSoon(p *entity) {
@@ -91,10 +94,14 @@ func (z *Zone) moveItem(p *entity, fromPlace, fromSlot, toPlace, toSlot int) {
 		if fromSlot < 0 || fromSlot >= game.BagSize || inv.bag[fromSlot].empty() {
 			return
 		}
-		why = inv.equipTo(fromSlot, toSlot, p.pl.class, p.level)
+		def := inv.bag[fromSlot].def
+		why = inv.equipTo(fromSlot, toSlot, p.pl.class, p.pl.spec, p.level)
 		gear = why == ""
+		if gear {
+			defer z.warnAboveLevel(p, def)
+		}
 	case fromPlace == placeEquip && toPlace == placeBag:
-		why = inv.unequip(fromSlot, toSlot, p.pl.class, p.level)
+		why = inv.unequip(fromSlot, toSlot, p.pl.class, p.pl.spec, p.level)
 		gear = why == ""
 	case fromPlace == placeEquip && toPlace == placeEquip:
 		why = inv.moveInEquip(fromSlot, toSlot)
@@ -118,7 +125,7 @@ func (z *Zone) useItem(p *entity, place, slot int) {
 	}
 	inv := &p.pl.inv
 	if place == placeEquip {
-		if why := inv.unequip(slot, -1, p.pl.class, p.level); why != "" {
+		if why := inv.unequip(slot, -1, p.pl.class, p.pl.spec, p.level); why != "" {
 			if why != "?" {
 				z.system(p, why)
 			}
@@ -133,13 +140,14 @@ func (z *Zone) useItem(p *entity, place, slot int) {
 	def := inv.bag[slot].def
 	switch {
 	case def.Equippable():
-		if why := inv.equipFromBag(slot, p.pl.class, p.level); why != "" {
+		if why := inv.equipFromBag(slot, p.pl.class, p.pl.spec, p.level); why != "" {
 			if why != "?" {
 				z.system(p, why)
 			}
 			return
 		}
 		z.inventoryChanged(p, true)
+		z.warnAboveLevel(p, def)
 	case def.Kind == game.KindPotion:
 		z.drink(p, slot, def)
 	case def.Kind == game.KindScroll && def.Scroll == game.ScrollReturn:
@@ -149,11 +157,29 @@ func (z *Zone) useItem(p *entity, place, slot int) {
 	}
 }
 
+// warnAboveLevel avisa quem acabou de vestir uma peça acima do próprio nível: ela vale, mas
+// com a penalidade de nível (game.UnderLevelPenalty) até o nível exigido.
+func (z *Zone) warnAboveLevel(p *entity, def *game.ItemDef) {
+	if def.AboveLevel(p.level) {
+		z.system(p, fmt.Sprintf("%s pede o nível %d. Até lá, você fica com %s.", def.Name, def.ReqLevel, underLevelText()))
+	}
+}
+
+// underLevelText: a penalidade de nível em texto ("−100 de precisão e −40% de …").
+func underLevelText() string {
+	u := game.UnderLevelPenalty
+	return fmt.Sprintf("−%.0f de precisão e −%.0f%% de velocidade de ataque e de conjuração", -u.Accuracy, -u.AtkSpeed*100)
+}
+
 // drink usa uma poção: cura na hora e inicia a recarga do grupo (vida ou mana).
 func (z *Zone) drink(p *entity, slot int, def *game.ItemDef) {
 	key := uint32(itemCooldownBase + def.Cooldown)
 	if ready := p.pl.cooldowns[key]; z.now < ready {
 		z.sendItemCooldown(p, def.Cooldown, ready-z.now)
+		return
+	}
+	if def.Cleanse {
+		z.drinkAntidote(p, slot, def, key)
 		return
 	}
 	hpFull := p.hp >= p.stats.MaxHP
@@ -167,11 +193,38 @@ func (z *Zone) drink(p *entity, slot int, def *game.ItemDef) {
 		return
 	}
 	p.pl.inv.take(slot, 1)
-	p.hp = math.Min(p.stats.MaxHP, p.hp+def.HealHP)
-	p.mp = math.Min(p.stats.MaxMP, p.mp+def.HealMP)
+	z.trackItem(p, false, def.ID, 1, "use")
+	z.questEvent(p, game.GoalPotion, def.ID)
+	heal := 1 + p.pl.mastery.of(game.MStatPotion) // Alquimia de Campo (Maestria)
+	p.hp = math.Min(p.stats.MaxHP, p.hp+def.HealHP*heal)
+	p.mp = math.Min(p.stats.MaxMP, p.mp+def.HealMP*heal)
 	p.pl.cooldowns[key] = z.now + game.CooldownSeconds(def.Cooldown)
 	p.pl.statsDirty = true
 	z.sendItemCooldown(p, def.Cooldown, game.CooldownSeconds(def.Cooldown))
+	z.inventoryChanged(p, false)
+}
+
+// drinkAntidote: o Antídoto limpa veneno e peste (os efeitos de dano por segundo que não são
+// fogo). Sem nenhum dos dois, não gasta a poção.
+func (z *Zone) drinkAntidote(p *entity, slot int, def *game.ItemDef, key uint32) {
+	cleaned := false
+	for _, k := range []game.EffectKind{game.EffectPoison, game.EffectPlague} {
+		for p.removeEffect(k) {
+			cleaned = true
+			z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: p.id, Effect: pb.Effect(k)})
+		}
+	}
+	if !cleaned {
+		z.system(p, "Você não está envenenado.")
+		return
+	}
+	p.pl.inv.take(slot, 1)
+	z.trackItem(p, false, def.ID, 1, "use")
+	z.questEvent(p, game.GoalPotion, def.ID)
+	p.pl.cooldowns[key] = z.now + game.CooldownSeconds(def.Cooldown)
+	p.pl.statsDirty = true
+	z.sendItemCooldown(p, def.Cooldown, game.CooldownSeconds(def.Cooldown))
+	z.system(p, "O Antídoto queima por dentro, mas o veneno some.")
 	z.inventoryChanged(p, false)
 }
 
@@ -183,13 +236,14 @@ func (z *Zone) destroyItem(p *entity, slot, count int) {
 	s := inv.bag[slot]
 	count = min(max(count, 1), s.count)
 	inv.take(slot, count)
+	z.trackItem(p, false, s.def.ID, count, "destroy")
 	z.system(p, fmt.Sprintf("Você destruiu %s.", itemLabel(s.def, count)))
 	z.inventoryChanged(p, false)
 }
 
 func (z *Zone) sendItemCooldown(p *entity, group int, seconds float64) {
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_ItemCooldown{ItemCooldown: &pb.ItemCooldown{
-		Group: uint32(group), ReadyInMs: uint32(math.Max(0, seconds) * 1000), TotalMs: uint32(game.CooldownSeconds(group) * 1000),
+		Group: uint32(group), ReadyInMs: uint32(math.Max(0, seconds) * 1000), TotalMs: uint32(z.itemCooldown(p, group) * 1000),
 	}}})
 }
 
@@ -236,18 +290,11 @@ func inventoryPB(inv *inventory) *pb.Inventory {
 }
 
 func itemInfoPB(d *game.ItemDef) *pb.ItemInfo {
-	b := d.Bonus
 	info := &pb.ItemInfo{
 		Id: d.ID, Name: d.Name, Kind: pb.ItemKind(d.Kind), Grade: uint32(d.Grade), Slot: int32(d.Slot()),
 		Classes: d.Classes, ReqLevel: uint32(d.ReqLevel),
-		Bonus: &pb.ItemBonus{
-			MaxHp: int32(b.MaxHP), MaxMp: int32(b.MaxMP), PAtk: int32(b.PAtk), MAtk: int32(b.MAtk),
-			PDef: int32(b.PDef), MDef: int32(b.MDef), Crit: float32(b.Crit),
-			Accuracy: float32(b.Accuracy), Evasion: float32(b.Evasion), Speed: float32(b.Speed),
-			AtkSpeed: float32(b.AtkSpeed), CastSpeed: float32(b.CastSpeed), HpRegen: float32(b.HPRegen),
-			MpRegen: float32(b.MPRegen), CritDamage: float32(b.CritDamage),
-		},
-		WeaponType: d.WeaponType,
+		Bonus:      itemBonusPB(d.Bonus),
+		WeaponType: d.WeaponType, Hands: uint32(d.Hands()),
 		Stack:      uint32(min(d.Stack, game.MaxStack)), Price: uint32(d.Price), SellPrice: uint32(d.SellPrice()),
 		Icon: d.Icon, Description: d.Description, CooldownGroup: uint32(d.Cooldown),
 		HealHp: uint32(d.HealHP), HealMp: uint32(d.HealMP), Model: d.Model, OffModel: d.OffModel,
@@ -259,7 +306,39 @@ func itemInfoPB(d *game.ItemDef) *pb.ItemInfo {
 	if d.Cooldown != game.CooldownNone {
 		info.CooldownMs = uint32(game.CooldownSeconds(d.Cooldown) * 1000)
 	}
+	if d.Equippable() { // graus (tunnel#153)
+		info.Tier, info.TierLevel, info.ArmorWeight = uint32(d.Tier), uint32(d.Tier.MinLevel()), uint32(d.Weight)
+		if d.ReqLevel > d.Tier.MinLevel() { // só a peça que dá para vestir antes do nível dela
+			info.UnderLevel = itemBonusPB(game.UnderLevelPenalty)
+		}
+		if set := game.ItemSets[d.Set]; set != nil {
+			// O conjunto inteiro vai uma vez, na primeira peça (o catálogo vai em todo Welcome);
+			// nas outras, só o id e o nome.
+			info.Set = &pb.ItemSetInfo{Id: set.ID, Name: set.Name}
+			if d.ID == set.Pieces[0] {
+				info.Set = itemSetPB(set)
+			}
+		}
+	}
 	return info
+}
+
+func itemBonusPB(b game.Stats) *pb.ItemBonus {
+	return &pb.ItemBonus{
+		MaxHp: int32(b.MaxHP), MaxMp: int32(b.MaxMP), PAtk: int32(b.PAtk), MAtk: int32(b.MAtk),
+		PDef: int32(b.PDef), MDef: int32(b.MDef), Crit: float32(b.Crit),
+		Accuracy: float32(b.Accuracy), Evasion: float32(b.Evasion), Speed: float32(b.Speed),
+		AtkSpeed: float32(b.AtkSpeed), CastSpeed: float32(b.CastSpeed), HpRegen: float32(b.HPRegen),
+		MpRegen: float32(b.MPRegen), CritDamage: float32(b.CritDamage),
+	}
+}
+
+func itemSetPB(s *game.ItemSet) *pb.ItemSetInfo {
+	out := &pb.ItemSetInfo{Id: s.ID, Name: s.Name, Theme: s.Theme, Pieces: s.Pieces}
+	for _, b := range s.Bonuses {
+		out.Bonuses = append(out.Bonuses, &pb.ItemSetBonus{Pieces: uint32(b.Pieces), Bonus: itemBonusPB(b.Bonus)})
+	}
+	return out
 }
 
 // itemCatalog é montado uma vez: as mensagens são só lidas ao serializar.
@@ -272,3 +351,16 @@ var itemCatalog = func() []*pb.ItemInfo {
 	}
 	return out
 }()
+
+// weaponCatalog: os tipos de arma do jogo (Welcome.weapons), em ordem estável.
+func weaponCatalog() []*pb.WeaponInfo {
+	var out []*pb.WeaponInfo
+	for _, t := range game.WeaponTypes() {
+		w := game.Weapons[t]
+		out = append(out, &pb.WeaponInfo{
+			Type: w.Type, Name: w.Name, Range: float32(w.Range), Interval: float32(w.Interval), Magic: w.Magic,
+			Hands: uint32(w.Hands), Dual: w.Dual, Anim: w.Anim, Projectile: w.Projectile,
+		})
+	}
+	return out
+}

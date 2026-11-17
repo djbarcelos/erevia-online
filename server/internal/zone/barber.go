@@ -28,7 +28,8 @@ func appearancePB(p *entity) *pb.ServerMessage {
 	w, o, g := p.pl.inv.look()
 	return &pb.ServerMessage{Msg: &pb.ServerMessage_Appearance{Appearance: &pb.Appearance{
 		Id: p.id, Weapon: w, Offhand: o, WeaponGrade: uint32(g), WeaponEnchant: uint32(p.pl.inv.weaponEnchant()),
-		Look: lookPB(p.pl.look),
+		Look:  lookPB(p.pl.look),
+		Armor: p.pl.inv.armorLook(),
 	}}}
 }
 
@@ -37,9 +38,13 @@ func (z *Zone) changeLook(p *entity, npcID uint32, l *pb.BodyLook) {
 	if n == nil || n.npc.role != pb.NpcRole_NPC_ROLE_BARBER {
 		return
 	}
-	a := game.NormalAppearance(p.pl.class, lookFromPB(l))
+	a := game.NormalAppearance(p.pl.mainClass, lookFromPB(l)) // o corpo é o da classe principal
 	if !game.ValidAppearance(a) {
 		z.system(p, "Visual inválido.")
+		return
+	}
+	if msg := z.bestiaryOutfitLocked(p, a.Outfit); msg != "" { // cor do Bestiário (família completa)
+		z.system(p, msg)
 		return
 	}
 	if a == p.pl.look {
@@ -52,6 +57,7 @@ func (z *Zone) changeLook(p *entity, npcID uint32, l *pb.BodyLook) {
 		return
 	}
 	inv.gold -= game.BarberPrice
+	z.trackGold(p, "barber", -game.BarberPrice)
 	p.pl.look = a
 	z.system(p, fmt.Sprintf("%s deixou você de visual novo por %d moedas.", n.name, game.BarberPrice))
 	z.broadcast(appearancePB(p), 0)

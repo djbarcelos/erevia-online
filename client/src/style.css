@@ -152,6 +152,83 @@
   color: var(--bad);
 }
 
+/* Graus de equipamento (tunnel#153): o selo ao lado do nome, o conjunto e a penalidade. */
+.tip-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tier-badge {
+  display: inline-block;
+  min-width: 1.15em;
+  padding: 0 4px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-family: var(--font-title);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--gold-hi);
+  vertical-align: middle;
+}
+
+.tier-badge.tier-c {
+  color: #9fd0ff;
+}
+
+.tier-badge.tier-b {
+  color: #ffb07a;
+}
+
+.tip-set {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.tip-set-name {
+  color: var(--gold-hi);
+  font-weight: 600;
+}
+
+.tip-set-theme {
+  margin: 2px 0 4px;
+  font-style: italic;
+}
+
+.tip-set-pieces {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  opacity: 0.75;
+}
+
+.tip-set-pieces .on,
+.tip-set-bonus.on {
+  color: var(--ok);
+  opacity: 1;
+}
+
+.tip-set-bonus {
+  opacity: 0.75;
+}
+
+.tip-set-note {
+  margin-top: 4px;
+  font-size: 0.68rem;
+  opacity: 0.7;
+}
+
+.tip-penalty {
+  margin: 0 0 6px;
+  color: var(--bad);
+  font-size: 0.74rem;
+}
+
 .tip-key {
   margin: 6px 0 0;
   padding-top: 6px;
@@ -400,9 +477,37 @@
   background: radial-gradient(circle at 50% 40%, rgba(110, 180, 255, 0.35), rgba(20, 30, 60, 0.6));
 }
 
+/* Pedra ainda não descoberta: cinza, sem botão */
+.tp-row.unknown {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+.tp-row.unknown .tp-icon {
+  color: #9aa0a6;
+  background: rgba(60, 60, 60, 0.6);
+}
+
+.tp-region {
+  display: block;
+  color: #9fb0c4;
+  font-size: 0.7rem;
+}
+
 .tp-note {
   margin: 4px 12px;
   color: var(--bad, #ff6b5b);
+}
+
+/* Destino sugerido pelo "Ir" da missão (questgo.ts) */
+.tp-row.suggested {
+  outline: 1px solid var(--gold, #d6b46e);
+  outline-offset: -1px;
+}
+
+.tp-quest {
+  color: #ffd36b;
+  font-size: 0.7rem;
 }
 
 /* Dica do item: linha do encantamento */
@@ -536,5 +641,104 @@
 
   .barber-editor {
     overflow: visible;
+  }
+}
+
+/* ---------- Mestra dos Caminhos: escolha da especialização ---------- */
+
+.shop-panel.spec-panel {
+  width: 640px;
+  left: max(12px, calc(50% - 320px));
+}
+
+.spec-cards {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.spec-card {
+  --sc: var(--gold);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--sc) 45%, transparent);
+  border-radius: 6px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--sc) 14%, transparent), rgba(0, 0, 0, 0.25));
+}
+
+.spec-card.mine {
+  border-color: var(--sc);
+  box-shadow: 0 0 0 1px var(--sc) inset;
+}
+
+.spec-name {
+  margin: 0;
+  color: var(--sc);
+}
+
+.spec-desc {
+  margin: 0;
+  color: var(--muted);
+}
+
+.spec-bonus {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.spec-skills {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.spec-skills li {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.spec-skills li small {
+  display: block;
+}
+
+.spec-icon svg {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+}
+
+.spec-go {
+  margin-top: auto;
+}
+
+.spec-note {
+  margin: 10px 0 6px;
+}
+
+/* ---------- Guardião das Sendas: subclasse (usa os cartões da Mestra) ---------- */
+
+.spec-card.sub-option {
+  border-style: dashed;
+}
+
+@media (max-width: 767px), (max-height: 520px) {
+  .shop-panel.spec-panel {
+    width: auto;
+    left: 8px;
+    max-height: 80dvh;
+  }
+
+  .spec-cards {
+    grid-template-columns: 1fr;
   }
 }

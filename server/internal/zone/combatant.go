@@ -29,18 +29,26 @@ type activeEffect struct {
 	kind     game.EffectKind
 	value    float64
 	until    float64
+	duration float64 // duração com que foi aplicado (o contágio da Praga repete)
 	source   uint32  // quem aplicou (venenos dão o crédito do abate; provocar aponta o alvo)
 	nextTick float64 // venenos/queimaduras: próximo segundo de dano
 }
 
 // entity é um jogador ou monstro na zona. Só a goroutine da zona mexe nele.
 type entity struct {
-	id    uint32
-	kind  pb.EntityKind
-	name  string
-	model string
-	level int
-	scale float64
+	// spawnSeq muda quando o monstro renasce: a AOI manda um Spawn novo a quem já o conhecia.
+	spawnSeq uint32
+	// gone: saiu do mundo (jogador saiu, invocação sumiu); a AOI manda o Despawn.
+	gone bool
+	// Estado e vida deste tick já codificados para o snapshot (só quando encTick == tick).
+	encTick         uint32
+	encState, encHP []byte
+	id              uint32
+	kind            pb.EntityKind
+	name            string
+	model           string
+	level           int
+	scale           float64
 
 	pos, dest Vec2
 	face      Vec2    // última direção em que andou (Piscar vai para lá)
@@ -83,7 +91,17 @@ type playerState struct {
 	// Progressão (Fase B): pontos de atributo gastos, ranks da árvore e barra de atalhos.
 	attrs  game.Attrs
 	ranks  map[uint32]int
+	// passives: o total de cada tipo de passiva aprendida (refreshStats recalcula).
+	passives game.Passives
 	hotbar []string
+	// Especialização (segunda classe, nível 20): id do caminho ("" = ainda não escolheu).
+	spec string
+	// Subclasse (subclass.go): class acima é a classe ativa (skills, equipamento e
+	// atributos), e xp, attrs, ranks, hotbar, spec e o nível da entidade são dela.
+	// mainClass é a principal, a do corpo (modelo e visual). Em classes, a entrada da
+	// ativa só é atualizada ao salvar e ao trocar (classSnapshot).
+	mainClass string
+	classes   game.ClassSet
 	// Muralha Viva: quando pode disparar de novo. Sumir: o próximo golpe é crítico.
 	lastStandReady float64
 	ambushCrit     bool
@@ -97,9 +115,40 @@ type playerState struct {
 	sentPvp    pb.PvpState
 	killedBy   string // morto: nome de quem matou
 	party      *party
+	helpUntil  float64 // ajudou (dano, buff, cura) até este z.now: conta na XP do grupo (xpTakers)
 	clan       *clan
 	clanLeftAt time.Time     // saiu de um clã (espera para entrar em outro)
 	channel    *channelState // canalizando teleporte ou pergaminho
+	pathGoal   *Vec2         // caminho longo esperando na fila (ver pathqueue.go)
+
+	// AOI: jogadores e monstros que este cliente conhece (e o spawnSeq do Spawn que recebeu).
+	known map[uint32]knownEntity
+
+	// Moderação.
+	gm         bool
+	mutedUntil time.Time // relógio de parede (zero = pode falar)
+	userAgent  string
+	nextBug    float64 // próximo /bug aceito (tempo de simulação)
+
+	quests   questLog
+	trade    *trade    // troca aberta (nil = nenhuma)
+	joinedAt time.Time // telemetria: início da sessão
+
+	social socialState // amigos, emote e leitura do correio
+	// Conquistas, título escolhido e quando pode pedir o ranking de novo.
+	ach         achievements
+	bst         bestiary  // abates por monstro e famílias (bestiary.go)
+	disc        discovery // pedras de teleporte descobertas e a última cidade (teleport.go)
+	rankingNext float64
+	// Maestria (nível máximo): barra, pontos da árvore e a soma dos efeitos (ver mastery.go).
+	mastery masteryState
+	// Contratos do quadro e reputação com as facções (contracts.go).
+	contracts contractsState
+	// Casa de leilões: operações a caminho do banco, anúncios vistos e anexos do correio.
+	auc auctionState
+	hop     hopState // portão e zonas (gate.go)
+	// Vitalidade e recuperação (vitality.go).
+	vit vitalityState
 }
 
 // rank da skill (0 = não aprendida).
@@ -175,6 +224,12 @@ func (e *entity) speed(now float64) float64 {
 	if v, ok := e.effect(game.EffectSlow, now); ok {
 		s *= 1 - v
 	}
+	// Passo Leve (Maestria): só fora de combate. O snapshot leva a velocidade a cada passo.
+	if e.pl != nil && now-e.lastCombat > outOfCombatAfter {
+		if v := e.pl.mastery.of(game.MStatCalmSpeed); v > 0 {
+			s *= 1 + v
+		}
+	}
 	return s
 }
 
@@ -212,7 +267,7 @@ func (e *entity) def(magic bool, now float64) float64 {
 
 // addEffect aplica (ou renova) um efeito; o mais novo do mesmo tipo substitui o antigo.
 func (e *entity) addEffect(def *game.EffectDef, now float64, source uint32) {
-	ef := activeEffect{kind: def.Kind, value: def.Value, until: now + def.Duration, source: source, nextTick: now + 1}
+	ef := activeEffect{kind: def.Kind, value: def.Value, until: now + def.Duration, duration: def.Duration, source: source, nextTick: now + 1}
 	for i := range e.effects {
 		if e.effects[i].kind == def.Kind {
 			e.effects[i] = ef
@@ -247,8 +302,20 @@ func (e *entity) pruneEffects(now float64) (expired []game.EffectKind) {
 	return expired
 }
 
-func (e *entity) hpInt() int    { return int(math.Ceil(e.hp)) }
+// Vida e mana como inteiros (snapshot, SelfStats, grupo, nível, renascer, salvamento).
+// Uma regra só para todas as mensagens: o máximo é o valor arredondado (o mesmo que a
+// janela do personagem mostra) e o valor atual nunca passa dele. A vida arredonda para
+// cima (vivo com 0,3 aparece com 1, nunca 0) e a mana para baixo (o que aparece dá para
+// gastar), mas mana cheia aparece cheia. Ex.: máximo 408,4 e vida cheia = 408 / 408.
 func (e *entity) maxHPInt() int { return int(math.Round(e.stats.MaxHP)) }
+func (e *entity) hpInt() int    { return min(max(0, int(math.Ceil(e.hp))), e.maxHPInt()) }
+func (e *entity) maxMPInt() int { return int(math.Round(e.stats.MaxMP)) }
+func (e *entity) mpInt() int {
+	if e.mp >= e.stats.MaxMP {
+		return e.maxMPInt()
+	}
+	return min(max(0, int(math.Floor(e.mp))), e.maxMPInt())
+}
 
 func (e *entity) clearAction() { e.act = action{} }
 
@@ -277,6 +344,9 @@ func (e *entity) setDest(d Vec2) {
 func (e *entity) teleportTo(p Vec2) {
 	e.pos, e.dest, e.path = p, p, nil
 	e.moved, e.teleport = true, true
+	if e.pl != nil {
+		e.pl.disc.jumped = true // salto não descobre pedra (teleport.go)
+	}
 }
 
 func dist(a, b Vec2) float64 { return math.Hypot(a.X-b.X, a.Z-b.Z) }

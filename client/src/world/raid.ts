@@ -1,14 +1,17 @@
 /**
- * Raid boss no mundo: avisos no chão (o golpe cai no fim do círculo), a aparência do
- * chefe (coroa, aura, tom escuro), as invocações saindo do chão e a barra no topo quando
- * você está perto. Os dados vêm do servidor (BossStatus, Telegraph e Announce).
+ * Raid boss no mundo: avisos no chão (o golpe cai no fim da forma; também os das
+ * habilidades dos outros monstros), a aparência do chefe (coroa, aura, tom escuro), as
+ * invocações saindo do chão e a barra no topo quando você está perto. Os dados vêm do
+ * servidor (BossStatus, Telegraph e Announce).
  */
 
 import { Color3, Mesh, MeshBuilder, PBRMaterial, StandardMaterial, TransformNode, Vector3, type AbstractMesh, type Scene } from "@babylonjs/core";
 import { TelegraphKind, type Announce, type BossStatus, type Telegraph } from "../gen/erevia/v1/game_pb";
+import { GroundWarnings, shapeCenter, shapeContains, type WarningShape } from "./fx/ground-warnings";
 import type { RaidUi } from "../ui/raid";
 import type { EntityManager } from "./entities";
 import type { Fx, FxHandle } from "./fx";
+import { heightAt } from "./terrain";
 
 /** Distância em que a barra do chefe aparece (m). */
 const BAR_DISTANCE = 60;
@@ -19,6 +22,8 @@ const COLORS: Record<number, Color3> = {
   [TelegraphKind.WAVE]: new Color3(1, 0.22, 0.18),
   [TelegraphKind.RAIN]: new Color3(1, 0.42, 0.2),
   [TelegraphKind.MARK]: new Color3(0.85, 0.2, 1),
+  // Habilidades dos monstros comuns e chefes de campo: âmbar (pancada no chão).
+  [TelegraphKind.STRIKE]: new Color3(1, 0.55, 0.12),
 };
 const AURA = new Color3(0.62, 0.25, 1);
 /** Osso um pouco mais escuro e acinzentado que o dos esqueletos comuns. */
@@ -37,7 +42,9 @@ interface Decoration {
 
 export class RaidDirector {
   private bosses = new Map<number, BossStatus>();
-  private telegraphs = new Map<number, { handle: FxHandle; timer: number }>();
+  /** A lança da Chuva sai antes do golpe: o timer de cada aviso de Chuva pendente. */
+  private rainTimers = new Map<number, number>();
+  private warnings: GroundWarnings;
   private decorations = new Map<number, Decoration>();
   private listeners: (() => void)[] = [];
   private tintCache = new Map<string, PBRMaterial | StandardMaterial>();
@@ -49,7 +56,9 @@ export class RaidDirector {
     private ui: RaidUi,
     private localId: number,
     private onAnnounceLine: (text: string) => void,
-  ) {}
+  ) {
+    this.warnings = new GroundWarnings(scene, () => this.entities.rootOf(this.localId)?.position ?? null);
+  }
 
   /** Lista inicial (Welcome). */
   setBosses(list: BossStatus[]): void {
@@ -90,33 +99,42 @@ export class RaidDirector {
 
   /** Aviso no chão: começo, golpe ou cancelamento. */
   onTelegraph(t: Telegraph): void {
-    const at = new Vector3(t.x, 0, t.z);
     const color = COLORS[t.kind] ?? COLORS[TelegraphKind.WAVE];
-    const kind = t.kind === TelegraphKind.RAIN ? "rain" : t.kind === TelegraphKind.MARK ? "mark" : "wave";
-    const mine = this.distanceToMe(t.x, t.z) <= t.radius + 1;
+    const shape: WarningShape = { shape: t.shape, radius: t.radius, inner: t.innerRadius, arc: t.arc, length: t.length, width: t.width, angle: t.angle };
     if (t.cancelled || t.resolved) {
-      const cur = this.telegraphs.get(t.id);
-      if (cur) {
-        cur.handle.stop();
-        window.clearTimeout(cur.timer);
-        this.telegraphs.delete(t.id);
+      const drawn = this.warnings.remove(t.id);
+      window.clearTimeout(this.rainTimers.get(t.id));
+      this.rainTimers.delete(t.id);
+      if (!t.resolved) return;
+      if (t.kind === TelegraphKind.STRIKE) {
+        // Os avisos que não couberam entre os desenhados também não têm impacto.
+        if (!drawn) return;
+        const c = shapeCenter(shape, t.x, t.z);
+        const me = this.entities.rootOf(this.localId)?.position;
+        const mine = !!me && shapeContains(shape, t.x, t.z, me.x, me.z);
+        this.fx.as(mine, () => this.fx.slam(new Vector3(c.x, heightAt(c.x, c.z), c.z), c.radius, color, mine));
+        return;
       }
       // A Chuva já começou a cair antes (para encostar junto com o dano).
-      if (t.resolved && kind !== "rain") this.fx.telegraphImpact(at, t.radius, color, kind, mine);
+      const kind = t.kind === TelegraphKind.MARK ? "mark" : "wave";
+      if (t.kind !== TelegraphKind.RAIN) this.fx.telegraphImpact(new Vector3(t.x, heightAt(t.x, t.z), t.z), t.radius, color, kind, this.distanceToMe(t.x, t.z) <= t.radius + 1);
       return;
     }
     const follow = t.followId ? () => this.entities.rootOf(t.followId)?.position ?? null : undefined;
-    const handle = this.fx.telegraph(at, t.radius, t.durationMs, color, follow);
-    let timer = 0;
-    if (kind === "rain") {
-      timer = window.setTimeout(() => this.fx.telegraphImpact(at, t.radius, color, "rain", this.distanceToMe(t.x, t.z) <= t.radius + 1), Math.max(0, t.durationMs - RAIN_FALL_MS));
+    this.warnings.add(t.id, { ...shape, x: t.x, z: t.z, color, durationMs: t.durationMs, follow });
+    if (t.kind === TelegraphKind.RAIN) {
+      const at = new Vector3(t.x, heightAt(t.x, t.z), t.z);
+      const timer = window.setTimeout(() => {
+        this.rainTimers.delete(t.id);
+        this.fx.telegraphImpact(at, t.radius, color, "rain", this.distanceToMe(t.x, t.z) <= t.radius + 1);
+      }, Math.max(0, t.durationMs - RAIN_FALL_MS));
+      this.rainTimers.set(t.id, timer);
     }
-    this.telegraphs.set(t.id, { handle, timer });
   }
 
   /** Um Guarda Ossário nasceu: fumaça e runas no chão. */
   onSpawn(id: number, model: string, x: number, z: number): void {
-    if (model === "skeleton_warrior" && this.nearLair(x, z)) this.fx.summonRise(new Vector3(x, 0, z));
+    if (model === "skeleton_warrior" && this.nearLair(x, z)) this.fx.summonRise(new Vector3(x, heightAt(x, z), z));
     void id;
   }
 
@@ -124,27 +142,27 @@ export class RaidDirector {
   update(): void {
     let bar: Parameters<RaidUi["setBar"]>[0] = null;
     for (const b of this.bosses.values()) {
-      if (!b.raid) continue;
+      const field = !b.raid && b.phaseMarks.length > 0; // chefe de campo: só a barra, sem coroa nem aura
+      if (!b.raid && !field) continue;
       const info = this.entities.info(b.id);
       if (!info || info.dead || !b.alive) {
         this.undecorate(b.id);
         continue;
       }
-      this.decorate(b);
+      if (!field) this.decorate(b);
       const root = this.entities.rootOf(b.id);
       if (root && this.distanceToMe(root.position.x, root.position.z) <= BAR_DISTANCE) {
-        bar = { name: info.name, hp: info.hp, maxHp: info.maxHp, phase: b.phase, enraged: b.enraged, final: b.finalEnrage, fightStartMs: Number(b.fightStartMs) };
+        bar = { name: info.name, hp: info.hp, maxHp: info.maxHp, phase: b.phase, enraged: b.enraged, final: b.finalEnrage, fightStartMs: Number(b.fightStartMs), marks: b.phaseMarks };
       }
     }
     this.ui.setBar(bar);
+    this.warnings.update();
   }
 
   dispose(): void {
-    for (const t of this.telegraphs.values()) {
-      t.handle.stop();
-      window.clearTimeout(t.timer);
-    }
-    this.telegraphs.clear();
+    for (const timer of this.rainTimers.values()) window.clearTimeout(timer);
+    this.rainTimers.clear();
+    this.warnings.dispose();
     for (const id of [...this.decorations.keys()]) this.undecorate(id);
     this.ui.setBar(null);
   }
@@ -188,6 +206,8 @@ export class RaidDirector {
         if (!d.crown && m.parent instanceof TransformNode) d.crown = this.buildCrown(m.parent);
         continue;
       }
+      // Ozrhal do remaster (ozrhal_b): a malha do Meshy já tem coroa, ossos e cores próprios.
+      if (/^Mesh_\d/.test(m.name)) continue;
       this.tint(m);
     }
   }

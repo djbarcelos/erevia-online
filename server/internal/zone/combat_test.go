@@ -38,7 +38,7 @@ func (z *Zone) onlyMonster() *entity {
 
 func joinAt(z *Zone, id uint32, class string, x, zz float64, xp int64) (*entity, *fakePeer) {
 	peer := &fakePeer{}
-	z.handle(joinEvent{info: JoinInfo{ID: id, Name: "P" + class, Class: class, X: x, Z: zz, XP: xp, Peer: peer}})
+	z.handle(joinEvent{info: JoinInfo{ID: id, Name: "P" + class, Class: class, X: x, Z: zz, XP: xp, Peer: peer, Discovered: game.DiscoveryState{Stones: game.LegacyStoneKeys}}})
 	return z.players[id], peer
 }
 

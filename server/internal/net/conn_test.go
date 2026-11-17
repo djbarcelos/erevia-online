@@ -50,14 +50,14 @@ func startServer(t *testing.T) (url string, ctx context.Context) {
 	cfg := zone.DefaultConfig()
 	cfg.SafeRadius = 0 // os testes lutam perto da origem
 	cfg.Spawns = []game.Spawn{{Monster: "skeleton_minion", Count: 1, Fixed: true, X: 18, Z: 0, LevelMin: 1, Respawn: 5}}
-	z := zone.New(cfg, log, nil)
-	go z.Run(ctx)
+	m := zone.NewManager(log, zone.New(cfg, log, nil))
+	go m.Run(ctx)
 
 	backend := &fakeBackend{chars: map[int64][]Character{
 		1: {{ID: 10, Name: "Alice", Class: "mage", X: 1, Z: 2}},
 		2: {{ID: 20, Name: "Bob", Class: "knight", Items: game.StarterKit("knight")}},
 	}}
-	srv := httptest.NewServer(NewServer(z, backend, log, []string{"*"}))
+	srv := httptest.NewServer(NewServer(m, backend, log, []string{"*"}))
 	t.Cleanup(srv.Close)
 	return "ws" + strings.TrimPrefix(srv.URL, "http"), ctx
 }
@@ -68,6 +68,10 @@ func dialAs(t *testing.T, ctx context.Context, url string, account int64) (*webs
 	h.Set("Cookie", "acc="+strconv.FormatInt(account, 10))
 	c, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{HTTPHeader: h})
 	if err == nil {
+		// O navegador não limita o tamanho das mensagens; a biblioteca limita a 32 KB por
+		// padrão, e o Welcome (catálogo de skills com os textos de cada rank, itens…) já
+		// passa disso com o 5º degrau da árvore.
+		c.SetReadLimit(1 << 20)
 		t.Cleanup(func() { c.CloseNow() })
 	}
 	return c, err
@@ -143,8 +147,9 @@ func TestTwoPlayersMoveAndChat(t *testing.T) {
 			self = e
 		}
 	}
-	// A árvore inteira da classe (12 skills), com as 2 iniciais aprendidas, e a barra padrão.
-	if len(welcomeA.Skills) != 12 || len(welcomeA.Branches) != 3 {
+	// A árvore inteira da classe (15 skills) mais as 6 dos dois caminhos da especialização,
+	// com as 2 iniciais aprendidas, e a barra padrão.
+	if len(welcomeA.Skills) != 15+6 || len(welcomeA.Branches) != 3 {
 		t.Fatalf("welcome should carry the class tree, got %d skills / %d branches", len(welcomeA.Skills), len(welcomeA.Branches))
 	}
 	if welcomeA.Progress == nil || len(welcomeA.Progress.Ranks) != 2 || len(welcomeA.Progress.PerPoint) != 6 {

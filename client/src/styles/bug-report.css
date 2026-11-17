@@ -1,0 +1,17 @@
+/* Caixinha "Relatar problema" (ui/bug-report.ts): reaproveita .account-modal e .account-dialog. */
+.bug-modal {
+  z-index: 90; /* acima das janelas do jogo */
+}
+
+.bug-text {
+  width: 100%;
+  min-height: 7.5em;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.45;
+}
+
+.bug-count {
+  justify-self: end;
+  margin-top: -6px;
+}

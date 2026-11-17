@@ -2,21 +2,30 @@
  * Auto-caça no cliente: escolhe o monstro vivo mais perto dentro do raio, manda atacar,
  * usa as skills da barra quando prontas e toma poção abaixo do limite. Manda só os mesmos
  * comandos que um jogador mandaria (o servidor valida tudo) e num ritmo baixo (4×/s).
+ *
+ * Com filtro (o "Caçar aqui" das missões, ver questgo.ts) só mira nos monstros com aqueles
+ * nomes; ligada pelo F/AUTO não tem filtro e caça como sempre.
+ *
+ * As regras de alvo ficam em huntrules.ts (tunnel#129): não mira o que não vê, pula os
+ * neutros (a não ser com "Atacar monstros neutros" ligado), prefere quem já briga com você
+ * e larga o alvo que travou a caça (o atirador que recuou para onde não dá para ir).
  */
 
 import { SkillTarget, type SelfStats, type SkillInfo } from "../gen/erevia/v1/game_pb";
 import { settings } from "../ui/kit";
+import { pickTarget, StallWatch, type HuntCandidate, type HuntRules } from "./huntrules";
 
 export interface AutoHuntDeps {
   dead(): boolean;
   stats(): SelfStats | null;
-  /** Monstro vivo mais perto (distância em metros). */
-  nearestMonster(): { id: number; dist: number } | null;
+  /** Monstros vivos na tela, com o que as regras de alvo precisam (huntrules.ts). */
+  monsters(): HuntCandidate[];
   targetId(): number;
-  isEnemy(id: number): boolean;
   distanceTo(id: number): number | null;
   /** Seleciona e ataca. */
   attack(id: number): void;
+  /** Para de perseguir o alvo (fica onde está). */
+  halt(): void;
   /** Skills da barra de atalhos, na ordem. */
   hotbarSkills(): SkillInfo[];
   skillReady(s: SkillInfo): boolean;
@@ -38,17 +47,30 @@ export class AutoHunt {
   kills = 0;
   since = 0;
   xpStart = 0n;
+  /** Nomes dos monstros que valem como alvo (null = qualquer um). */
+  filter: readonly string[] | null = null;
+  private label = "";
+  private watch = new StallWatch();
 
   constructor(private d: AutoHuntDeps) {}
 
-  start(): void {
+  /** Liga; com `only`, só caça os monstros desses nomes (label vai na pílula). */
+  start(only: { names: readonly string[]; label: string } | null = null): void {
     if (this.on) return;
     this.on = true;
+    this.filter = only ? only.names : null;
+    this.label = only?.label ?? "";
     this.kills = 0;
     this.since = performance.now();
     this.xpStart = this.d.stats()?.xp ?? 0n;
     this.current = 0;
+    this.watch.reset();
     this.timer = window.setInterval(() => this.tick(), 250);
+  }
+
+  /** Ligada pelo "Caçar aqui" (com filtro), não pelo F/AUTO. */
+  get questMode(): boolean {
+    return this.on && this.filter !== null;
   }
 
   stop(reason = ""): void {
@@ -74,7 +96,7 @@ export class AutoHunt {
   status(): string {
     const secs = Math.floor((performance.now() - this.since) / 1000);
     const xp = Number((this.d.stats()?.xp ?? this.xpStart) - this.xpStart);
-    return `Auto-caça · ${this.kills} ${this.kills === 1 ? "abate" : "abates"} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} · +${Math.max(0, xp).toLocaleString("pt-BR")} XP`;
+    return `${this.label ? `Caçar aqui: ${this.label}` : "Auto-caça"} · ${this.kills} ${this.kills === 1 ? "abate" : "abates"} · ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")} · +${Math.max(0, xp).toLocaleString("pt-BR")} XP`;
   }
 
   private tick(): void {
@@ -94,12 +116,16 @@ export class AutoHunt {
       }
     } else if (st && st.maxMp > 0 && st.mp / st.maxMp < 0.2) d.drink("mp");
 
-    // Alvo: mantém o atual se ainda for inimigo; senão o mais perto dentro do raio.
+    // Alvo: mantém o atual se ainda valer (vivo, visível, não neutro e sem travar); senão
+    // quem briga com você ou o mais perto dentro do raio.
+    const list = d.monsters();
+    const rules: HuntRules = { names: this.filter, neutrals: s.autoNeutral, skip: this.watch.skips(now) };
     let target = d.targetId();
-    if (!d.isEnemy(target)) {
+    const cur = target ? list.find((c) => c.id === target) : undefined;
+    if (!cur || !pickTarget([cur], rules, Infinity)) {
       if (s.autoLoot && d.lootNearby(10)) return; // pega o saque antes do próximo
-      const n = d.nearestMonster();
-      if (!n || n.dist > s.autoRadius) {
+      const n = pickTarget(list, rules, s.autoRadius);
+      if (!n) {
         this.current = 0;
         return;
       }
@@ -107,6 +133,17 @@ export class AutoHunt {
       this.current = target;
       d.attack(target);
       this.lastAttack = now;
+      return;
+    }
+    // Travou (não perde vida e você não chega mais perto): larga e vai para outro, ou para.
+    if (this.watch.check(target, cur.hp, cur.dist, now)) {
+      this.current = 0;
+      const next = pickTarget(list, { ...rules, skip: this.watch.skips(now) }, s.autoRadius);
+      if (next) {
+        this.current = next.id;
+        d.attack(next.id);
+        this.lastAttack = now;
+      } else d.halt(); // ninguém mais: não fica correndo atrás do que travou
       return;
     }
     this.current = target;

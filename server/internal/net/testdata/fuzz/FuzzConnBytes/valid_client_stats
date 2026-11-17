@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("\xe2\x01\x1d\r\x00\x00jB\x15\x00\x00$B\x1a\x0fdesktop windows <")

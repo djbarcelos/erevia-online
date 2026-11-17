@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	mrand "math/rand/v2"
 	"strconv"
@@ -35,7 +36,10 @@ const (
 	charactersNameIdxKey = "characters_name_lower_idx"
 	characterCols        = "id, account_id, name, class, x, z, level, xp, coalesce(hp, -1), coalesce(mp, -1), gold, kit_given, " +
 		"attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_spi, skill_ranks, hotbar, emblem, " +
-		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat"
+		"karma, pk_count, pvp_kills, clan_left_at, skin, hair, outfit, head, hide_hat, quests, achievements, title, spec, mastery, contracts, reputation, bestiary, xp_curve, zone, classes, discovered"
+	// activeClassSQL: a classe ativa de c (a subclasse em uso; characters.class é a
+	// principal, a do corpo). Ranking, clã e amigos mostram a ativa, com o nível dela.
+	activeClassSQL = "coalesce(nullif(c.classes->>'active', ''), c.class)"
 )
 
 var (
@@ -74,16 +78,51 @@ type Character struct {
 	Hotbar    []string          `json:"-"`
 	Emblem    string            `json:"emblem"` // sempre preenchido (padrão da classe se vazio no banco)
 	// Look: o que o personagem tem nas mãos agora (para a tela de seleção).
-	Look       CharacterLook `json:"look"`
+	Look CharacterLook `json:"look"`
 	// Appearance: visual do corpo (pele, cabelo, roupa, rosto e chapéu).
 	Appearance game.Appearance `json:"appearance"`
-	Karma      int           `json:"-"`
-	PKs        int           `json:"-"`
-	PvPKills   int           `json:"-"`
-	ClanLeftAt *time.Time    `json:"-"`
-	// Armazém da conta (só em CharacterForAccount).
-	Storage  StorageState `json:"-"`
+	Karma      int             `json:"-"`
+	PKs        int             `json:"-"`
+	PvPKills   int             `json:"-"`
+	ClanLeftAt *time.Time      `json:"-"`
+	// Armazém da conta e moderação (só em CharacterForAccount).
+	Storage    StorageState    `json:"-"`
+	GM         bool            `json:"-"`
+	MutedUntil *time.Time      `json:"-"`
+	Quests     game.QuestState `json:"-"`
+	// Conquistas e o título em uso (id da conquista; "" = nenhum).
+	Achievements game.AchievementState `json:"-"`
+	Title        string                `json:"-"`
+	// Especialização (segunda classe, nível 20; "" = nenhuma).
+	Spec string `json:"spec"`
+	// Bestiário: abates por monstro e famílias completas (migração 00031).
+	Bestiary game.BestiaryState `json:"-"`
+	// Pedras de Teleporte descobertas e a última cidade visitada (migração 00036).
+	Discovered game.DiscoveryState `json:"-"`
+	// Maestria (nível máximo): barra, bônus diário e pontos de cada nó.
+	Mastery game.MasteryState `json:"-"`
+	Zone    string            `json:"-"` // mapa onde está (id; "starter" = o principal)
+	// Vitalidade: o estoque, a última saída e o maior nível da conta (só em
+	// CharacterForAccount; a zona enche o que passou fora do jogo).
+	Vitality game.VitalityState `json:"-"`
 	kitGiven bool
+	// Contratos do quadro e reputação com as facções (tunnel#157).
+	Contracts  game.ContractState   `json:"-"`
+	Reputation game.ReputationState `json:"-"`
+	// Subclasse: as classes do personagem (Class é a principal, a do corpo; Level, XP,
+	// Attrs, Ranks, Hotbar e Spec são da ativa). ActiveClass e ClassLevels vão para a tela
+	// de personagens (ClassLevels só com subclasse).
+	Classes     game.ClassSet `json:"-"`
+	ActiveClass string        `json:"activeClass"`
+	ClassLevels []ClassLevel  `json:"classes,omitempty"`
+	xpCurve     int16         // versão da curva em que a XP foi salva (game.XPCurve)
+}
+
+// ClassLevel: uma classe do personagem e o nível dela (tela de personagens).
+type ClassLevel struct {
+	Class string `json:"class"`
+	Level int    `json:"level"`
+	Main  bool   `json:"main,omitempty"`
 }
 
 // StorageState é o armazém de uma conta: moedas e itens (Equipped é sempre false).
@@ -117,9 +156,28 @@ type CharacterState struct {
 	PKs         int
 	PvPKills    int
 	Appearance  game.Appearance
-	Seq         int64 // salvamento mais velho que o gravado é ignorado
+	Quests      game.QuestState
+	// Conquistas e título vão junto com o personagem (mesma linha, mesma transação).
+	Achievements game.AchievementState
+	Title        string
+	Spec         string            // especialização ("" = nenhuma)
+	Mastery      game.MasteryState // Maestria (o nível vai também em mastery_level, para o ranking)
+	Vitality     int64             // XP bônus da vitalidade (characters.vitality)
+	Seq          int64             // salvamento mais velho que o gravado é ignorado
+	// Contratos aceitos hoje e nesta semana e a reputação com as facções (tunnel#157).
+	Contracts  game.ContractState
+	Reputation game.ReputationState
+	// Bestiário (mesma linha, mesma transação).
+	Bestiary game.BestiaryState
+	// Descobertas de pedras (mesma linha, mesma transação).
+	Discovered game.DiscoveryState
+	Zone       string // mapa onde está ("" = não muda)
+	// Classes: a progressão de cada classe e a ativa (Main vazio = não mexe na coluna).
+	Classes game.ClassSet
 	// Storage (opcional): o armazém da conta mudou e vai junto, na mesma transação.
 	Storage *StorageState
+	// Auction: operações da casa de leilões que vão na mesma transação (ver auction.go).
+	Auction []AuctionOp
 }
 
 type Store struct {
@@ -146,9 +204,17 @@ func Open(ctx context.Context, url string) (*Store, error) {
 }
 
 func migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	return migrateFS(ctx, pool, mustSub(migrations, "migrations"))
+}
+
+func migrateFS(ctx context.Context, pool *pgxpool.Pool, fsys fs.FS) error {
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, mustSub(migrations, "migrations"))
+	// Fora de ordem permitido: dois PCs trabalham em paralelo com faixas de números
+	// reservadas (PC 1: 00009–00019, PC 2: 00020–00029), então uma migração de número
+	// menor pode chegar à produção depois de uma maior. Sem isso o goose recusa
+	// ("missing (out-of-order) migration") e o servidor não sobe.
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithAllowOutofOrder(true))
 	if err != nil {
 		return fmt.Errorf("goose: %w", err)
 	}
@@ -362,6 +428,9 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 		if c, err = pgx.CollectExactlyOneRow(rows, scanCharacter); err != nil {
 			return err
 		}
+		if err := convertXPCurve(ctx, tx, &c); err != nil {
+			return err
+		}
 		if !c.kitGiven { // personagem de antes do kit: recebe o padrão da classe
 			if err := giveStarterKit(ctx, tx, &c, game.StarterKit(c.Class)); err != nil {
 				return err
@@ -371,6 +440,13 @@ func (s *Store) CharacterForAccount(ctx context.Context, accountID, characterID 
 			return err
 		}
 		c.Look = lookOf(c.Items)
+		if err := tx.QueryRow(ctx, `SELECT gm, muted_until FROM accounts WHERE id = $1`, accountID).
+			Scan(&c.GM, &c.MutedUntil); err != nil {
+			return err
+		}
+		if c.Vitality, err = loadVitality(ctx, tx, c.ID, accountID); err != nil {
+			return err
+		}
 		c.Storage, err = loadStorage(ctx, tx, accountID)
 		return err
 	})
@@ -410,6 +486,20 @@ func loadItems(ctx context.Context, tx pgx.Tx, characterID int64) ([]game.ItemRe
 	})
 }
 
+// loadVitality lê a vitalidade, a última saída (last_seen_at, gravado a cada salvamento) e
+// o maior nível da conta, uma vez no login (a recuperação não consulta nada por abate).
+func loadVitality(ctx context.Context, tx pgx.Tx, characterID, accountID int64) (game.VitalityState, error) {
+	var v game.VitalityState
+	var seen *time.Time
+	err := tx.QueryRow(ctx, `SELECT vitality, last_seen_at,
+			(SELECT coalesce(max(level), 0) FROM characters WHERE account_id = $2)
+		FROM characters WHERE id = $1`, characterID, accountID).Scan(&v.Stored, &seen, &v.AccountTop)
+	if seen != nil {
+		v.LastSeen = *seen
+	}
+	return v, err
+}
+
 // loadStorage lê o armazém da conta.
 func loadStorage(ctx context.Context, tx pgx.Tx, accountID int64) (StorageState, error) {
 	st := StorageState{AccountID: accountID}
@@ -443,6 +533,13 @@ func placeOf(r game.ItemRecord) int16 {
 // única transação. Um estado mais velho (Seq menor) que o já gravado é ignorado, e os
 // itens de um personagem só são trocados junto com a linha dele: nunca fica meio salvo.
 func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
+	_, err := s.SaveStatesAuction(ctx, states)
+	return err
+}
+
+// SaveStatesAuction é o SaveStates que também aplica as operações da casa de leilões que
+// vieram com os estados (na mesma transação) e devolve o que aconteceu com cada uma.
+func (s *Store) SaveStatesAuction(ctx context.Context, states []CharacterState) ([]AuctionResult, error) {
 	// Se o mesmo personagem vier duas vezes, vale o mais novo.
 	latest := map[int64]CharacterState{}
 	for _, c := range states {
@@ -451,9 +548,10 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 		}
 	}
 	if len(latest) == 0 {
-		return nil
+		return nil, nil
 	}
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+	var results []AuctionResult
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		batch := &pgx.Batch{}
 		order := make([]CharacterState, 0, len(latest))
 		for _, c := range latest {
@@ -462,20 +560,56 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 			if err != nil {
 				return err
 			}
+			quests, err := json.Marshal(c.Quests)
+			if err != nil {
+				return err
+			}
+			achievements, err := json.Marshal(c.Achievements)
+			if err != nil {
+				return err
+			}
+			mastery, err := json.Marshal(c.Mastery)
+			if err != nil {
+				return err
+			}
+			contracts, reputation, err := contractsJSON(c.Contracts, c.Reputation)
+			if err != nil {
+				return err
+			}
+			bestiary, err := json.Marshal(c.Bestiary)
+			if err != nil {
+				return err
+			}
+			discovered, err := json.Marshal(c.Discovered)
+			if err != nil {
+				return err
+			}
+			var classes []byte // nil = NULL: fica o que está no banco
+			if c.Classes.Main != "" {
+				if classes, err = json.Marshal(c.Classes); err != nil {
+					return err
+				}
+			}
 			a := c.Attrs
 			batch.Queue(`UPDATE characters SET x = $2, z = $3, level = $4, xp = $5, hp = $6, mp = $7, gold = $8,
 				save_seq = GREATEST(save_seq, $9::bigint), last_seen_at = now(),
 				attr_str = $10, attr_dex = $11, attr_con = $12, attr_int = $13, attr_wis = $14, attr_spi = $15,
 				skill_ranks = $16, hotbar = $17, karma = $18, pk_count = $19, pvp_kills = $20,
-				skin = $21, hair = $22, outfit = $23, head = $24, hide_hat = $25
+				skin = $21, hair = $22, outfit = $23, head = $24, hide_hat = $25, quests = $26,
+				achievements = $27, title = $28, spec = $29, mastery = $30, mastery_level = $31,
+				contracts = $32, reputation = $33, bestiary = $34,
+				zone = COALESCE(NULLIF($35::text, ''), zone),
+				classes = coalesce($36::jsonb, classes),
+				discovered = $37
 				WHERE id = $1 AND ($9::bigint = 0 OR save_seq < $9::bigint) RETURNING id`,
 				c.CharacterID, c.X, c.Z, c.Level, c.XP, nullIfFull(c.HP), nullIfFull(c.MP), max(c.Gold, 0), c.Seq,
 				max(a.Str, 0), max(a.Dex, 0), max(a.Con, 0), max(a.Int, 0), max(a.Wis, 0), max(a.Spi, 0), ranks, hotbar,
 				max(c.Karma, 0), max(c.PKs, 0), max(c.PvPKills, 0),
-				c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit, c.Appearance.Head, c.Appearance.HideHat)
+				c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit, c.Appearance.Head, c.Appearance.HideHat, quests,
+				achievements, c.Title, c.Spec, mastery, max(c.Mastery.Points, 0), contracts, reputation, bestiary, c.Zone, classes, discovered)
 		}
 		br := tx.SendBatch(ctx, batch)
-		var ids []int64
+		var ids, vits []int64
 		var rows [][]any
 		for _, c := range order {
 			var id int64
@@ -488,6 +622,7 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 				return err
 			}
 			ids = append(ids, id)
+			vits = append(vits, max(c.Vitality, 0))
 			for _, it := range c.Items {
 				rows = append(rows, []any{id, placeOf(it), int16(it.Slot), it.ItemID, int32(it.Count), int16(it.Enchant)})
 			}
@@ -496,6 +631,11 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 			return err
 		}
 		if len(ids) > 0 {
+			// A vitalidade vai à parte, só para quem foi gravado acima (save_seq já conferido).
+			if _, err := tx.Exec(ctx, `UPDATE characters c SET vitality = v.vit
+				FROM unnest($1::bigint[], $2::bigint[]) AS v(id, vit) WHERE c.id = v.id`, ids, vits); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, `DELETE FROM character_items WHERE character_id = ANY($1)`, ids); err != nil {
 				return err
 			}
@@ -504,8 +644,17 @@ func (s *Store) SaveStates(ctx context.Context, states []CharacterState) error {
 				return err
 			}
 		}
-		return saveStorages(ctx, tx, states)
+		if err := saveStorages(ctx, tx, states); err != nil {
+			return err
+		}
+		var err error
+		results, err = applyAuctionOps(ctx, tx, states)
+		return err
 	})
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 // saveStorages grava os armazéns que vieram junto (o mais novo de cada conta), na mesma
@@ -556,14 +705,48 @@ func nullIfFull(v int) *int {
 func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	var c Character
 	var x, z float32
-	var ranks, hotbar []byte
+	var ranks, hotbar, quests, achievements, mastery, contracts, reputation, bestiary, classes, discovered []byte
 	var a [6]int16
 	var skin, hair, outfit int16
 	err := row.Scan(&c.ID, &c.AccountID, &c.Name, &c.Class, &x, &z, &c.Level, &c.XP, &c.HP, &c.MP, &c.Gold, &c.kitGiven,
 		&a[0], &a[1], &a[2], &a[3], &a[4], &a[5], &ranks, &hotbar, &c.Emblem,
-		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat)
+		&c.Karma, &c.PKs, &c.PvPKills, &c.ClanLeftAt, &skin, &hair, &outfit, &c.Appearance.Head, &c.Appearance.HideHat, &quests,
+		&achievements, &c.Title, &c.Spec, &mastery, &contracts, &reputation, &bestiary, &c.xpCurve, &c.Zone, &classes, &discovered)
 	if err != nil {
 		return c, err
+	}
+	if len(discovered) > 0 {
+		if err := json.Unmarshal(discovered, &c.Discovered); err != nil {
+			return c, fmt.Errorf("discovered: %w", err)
+		}
+	}
+	if len(classes) > 0 {
+		if err := json.Unmarshal(classes, &c.Classes); err != nil {
+			return c, fmt.Errorf("classes: %w", err)
+		}
+	}
+	if len(mastery) > 0 {
+		if err := json.Unmarshal(mastery, &c.Mastery); err != nil {
+			return c, fmt.Errorf("mastery: %w", err)
+		}
+	}
+	if err := parseContracts(contracts, reputation, &c.Contracts, &c.Reputation); err != nil {
+		return c, err
+	}
+	if len(bestiary) > 0 {
+		if err := json.Unmarshal(bestiary, &c.Bestiary); err != nil {
+			return c, fmt.Errorf("bestiary: %w", err)
+		}
+	}
+	if len(achievements) > 0 {
+		if err := json.Unmarshal(achievements, &c.Achievements); err != nil {
+			return c, fmt.Errorf("achievements: %w", err)
+		}
+	}
+	if len(quests) > 0 {
+		if err := json.Unmarshal(quests, &c.Quests); err != nil {
+			return c, fmt.Errorf("quests: %w", err)
+		}
 	}
 	c.Emblem = game.EmblemOr(c.Class, c.Emblem)
 	c.Appearance.Skin, c.Appearance.Hair, c.Appearance.Outfit = int(skin), int(hair), int(outfit)
@@ -573,7 +756,66 @@ func scanCharacter(row pgx.CollectableRow) (Character, error) {
 	c.X, c.Z = float64(x), float64(z)
 	c.Attrs = game.Attrs{Str: int(a[0]), Dex: int(a[1]), Con: int(a[2]), Int: int(a[3]), Wis: int(a[4]), Spi: int(a[5])}
 	c.Ranks, c.Hotbar, err = parseProgress(ranks, hotbar)
+	c.fillClasses()
 	return c, err
+}
+
+// fillClasses: a classe ativa e o nível de cada classe para a tela de personagens (o da
+// ativa é o das colunas).
+func (c *Character) fillClasses() {
+	set := game.NormalClassSet(c.Class, c.Classes)
+	c.ActiveClass = set.Active
+	c.ClassLevels = nil
+	if len(set.List) < 2 {
+		return
+	}
+	for i, k := range set.List {
+		lv := k.Level
+		if k.Class == set.Active {
+			lv = c.Level
+		}
+		c.ClassLevels = append(c.ClassLevels, ClassLevel{Class: k.Class, Level: lv, Main: i == 0})
+	}
+}
+
+// convertXPCurve: a XP salva numa curva antiga vira a da curva de hoje (o mesmo nível e a
+// mesma fração dele, game.ConvertXP) e já fica salva, na transação que carrega o personagem
+// (a linha está travada com FOR UPDATE). Roda uma vez por personagem.
+//
+// Guarda do deploy: a Railway sobe o servidor novo antes de derrubar o antigo, e o antigo,
+// ao desligar, grava todo mundo com a XP da curva 1 sem mexer em xp_curve. Se o jogador já
+// tinha reconectado no novo, a linha está marcada na curva de hoje com XP da curva 1. O
+// save sempre grava a coluna level (nos dois servidores, e a conversão não muda o nível),
+// então a XP é conferida contra ela (game.CheckSavedXP): XP da curva 1 é convertida de
+// novo; XP que não cabe em nenhuma fica no início do nível salvo e vira um evento
+// "invariant" (ref "xp_curve") na telemetria. O nível salvo nunca desce.
+func convertXPCurve(ctx context.Context, tx pgx.Tx, c *Character) error {
+	var xp int64
+	level := c.Level
+	if int(c.xpCurve) < game.XPCurve {
+		xp = game.ConvertXP(c.XP, int(c.xpCurve))
+		level = game.LevelForXP(xp)
+	} else {
+		var how game.XPRepair
+		if xp, how = game.CheckSavedXP(c.XP, c.Level); how == game.XPOK {
+			return nil
+		}
+		level = max(game.LevelForXP(xp), min(c.Level, game.MaxLevel))
+		if how == game.XPClamped {
+			if err := insertEvents(ctx, tx, []GameEvent{{At: time.Now(), Kind: "invariant", CharacterID: c.ID, AccountID: c.AccountID,
+				Level: level, Ref: "xp_curve", Extra: map[string]any{
+					"value": fmt.Sprintf("nível %d com XP %d", c.Level, c.XP), "fixed": true, "xp": xp, "where": "load"}}}); err != nil {
+				return fmt.Errorf("registrar a XP inválida: %w", err)
+			}
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE characters SET xp = $2, level = $3, xp_curve = $4 WHERE id = $1`,
+		c.ID, xp, level, game.XPCurve); err != nil {
+		return fmt.Errorf("converter a XP: %w", err)
+	}
+	c.XP, c.Level, c.xpCurve = xp, level, game.XPCurve
+	c.fillClasses()
+	return nil
 }
 
 // progressJSON: ranks como {"id": rank} e a barra como lista (JSONB).

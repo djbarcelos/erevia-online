@@ -5,3 +5,11 @@ dist/
 .env
 server/bin/
 assets-src/
+test-results/
+playwright-report/
+
+# Gerado por scripts/build-ktx2-decoder.mjs (decodificador de KTX2 servido pelo próprio site)
+client/public/ktx2/
+
+# Resultados brutos das medições de FPS com GPU (e2e/bench-gpu.mjs)
+.bench/

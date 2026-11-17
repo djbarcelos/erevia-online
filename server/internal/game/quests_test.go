@@ -1,0 +1,125 @@
+package game
+
+import (
+	"slices"
+	"strings"
+	"testing"
+)
+
+func TestQuestDataIsConsistent(t *testing.T) {
+	if Quests[TutorialStart] == nil {
+		t.Fatalf("tutorial start %q missing", TutorialStart)
+	}
+	// Toda missão sem Unlock vem de uma sequência: a do tutorial ou a que começa numa
+	// missão de nível (ex.: a da subclasse).
+	seen := map[string]bool{}
+	follow := func(start string) {
+		for id := start; id != ""; id = Quests[id].Next {
+			if Quests[id] == nil {
+				t.Fatalf("chain points to missing quest %q", id)
+			}
+			if Quests[id].Unlock == 0 && seen[id] {
+				t.Fatalf("quest chain loops at %q", id)
+			}
+			if Quests[id].Unlock == 0 {
+				seen[id] = true
+			}
+		}
+	}
+	follow(TutorialStart)
+	chained := 0
+	for _, q := range Quests {
+		if q.Daily != 0 {
+			continue // diárias: saem do sorteio do dia (dailies.go)
+		}
+		if q.Unlock == 0 {
+			chained++
+		} else if q.Unlock < 1 || q.Unlock > MaxLevel || q.Next != "" && Quests[q.Next] == nil {
+			t.Errorf("%s: unlock level %d or next %q is wrong", q.ID, q.Unlock, q.Next)
+		} else {
+			follow(q.Next)
+		}
+	}
+	if len(seen) != chained {
+		t.Fatalf("as sequências chegam a %d de %d missões", len(seen), chained)
+	}
+	for _, q := range Quests {
+		if q.Title == "" || q.Text == "" || len(q.Steps) == 0 {
+			t.Errorf("%s: title, text and steps are required", q.ID)
+		}
+		for _, s := range q.Steps {
+			if s.Count < 1 || s.Text == "" {
+				t.Errorf("%s: step %+v needs count and text", q.ID, s)
+			}
+			if s.Goal == GoalTalk && s.Target != TalkMaster && s.Target != TalkGuardian && TalkerByName(s.Target) == nil {
+				t.Errorf("%s: unknown talk target %q", q.ID, s.Target)
+			}
+			if s.Goal == GoalKill && s.Target != "" {
+				for _, m := range strings.Split(s.Target, "|") {
+					if Monsters[m] == nil {
+						t.Errorf("%s: unknown monster %q", q.ID, m)
+					}
+				}
+			}
+		}
+		for _, it := range q.Reward.Items {
+			if Items[it.ID] == nil || it.Count < 1 {
+				t.Errorf("%s: bad reward item %+v", q.ID, it)
+			}
+		}
+	}
+}
+
+func TestQuestStepMatches(t *testing.T) {
+	s := QuestStep{Goal: GoalKill, Target: "skeleton_warrior|skeleton_rogue", Count: 5}
+	if !s.Matches(GoalKill, "skeleton_rogue") || s.Matches(GoalKill, "skeleton_minion") || s.Matches(GoalSkill, "skeleton_rogue") {
+		t.Fatal("target list matching is wrong")
+	}
+	if !(QuestStep{Goal: GoalBuy, Count: 1}).Matches(GoalBuy, "potion_hp_s") {
+		t.Fatal("empty target should match anything of the same goal")
+	}
+}
+
+// Contratos de caça: um por nível do 5 ao 39, nos monstros do nível, pagando 30% da XP dele,
+// e só para quem ainda está perto do nível (Until).
+func TestContracts(t *testing.T) {
+	for l := ContractFrom; l < MaxLevel; l++ {
+		q := Quests[ContractID(l)]
+		if q == nil {
+			t.Fatalf("sem contrato no %d", l)
+		}
+		if q.Unlock != l || q.Until != l+ContractWindow || q.Reward.XP <= 0 || q.Reward.XP >= XPToNext(l) {
+			t.Errorf("%s: %+v", q.ID, q)
+		}
+		hunted := huntMonsters(l)
+		for _, m := range q.Steps[0].Monsters() {
+			if !slices.Contains(hunted, m) {
+				t.Errorf("%s pede %s, que não se caça no %d", q.ID, m, l)
+			}
+		}
+	}
+	if Quests[ContractID(ContractFrom-1)] != nil || Quests[ContractID(MaxLevel)] != nil {
+		t.Fatal("contrato fora da faixa")
+	}
+}
+
+func TestEveryQuestHasACategory(t *testing.T) {
+	seen := map[string]bool{}
+	for _, q := range QuestsInOrder() {
+		if q.Category < QuestStory || q.Category > QuestTutorial {
+			t.Errorf("%s: category %d is not one of the Diary groups", q.ID, q.Category)
+		}
+		if seen[q.ID] {
+			t.Errorf("%s: listed twice", q.ID)
+		}
+		seen[q.ID] = true
+	}
+	if len(seen) != len(Quests) {
+		t.Fatalf("QuestsInOrder has %d quests, Quests has %d", len(seen), len(Quests))
+	}
+	for id := TutorialStart; id != ""; id = Quests[id].Next {
+		if Quests[id].Category != QuestTutorial {
+			t.Errorf("%s: the tutorial chain should be in the tutorial group", id)
+		}
+	}
+}

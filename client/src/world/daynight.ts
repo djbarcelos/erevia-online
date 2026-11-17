@@ -1,6 +1,5 @@
 import {
   Color3,
-  Color4,
   Constants,
   DynamicTexture,
   GlowLayer,
@@ -11,8 +10,13 @@ import {
   Vector3,
   type Scene,
 } from "@babylonjs/core";
+import type { Region } from "../ui/regions";
 import { mulberry32 } from "./map-painter";
+import { RenderQuality } from "./render";
 import type { WorldScene } from "./scene";
+import { setCloudSky, setCloudTime } from "./sky-clouds";
+import { setWaterSky, setWaterTime } from "./water";
+import { setWindTime } from "./wind";
 import { Torches } from "./torches";
 import type { WorldData } from "./world-data";
 
@@ -22,6 +26,9 @@ import type { WorldData } from "./world-data";
 
 /** Início da noite na fase do ciclo (igual ao servidor: game.NightStart). */
 export const NIGHT_START = 0.75;
+
+/** Fase fixa das masmorras: a noite fechada (tochas acesas, luar frio), de dia e de noite. */
+export const INDOOR_PHASE = 0.875;
 
 export function isNight(phase: number): boolean {
   return phase >= NIGHT_START;
@@ -136,6 +143,12 @@ function sample(phase: number): Key {
     shadow: num(a.shadow, b.shadow),
     night: num(a.night, b.night),
   };
+}
+
+/** 0–1: perto do nascer (fase 0) ou do pôr do sol (~0,71), quando a luz fica dourada. */
+function golden(phase: number): number {
+  const bell = (c: number, w: number) => Math.max(0, 1 - Math.abs(phase - c) / w);
+  return Math.max(bell(0.02, 0.06), bell(1.02, 0.06), bell(0.71, 0.07));
 }
 
 function smooth(t: number): number {
@@ -263,8 +276,10 @@ function additive(scene: Scene, name: string, tex: DynamicTexture): StandardMate
 
 /** Liga céu, luzes, neblina, sol, lua, estrelas e tochas à hora do mundo. */
 export class DayNight {
-  /** Camada de brilho compartilhada (chamas e efeitos visuais). */
+  /** Camada de brilho compartilhada (chamas e efeitos visuais). É o bloom do render. */
   readonly glow: GlowLayer;
+  /** Presets de qualidade, pós-processamento e cor por região. */
+  readonly render: RenderQuality;
   private torches: Torches | null = null;
   private sunDisc: Mesh;
   private moon: Mesh;
@@ -273,6 +288,8 @@ export class DayNight {
   private sunMat: StandardMaterial;
   private moonMat: StandardMaterial;
   private lastSky = -1;
+  /** Masmorra: sem céu (nada de sol, lua nem estrelas) e o chão de fora é rocha escura. */
+  private readonly indoor: boolean;
   private lastLightSweep = 0;
   private dir = new Vector3();
   private _night = 0;
@@ -282,8 +299,10 @@ export class DayNight {
     data: WorldData,
   ) {
     const scene = world.scene;
+    this.indoor = data.indoor === true;
     this.glow = new GlowLayer("glow", scene, { mainTextureRatio: 0.5, blurKernelSize: 48 });
     this.glow.intensity = 0.9;
+    this.render = new RenderQuality(world, this.glow);
 
     this.stars = MeshBuilder.CreateSphere("stars", { diameter: 1500, segments: 16, sideOrientation: Mesh.BACKSIDE }, scene);
     this.starMat = additive(scene, "starMat", starTexture(scene));
@@ -325,6 +344,11 @@ export class DayNight {
     if (data.torches?.length) this.torches = new Torches(scene, data.torches, world, this.glow);
   }
 
+  /** Regiões do mapa, para a névoa e a cor por região. */
+  setRegions(regions: Region[]): void {
+    this.render.setRegions(regions);
+  }
+
   /** 0 (dia claro) a 1 (noite fechada). */
   get night(): number {
     return this._night;
@@ -336,22 +360,36 @@ export class DayNight {
     this._night = k.night;
 
     // Céu (redesenhado só quando a fase muda o bastante).
+    let skyChanged = false;
     if (Math.abs(phase - this.lastSky) > 0.0015) {
       this.lastSky = phase;
       this.paintSky(k);
+      skyChanged = true;
     }
-    const fog = hex(k.fog);
-    scene.fogColor = fog;
-    scene.fogDensity = k.fogDensity;
-    scene.clearColor = new Color4(fog.r, fog.g, fog.b, 1);
+    // Tempo do vento, da água e das nuvens (no vertex/fragment shader; nada anima em CPU).
+    const seconds = performance.now() / 1000;
+    setWindTime(seconds);
+    setWaterTime(seconds);
+    setCloudTime(seconds);
     scene.ambientColor = hex(k.ambient);
     hemi.intensity = k.hemi;
-    hemi.diffuse = hex(k.hemiSky);
-    hemi.groundColor = hex(k.hemiGround);
-    this.world.outerMat.diffuseColor = Color3.Lerp(new Color3(0.2, 0.26, 0.14), new Color3(0.07, 0.09, 0.08), k.night);
+    // Névoa e luz do céu: a hora, misturada com a cor da região (render.ts).
+    this.render.update(player, {
+      fog: hex(k.fog),
+      fogDensity: k.fogDensity,
+      hemiSky: hex(k.hemiSky),
+      hemiGround: hex(k.hemiGround),
+      light: hex(k.lightColor),
+      night: k.night,
+      golden: golden(phase),
+    });
+    this.world.outerMat.diffuseColor = this.indoor
+      ? new Color3(0.05, 0.05, 0.07)
+      : Color3.Lerp(new Color3(0.2, 0.26, 0.14), new Color3(0.07, 0.09, 0.08), k.night);
 
     // Sol de dia, lua à noite. Perto do horizonte a luz some, então a troca não aparece.
     const { elevation, moon } = bodyDir(phase, this.dir);
+    if (skyChanged) this.paintSkyFx(k);
     const up = smooth(elevation / 0.22);
     const lightDir = new Vector3(-this.dir.x, -Math.max(this.dir.y, 0.3), -this.dir.z).normalize();
     sun.direction.copyFrom(lightDir);
@@ -378,6 +416,12 @@ export class DayNight {
     this.stars.setEnabled(starVis > 0.01);
     this.stars.visibility = starVis;
     this.stars.rotation.y = phase * Math.PI * 0.6;
+    if (this.indoor) {
+      // Cripta: o luar entra como luz (acima), mas o céu não aparece.
+      this.sunDisc.setEnabled(false);
+      this.moon.setEnabled(false);
+      this.stars.setEnabled(false);
+    }
 
     this.torches?.update(k.night, performance.now() / 1000, player);
     this.glow.intensity = 0.55 + 0.45 * k.night;
@@ -390,6 +434,22 @@ export class DayNight {
         if (typeof lit.maxSimultaneousLights === "number" && lit.maxSimultaneousLights < 6) lit.maxSimultaneousLights = 6;
       }
     }
+  }
+
+  /**
+   * Cores do céu da hora para a água (reflexo falso) e para as nuvens (topo na cor da luz,
+   * parte de baixo na cor do céu). Só quando a fase muda o bastante, como o degradê.
+   */
+  private paintSkyFx(k: Key): void {
+    const hor = hex(k.horizon);
+    const mid = hex(k.mid);
+    const zen = hex(k.zenith);
+    const light = hex(k.lightColor);
+    setWaterSky(Color3.Lerp(hor, mid, 0.25), Color3.Lerp(mid, zen, 0.6), k.night);
+    const lit = Color3.Lerp(Color3.White(), light, 0.4).scale(1.05 - 0.55 * k.night);
+    const shade = Color3.Lerp(mid, hor, 0.3).scale(0.6);
+    const len = Math.hypot(this.dir.x, this.dir.z) || 1;
+    setCloudSky(lit, shade, k.night, this.dir.x / len, this.dir.z / len);
   }
 
   private paintSky(k: Key): void {

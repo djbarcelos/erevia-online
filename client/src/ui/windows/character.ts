@@ -11,11 +11,13 @@ import type { Progress, SelfStats, StatBlock } from "../../gen/erevia/v1/game_pb
 import type { ItemStore } from "../items";
 import { bar, button, el, fmt, toast, tooltip } from "../kit";
 import { createPreview } from "../preview3d";
+import { specInfo } from "../specs";
 import type { BodyLook } from "../../world/body-look";
 
 export interface CharacterDeps {
   store: ItemStore;
-  me(): { myClass: string; myLevel: number; name: string; emblem: string; body?: BodyLook };
+  /** myClass: a classe ativa; bodyClass: a principal (o modelo da prévia). */
+  me(): { myClass: string; myLevel: number; name: string; emblem: string; body?: BodyLook; bodyClass?: string };
   stats(): SelfStats | null;
   progress(): Progress | null;
   onStats(fn: () => void): () => void;
@@ -97,7 +99,9 @@ export function buildCharacter(d: CharacterDeps): HTMLElement {
   const canvas = el("canvas", "attr-canvas");
   const xp = bar("xp");
   const sub = el("div", "ap-sub");
-  const portrait = el("section", "attr-portrait", el("div", "ap-stage", canvas), el("div", "ap-info", el("h3", "title ap-name", me.name), sub, xp.root));
+  // Especialização (segunda classe): nome na cor do caminho e o bônus de atributos.
+  const specLine = el("div", "ap-spec small");
+  const portrait = el("section", "attr-portrait", el("div", "ap-stage", canvas), el("div", "ap-info", el("h3", "title ap-name", me.name), sub, specLine, xp.root));
   portrait.style.setProperty("--emblem", me.emblem);
   const pv = createPreview(canvas, { radius: 5.2 });
 
@@ -152,7 +156,7 @@ export function buildCharacter(d: CharacterDeps): HTMLElement {
     el("div", "attr-head", el("h3", "title", "Atributos"), pointsEl),
     list,
     el("div", "attr-actions", undo, suggest, confirm),
-    el("p", "small muted attr-note", "Cada nível dá 3 pontos. A base vem da classe; os pontos somam em cima."),
+    el("p", "small muted attr-note", "Cada nível dá 3 pontos. A base vem da classe (e do caminho, a partir do nível 20); os pontos somam em cima."),
   );
 
   // ---------- Combate ----------
@@ -213,7 +217,13 @@ export function buildCharacter(d: CharacterDeps): HTMLElement {
     const m = d.me();
     const p = d.progress();
     const s = d.stats();
-    sub.textContent = `${classInfo(m.myClass).label} · Nível ${m.myLevel}`;
+    const spec = specInfo(p?.spec);
+    sub.textContent = `${classInfo(m.myClass).label}${spec ? ` · ${spec.name}` : ""} · Nível ${m.myLevel}`;
+    specLine.hidden = !spec;
+    if (spec) {
+      specLine.textContent = `Caminho: ${spec.name} (${spec.bonusText})`;
+      specLine.style.color = spec.color;
+    }
     if (s) {
       if (s.xpNextLevel > 0n) {
         const into = Number(s.xp - s.xpLevelStart);
@@ -224,7 +234,8 @@ export function buildCharacter(d: CharacterDeps): HTMLElement {
     // Atributos: base da classe + pontos + rascunho
     const f = free();
     pointsEl.replaceChildren(el("span", "label", "Pontos livres"), el("b", f > 0 ? "gold pulse" : "", String(Math.max(0, f))));
-    const values = ATTRS.map((a) => (p?.base?.[a.id] ?? 0) + (p?.spent?.[a.id] ?? 0) + draft[a.id]);
+    // Base da classe + bônus da especialização + pontos + rascunho.
+    const values = ATTRS.map((a) => (p?.base?.[a.id] ?? 0) + (spec?.bonus?.[a.id] ?? 0) + (p?.spent?.[a.id] ?? 0) + draft[a.id]);
     const top = Math.max(30, ...values);
     ATTRS.forEach((a, i) => {
       const r = rows.get(a.id)!;
@@ -262,7 +273,7 @@ export function buildCharacter(d: CharacterDeps): HTMLElement {
     const key = JSON.stringify(look);
     if (key !== lastLook) {
       lastLook = key;
-      void pv.show(m.myClass as ClassId, look);
+      void pv.show((m.bodyClass ?? m.myClass) as ClassId, look);
     }
   }
 

@@ -1,0 +1,107 @@
+# Teste de caos noturno (tunnel#117): 50 bots sorteando ações válidas e inválidas de todo o
+# protocolo por 10 minutos, contra o servidor com DEBUG_INVARIANTS=1 (invariante quebrada
+# derruba o processo). Falha se houver panic, invariante, erro do banco, servidor fora do ar
+# no fim ou economia que não fecha (banco × telemetria). A semente é o dia do ano: para
+# reproduzir uma noite que falhou, rode o mesmo comando com a mesma -seed (ver README).
+name: Caos noturno
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 03:00 em Brasília
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: "Semente (vazio = dia do ano)"
+        required: false
+      duration:
+        description: "Duração"
+        required: false
+        default: "10m"
+
+concurrency:
+  group: nightly-chaos
+  cancel-in-progress: false
+
+jobs:
+  chaos:
+    name: Caos (50 bots, 10 min)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: erevia
+          POSTGRES_PASSWORD: erevia
+          POSTGRES_DB: erevia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erevia"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: server
+    env:
+      DATABASE_URL: postgres://erevia:erevia@localhost:5432/erevia?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Compilar servidor e loadbot
+        run: |
+          go build -o "$RUNNER_TEMP/zone" ./cmd/zone
+          go build -o "$RUNNER_TEMP/loadbot" ./cmd/loadbot
+
+      - name: Subir o servidor (DEBUG_INVARIANTS=1, DEV_LOGIN=true)
+        run: |
+          DEBUG_INVARIANTS=1 DEV_LOGIN=true ADDR=127.0.0.1:8080 \
+            nohup "$RUNNER_TEMP/zone" > "$RUNNER_TEMP/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/server.pid"
+          for i in $(seq 1 60); do
+            curl -fs http://127.0.0.1:8080/healthz && exit 0
+            sleep 1
+          done
+          echo "o servidor não subiu"; cat "$RUNNER_TEMP/server.log"; exit 1
+
+      - name: Caos
+        run: |
+          SEED="${{ github.event.inputs.seed }}"
+          [ -n "$SEED" ] || SEED=$(date +%j)
+          DURATION="${{ github.event.inputs.duration }}"
+          [ -n "$DURATION" ] || DURATION=10m
+          echo "semente $SEED"
+          set +e
+          # O mesmo que: go run ./cmd/loadbot -chaos -bots 50 -duration 10m -seed $(date +%j)
+          "$RUNNER_TEMP/loadbot" -chaos -bots 50 -duration "$DURATION" -seed "$SEED" \
+            -url http://127.0.0.1:8080 -db "$DATABASE_URL" -serverlog "$RUNNER_TEMP/server.log" \
+            | tee "$RUNNER_TEMP/chaos.txt"
+          code=${PIPESTATUS[0]}
+          echo "### Caos noturno (semente $SEED)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          sed -n '/RELATÓRIO DO CAOS/,$p' "$RUNNER_TEMP/chaos.txt" | grep -v '^  ' | head -80 >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          exit $code
+
+      - name: Parar o servidor
+        if: always()
+        run: |
+          pid=$(cat "$RUNNER_TEMP/server.pid" 2>/dev/null) || exit 0
+          kill -INT "$pid" 2>/dev/null || { echo "o servidor já tinha caído"; exit 0; }
+          for i in $(seq 1 20); do kill -0 "$pid" 2>/dev/null || exit 0; sleep 1; done
+          kill -9 "$pid" || true
+
+      - name: Guardar logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: caos-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/server.log
+            ${{ runner.temp }}/chaos.txt
+          retention-days: 14

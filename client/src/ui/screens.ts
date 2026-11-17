@@ -15,6 +15,7 @@ import { art, button, el, isCompact, tabs, toast } from "./kit";
 import { CLASS_BAR_NAMES, CLASS_EXTRA, DEFAULT_LOOK } from "./looks";
 import { createPreview, type Appearance, type Preview } from "./preview3d";
 import { bodyEditor } from "./body-editor";
+import { openWhatsNewAlone } from "./windows/whatsnew";
 import { normalLook, ORIGINAL_LOOK, setBodyPalettes, toBodyLook, type BodyLook } from "../world/body-look";
 
 const overlay = document.getElementById("overlay")!;
@@ -40,8 +41,8 @@ function mount(kind: string, ...nodes: Node[]): void {
 
 type Screen = "screen-loading" | null;
 
-/** Mostra a tela de carregando, ou esconde tudo (null = entrou no jogo). */
-export function showScreen(screen: Screen): void {
+/** Mostra a tela de carregando (com um texto opcional), ou esconde tudo (null = entrou no jogo). */
+export function showScreen(screen: Screen, text = "Carregando…"): void {
   if (screen === null) {
     preview?.dispose();
     preview = null;
@@ -49,9 +50,87 @@ export function showScreen(screen: Screen): void {
     stopBg = null;
     overlay.hidden = true;
     content.replaceChildren();
+    progress = null;
     return;
   }
-  mount("loading", el("div", "entry-loading", el("h1", "logo-word", "EREVIA"), el("span", "spinner"), el("p", "muted", "Carregando…")));
+  progress = null;
+  const spinner = el("span", "spinner");
+  const label = el("p", "load-label", text);
+  const fill = el("div", "load-fill");
+  const bar = el("div", "load-bar", fill);
+  bar.hidden = true;
+  const stepsEl = el("ol", "load-steps");
+  stepsEl.hidden = true;
+  const place = el("h2", "load-place");
+  const dest = el("div", "load-dest", el("span", "load-over", "Você está indo para"), place);
+  dest.hidden = true;
+  const tip = el("p", "load-tip", art(ui("bulb", 18), "load-tip-icon"), el("span", null, LOAD_TIPS[Math.floor(Math.random() * LOAD_TIPS.length)]));
+  mount("loading", el("div", "entry-loading", dest, el("div", "load-mid", el("h1", "logo-word", "EREVIA"), spinner, bar, stepsEl, label), tip));
+  progress = { spinner, bar, fill, stepsEl, label, dest, place };
+}
+
+/** Dicas da tela de carregamento (só o que o jogo tem hoje). */
+const LOAD_TIPS = [
+  "Clique no chão para andar e em um monstro para atacar. As teclas 1 a 0 usam a barra de atalhos.",
+  "O Diário de missões (J) deixa você fixar até 3 missões no painel do HUD.",
+  "Em grupo, a experiência dos monstros é dividida entre quem está por perto.",
+  "O Barbeiro da praça muda o visual do seu personagem quando você quiser.",
+  "Poções na barra de atalhos gastam um toque e ficam em recarga por alguns segundos.",
+];
+
+interface LoadingUi {
+  spinner: HTMLElement;
+  bar: HTMLElement;
+  fill: HTMLElement;
+  stepsEl: HTMLElement;
+  label: HTMLElement;
+  dest: HTMLElement;
+  place: HTMLElement;
+}
+let progress: LoadingUi | null = null;
+
+/** Diz, no alto da tela de carregamento, para onde o personagem está indo ("Você está indo para ..."). */
+export function setLoadingDestination(name: string): void {
+  if (!progress || !name) return;
+  progress.place.textContent = name;
+  progress.dest.hidden = false;
+}
+
+/**
+ * Barra de progresso da entrada no mundo, com etapas ("Mapa", "Cenário"…): `current` é a etapa em curso
+ * (steps.length = tudo pronto). Troca o spinner pela barra, desenhada em um segmento por etapa.
+ */
+export function setLoadingProgress(steps: string[], current: number): void {
+  const p = progress;
+  if (!p) return;
+  p.spinner.hidden = true;
+  p.bar.hidden = true; // a barra contínua fica só para leitores de tela; o desenho são os segmentos
+  p.stepsEl.hidden = false;
+  const k = steps.length ? Math.min(1, current / steps.length) : 1;
+  p.fill.style.width = `${Math.round(k * 100)}%`;
+  p.stepsEl.setAttribute("role", "progressbar");
+  p.stepsEl.setAttribute("aria-valuenow", String(Math.round(k * 100)));
+  p.stepsEl.replaceChildren(
+    ...steps.map((s, i) => el("li", i < current ? "done" : i === current ? "now" : "", el("i"), el("span", null, s))),
+  );
+  p.label.textContent = current < steps.length ? steps[current] : "Pronto";
+}
+
+/** Sai da tela de carregamento com um fade curto (sem corte seco) e some de vez. */
+export function leaveLoadingScreen(ms = 300): Promise<void> {
+  if (overlay.hidden) return Promise.resolve();
+  return new Promise((resolve) => {
+    overlay.style.transition = `opacity ${ms}ms ease`;
+    overlay.style.opacity = "0";
+    overlay.style.pointerEvents = "none";
+    window.setTimeout(() => {
+      showScreen(null);
+      overlay.style.transition = "";
+      overlay.style.opacity = "";
+      overlay.style.pointerEvents = "";
+      resolve();
+    }, ms);
+  });
 }
 
 export function showMessage(title: string, text: string, buttonText: string, onClick: () => void): void {
@@ -87,7 +166,7 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
 
   const social = el("div", "stack");
   if (providers.google) {
-    const a = el("a", "btn btn-block btn-social google");
+    const a = el("a", "btn btn-gold btn-block btn-social google");
     a.href = "/api/auth/google/login";
     a.innerHTML = `${ui("google", 20)}<span>Entrar com Google</span>`;
     social.append(a);
@@ -105,7 +184,7 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
   if (loginError) error.textContent = LOGIN_ERRORS[loginError] ?? "Falha no login.";
 
   if (providers.dev) {
-    if (social.childElementCount) card.append(el("div", "divider", "ou"));
+    if (social.childElementCount) card.append(el("div", "divider", "ou, no servidor de testes"));
     const form = el("form", "dev-login");
     const user = el("input", "input");
     user.placeholder = "Nome de usuário";
@@ -141,30 +220,82 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
     card.append(el("label", "label", "Login de desenvolvimento (só local)"), form);
   }
   if (!providers.google && !providers.discord && !providers.dev) card.append(el("p", "muted", "Nenhum login configurado no servidor."));
-  card.append(error);
+  card.append(error, el("p", "login-legal small muted", "Ao entrar, você concorda com os ", legalLink("termos"), " e com a ", legalLink("privacidade"), "."));
 
-  const news = el("aside", "login-news frame glass", el("h2", "title", "Novidades"));
+  const news = el("aside", "login-news", el("h2", "title", "Novidades"));
   for (const n of NEWS) {
     news.append(
       el("article", "news-item", el("div", "news-meta", el("span", `news-tag t-${n.tag.toLowerCase()}`, n.tag)), el("h3", null, n.title), el("p", null, n.text)),
     );
   }
+  news.append(button("O que há de novo", "btn btn-sm btn-ghost news-all", openWhatsNewAlone));
 
   const logo = el(
     "header",
     "login-logo",
-    el("div", "logo-crest", el("span")),
+    el("p", "logo-over", "As terras de Vel'Aran"),
     el("h1", "logo-word", "EREVIA"),
     el("p", "logo-tag", "As terras partidas esperam por você"),
   );
+  const status = el("span", "srv-status", el("i", "srv-dot"), el("span", null, "Verificando o servidor…"));
+  void serverStatus(status);
   const layout = el(
     "div",
     "login-layout scroll",
-    el("div", "login-main", logo, card),
-    news,
-    el("footer", "login-foot", el("span", null, "Modelos 3D: KayKit (CC0)"), el("span", null, "© 2026 Erevia")),
+    el("div", "login-main", logo, news),
+    card,
+    el(
+      "footer",
+      "login-foot",
+      status,
+      newsLink(),
+      legalLink("privacidade"),
+      legalLink("termos"),
+      el("span", null, "Modelos 3D: KayKit (CC0)"),
+      el("span", null, "© 2026 Erevia"),
+    ),
   );
   mount("login", layout);
+}
+
+/** Preenche o estado do servidor no rodapé do login (GET /healthz). */
+async function serverStatus(box: HTMLElement): Promise<void> {
+  const t0 = performance.now();
+  let ok = false;
+  try {
+    ok = (await fetch("/healthz", { cache: "no-store" })).ok;
+  } catch {
+    ok = false;
+  }
+  box.classList.toggle("down", !ok);
+  box.lastElementChild!.textContent = ok ? `Servidor online · ${Math.round(performance.now() - t0)} ms` : "Servidor indisponível";
+}
+
+// ---------------------------------------------------------------------------------------
+// Páginas legais (estáticas: client/privacidade.html e client/termos.html)
+// ---------------------------------------------------------------------------------------
+
+const LEGAL = {
+  privacidade: { href: "/privacidade.html", label: "Política de Privacidade" },
+  termos: { href: "/termos.html", label: "Termos de Uso" },
+} as const;
+
+/** Link para uma página legal (abre em outra aba para não perder a tela atual). */
+function legalLink(kind: keyof typeof LEGAL, text: string = LEGAL[kind].label): HTMLAnchorElement {
+  const a = el("a", "legal-link", text);
+  a.href = LEGAL[kind].href;
+  a.target = "_blank";
+  a.rel = "noopener";
+  return a;
+}
+
+/** Link para a página pública de novidades (client/novidades.html). */
+function newsLink(): HTMLAnchorElement {
+  const a = el("a", "legal-link", "Novidades");
+  a.href = "/novidades";
+  a.target = "_blank";
+  a.rel = "noopener";
+  return a;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -260,23 +391,46 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     (id) => setMode(id as typeof mode),
     "tabs mode-tabs",
   );
-  top.append(logout, modeTabs.root, el("span", "account small muted", me.displayName ? `Conectado como ${me.displayName}` : ""));
+  const account = button("", "btn btn-ghost btn-sm btn-account", () => openAccountDialog(me.displayName, roster.length, onLogout));
+  account.innerHTML = `${ui("user", 16)}<span>Conta</span>`;
+  account.setAttribute("aria-label", "Conta: privacidade, termos e apagar a conta");
+  top.append(
+    logout,
+    account,
+    modeTabs.root,
+    el(
+      "span",
+      "account small muted",
+      me.displayName ? `Conectado como ${me.displayName}` : "",
+      el("span", "account-legal", legalLink("privacidade", "Privacidade"), legalLink("termos", "Termos")),
+    ),
+  );
 
   // ---------- Seleção ----------
   const selectPanel = el("aside", "char-panel left frame glass select-panel");
   const selectFoot = el("div", "char-foot select-foot");
+  const detailPanel = el("aside", "char-panel right frame glass select-panel detail-panel");
   let picked = 0;
 
+  /** "Mago · Nv 20" (a classe ativa) e, com subclasse, "Cavaleiro 30 · Mago 20". */
+  const classLine = (c: CharacterInfo, nv: string) => `${classInfo(c.activeClass ?? c.class).label} · ${nv} ${c.level ?? 1}`;
+  const classesLine = (c: CharacterInfo) => (c.classes && c.classes.length > 1 ? c.classes.map((k) => `${classInfo(k.class).label} ${k.level}`).join(" · ") : "");
   const renderSelect = () => {
     selectPanel.replaceChildren(el("h2", "title panel-title", "Personagens", el("span", "count", ` ${roster.length}/${max}`)));
     roster.forEach((c, i) => {
-      const info = classInfo(c.class);
+      const info = classInfo(c.activeClass ?? c.class);
       const b = el("button", "roster-slot");
       b.type = "button";
       b.setAttribute("aria-pressed", String(i === picked));
       b.style.setProperty("--cc", info.color);
       b.style.setProperty("--emblem", c.emblem ?? DEFAULT_LOOK[c.class].emblem);
-      b.append(el("span", "roster-crest", info.label[0]), el("span", "roster-info", el("b", null, c.name), el("span", null, `${info.label} · Nv ${c.level ?? 1}`)));
+      b.append(
+        el("span", "roster-crest", info.label[0]),
+        el("span", "roster-info", el("b", null, c.name), el("span", null, info.label + (c.classes && c.classes.length > 1 ? " · subclasse" : "")), el("small", null, CLASS_EXTRA[c.activeClass ?? c.class].role)),
+        el("span", "roster-lvl", el("small", null, "Nv"), el("b", null, String(c.level ?? 1))),
+      );
+      const subs = classesLine(c);
+      if (subs) b.title = subs;
       b.onclick = () => {
         picked = i;
         renderSelect();
@@ -295,7 +449,8 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     if (!c) return;
     const look = rosterLook(c);
     void preview?.show(c.class, look);
-    setPlate(c.name, `${classInfo(c.class).label} · Nível ${c.level ?? 1}`, look.emblem);
+    const subs = classesLine(c);
+    setPlate(c.name, classLine(c, "Nível") + (subs ? ` (${subs})` : ""), look.emblem);
     const play = button("Entrar no mundo", "btn btn-gold btn-play", () => onPlay(c));
     const info = classInfo(c.class);
     const extra = CLASS_EXTRA[c.class];
@@ -530,7 +685,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     }
   }
 
-  root.append(stage, top, selectPanel, classPanel, mobileTabs.root, lookPanel, selectFoot, createFoot);
+  root.append(stage, top, selectPanel, detailPanel, classPanel, mobileTabs.root, lookPanel, selectFoot, createFoot);
   mount("chars", root);
   // O palco 3D é criado depois de o canvas estar na página (precisa do tamanho).
   preview = createPreview(canvas);
@@ -539,4 +694,120 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
   spinR.onclick = () => preview?.spin(0.6);
   modeTabs.select(mode, false);
   setMode(mode);
+}
+
+// ---------------------------------------------------------------------------------------
+// Conta: privacidade, termos e apagar a conta
+// ---------------------------------------------------------------------------------------
+
+/** Palavra que o jogador digita para apagar a conta (o servidor confere de novo). */
+const DELETE_WORD = "APAGAR";
+
+/** Janela da conta sobre a tela de personagens. Apagar é para sempre e exige digitar APAGAR. */
+function openAccountDialog(displayName: string, characters: number, onDeleted: () => void): void {
+  document.querySelector(".account-modal")?.remove();
+  const scrim = el("div", "account-modal");
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") close();
+  };
+  const close = () => {
+    scrim.remove();
+    document.removeEventListener("keydown", onKey, true);
+  };
+  document.addEventListener("keydown", onKey, true);
+  scrim.onclick = (e) => {
+    if (e.target === scrim) close();
+  };
+
+  const x = button("✕", "btn btn-icon btn-ghost btn-sm account-x", close);
+  x.setAttribute("aria-label", "Fechar");
+
+  const confirm = el("input", "input account-confirm");
+  confirm.id = "account-confirm";
+  confirm.autocomplete = "off";
+  confirm.spellcheck = false;
+  confirm.placeholder = DELETE_WORD;
+  const label = el("label", "label", `Digite ${DELETE_WORD} para confirmar`);
+  label.htmlFor = confirm.id;
+  const error = el("p", "account-error bad small");
+  error.setAttribute("role", "alert");
+  const del = button("", "btn btn-danger btn-block");
+  del.innerHTML = `${ui("trash", 16)}<span>Apagar minha conta</span>`;
+  del.disabled = true;
+  const typed = () => confirm.value.trim() === DELETE_WORD;
+  confirm.oninput = () => {
+    del.disabled = !typed();
+    error.textContent = "";
+  };
+  const run = async () => {
+    if (!typed() || del.classList.contains("loading")) return;
+    del.disabled = true;
+    confirm.disabled = true;
+    del.classList.add("loading");
+    try {
+      await api.deleteAccount(DELETE_WORD);
+      forgetLocalData();
+      close();
+      showMessage(
+        "Conta apagada",
+        "Sua conta, os personagens, os itens e o armazém foram apagados para sempre. Obrigado por ter jogado Erevia.",
+        "Voltar ao início",
+        onDeleted,
+      );
+    } catch (err) {
+      error.textContent = err instanceof ApiError ? err.message : "Não foi possível apagar a conta. Tente de novo.";
+      confirm.disabled = false;
+      del.disabled = !typed();
+    } finally {
+      del.classList.remove("loading");
+    }
+  };
+  del.onclick = () => void run();
+  confirm.onkeydown = (e) => {
+    if (e.key === "Enter") void run();
+  };
+
+  const chars = characters === 1 ? "o seu personagem" : characters > 1 ? `os seus ${characters} personagens` : "";
+  const box = el(
+    "section",
+    "account-dialog frame",
+    x,
+    el("h2", "title", "Conta"),
+    displayName ? el("p", "muted small", `Conectado como ${displayName}`) : null,
+    el("nav", "account-links", legalLink("privacidade"), legalLink("termos")),
+    el(
+      "div",
+      "account-danger",
+      el("h3", "title", "Apagar a conta"),
+      el(
+        "p",
+        null,
+        `Apaga para sempre a conta${chars ? `, ${chars}` : ""}, os itens, as moedas, o armazém e a ligação com o seu login do Google ou do Discord. Não dá para desfazer.`,
+      ),
+      el(
+        "p",
+        "small muted",
+        "Se você lidera um clã, a liderança passa para o membro de cargo mais alto (ou o clã é desfeito, se ficar vazio). Quem estiver jogando com esta conta é desconectado. As cópias de segurança somem em até 27 dias.",
+      ),
+      label,
+      confirm,
+      error,
+      del,
+    ),
+  );
+  box.setAttribute("role", "dialog");
+  box.setAttribute("aria-modal", "true");
+  box.setAttribute("aria-label", "Conta");
+  scrim.append(box);
+  document.body.append(scrim);
+  if (!isCompact()) confirm.focus({ preventScroll: true });
+}
+
+/** Apaga o que o jogo guardou neste navegador (preferências e barras antigas, "erevia.*"). */
+function forgetLocalData(): void {
+  try {
+    for (const key of Object.keys(localStorage)) if (key.startsWith("erevia.")) localStorage.removeItem(key);
+  } catch {
+    // Navegador sem localStorage (modo privado restrito): nada a apagar.
+  }
 }

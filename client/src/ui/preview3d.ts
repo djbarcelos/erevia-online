@@ -21,6 +21,7 @@ import {
   Vector3,
 } from "@babylonjs/core";
 import type { ClassId } from "../api";
+import { watchEngine } from "../net/errors";
 import { AnimController } from "../world/anim";
 import { ORIGINAL_LOOK, type BodyLook } from "../world/body-look";
 import { CharacterModels, type AnimRole, type CharacterInstance } from "../world/models";
@@ -50,6 +51,7 @@ export interface Preview {
 export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number; interactive?: boolean } = {}): Preview {
   const engine = new Engine(canvas, true, { alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: false, stencil: true }, true);
   engine.setHardwareScalingLevel(1 / Math.min(2, devicePixelRatio || 1));
+  watchEngine(engine, "prévia"); // o engine.dispose() solta o ouvinte
   const scene = new Scene(engine);
   scene.clearColor = new Color4(0, 0, 0, 0);
   scene.ambientColor = new Color3(0.25, 0.22, 0.28);
@@ -72,14 +74,16 @@ export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number
     auto.idleRotationSpinupTime = 1500;
   }
 
-  const hemi = new HemisphericLight("hemi", new Vector3(0, 1, 0), scene);
-  hemi.intensity = 0.55;
-  hemi.diffuse = new Color3(0.85, 0.82, 1);
-  hemi.groundColor = new Color3(0.2, 0.16, 0.18);
+  // Luz de três pontos: principal (key, quente, em cima à esquerda), de preenchimento (fill, fria,
+  // suave, vinda do céu) e de recorte (rim, na cor do emblema, atrás do personagem).
+  const hemi = new HemisphericLight("fill", new Vector3(0, 1, 0), scene);
+  hemi.intensity = 0.5;
+  hemi.diffuse = new Color3(0.72, 0.74, 1);
+  hemi.groundColor = new Color3(0.16, 0.13, 0.2);
 
   const key = new DirectionalLight("key", new Vector3(0.5, -1, 0.8).normalize(), scene);
   key.position = new Vector3(-4, 8, -6);
-  key.intensity = 1.5;
+  key.intensity = 1.6;
   key.diffuse = new Color3(1, 0.9, 0.78);
 
   const rim = new PointLight("rim", new Vector3(0, 2.6, 2.4), scene);
@@ -92,7 +96,7 @@ export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number
   shadows.darkness = 0.4;
 
   const glow = new GlowLayer("glow", scene, { mainTextureRatio: 0.5, blurKernelSize: 40 });
-  glow.intensity = 0.35;
+  glow.intensity = 0.25;
 
   // Pedestal: pedra escura com borda dourada e anel de luz em cima.
   const stone = MeshBuilder.CreateCylinder("pedestal", { diameterTop: 2.2, diameterBottom: 2.5, height: 0.32, tessellation: 48 }, scene);
@@ -102,6 +106,14 @@ export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number
   stoneMat.specularColor = new Color3(0.08, 0.08, 0.1);
   stone.material = stoneMat;
   stone.receiveShadows = true;
+
+  // Degrau de baixo, mais largo, e a borda dourada dele.
+  const step = MeshBuilder.CreateCylinder("pedestalStep", { diameterTop: 2.9, diameterBottom: 3.1, height: 0.14, tessellation: 48 }, scene);
+  step.position.y = -0.39;
+  step.material = stoneMat;
+  step.receiveShadows = true;
+  // A luz de recorte é para o personagem: sem ela o pedestal estoura de branco.
+  rim.excludedMeshes.push(stone, step);
 
   const trim = MeshBuilder.CreateTorus("trim", { diameter: 2.22, thickness: 0.05, tessellation: 64 }, scene);
   trim.position.y = 0.005;
@@ -138,11 +150,10 @@ export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number
   const ring = MeshBuilder.CreateGround("ring", { width: 2.6, height: 2.6 }, scene);
   ring.position.y = 0.012;
   const ringMat = new StandardMaterial("ringMat", scene);
-  ringMat.diffuseTexture = ringTex;
   ringMat.opacityTexture = ringTex;
   ringMat.emissiveColor = new Color3(1, 0.8, 0.4);
   ringMat.disableLighting = true;
-  ringMat.alpha = 0.7;
+  ringMat.alpha = 0.5;
   ring.material = ringMat;
   glow.addIncludedOnlyMesh(ring);
 
@@ -212,7 +223,15 @@ export function createPreview(canvas: HTMLCanvasElement, opts: { radius?: number
   return {
     show,
     setEmblem,
-    setBody: (l) => inst?.setLook(l),
+    setBody: (l) => {
+      if (!inst) return;
+      inst.setLook(l);
+      // Cabeça nova é outra malha (só a escolhida existe): entra na sombra também.
+      for (const mesh of inst.meshes()) {
+        shadows.addShadowCaster(mesh, false);
+        mesh.isPickable = false;
+      }
+    },
     play: (role) => anim?.play(role),
     spin: (d) => (targetSpin += d),
     ready: models.then(() => undefined),

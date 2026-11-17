@@ -1,7 +1,10 @@
 package zone
 
 import (
+	"fmt"
+
 	"erevia/server/internal/game"
+	"erevia/server/internal/pb"
 )
 
 // Lugares de um item (iguais aos do protocolo).
@@ -119,6 +122,27 @@ func (inv *inventory) add(def *game.ItemDef, count int) int {
 	return count
 }
 
+// takeID tira count unidades do item id da bolsa (das pilhas do fim para o começo).
+// Devolve false (sem mexer em nada) se não houver o bastante.
+func (inv *inventory) takeID(id string, count int) bool {
+	if inv.countOf(id) < count {
+		return false
+	}
+	for i := len(inv.bag) - 1; i >= 0 && count > 0; i-- {
+		s := &inv.bag[i]
+		if s.empty() || s.def.ID != id {
+			continue
+		}
+		n := min(count, s.count)
+		s.count -= n
+		count -= n
+		if s.count == 0 {
+			*s = stack{}
+		}
+	}
+	return true
+}
+
 // put guarda o item mantendo o encantamento (encantado = sempre um espaço vazio só dele).
 // Devolve quantas unidades não couberam.
 func (inv *inventory) put(def *game.ItemDef, count, enchant int) int {
@@ -201,7 +225,7 @@ func (inv *inventory) moveInBag(from, to int) bool {
 }
 
 // canEquip explica por que o item não pode ir no encaixe ("" = pode).
-func canEquip(def *game.ItemDef, slot int, class string, level int) string {
+func canEquip(def *game.ItemDef, slot int, class, spec string, level int) string {
 	switch {
 	case def == nil || !def.Equippable():
 		return "Este item não pode ser equipado."
@@ -209,8 +233,14 @@ func canEquip(def *game.ItemDef, slot int, class string, level int) string {
 		return "Este item não vai nesse lugar."
 	case !def.UsableBy(class):
 		return "Sua classe não pode usar este item."
-	case level < def.ReqLevel:
-		return "Você precisa de mais nível para usar este item."
+	case def.Kind == game.KindWeapon && !game.CanWield(class, spec, def.WeaponType):
+		return "Sua classe não sabe empunhar esta arma."
+	case def.OffhandType() != "" && !game.CanOffhand(class, spec, def.OffhandType()):
+		return "Sua classe não usa este item na mão secundária."
+	case level < def.Tier.MinLevel():
+		// Do mínimo do grau até o nível da peça, ela entra com a penalidade de nível
+		// (game.UnderLevelPenalty); abaixo do grau, não entra.
+		return fmt.Sprintf("Este item é do %s: precisa do nível %d.", def.Tier.Label(), def.Tier.MinLevel())
 	}
 	return ""
 }
@@ -232,23 +262,89 @@ func (inv *inventory) bestSlot(def *game.ItemDef) int {
 
 // equipFromBag põe o item do espaço da bolsa no melhor encaixe; o que estava lá volta
 // para o mesmo espaço da bolsa.
-func (inv *inventory) equipFromBag(bagSlot int, class string, level int) string {
+func (inv *inventory) equipFromBag(bagSlot int, class, spec string, level int) string {
 	if bagSlot < 0 || bagSlot >= game.BagSize || inv.bag[bagSlot].empty() {
 		return "?"
 	}
-	return inv.equipTo(bagSlot, inv.bestSlot(inv.bag[bagSlot].def), class, level)
+	return inv.equipTo(bagSlot, inv.bestSlot(inv.bag[bagSlot].def), class, spec, level)
 }
 
 // equipTo põe o item do espaço da bolsa num encaixe escolhido (trocando com o que houver).
-func (inv *inventory) equipTo(bagSlot, slot int, class string, level int) string {
+//
+// Arma de duas mãos (ou dupla) ocupa a mão secundária: ao equipá-la, o que estava lá vai para
+// a bolsa (sem espaço, recusa); com ela equipada, a mão secundária é recusada.
+func (inv *inventory) equipTo(bagSlot, slot int, class, spec string, level int) string {
 	if bagSlot < 0 || bagSlot >= game.BagSize || inv.bag[bagSlot].empty() {
 		return "?"
 	}
-	if why := canEquip(inv.bag[bagSlot].def, slot, class, level); why != "" {
+	def := inv.bag[bagSlot].def
+	if why := canEquip(def, slot, class, spec, level); why != "" {
 		return why
 	}
+	if why := inv.handsConflict(slot); why != "" {
+		return why
+	}
+	moveOff := slot == game.SlotWeapon && def.TwoHanded() && !inv.equip[game.SlotOffhand].empty()
+	if moveOff && !inv.equip[slot].empty() && inv.firstFree() < 0 {
+		return "Sua bolsa está cheia: libere um espaço para guardar a mão secundária."
+	}
 	inv.bag[bagSlot], inv.equip[slot] = inv.equip[slot], inv.bag[bagSlot]
+	if moveOff { // o espaço da arma que saiu (ou um livre) recebe a mão secundária
+		free := inv.firstFree()
+		inv.bag[free], inv.equip[game.SlotOffhand] = inv.equip[game.SlotOffhand], stack{}
+	}
 	return ""
+}
+
+// handsConflict: mensagem se a mão secundária não pode ser usada porque a arma equipada
+// ocupa as duas mãos ("" = sem conflito). Equipar a própria arma de duas mãos não conflita
+// aqui: a mão secundária sai dela em equipTo.
+func (inv *inventory) handsConflict(slot int) string {
+	if slot == game.SlotOffhand {
+		if w := inv.equip[game.SlotWeapon]; !w.empty() && w.def.TwoHanded() {
+			return "Sua arma ocupa as duas mãos: guarde-a para usar a mão secundária."
+		}
+	}
+	return ""
+}
+
+// invalidGear: os encaixes com o que a classe (na especialização e no nível) não pode usar,
+// mais a mão secundária que sobra junto de uma arma de duas mãos.
+func (inv *inventory) invalidGear(class, spec string, level int) []int {
+	var out []int
+	weaponStays := false
+	for i := range inv.equip {
+		s := inv.equip[i]
+		if s.empty() {
+			continue
+		}
+		if canEquip(s.def, i, class, spec, level) != "" {
+			out = append(out, i)
+		} else if i == game.SlotWeapon {
+			weaponStays = true
+		}
+	}
+	if weaponStays && inv.equip[game.SlotWeapon].def.TwoHanded() && !inv.equip[game.SlotOffhand].empty() &&
+		canEquip(inv.equip[game.SlotOffhand].def, game.SlotOffhand, class, spec, level) == "" {
+		out = append(out, game.SlotOffhand)
+	}
+	return out
+}
+
+// dropInvalidGear manda para a bolsa o equipamento que a classe não usa (ver invalidGear).
+// O que não couber continua equipado (nada se perde; o invariante "equip" avisa): devolve
+// quantos foram para a bolsa e quantos ficaram.
+func (inv *inventory) dropInvalidGear(class, spec string, level int) (moved, stuck int) {
+	for _, i := range inv.invalidGear(class, spec, level) {
+		b := inv.firstFree()
+		if b < 0 {
+			stuck++
+			continue
+		}
+		inv.bag[b], inv.equip[i] = inv.equip[i], stack{}
+		moved++
+	}
+	return moved, stuck
 }
 
 // moveInEquip troca dois encaixes (anel 1 ↔ anel 2, brinco 1 ↔ brinco 2).
@@ -266,7 +362,7 @@ func (inv *inventory) moveInEquip(from, to int) string {
 
 // unequip devolve o item do encaixe para a bolsa (no espaço pedido, ou no primeiro livre).
 // Se o espaço pedido tiver um item que serve no encaixe, os dois trocam de lugar.
-func (inv *inventory) unequip(slot, bagSlot int, class string, level int) string {
+func (inv *inventory) unequip(slot, bagSlot int, class, spec string, level int) string {
 	if slot < 0 || slot >= game.EquipSlots || inv.equip[slot].empty() {
 		return "?"
 	}
@@ -275,7 +371,8 @@ func (inv *inventory) unequip(slot, bagSlot int, class string, level int) string
 			inv.bag[bagSlot], inv.equip[slot] = inv.equip[slot], stack{}
 			return ""
 		}
-		if canEquip(inv.bag[bagSlot].def, slot, class, level) == "" {
+		if def := inv.bag[bagSlot].def; canEquip(def, slot, class, spec, level) == "" &&
+			!(slot == game.SlotWeapon && def.TwoHanded() && !inv.equip[game.SlotOffhand].empty()) {
 			inv.bag[bagSlot], inv.equip[slot] = inv.equip[slot], inv.bag[bagSlot]
 			return ""
 		}
@@ -288,18 +385,21 @@ func (inv *inventory) unequip(slot, bagSlot int, class string, level int) string
 	return ""
 }
 
-// bonus soma os atributos de todo o equipamento.
-func (inv *inventory) bonus() game.Stats {
-	var b game.Stats
+// bonus soma os atributos de todo o equipamento (peças, encantamento, conjuntos e a
+// penalidade de nível: game.EquipBonus).
+func (inv *inventory) bonus(level int) game.Stats {
+	return game.EquipBonus(level, inv.worn())
+}
+
+// worn: as peças vestidas, na ordem dos encaixes.
+func (inv *inventory) worn() []game.Worn {
+	var out []game.Worn
 	for _, s := range inv.equip {
 		if !s.empty() {
-			b = b.AddBonus(s.def.Bonus)
-			if s.enchant > 0 {
-				b = b.AddBonus(game.EnchantBonus(s.def, s.enchant))
-			}
+			out = append(out, game.Worn{Def: s.def, Enchant: s.enchant})
 		}
 	}
-	return b
+	return out
 }
 
 // weaponType: tipo da arma equipada ("" = sem arma). Esgrima vale com espadas.
@@ -316,6 +416,21 @@ func (inv *inventory) weaponEnchant() int {
 		return w.enchant
 	}
 	return 0
+}
+
+// armorLook: a raridade de cada peça de armadura equipada (o visual do corpo que os outros veem; nil = nada).
+func (inv *inventory) armorLook() *pb.ArmorLook {
+	g := func(slot int) uint32 {
+		if it := inv.equip[slot]; !it.empty() {
+			return uint32(it.def.Grade)
+		}
+		return 0
+	}
+	a := &pb.ArmorLook{Chest: g(game.SlotArmor), Helm: g(game.SlotHelmet), Cape: g(game.SlotCape), Legs: g(game.SlotLegs), Hands: g(game.SlotHands), Feet: g(game.SlotFeet)}
+	if a.Chest|a.Helm|a.Cape|a.Legs|a.Hands|a.Feet == 0 {
+		return nil
+	}
+	return a
 }
 
 // look é o que os outros veem: modelos das armas e a raridade da principal.

@@ -1,7 +1,8 @@
 /**
  * HUD do jogo (HTML sobre o canvas), no visual novo:
  * - topo esquerdo: personagem (vida, mana, nível, buffs);
- * - topo direito: minimapa (clique abre o mapa), zoom, X/Y, FPS e ping;
+ * - topo direito: minimapa (clique abre o mapa), zoom, X/Y, FPS e ping, e os eventos
+ *   (XP em dobro, invasão da cidade) num selo discreto embaixo;
  * - embaixo: barra de 10 atalhos (skills e itens), AUTO e menu das janelas; XP na borda;
  * - alvo no topo, chat embaixo à esquerda, avisos de saque e de nível, tela de morte;
  * - no toque: joystick e botões de ação (ataque, skills em arco, poção, alvo, AUTO).
@@ -14,22 +15,36 @@ import { classInfo } from "../classes";
 import {
   Effect,
   EntityKind,
+  InvasionPhase,
   PvpState,
   SkillTarget,
+  type EventStatus,
+  type MasteryState,
   type ItemInfo,
   type PartyState,
+  type QuestLog,
   type SelfStats,
   type SkillInfo,
+  type VitalityState,
 } from "../gen/erevia/v1/game_pb";
 import { hourLabel, isNight } from "../world/daynight";
 import type { ActiveEffect, EntityInfo } from "../world/entities";
 import { ui, uniqueIds } from "./art";
 import { effectIcon, effectName, effectText, formatSeconds, isDebuff, skillIcon } from "./icons";
 import { buildItemTip, itemIcon, type ItemStore } from "./items";
-import { art, bar, button, closeSheet, el, isTouch, keyLabel, openSheet, settings, toast, tooltip } from "./kit";
+import { art, bar, button, closeSheet, el, hideTip, isTouch, keyLabel, openSheet, settings, showTip, toast, tooltip } from "./kit";
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS, type MapSource } from "./minimap";
+import { drawQuestTarget, QuestArrow, questStepTarget, QuestTracker, type Project } from "./quest-nav";
 import { levelText, regionAt, type Region } from "./regions";
 import { createJoystick } from "./touch-controls";
+import { specInfo } from "./specs";
+import { neutralNow, neutralText, roleInfo, type RoleInfo } from "../world/roles";
+import { masteryTip } from "./windows/mastery";
+
+/** Vitalidade em % do teto (0 a 100). */
+function vitalityPct(v: VitalityState): number {
+  return v.cap > 0n ? Math.min(100, (Number(v.stored) / Number(v.cap)) * 100) : 0;
+}
 
 /** Quanto tempo uma skill de alvo pode ficar "na fila" sem resposta do servidor. */
 const QUEUE_TIMEOUT_MS = 8000;
@@ -40,10 +55,10 @@ export const HOTBAR_KEYS = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "D
 /** Um atalho: "skill:<id>" ou "item:<id do item>". */
 export type HotbarEntry = string | null;
 
-export type WindowId = "character" | "inventory" | "skills" | "party" | "clan" | "map" | "settings";
+export type WindowId = "character" | "inventory" | "skills" | "quests" | "party" | "clan" | "social" | "glory" | "bestiary" | "map" | "settings";
 
 /** Ações sobre um jogador selecionado (quadro do alvo). */
-export type TargetAction = "attack" | "party" | "clan" | "whisper";
+export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade" | "friend";
 
 /** O que o quadro do alvo precisa saber de um jogador além do EntityInfo. */
 export interface TargetExtras {
@@ -52,6 +67,8 @@ export interface TargetExtras {
   canParty: boolean;
   /** Mostrar "Convidar ao clã" (você convida e ele não tem clã). */
   canClan: boolean;
+  /** Mostrar "Amigo +" (ele ainda não está na sua lista). */
+  canFriend: boolean;
 }
 
 export interface HudCallbacks {
@@ -63,6 +80,8 @@ export interface HudCallbacks {
   onHotbarChange(entries: HotbarEntry[]): void;
   onAuto(on: boolean): void;
   openWindow(id: WindowId): void;
+  /** Barra de Maestria (nível máximo): abre a aba Maestria da janela de skills. */
+  openMastery(): void;
   /** Botão de ataque do toque: ataca o alvo ou o inimigo mais próximo. */
   onAttack(): void;
   /** Botões do quadro do alvo quando ele é um jogador. */
@@ -72,12 +91,18 @@ export interface HudCallbacks {
   /** Botão de cancelar a canalização (teleporte, pergaminho). */
   onCancelChannel(): void;
   onCycleTarget(): void;
+  /** Botão "Ir" de uma missão do painel (o personagem anda até o lugar do passo). */
+  onQuestGo(questId: string): void;
   /** Joystick (direção relativa à câmera) ou null ao soltar. */
   onStick(v: { x: number; y: number } | null): void;
   me(): { myClass: string; myLevel: number };
+  /** Personagem (as missões fixadas ficam guardadas por personagem). */
+  characterId: number;
   /** Distância do jogador até o alvo atual (null = sem alvo inimigo). */
   targetDistance(): number | null;
   map: MapSource;
+  /** Ponto do chão na tela (seta da missão rastreada na borda). */
+  project: Project;
   regions: Region[];
   stats(): { fps: number; ping: number };
   clock(): number;
@@ -101,8 +126,12 @@ const MENU: { id: WindowId; icon: string; label: string; key: string }[] = [
   { id: "character", icon: "user", label: "Personagem", key: "character" },
   { id: "inventory", icon: "bag", label: "Inventário", key: "inventory" },
   { id: "skills", icon: "book", label: "Skills", key: "skills" },
+  { id: "quests", icon: "scroll", label: "Diário de missões", key: "quests" },
   { id: "party", icon: "users", label: "Grupo", key: "party" },
   { id: "clan", icon: "clan", label: "Clã", key: "clan" },
+  { id: "social", icon: "mail", label: "Social", key: "social" },
+  { id: "glory", icon: "trophy", label: "Glória", key: "glory" },
+  { id: "bestiary", icon: "skull", label: "Bestiário", key: "bestiary" },
   { id: "map", icon: "map", label: "Mapa", key: "map" },
   { id: "settings", icon: "gear", label: "Configurações", key: "settings" },
 ];
@@ -132,6 +161,11 @@ export function skillTipHtml(s: SkillInfo, keyHint = ""): string {
   return html;
 }
 
+/** Texto para dentro de HTML de dica (os textos das missões vêm do servidor). */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
 export class Hud {
   // "hud-screen": as regras de toque e de tela pequena em styles/hud.css partem desta classe.
   private root = el("div", "hud hud-screen");
@@ -151,6 +185,13 @@ export class Hud {
   private hpBar = bar("hp");
   private mpBar = bar("mp");
   private xpBar = bar("xp", "hud-xp");
+  private self: SelfStats | null = null;
+  private mastery: MasteryState | null = null;
+  private xpIsMastery = false;
+  // Vitalidade (tunnel#150): faixa sobre a barra de XP e selo no quadro do personagem.
+  private vitality: VitalityState | null = null;
+  private xpVit = el("s", "xp-vit");
+  private vitEl = el("button", "me-vit");
   private meEl = el("div", "hud-me frame glass");
   private meLevel = el("span", "me-level", "1");
   private meName = el("div", "me-name");
@@ -168,6 +209,15 @@ export class Hud {
   private channelFill = el("i");
   private partyEl = el("section", "party");
   private partyList = el("div", "party-list");
+  private questsEl = el("section", "quests");
+  private questList = el("div", "quest-list");
+  private questBoxes = new Map<string, HTMLElement>();
+  /** Missões fixadas e a rastreada (guia o minimapa, o mapa do mundo e a seta da borda). */
+  readonly quests: QuestTracker;
+  private questArrow = new QuestArrow();
+  private lastArrow = 0;
+  /** Última posição do jogador vista pelo minimapa (a seta reaproveita). */
+  private mePos: { x: number; z: number; at: number } | null = null;
   private partyRows = new Map<number, { root: HTMLElement; name: HTMLElement; hp: ReturnType<typeof bar>; mp: ReturnType<typeof bar> }>();
   private miniCanvas = el("canvas", "mm-canvas");
   private miniCtx = this.miniCanvas.getContext("2d")!;
@@ -178,6 +228,12 @@ export class Hud {
   private coordY = el("b", "mm-cv", "0");
   private fpsEl = el("span");
   private pingEl = el("span");
+  /** Eventos do servidor: só texto, atualizado com o resto do HUD lento (2×/s). */
+  private eventsEl = el("div", "hud-events");
+  private xp2El = el("span", "ev-xp2", "XP ×2");
+  private invEl = el("span", "ev-inv");
+  private events: EventStatus | null = null;
+  private serverNow: () => number = () => Date.now();
   private menuBtns = new Map<WindowId, HTMLButtonElement>();
   private autoBtn = el("button", "auto-btn");
   private autoTouch = el("button", "act-auto");
@@ -203,6 +259,7 @@ export class Hud {
     private cb: HudCallbacks,
   ) {
     for (const s of skills) this.skills.set(s.id, { info: s, readyAt: 0, span: 1 });
+    this.quests = new QuestTracker(cb.characterId);
 
     // ---------- Personagem (topo esquerdo) ----------
     const crest = el("button", "me-crest", el("span", "me-initial"), this.meLevel);
@@ -210,7 +267,20 @@ export class Hud {
     crest.setAttribute("aria-label", "Abrir personagem");
     crest.onclick = () => cb.openWindow("character");
     tooltip(crest, () => `Personagem <span class="muted">(${keyLabel(settings.get().keys.character)})</span>`);
-    this.meEl.append(crest, el("div", "me-body", this.meName, this.hpBar.root, this.mpBar.root), this.myEffects);
+    this.meEl.append(crest, el("div", "me-body", this.meName, this.hpBar.root, this.mpBar.root));
+    // Selo da vitalidade: dica no hover (PC) e no toque (celular, onde a barra de XP é fina).
+    const vit = this.vitEl as HTMLButtonElement;
+    vit.type = "button";
+    vit.hidden = true;
+    vit.setAttribute("aria-label", "Vitalidade");
+    tooltip(vit, () => this.vitTip());
+    vit.onclick = (ev) => {
+      if (ev.pointerType === "mouse") return;
+      showTip(this.vitTip(), ev.clientX, ev.clientY + 24);
+      window.setTimeout(hideTip, 3000);
+    };
+    this.meEl.append(vit);
+    this.xpBar.root.insertBefore(this.xpVit, this.xpBar.root.lastChild); // embaixo do texto
     // ---------- Grupo (abaixo do personagem; some sem grupo) ----------
     const pHead = el("button", "side-head");
     pHead.type = "button";
@@ -218,7 +288,18 @@ export class Hud {
     pHead.onclick = () => this.partyEl.classList.toggle("collapsed");
     this.partyEl.append(pHead, this.partyList);
     this.partyEl.hidden = true;
-    const left = el("div", "hud-left", this.meEl, el("div", "hud-side", this.partyEl));
+    // ---------- Missões (abaixo do grupo; só as fixadas; some sem missão ativa) ----------
+    const qHead = el("button", "side-head");
+    qHead.type = "button";
+    qHead.innerHTML = `${ui("scroll", 16)}<span>Missões</span><i>▾</i>`;
+    qHead.onclick = () => this.questsEl.classList.toggle("collapsed");
+    const journal = button("Diário", "q-journal");
+    journal.onclick = () => cb.openWindow("quests");
+    tooltip(journal, () => `<b>Diário de missões</b> <span class="muted">(${keyLabel(settings.get().keys.quests)})</span><br>Todas as missões; fixe até 3 aqui no painel.`);
+    this.questsEl.append(el("div", "q-panel-head", qHead, journal), this.questList);
+    this.questsEl.hidden = true;
+    // Quadro do jogador, buffs logo abaixo, depois o grupo; as missões ficam no mesmo bloco (no PC o CSS as leva para a direita).
+    const left = el("div", "hud-left", this.meEl, this.myEffects, el("div", "hud-side", this.partyEl, this.questsEl));
 
     // ---------- Alvo ----------
     const tClose = button("✕", "t-close");
@@ -230,6 +311,8 @@ export class Hud {
       ["party", "Grupo +", "Convidar para o seu grupo"],
       ["clan", "Clã +", "Convidar para o seu clã"],
       ["whisper", "Sussurrar", "Mandar uma mensagem particular"],
+      ["trade", "Trocar", "Propor uma troca de itens e moedas (chegue perto)"],
+      ["friend", "Amigo +", "Adicionar à sua lista de amigos (você vê quando ele está online)"],
     ] as const) {
       const b = button(label, "btn btn-sm t-act", () => cb.onTargetAction(action));
       b.title = title;
@@ -243,7 +326,7 @@ export class Hud {
     // ---------- Minimapa ----------
     const openBadge = el("span", "mm-open");
     openBadge.innerHTML = ui("map", 14);
-    const frame = el("button", "mm-frame", this.miniCanvas, el("span", "mm-n", "N"), this.clock, openBadge);
+    const frame = el("button", "mm-frame", this.miniCanvas, el("span", "mm-n", "N"), openBadge);
     frame.type = "button";
     frame.setAttribute("aria-label", "Abrir o mapa do mundo");
     frame.onclick = () => cb.openWindow("map");
@@ -255,7 +338,15 @@ export class Hud {
     const coords = el("span", "mm-coords", el("i", "mm-ax", "X"), this.coordX, el("i", "mm-ax", "Y"), this.coordY);
     coords.title = "Sua posição (X = leste/oeste, Y = norte/sul)";
     const statsEl = el("div", "hud-stats", this.fpsEl, this.pingEl);
-    const mini = el("div", "hud-minimap", this.zoneName, frame, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl);
+    this.eventsEl.append(this.xp2El, this.invEl);
+    this.eventsEl.hidden = true;
+    tooltip(this.xp2El, () => this.xp2Tip());
+    tooltip(this.xpBar.root, () => this.xpTip());
+    this.xpBar.root.onclick = () => this.mastery?.active && cb.openMastery();
+    tooltip(this.invEl, () => "<h4>Invasão da cidade</h4>Esqueletos entram pelos 4 portões. Enquanto durar, as estradas e a praça deixam de ser zona segura (o PvP continua proibido). A recompensa sai no fim, pelo dano e pelos abates.");
+    // Aro dourado no alto e, embaixo, a plaqueta com a região e a hora.
+    const plaque = el("div", "mm-plaque", this.zoneName, this.clock);
+    const mini = el("div", "hud-minimap", frame, plaque, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl, this.eventsEl);
 
     // ---------- Menu ☰ (toque) ----------
     const burger = el("button", "menu-burger");
@@ -288,7 +379,7 @@ export class Hud {
       this.menuBtns.set(m.id, b);
       menu.append(b);
     }
-    const bottom = el("div", "hud-bottom", el("div", "hb-row", hotbarEl, this.autoBtn, menu));
+    const bottom = el("div", "hud-bottom", el("div", "hb-row", hotbarEl, this.autoBtn));
 
     // ---------- Auto-caça ----------
     this.autoPill.hidden = true;
@@ -350,7 +441,9 @@ export class Hud {
     cluster.append(this.attackBtn, pageBtn, targetBtn, this.potionBtn, this.autoTouch);
     const touch = el("div", "touch-ui", joy.root, cluster);
 
-    this.root.append(left, mini, this.target, topRight, this.chatRoot, bottom, this.xpBar.root, this.autoPill, this.loot, touch, this.bannerEl, this.channelEl, this.death);
+    this.root.append(left, mini, this.target, topRight, this.chatRoot, bottom, menu, this.xpBar.root, this.autoPill, this.loot, touch, this.questArrow.el, this.bannerEl, this.channelEl, this.death);
+    this.quests.onChange(() => this.markTracked());
+    this.quests.onPanel(() => this.renderQuests());
     document.body.append(this.root);
 
     const applyEnv = () => {
@@ -359,8 +452,13 @@ export class Hud {
       this.autoBtn.querySelector("kbd")!.textContent = keyLabel(settings.get().keys.auto);
     };
     applyEnv();
-    this.offSettings = settings.on(applyEnv);
+    const offEnv = settings.on(applyEnv);
     addEventListener("resize", applyEnv);
+    // Saída e troca de mapa: nada do HUD velho continua ouvindo.
+    this.offSettings = () => {
+      offEnv();
+      removeEventListener("resize", applyEnv);
+    };
 
     this.renderSlots();
     store.onChange(() => this.renderSlots());
@@ -380,6 +478,7 @@ export class Hud {
     cancelAnimationFrame(this.raf);
     this.joyDispose();
     this.offSettings();
+    this.quests.dispose();
     this.root.remove();
   }
 
@@ -496,15 +595,106 @@ export class Hud {
     this.mpNow = s.mp;
     this.meLevel.textContent = String(s.level);
     this.meEl.classList.toggle("low", s.maxHp > 0 && s.hp / s.maxHp < 0.3);
-    if (s.xpNextLevel > 0n) {
-      const into = Number(s.xp - s.xpLevelStart);
-      const need = Number(s.xpNextLevel - s.xpLevelStart);
-      this.xpBar.set(into, need, `Nível ${s.level} · ${((into / need) * 100).toFixed(1).replace(".", ",")}%`);
-    } else this.xpBar.set(1, 1, `Nível ${s.level} · máximo`);
+    this.self = s;
+    this.renderXp();
     const wasDead = !this.death.hidden;
     this.death.hidden = !s.dead;
     if (s.dead) this.deathSub.textContent = s.killedBy ? `Morto por ${s.killedBy}.` : "Você perdeu um pouco de experiência.";
     if (s.dead && !wasDead && this.auto) this.setAuto(false, false);
+  }
+
+  /** Maestria (nível máximo): a barra de XP do HUD vira a barra de Maestria. */
+  setMastery(m: MasteryState): void {
+    this.mastery = m;
+    this.renderXp();
+  }
+
+  /** Vitalidade e recuperação: só quando o servidor manda (nada por quadro). */
+  setVitality(v: VitalityState): void {
+    this.vitality = v;
+    const pct = vitalityPct(v);
+    const on = v.stored > 0n || v.catchupMult > 0;
+    this.vitEl.hidden = !on;
+    if (on) {
+      this.vitEl.innerHTML = `${ui("moon", 12)}<span>${v.stored > 0n ? `${Math.floor(pct)}%` : ""}${v.catchupMult > 0 ? `${v.stored > 0n ? " " : ""}+${Math.round((v.catchupMult - 1) * 100)}%` : ""}</span>`;
+    }
+    this.vitEl.classList.toggle("empty", v.stored === 0n);
+    this.renderXp();
+  }
+
+  /** Barra da borda: XP do nível ou, no máximo, a de Maestria (outra cor, com o bônus diário). */
+  private renderXp(): void {
+    const m = this.mastery;
+    const s = this.self;
+    const mastery = !!m?.active;
+    if (mastery !== this.xpIsMastery) {
+      this.xpIsMastery = mastery;
+      this.xpBar.root.classList.toggle("mastery", mastery);
+    }
+    if (m && mastery) {
+      const into = Number(m.xp);
+      const need = Number(m.need);
+      const rested = m.rested > 0n ? ` · bônus diário ${m.restedMult}×` : "";
+      if (m.level >= m.maxLevel) this.xpBar.set(1, 1, `Maestria ${m.level} · teto`);
+      else this.xpBar.set(into, need, `Maestria ${m.level} · ${((into / need) * 100).toFixed(1).replace(".", ",")}%${rested}`);
+      this.renderVitBar(m.level >= m.maxLevel ? 0 : into, need, true);
+      return;
+    }
+    if (!s) return;
+    if (s.xpNextLevel > 0n) {
+      const into = Number(s.xp - s.xpLevelStart);
+      const need = Number(s.xpNextLevel - s.xpLevelStart);
+      this.xpBar.set(into, need, `Nível ${s.level} · ${((into / need) * 100).toFixed(1).replace(".", ",")}%`);
+      this.renderVitBar(into, need, false);
+    } else {
+      this.xpBar.set(1, 1, `Nível ${s.level} · máximo`);
+      this.renderVitBar(0, 0, false);
+    }
+  }
+
+  /**
+   * Faixa da vitalidade: a parte da barra que ainda sai com a XP de monstro em dobro (o
+   * estoque é o bônus; a XP caçada até ele acabar é estoque × mult/(mult−1)).
+   */
+  private renderVitBar(into: number, need: number, mastery: boolean): void {
+    const v = this.vitality;
+    let w = 0;
+    if (v && need > 0 && v.stored > 0n && v.mastery === mastery && v.mult > 1) {
+      const covered = (Number(v.stored) * v.mult) / (v.mult - 1);
+      w = Math.max(0, Math.min(need - into, covered) / need);
+    }
+    this.xpVit.style.setProperty("--vit", `${(w * 100).toFixed(2)}%`);
+    this.xpVit.hidden = w <= 0;
+  }
+
+  private xpTip(): string {
+    const m = this.mastery;
+    if (m?.active) return masteryTip(m) + this.vitTip();
+    const s = this.self;
+    if (!s) return "";
+    if (s.xpNextLevel <= 0n) return `<h4>Nível ${s.level}</h4>Nível máximo.`;
+    const into = Number(s.xp - s.xpLevelStart);
+    const need = Number(s.xpNextLevel - s.xpLevelStart);
+    return `<h4>Nível ${s.level}</h4><div class="sub">${into.toLocaleString("pt-BR")} / ${need.toLocaleString("pt-BR")} XP</div>${this.vitTip()}`;
+  }
+
+  /** Dica da vitalidade (e da recuperação, quando houver). */
+  private vitTip(): string {
+    const v = this.vitality;
+    if (!v) return "";
+    const pct = (n: number) => `${n.toFixed(1).replace(".", ",").replace(/,0$/, "")}%`;
+    const what = v.mastery ? "XP de monstro na barra de Maestria" : "XP de monstro";
+    let html = `<div class="cmp">`;
+    html +=
+      v.stored > 0n
+        ? `<div class="ok">Vitalidade: ${pct(vitalityPct(v))} (dobra a ${what})</div>`
+        : `<div class="muted">Vitalidade: 0% (quando houver, dobra a ${what})</div>`;
+    html += `<div class="muted">Enche fora do jogo (${pct(v.offlinePerHour * 100)} por hora, cheia em ~${Math.round(1 / v.offlinePerHour / 24)} dias) e parado na cidade, fora de combate. Missões não gastam.</div>`;
+    if (v.mastery && this.mastery?.rested && this.mastery.rested > 0n) html += `<div class="muted">No nível máximo ela espera o bônus diário da Maestria acabar.</div>`;
+    if (v.catchupMult > 0)
+      html += `<div class="ok">Bônus de recuperação: +${Math.round((v.catchupMult - 1) * 100)}% de XP de monstro e de missão até o nível ${v.catchupUntil} (a conta já tem um personagem no máximo)</div>`;
+    if (v.multCap > 0) html += `<div class="muted">Os bônus de XP de monstro (noite, evento, recuperação e vitalidade) somam no máximo ×${v.multCap}.</div>`;
+    return html + `</div>`;
   }
 
   /** Nome e cor do emblema no quadro do personagem. */
@@ -604,6 +794,112 @@ export class Hud {
     return !this.channelEl.hidden;
   }
 
+  /** Estado dos eventos do servidor (EventStatus). */
+  setEvents(s: EventStatus, serverNow: () => number): void {
+    this.events = s;
+    this.serverNow = serverNow;
+    this.renderEvents();
+  }
+
+  private renderEvents(): void {
+    const s = this.events!;
+    const inv = s.invasion !== InvasionPhase.NONE;
+    this.xp2El.hidden = !s.xp2;
+    this.invEl.hidden = !inv;
+    this.eventsEl.hidden = !s.xp2 && !inv;
+    if (!inv) return;
+    const left = Math.max(0, Math.ceil((Number(s.invasionAtMs) - this.serverNow()) / 1000));
+    const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    this.invEl.classList.toggle("active", s.invasion === InvasionPhase.ACTIVE);
+    this.invEl.textContent =
+      s.invasion === InvasionPhase.WARNING ? `Invasão em ${clock}` : `Invasão · onda ${s.wave}/${s.waves} · ${s.alive} ☠ · ${clock}`;
+  }
+
+  private xp2Tip(): string {
+    const until = Number(this.events?.xp2UntilMs ?? 0);
+    const when = until > 0 ? `até ${new Date(until).toLocaleString("pt-BR", { weekday: "long", hour: "2-digit", minute: "2-digit" })}` : "por tempo indeterminado";
+    return `<h4>XP em dobro</h4>Monstros dão o dobro de experiência ${when}.`;
+  }
+
+  /** QuestLog novo: o rastreador avisa o painel (e o Diário, se aberto). */
+  setQuests(log: QuestLog): void {
+    this.quests.setLog(log);
+  }
+
+  /** Painel de missões: só as fixadas (até 3) e, por alguns segundos, a recém-aceita com o
+   *  "Fixar". Redesenhado só quando chega o QuestLog ou muda a fixação (nada por quadro).
+   *  Clicar numa missão a torna a rastreada. */
+  private renderQuests(): void {
+    const all = this.quests.list();
+    this.questsEl.hidden = all.length === 0;
+    this.questBoxes.clear();
+    const shown = this.quests.panel();
+    if (!shown.length) {
+      this.questList.replaceChildren(el("p", "q-empty", `Nenhuma missão fixada. Abra o Diário (${keyLabel(settings.get().keys.quests)}) para fixar.`));
+      return;
+    }
+    this.questList.replaceChildren(
+      ...shown.map((q) => {
+        const temp = this.quests.isTemp(q.id);
+        // Caixa clicável (rastreia) com o botão "Ir" dentro: div com papel de botão, porque
+        // botão dentro de botão não vale.
+        const head = el("div", "q-head", el("b", null, q.title));
+        const box = el("div", temp ? "quest temp" : "quest", head);
+        if (temp) box.style.setProperty("--q-left", `${this.quests.tempLeft(q.id)}ms`);
+        box.tabIndex = 0;
+        box.setAttribute("role", "button");
+        box.onclick = () => this.quests.track(q.id);
+        box.onkeydown = (ev) => {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            this.quests.track(q.id);
+          }
+        };
+        if (temp) {
+          // Recém-aceita com o painel cheio: some sozinha se não for fixada.
+          const pin = button("Fixar", "btn btn-sm btn-gold q-go", (ev) => {
+            ev.stopPropagation();
+            const out = this.quests.pin(q.id);
+            if (out) toast(`${out} saiu do painel (continua no Diário).`);
+          });
+          pin.title = `Fixar no painel (fica no lugar de ${this.quests.wouldEvict() ?? "outra"})`;
+          head.append(pin);
+        } else if (questStepTarget(q)) {
+          const go = button("Ir", "btn btn-sm btn-gold q-go", (ev) => {
+            ev.stopPropagation();
+            this.quests.track(q.id);
+            this.cb.onQuestGo(q.id);
+          });
+          go.title = "Andar até o objetivo (WASD, clique no chão ou ser atacado param)";
+          head.append(go);
+        }
+        this.questBoxes.set(q.id, box);
+        for (const s of q.steps) {
+          const row = el("div", "q-step", el("span", null, s.text), el("span", "q-count", `${s.count}/${s.need}`));
+          if (s.count >= s.need) row.classList.add("done");
+          box.append(row);
+        }
+        box.append(el("small", null, temp ? "Nova missão: fixe para manter no painel." : q.text));
+        tooltip(box, () => {
+          const hint = !settings.get().questMarkers
+            ? ""
+            : box.classList.contains("tracked")
+              ? `<br><span class="muted">Rastreada no minimapa e no mapa.</span>`
+              : `<br><span class="muted">Clique para rastrear.</span>`;
+          return `<b>${escapeHtml(q.title)}</b><br>${escapeHtml(q.text)}<br><span class="muted">Recompensa: ${escapeHtml(q.reward)}</span>${hint}`;
+        });
+        return box;
+      }),
+    );
+    this.markTracked();
+  }
+
+  /** Destaque da missão rastreada no painel (só com os marcadores ligados). */
+  private markTracked(): void {
+    const id = settings.get().questMarkers ? this.quests.tracked()?.id : undefined;
+    for (const [qid, box] of this.questBoxes) box.classList.toggle("tracked", qid === id);
+  }
+
   /** Painel do grupo: um por colega (você não aparece), com vida, mana e o líder. */
   setParty(state: PartyState, localId: number, near: (id: number) => boolean): void {
     const others = state.members.filter((m) => m.id !== localId);
@@ -624,12 +920,13 @@ export class Hud {
         this.partyRows.set(m.id, row);
       }
       const lead = m.id === state.leaderId ? el("span", "m-lead", "♛") : "";
-      row.name.replaceChildren(lead, document.createTextNode(m.name), el("small", null, ` Nv ${m.level}`));
+      // Em outro mapa (zonas): o nome do mapa no lugar do nível; a vida é de até 1 s atrás.
+      row.name.replaceChildren(lead, document.createTextNode(m.name), el("small", null, m.map ? ` · ${m.map}` : ` Nv ${m.level}`));
       row.hp.set(m.hp, m.maxHp, "");
       row.mp.set(m.mp, m.maxMp, "");
       row.root.classList.toggle("dead", m.dead);
-      row.root.classList.toggle("far", !near(m.id));
-      row.root.title = m.dead ? `${m.name} (morto)` : `Selecionar ${m.name}`;
+      row.root.classList.toggle("far", !!m.map || !near(m.id));
+      row.root.title = m.map ? `${m.name} está em ${m.map}` : m.dead ? `${m.name} (morto)` : `Selecionar ${m.name}`;
     }
     for (const [id, row] of this.partyRows) {
       if (!seen.has(id)) {
@@ -663,12 +960,49 @@ export class Hud {
       this.tActionBtns.get("attack")!.hidden = extras.ally || info.dead;
       this.tActionBtns.get("party")!.hidden = !extras.canParty;
       this.tActionBtns.get("clan")!.hidden = !extras.canClan;
+      this.tActionBtns.get("friend")!.hidden = !extras.canFriend;
     }
     this.target.classList.toggle("dead", info.dead);
     this.target.classList.toggle("boss", !!info.boss);
-    this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}`), info.boss ? el("em", null, "CHEFE") : "");
+    this.target.classList.toggle("rare", !!info.rare);
+    // Jogador com especialização: o nome do caminho, na cor dele, depois do nível.
+    const spec = pc ? specInfo(info.spec) : undefined;
+    const specEl = spec ? el("span", "t-spec", ` · ${spec.name}`) : "";
+    if (spec && specEl) specEl.style.color = spec.color;
+    // Jogador: a classe ativa (a subclasse em uso) depois do nível.
+    const clsText = pc && info.cls ? ` ${classInfo(info.cls).label}` : "";
+    // Monstros: o papel na luta (tunnel#129), um ícone com a dica, como o selo de raro.
+    const role = info.kind === EntityKind.MONSTER ? roleInfo(info) : null;
+    // Só refaz o nome quando algo muda: o quadro atualiza a cada snapshot, e recriar o selo
+    // perderia o mouse em cima dele (a dica).
+    const key = [info.name, npc ? info.title : "", info.level, clsText, spec?.name ?? "", info.boss, info.rare, role?.key ?? ""].join("|");
+    this.tRoleOf = info;
+    if (this.tName.dataset.key !== key) {
+      this.tName.dataset.key = key;
+      this.tName.replaceChildren(el("b", null, info.name), el("span", null, npc ? ` · ${info.title}` : ` Nv ${info.level}${clsText}`), specEl, info.boss ? el("em", null, "CHEFE") : "", info.rare ? el("em", "t-rare", "RARO") : "", role ? this.roleBadge(role) : "");
+    }
     this.tHp.root.hidden = npc;
     this.tHp.set(info.hp, info.maxHp, info.dead ? "Morto" : undefined);
+  }
+
+  /** O alvo cujo papel o selo mostra (a dica lê na hora: o neutro de dia muda à noite). */
+  private tRoleOf: EntityInfo | null = null;
+
+  /** Selo do papel do monstro no quadro do alvo: ícone e, no mouse (ou toque longo), a dica. */
+  private roleBadge(r: RoleInfo): HTMLElement {
+    const badge = el("em", `t-role t-role-${r.key}`);
+    badge.innerHTML = r.icon;
+    badge.setAttribute("aria-label", r.label);
+    tooltip(badge, () => {
+      const cur = this.tRoleOf;
+      const ri = cur ? roleInfo(cur) : null;
+      if (!cur || !ri) return null;
+      const night = isNight(this.cb.clock());
+      const n = ri.key === "neutral" && cur.neutral ? "" : neutralText(cur, night); // o selo neutro já diz
+      const calm = neutralNow(cur, night) ? "<div class=\"cmp muted\">A auto-caça passa por ele (Configurações → Jogo).</div>" : "";
+      return `<h4>${ri.label}</h4>${ri.hint}${n ? `<br>${n}` : ""}${calm}`;
+    });
+    return badge;
   }
 
   setEffects(mine: ActiveEffect[], target: ActiveEffect[]): void {
@@ -717,13 +1051,18 @@ export class Hud {
     this.root.append(...els);
   }
 
-  levelBanner(level: number): void {
+  levelBanner(level: number, title = `Nível ${level}!`, sub = "Você ficou mais forte."): void {
     this.bannerEl.hidden = false;
-    this.bannerEl.replaceChildren(el("div", "lb-title", `Nível ${level}!`), el("div", "lb-sub", "Você ficou mais forte."));
+    this.bannerEl.replaceChildren(el("div", "lb-title", title), el("div", "lb-sub", sub));
     this.bannerEl.classList.remove("show");
     void this.bannerEl.offsetWidth;
     this.bannerEl.classList.add("show");
     setTimeout(() => (this.bannerEl.hidden = true), 3600);
+  }
+
+  /** Ponto de Maestria ganho (o mesmo banner do nível). */
+  masteryBanner(level: number): void {
+    this.levelBanner(level, `Maestria ${level}!`, "Um ponto novo para a árvore (aba Maestria das skills).");
   }
 
   /** Liga/desliga o visual da auto-caça; notify = avisar o jogo (clique do jogador). */
@@ -900,6 +1239,10 @@ export class Hud {
       this.lastMini = now;
       this.drawMinimap();
     }
+    if (now - this.lastArrow > 200) {
+      this.lastArrow = now;
+      this.updateQuestArrow(now);
+    }
     if (now - this.lastSlow > 500) {
       this.lastSlow = now;
       const st = this.cb.stats();
@@ -908,7 +1251,22 @@ export class Hud {
       this.pingEl.className = st.ping < 80 ? "ok" : "warn";
       const phase = this.cb.clock();
       this.clock.innerHTML = `${ui(isNight(phase) ? "moon" : "sun", 12)}${hourLabel(phase)}`;
+      if (this.events) this.renderEvents();
     }
+  }
+
+  /** Seta na borda da tela para a missão rastreada (até 5×/s). */
+  private updateQuestArrow(now: number): void {
+    const t = this.quests.target();
+    let me: { x: number; z: number } | null = null;
+    if (t) {
+      if (this.mePos && now - this.mePos.at < 400) me = this.mePos;
+      else
+        this.cb.map.forEachMarker((m) => {
+          if (m.local) me = { x: m.x, z: m.z };
+        });
+    }
+    this.questArrow.update(t, me, this.cb.project);
   }
 
   private drawMinimap(): void {
@@ -921,6 +1279,7 @@ export class Hud {
     });
     if (!me) return;
     const pos = me as { x: number; z: number; heading: number };
+    this.mePos = { x: pos.x, z: pos.z, at: performance.now() };
     this.coordX.textContent = String(Math.round(pos.x));
     this.coordY.textContent = String(Math.round(pos.z));
     this.zoneName.textContent = regionAt(this.cb.regions, pos.x, pos.z).name;
@@ -955,6 +1314,11 @@ export class Hud {
       else if (m.party) drawDot(c, x, y, 4.2 * dpr, MARKER_COLORS.party);
       else drawDot(c, x, y, 3.5 * dpr, MARKER_COLORS.player);
     });
+    // Missão rastreada: área, ícone (preso na borda se estiver longe) e linha tracejada.
+    const qt = this.quests.target();
+    if (qt) {
+      drawQuestTarget(c, qt, pos, (x) => W / 2 + (x - pos.x) * scale, (z) => W / 2 - (z - pos.z) * scale, scale, 6.5 * dpr, { cx: W / 2, cy: W / 2, r: W / 2 });
+    }
     // Cone da câmera e seta do jogador
     c.translate(W / 2, W / 2);
     c.save();

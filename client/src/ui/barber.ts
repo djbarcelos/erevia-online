@@ -10,6 +10,8 @@ export interface BarberActions {
   change(npcId: number, look: BodyLook): void;
   /** Classe, armas e emblema atuais (para o palco) e o visual atual. */
   me(): { myClass: string; look: Appearance; body: BodyLook };
+  /** Cores de roupa do Bestiário liberadas (famílias completas). */
+  bestiaryOutfits?(): number[];
 }
 
 /** Barbeiro: muda rosto, pele, cabelo, roupa e chapéu, com prévia 3D, por moedas. */
@@ -76,11 +78,19 @@ export class BarberWindow {
     this.price = pal.barberPrice;
     this.current = normalLook(this.cls, me.body, pal);
     this.draft = { ...this.current };
-    this.editor = bodyEditor(pal, this.cls, this.draft, (l) => {
-      this.draft = l;
-      this.preview?.setBody(l);
-      this.render();
-    });
+    const unlocked = this.actions.bestiaryOutfits?.() ?? [];
+    const extra = (pal.bestiaryOutfits ?? []).filter((o) => unlocked.includes(o.index) || o.index === this.current?.outfit);
+    this.editor = bodyEditor(
+      pal,
+      this.cls,
+      this.draft,
+      (l) => {
+        this.draft = l;
+        this.preview?.setBody(l);
+        this.render();
+      },
+      extra,
+    );
     this.editorBox.replaceChildren(this.editor.root);
     // Palco 3D (um contexto WebGL só enquanto a janela está aberta).
     const canvas = el("canvas", "barber-canvas");

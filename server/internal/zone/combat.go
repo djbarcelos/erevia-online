@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	outOfCombatAfter = 5.0  // segundos sem lutar para regenerar rápido
-	approachFactor   = 0.75 // para a esta fração do alcance (folga para o alvo andar)
-	calmRegenMult    = 5.0  // fora de combate, a vida regenera 5× mais rápido
-	calmMPRegenMult  = 3.3  // e a mana, 3,3×
+	outOfCombatAfter = game.OutOfCombatAfter // segundos sem lutar para regenerar rápido
+	approachFactor   = 0.75                  // para a esta fração do alcance (folga para o alvo andar)
+	calmRegenMult    = game.CalmHPRegenMult  // fora de combate, a vida regenera 5× mais rápido
+	calmMPRegenMult  = game.CalmMPRegenMult  // e a mana, 3,3×
 	tauntHate        = 100.0
 	chargeStop       = 1.5 // Investida para a esta distância do alvo
 )
@@ -30,7 +30,7 @@ func (z *Zone) runAction(e *entity) {
 		return
 	}
 	t := z.get(e.act.target)
-	if t == nil || t.dead || t == e || (t.mon != nil && t.mon.hidden) || (e.mon != nil && t.invisible(z.now)) {
+	if t == nil || t.dead || t == e || (t.mon != nil && t.mon.unseen()) || (e.mon != nil && t.invisible(z.now)) {
 		z.cancelQueuedSkill(e)
 		e.clearAction()
 		return
@@ -63,8 +63,13 @@ func (z *Zone) runAction(e *entity) {
 	e.stopMoving()
 
 	// Sem combate dentro da cidade (quem está lá dentro só anda), menos contra quem tem karma.
+	// Contra monstros vale pveSafe: durante a invasão, as estradas e a praça ficam abertas.
 	townHunt := e.pl != nil && t.pl != nil && z.hostile(e, t, e.act.force)
-	if (z.inSafe(e.pos) || z.inSafe(t.pos)) && !townHunt {
+	safe := z.inSafe
+	if e.pl == nil || t.pl == nil {
+		safe = z.pveSafe
+	}
+	if (safe(e.pos) || safe(t.pos)) && !townHunt {
 		if e.act.kind == actSkill {
 			z.system(e, "Não é possível lutar dentro da cidade.")
 			z.cancelQueuedSkill(e)
@@ -93,10 +98,16 @@ func (z *Zone) hitInput(src, dst *entity, magic bool, mult, extraCrit float64) g
 		Crit: src.stats.Crit + extraCrit, CritMult: src.stats.CritDamage,
 		Accuracy: src.accuracy(z.now), Evasion: dst.stats.Evasion,
 	}
+	in.Mult *= 1 + z.bestiaryBonus(src, dst) // Bestiário: +1% contra o tipo no 500º abate (bestiary.go)
 	// Saindo da invisibilidade: o primeiro golpe é crítico garantido.
 	if src.pl != nil && src.pl.ambushCrit {
 		in.ForceCrit = true
 		src.pl.ambushCrit = false
+	}
+	// Emboscador que acabou de aparecer: o primeiro golpe dói mais (archetypes.go).
+	if src.mon != nil && src.mon.arch.ambushHit {
+		in.Mult *= src.mon.def.Arch.AmbushMult
+		src.mon.arch.ambushHit = false
 	}
 	return in
 }
@@ -111,20 +122,12 @@ func (z *Zone) basicAttack(src, dst *entity) {
 
 // skillMP: custo de mana no rank (Sobrecarga encarece 10%).
 func skillMP(p *entity, s *game.SkillDef) float64 {
-	cost := s.MPCost(p.pl.rank(s.ID))
-	if p.pl.rank(game.SkillOverload) > 0 {
-		cost *= game.OverloadMPCost
-	}
-	return math.Round(cost)
+	return game.SkillMPCost(s, p.pl.rank(s.ID), p.pl.passives.Has(game.PassiveOverload))
 }
 
 // skillCD: recarga no rank, dividida pela velocidade de conjuração.
 func skillCD(p *entity, s *game.SkillDef) float64 {
-	cs := p.stats.CastSpeed
-	if cs <= 0 {
-		cs = 1
-	}
-	return s.Cooldown(p.pl.rank(s.ID)) / cs
+	return game.SkillCooldownFor(s, p.pl.rank(s.ID), p.stats.CastSpeed)
 }
 
 // requestSkill valida o pedido do jogador e executa (si mesmo/área) ou agenda (alvo).
@@ -134,7 +137,7 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 	}
 	z.cancelChannel(p, "Viagem cancelada.")
 	s := game.Skills[skillID]
-	if s == nil || s.Class != p.pl.class || s.IsPassive() {
+	if s == nil || s.Class != p.pl.class || s.IsPassive() || s.Spec != "" && s.Spec != p.pl.spec {
 		return
 	}
 	if p.pl.rank(s.ID) < 1 {
@@ -153,7 +156,7 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 	case game.TargetSelf:
 		z.castSkill(p, s, nil)
 	case game.TargetAreaSelf:
-		if z.inSafe(p.pos) {
+		if z.pveSafe(p.pos) { // jogadores na área continuam protegidos (hostile usa inSafe)
 			z.system(p, "Não é possível lutar dentro da cidade.")
 			return
 		}
@@ -168,7 +171,7 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 				z.system(p, why)
 				return
 			}
-		} else if t == nil || t.mon == nil || t.dead || t.mon.hidden {
+		} else if t == nil || t.mon == nil || t.dead || t.mon.unseen() {
 			z.system(p, "Selecione um alvo.")
 			return
 		}
@@ -190,7 +193,7 @@ func (z *Zone) requestAttack(p *entity, target uint32, force bool) {
 			}
 			return
 		}
-	case t.mon == nil || t.mon.hidden:
+	case t.mon == nil || t.mon.unseen():
 		return
 	}
 	if p.act.kind != actAttack || p.act.target != t.id || p.act.force != force {
@@ -223,6 +226,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			}
 		}
 		src.mp -= cost
+		z.questEvent(src, game.GoalSkill, "")
 		cd := skillCD(src, s)
 		src.pl.cooldowns[s.ID] = z.now + cd
 		src.pl.statsDirty = true
@@ -241,6 +245,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			for _, p := range z.players {
 				if p != src && !p.dead && z.allies(src, p) && dist(p.pos, src.pos) <= s.AllyRadius {
 					z.applyEffect(src, p, def)
+					z.markHelp(src) // buff em alguém do grupo
 				}
 			}
 		}
@@ -261,7 +266,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		z.skillHit(src, target, s, rank)
 		if s.Splash > 0 {
 			for _, m := range z.monsters {
-				if m != target && !m.dead && !m.mon.hidden && dist(target.pos, m.pos)-m.bodyRadius() <= s.Splash {
+				if m != target && !m.dead && !m.mon.unseen() && dist(target.pos, m.pos)-m.bodyRadius() <= s.Splash {
 					z.skillHit(src, m, s, rank)
 				}
 			}
@@ -275,7 +280,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		// Mostra a skill mesmo sem acertar ninguém.
 		z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID})
 		for _, m := range z.monsters {
-			if m.dead || m.mon.hidden || dist(src.pos, m.pos)-m.bodyRadius() > s.Range {
+			if m.dead || m.mon.unseen() || dist(src.pos, m.pos)-m.bodyRadius() > s.Range {
 				continue
 			}
 			z.skillHit(src, m, s, rank)
@@ -298,6 +303,9 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 		return
 	}
 	z.onPvPHit(src, dst)
+	if dst.mon != nil && src.pl != nil {
+		z.markHelp(src) // provocar ou enfraquecer também é ajudar o grupo
+	}
 	landed := s.Mult.At(rank) <= 0 // sem dano: o efeito sempre pega
 	if mult := s.Mult.At(rank); mult > 0 {
 		if s.ExecuteBelow > 0 && dst.hp < dst.stats.MaxHP*s.ExecuteBelow {
@@ -329,10 +337,11 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 		}
 		z.applyEffect(src, dst, def)
 	}
-	// Brasa Viva: skills de fogo deixam o alvo queimando.
-	if s.Fire && src.pl != nil {
-		if r := src.pl.rank(game.SkillEmber); r > 0 {
-			v := math.Round(src.atk(true, z.now) * game.Skills[game.SkillEmber].PValue.At(r))
+	// Brasa Viva: skills de fogo deixam o alvo queimando (menos as que já queimam por conta
+	// própria, como o Inferno: a queimadura mais fraca da Brasa substituiria a delas).
+	if s.Fire && src.pl != nil && (s.OnTarget == nil || s.OnTarget.Kind != game.EffectBurn) {
+		if pv := src.pl.passives.Of(game.PassiveFireBurn); pv > 0 {
+			v := math.Round(src.atk(true, z.now) * pv)
 			z.applyEffect(src, dst, &game.EffectDef{Kind: game.EffectBurn, Duration: game.FireBurnSeconds, Value: math.Max(1, v)})
 		}
 	}
@@ -341,6 +350,13 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 func (z *Zone) applyEffect(src, e *entity, def *game.EffectDef) {
 	if e.dead || (e.mon != nil && e.mon.def.ImmuneTo(def.Kind)) {
 		return
+	}
+	if e.pl != nil && (def.Kind == game.EffectStun || def.Kind == game.EffectSlow) {
+		if v := e.pl.mastery.of(game.MStatCCResist); v > 0 { // Firmeza (Maestria)
+			short := *def
+			short.Duration *= 1 - v
+			def = &short
+		}
 	}
 	e.addEffect(def, z.now, src.id)
 	z.frame.effects = append(z.frame.effects, &pb.EffectEvent{
@@ -375,6 +391,7 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 	src.lastCombat, dst.lastCombat = z.now, z.now
 
 	if dst.mon != nil && src.pl != nil {
+		z.markHelp(src) // conta para a XP do grupo (party.go)
 		dst.mon.hate[src.id] += math.Max(1, hit.Damage)
 		dst.mon.returning = false
 	}
@@ -386,19 +403,26 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 		dmg = math.Round(dmg * (1 + v))
 		ev.Damage = uint32(dmg)
 	}
+	// Escudo frontal (archetypes.go): o golpe físico de frente perde parte do dano, que o
+	// cliente mostra como absorvido.
+	if b := z.shieldBlock(src, dst, dmg, magic); b > 0 {
+		dmg -= b
+		ev.Damage = uint32(dmg)
+		ev.Absorbed += uint32(b)
+	}
 	taken := z.damage(src, dst, dmg, ev)
 
 	if src.pl != nil && taken > 0 && !src.dead {
 		// Sede de Sangue
-		if r := src.pl.rank(game.SkillBloodthirst); r > 0 {
-			heal := math.Round(taken * game.Skills[game.SkillBloodthirst].PValue.At(r))
+		if pv := src.pl.passives.Of(game.PassiveLifesteal); pv > 0 {
+			heal := math.Round(taken * pv)
 			if heal > 0 && src.hp < src.stats.MaxHP {
 				src.hp = math.Min(src.stats.MaxHP, src.hp+heal)
 				ev.Heal = uint32(heal)
 			}
 		}
 		// Lâmina Envenenada
-		if r := src.pl.rank(game.SkillPoisonedBlade); r > 0 && !dst.dead && z.rng.Float64() < game.Skills[game.SkillPoisonedBlade].PValue.At(r) {
+		if pv := src.pl.passives.Of(game.PassivePoisonProc); pv > 0 && !dst.dead && z.rng.Float64() < pv {
 			v := math.Max(1, math.Round(z.attackPower(src, false)*game.PoisonProcFrac))
 			z.applyEffect(src, dst, &game.EffectDef{Kind: game.EffectPoison, Duration: game.PoisonProcSecs, Value: v})
 		}
@@ -437,7 +461,7 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 		}
 	}
 	if ev != nil && absorbed > 0 {
-		ev.Absorbed = uint32(math.Round(absorbed))
+		ev.Absorbed += uint32(math.Round(absorbed))
 	}
 	if dmg <= 0 {
 		return absorbed
@@ -450,6 +474,13 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 	}
 	if dst.mon != nil && dst.mon.raid != nil {
 		z.raidCredit(dst, src, math.Min(dmg, dst.hp))
+	}
+	if dst.mon != nil && dst.mon.invader {
+		z.invasionCredit(src, math.Min(dmg, dst.hp))
+	}
+	if dst.mon != nil && src.pl != nil {
+		dst.mon.addDamage(src.id, math.Min(dmg, dst.hp)) // crédito do abate (party.go)
+		z.markHelp(src)
 	}
 	dst.hp -= dmg
 	if dst.hp <= 0 {
@@ -465,14 +496,14 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 
 // checkLastStand: Muralha Viva (cavaleiro abaixo de 30% ganha um escudo).
 func (z *Zone) checkLastStand(p *entity) {
-	if p.pl == nil || p.pl.rank(game.SkillLivingWall) < 1 || z.now < p.pl.lastStandReady {
+	if p.pl == nil || p.pl.passives.Of(game.PassiveLastStand) <= 0 || z.now < p.pl.lastStandReady {
 		return
 	}
 	if p.hp >= p.stats.MaxHP*game.LastStandBelow {
 		return
 	}
 	p.pl.lastStandReady = z.now + game.LastStandCD
-	v := math.Round(p.stats.MaxHP * game.Skills[game.SkillLivingWall].PValue.At(1))
+	v := math.Round(p.stats.MaxHP * p.pl.passives.Of(game.PassiveLastStand))
 	z.applyEffect(p, p, &game.EffectDef{Kind: game.EffectShield, Duration: game.LastStandSeconds, Value: v})
 	z.system(p, "Muralha Viva! Um escudo protege você.")
 }
@@ -491,19 +522,27 @@ func (z *Zone) regen(e *entity, dt float64) {
 	if calm {
 		hp *= calmRegenMult
 		mp *= calmMPRegenMult
+		if e.pl != nil { // Fôlego (Maestria)
+			v := 1 + e.pl.mastery.of(game.MStatCalmRegen)
+			hp, mp = hp*v, mp*v
+		}
 	}
 	if v, ok := e.effect(game.EffectCourage, z.now); ok {
 		hp += v
 	}
 	// Espírito do Urso
-	if e.pl != nil && e.pl.rank(game.SkillBearSpirit) > 0 && e.hp < e.stats.MaxHP*game.BearBelow {
-		hp += e.stats.MaxHP * game.Skills[game.SkillBearSpirit].PValue.At(1)
+	if e.pl != nil && e.pl.passives.Has(game.PassiveBearSpirit) && e.hp < e.stats.MaxHP*game.BearBelow {
+		hp += e.stats.MaxHP * e.pl.passives.Of(game.PassiveBearSpirit)
 	}
 	e.hp = math.Min(e.stats.MaxHP, e.hp+hp*dt)
 	e.mp = math.Min(e.stats.MaxMP, e.mp+mp*dt)
 }
 
-func (z *Zone) inSafe(p Vec2) bool { return math.Hypot(p.X, p.Z) < z.cfg.SafeRadius }
+func (z *Zone) inSafe(p Vec2) bool { return p.X*p.X+p.Z*p.Z < z.cfg.SafeRadius*z.cfg.SafeRadius }
+
+// pveSafe: zona segura para lutar com monstros. Durante a invasão, as estradas dos portões
+// e a praça deixam de ser (o PvP continua com inSafe: karma e flag não mudam).
+func (z *Zone) pveSafe(p Vec2) bool { return z.inSafe(p) && !z.invasionOpen(p) }
 
 func (z *Zone) sendCooldown(p *entity, skillID uint32, seconds float64) {
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_SkillCooldown{SkillCooldown: &pb.SkillCooldown{

@@ -13,6 +13,9 @@ const townSpawnRadius = 5.0
 
 // kill trata a morte de qualquer entidade.
 func (z *Zone) kill(dead, killer *entity) {
+	if dead.mon != nil && z.rareRise(dead) {
+		return // Ossudo, o Teimoso, levanta uma vez (rares.go)
+	}
 	dead.dead = true
 	dead.hp = 0
 	z.spreadPlague(dead)
@@ -30,14 +33,21 @@ func (z *Zone) kill(dead, killer *entity) {
 	}
 	if dead.mon != nil {
 		ms := dead.mon
-		// O drop fica reservado para quem causou mais dano (lido antes de zerar o ódio), e a
-		// XP vai para o grupo (ou jogador) que causou mais dano no total.
-		z.dropLoot(dead, topHate(ms.hate))
-		takers := z.creditGroup(ms.hate, dead.pos)
+		// O abate é de quem causou mais dano (o grupo soma o dele), não de quem deu o último
+		// golpe: esse lado leva a XP, o saque reservado (para quem dele mais bateu) e o
+		// crédito de missão, contrato e bestiário (party.go, creditKill). Invasores não
+		// deixam saque no chão da cidade: a recompensa da invasão sai no fim.
+		takers, owner := z.creditKill(ms, dead.pos)
 		if len(takers) == 0 && killer != nil && killer.pl != nil && !killer.dead {
-			takers = []*entity{killer} // sem ódio registrado (ex.: veneno de quem saiu)
+			takers, owner = []*entity{killer}, killer.id // sem dano registrado (ex.: veneno de quem saiu)
 		}
-		ms.hate = map[uint32]float64{}
+		if ms.invader {
+			z.invasionKilled(dead, killer)
+		} else {
+			z.dropLoot(dead, owner)
+		}
+		z.archDeath(dead) // dividir, explodir e os lacaios do invocador (com o ódio ainda aqui)
+		ms.forget()
 		ms.corpseEnd = z.now + corpseSeconds
 		ms.respawnAt = z.now + ms.spawn.Respawn*(1+z.rng.Float64())
 		if ms.def.Boss && !ms.summon {
@@ -48,6 +58,7 @@ func (z *Zone) kill(dead, killer *entity) {
 			z.bossChanged(dead)
 		}
 		z.shareMonsterXP(dead, takers)
+		z.rareKilled(dead, takers)
 		return
 	}
 
@@ -65,15 +76,31 @@ func (z *Zone) kill(dead, killer *entity) {
 	if killer != nil && killer != dead {
 		dead.pl.killedBy = killer.name
 	}
+	cause := ""
+	switch {
+	case killer != nil && killer.mon != nil:
+		cause = "monster:" + killer.mon.def.ID
+	case killer != nil && killer.pl != nil && killer != dead:
+		cause = "player"
+	}
+	z.track(dead, "death", cause, 0, nil)
+	z.dungeonDeath(dead) // telemetria da cópia da masmorra
 	before := dead.pl.xp
+	losses := 0
 	switch {
 	case chaotic:
-		for range pkXPLossFactor {
-			dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level)
-		}
-	case !byPlayer:
+		losses = pkXPLossFactor
+	case !byPlayer && (killer == nil || killer.mon == nil || !killer.mon.invader):
+		losses = 1 // morrer defendendo a cidade não custa XP
+	}
+	for range losses {
 		dead.pl.xp = game.XPAfterDeath(dead.pl.xp, dead.level)
 	}
+	var barLost int64
+	if losses > 0 && dead.level >= game.MasteryLevel {
+		barLost = z.masteryDeath(dead, losses) // no máximo, sai da barra de Maestria (sem tirar ponto)
+	}
+	z.tallyXP(dead, xpDeath, dead.pl.xp-before) // telemetria (xptally.go)
 	dead.pl.statsDirty = true
 	z.forgetTarget(dead.id)
 	if chaotic {
@@ -92,13 +119,23 @@ func (z *Zone) kill(dead, killer *entity) {
 	if lost := before - dead.pl.xp; lost > 0 {
 		msg += fmt.Sprintf(" e perdeu %d de XP", lost)
 	}
+	if barLost > 0 {
+		msg += fmt.Sprintf(" e perdeu %d de XP da barra de Maestria", barLost)
+	}
 	z.system(dead, msg+". Clique em \"Voltar à cidade\".")
 }
 
-// grantXP soma XP e sobe de nível quantas vezes for preciso.
+// grantXP soma XP à classe ativa e sobe de nível quantas vezes for preciso. No nível
+// máximo, a XP enche a barra de Maestria (mastery.go), que é do personagem. Com o bônus
+// Duas Sendas, a classe ativa mais baixa ganha 5% a mais (subclass.go).
 func (z *Zone) grantXP(p *entity, xp int64) {
 	if p.level >= game.MaxLevel {
+		z.grantMasteryXP(p, xp)
 		return
+	}
+	if extra := subclassXP(p, xp); extra > 0 {
+		z.tallyXP(p, xpSubclass, extra) // telemetria (xptally.go)
+		xp += extra
 	}
 	p.pl.xp += xp
 	p.pl.statsDirty = true
@@ -116,9 +153,21 @@ func (z *Zone) grantXP(p *entity, xp int64) {
 	p.hp, p.mp = p.stats.MaxHP, p.stats.MaxMP
 	z.sendProgress(p) // pontos novos de atributo e de skill
 	z.clanLevelUp(p)
+	z.vitalityLevelUp(p) // teto novo da vitalidade e o fim da recuperação (vitality.go)
 	z.frame.levelUps = append(z.frame.levelUps, &pb.LevelUp{Id: p.id, Level: uint32(p.level), MaxHp: uint32(p.maxHPInt())})
 	z.systemAfterFlush(p, fmt.Sprintf("Você subiu para o nível %d!", p.level))
+	if p.pl.class != p.pl.mainClass { // subclasse: ref "subclass", para separar da progressão da principal
+		z.track(p, "level", "subclass", int64(p.level), map[string]any{"class": p.pl.class})
+		z.achValue(p, game.AchSubclass, "", p.level)
+	} else {
+		z.track(p, "level", "", int64(p.level), nil)
+	}
+	z.questLevelUp(p) // também reenvia o lugar dos objetivos que dependem do nível
+	z.achValue(p, game.AchLevel, "", p.level)
 	z.log.Info("level up", "id", p.id, "name", p.name, "level", p.level)
+	if p.level >= game.MasteryLevel {
+		z.masteryOpened(p)
+	}
 }
 
 // respawnPlayer leva o jogador morto de volta à cidade, com vida e mana cheias.
@@ -126,9 +175,14 @@ func (z *Zone) respawnPlayer(p *entity) {
 	if !p.dead {
 		return
 	}
+	// Durante a invasão a praça está em luta: quem morre volta num canto seguro da cidade.
+	center, spread := Vec2{}, townSpawnRadius
+	if z.invasionOpen(center) {
+		center, spread = invShelters()[z.rng.IntN(4)], 1.5
+	}
 	a := z.rng.Float64() * 2 * math.Pi
-	r := z.rng.Float64() * townSpawnRadius
-	p.pos = z.freeSpot(Vec2{X: r * math.Cos(a), Z: r * math.Sin(a)})
+	r := z.rng.Float64() * spread
+	p.pos = z.freeSpot(Vec2{X: center.X + r*math.Cos(a), Z: center.Z + r*math.Sin(a)})
 	p.dest = p.pos
 	p.path = nil
 	p.dead = false
@@ -149,7 +203,7 @@ func (z *Zone) selfStats(p *entity) *pb.SelfStats {
 	}
 	return &pb.SelfStats{
 		Hp: uint32(p.hpInt()), MaxHp: uint32(p.maxHPInt()),
-		Mp: uint32(math.Floor(p.mp)), MaxMp: uint32(math.Round(p.stats.MaxMP)),
+		Mp: uint32(p.mpInt()), MaxMp: uint32(p.maxMPInt()),
 		Level: uint32(p.level), Xp: uint64(p.pl.xp),
 		XpLevelStart: uint64(game.XPLevelStart(p.level)), XpNextLevel: next,
 		PAtk:     uint32(math.Round(p.atk(false, z.now))),

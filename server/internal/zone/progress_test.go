@@ -16,11 +16,13 @@ func atLevel(z *Zone, p *entity, level int) {
 	p.hp, p.mp = p.stats.MaxHP, p.stats.MaxMP
 }
 
-// learn dá ranks sem validar (para testar a mecânica de uma skill isolada).
+// learn dá ranks sem validar (para testar a mecânica de uma skill isolada); por isso
+// desliga a invariante dos pontos.
 func learn(z *Zone, p *entity, ranks map[uint32]int) {
 	for id, r := range ranks {
 		p.pl.ranks[id] = r
 	}
+	z.invariants.disable("points")
 	z.refreshStats(p)
 }
 
@@ -65,7 +67,7 @@ func TestNewCharacterStartsWithStarterSkillsAndDefaultHotbar(t *testing.T) {
 			w = m.GetWelcome()
 		}
 	}
-	if w == nil || len(w.Skills) != 12 || len(w.Branches) != 3 || w.Progress.FreeSkillPoints != 0 || w.Progress.FreeAttrPoints != 0 {
+	if w == nil || len(w.Skills) != 15+6 || len(w.Branches) != 3 || len(w.Specs) != len(game.SpecList) || w.Progress.FreeSkillPoints != 0 || w.Progress.FreeAttrPoints != 0 {
 		t.Fatalf("welcome progression wrong")
 	}
 	for _, s := range w.Skills {
@@ -220,7 +222,7 @@ func TestProgressSurvivesRelogin(t *testing.T) {
 }
 
 func TestLoadProgressRepairsBadData(t *testing.T) {
-	attrs, ranks, bar := loadProgress("knight", 1, game.Attrs{Str: 99}, map[uint32]int{game.SkillJudgment: 1, game.SkillFireball: 3}, nil)
+	attrs, ranks, bar := loadProgress("knight", "", 1, game.Attrs{Str: 99}, map[uint32]int{game.SkillJudgment: 1, game.SkillFireball: 3}, nil)
 	if attrs.Sum() != 0 {
 		t.Error("too many attribute points kept")
 	}
@@ -632,5 +634,33 @@ func TestExecuteTwinBladesJudgmentLifestealSplashParalysis(t *testing.T) {
 	}
 	if !hit[a.id] || !hit[b.id] {
 		t.Errorf("ember rain should splash: %v", hit)
+	}
+}
+
+// A mecânica reage ao tipo da passiva, não ao ID: um total de PassiveLifesteal injetado
+// (como uma skill nova de qualquer classe daria) faz o roubo de vida funcionar.
+func TestLifestealByPassiveKind(t *testing.T) {
+	z := newCombatZone(fixed("skeleton_warrior", 10, 32, 0))
+	var m *entity
+	for _, mm := range z.monsters {
+		m = mm
+	}
+	r, _ := joinAt(z, 1, "rogue", 31, 0, 0)
+	atLevel(z, r, 20)
+	m.stats.MaxHP, m.hp = 1e6, 1e6
+	r.hp = r.stats.MaxHP / 2
+	hp := r.hp
+	for i := 0; i < 8; i++ {
+		z.basicAttack(r, m)
+	}
+	if r.hp > hp {
+		t.Fatal("sem a passiva não deve curar")
+	}
+	r.pl.passives[game.PassiveLifesteal] = 0.5
+	for i := 0; i < 8; i++ {
+		z.basicAttack(r, m)
+	}
+	if r.hp <= hp {
+		t.Error("PassiveLifesteal deveria curar, de qualquer skill")
 	}
 }

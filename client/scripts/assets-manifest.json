@@ -1,0 +1,492 @@
+{
+  "_leia": "Categoria de cada GLB de public/models (orçamento em scripts/lib/asset-budget.mjs e docs/guia-de-arte.md, seção 5). variantes: regex de nós que o jogo esconde (conta só a maior). porPeca: kit com várias peças (mede a maior). excecoes: teto de hoje + motivo; só encolhe.",
+  "modelos": {
+    "anims-combatmelee.glb": {
+      "categoria": "animacao"
+    },
+    "anims-combatranged.glb": {
+      "categoria": "animacao"
+    },
+    "anims-general.glb": {
+      "categoria": "animacao"
+    },
+    "anims-movementbasic.glb": {
+      "categoria": "animacao"
+    },
+    "anims-special.glb": {
+      "categoria": "animacao"
+    },
+    "armor/cape_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/cape_legend.glb": {
+      "categoria": "armadura"
+    },
+    "armor/cape_rare.glb": {
+      "categoria": "armadura"
+    },
+    "armor/hat_mage_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/helm_barbarian_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/helm_knight_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/helm_knight_rare.glb": {
+      "categoria": "armadura"
+    },
+    "armor/hood_rogue_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/pauldron_epic.glb": {
+      "categoria": "armadura"
+    },
+    "armor/pauldron_legend.glb": {
+      "categoria": "armadura"
+    },
+    "barbarian_b.glb": {
+      "categoria": "personagem"
+    },
+    "barbarian.glb": {
+      "categoria": "personagem",
+      "variantes": [
+        "^Head_"
+      ],
+      "excecoes": {
+        "tris": {
+          "max": 8708,
+          "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
+        }
+      }
+    },
+    "bone_lord_b.glb": {
+      "categoria": "chefe"
+    },
+    "brejeiro_b.glb": {
+      "categoria": "monstro"
+    },
+    "env-catacumbas.glb": {
+      "categoria": "cenario",
+      "porPeca": true
+    },
+    "env-forest.glb": {
+      "categoria": "cenario",
+      "porPeca": true
+    },
+    "env-town.glb": {
+      "categoria": "cenario",
+      "porPeca": true,
+      "excecoes": {
+        "tris": {
+          "max": 3125,
+          "motivo": "KayKit legado, substituído na #100"
+        }
+      }
+    },
+    "frog_b.glb": {
+      "categoria": "monstro"
+    },
+    "knight_b.glb": {
+      "categoria": "personagem"
+    },
+    "knight.glb": {
+      "categoria": "personagem",
+      "variantes": [
+        "^Head_"
+      ]
+    },
+    "mage_b.glb": {
+      "categoria": "personagem"
+    },
+    "mage.glb": {
+      "categoria": "personagem",
+      "variantes": [
+        "^Head_"
+      ]
+    },
+    "nature_boat_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_bush_leaf_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_cliff_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_crystal_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_fallen_log_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_ferryman_hut_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_grass_tuft_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_grave_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_reeds_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_rock_l_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_rock_m_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_rock_s_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_tree_dead_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_tree_oak_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_tree_pine_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_tree_vale_b.glb": {
+      "categoria": "cenario"
+    },
+    "npc_anselmo_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_bruno_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_cassio_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_darcio_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_edrian_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_gaspar_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_guarda_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_iselda_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_livia_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_maelis_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_marga_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_merchant.glb": {
+      "categoria": "personagem"
+    },
+    "npc_otto_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_rovena_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_severino_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_smith.glb": {
+      "categoria": "personagem",
+      "excecoes": {
+        "tris": {
+          "max": 8900,
+          "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
+        }
+      }
+    },
+    "npc_teodoro_b.glb": {
+      "categoria": "personagem"
+    },
+    "npc_ysolde_b.glb": {
+      "categoria": "personagem"
+    },
+    "ozrhal_b.glb": {
+      "categoria": "chefe"
+    },
+    "plaza_BannerPost_b.glb": {
+      "categoria": "cenario"
+    },
+    "plaza_Fountain_b.glb": {
+      "categoria": "cenario"
+    },
+    "plaza_Paving_b.glb": {
+      "categoria": "cenario"
+    },
+    "props/loot_sack.glb": {
+      "categoria": "cenario"
+    },
+    "rogue_b.glb": {
+      "categoria": "personagem"
+    },
+    "rogue.glb": {
+      "categoria": "personagem",
+      "variantes": [
+        "^Head_"
+      ]
+    },
+    "skeleton_mage_b.glb": {
+      "categoria": "monstro"
+    },
+    "skeleton_mage.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "tris": {
+          "max": 4588,
+          "motivo": "KayKit legado, substituído na #98"
+        },
+        "materials": {
+          "max": 2,
+          "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "skeleton_minion_b.glb": {
+      "categoria": "monstro"
+    },
+    "skeleton_minion.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "tris": {
+          "max": 5288,
+          "motivo": "KayKit legado, substituído na #98"
+        },
+        "materials": {
+          "max": 2,
+          "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "skeleton_rogue_b.glb": {
+      "categoria": "monstro"
+    },
+    "skeleton_rogue.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "tris": {
+          "max": 5278,
+          "motivo": "KayKit legado, substituído na #98"
+        },
+        "materials": {
+          "max": 2,
+          "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "skeleton_warrior_b.glb": {
+      "categoria": "monstro"
+    },
+    "skeleton_warrior.glb": {
+      "categoria": "monstro",
+      "excecoes": {
+        "tris": {
+          "max": 5934,
+          "motivo": "KayKit legado, substituído na #98"
+        },
+        "materials": {
+          "max": 2,
+          "motivo": "KayKit legado, substituído na #98"
+        }
+      }
+    },
+    "slime_b.glb": {
+      "categoria": "monstro"
+    },
+    "spider_b.glb": {
+      "categoria": "monstro"
+    },
+    "stone_golem_b.glb": {
+      "categoria": "monstro"
+    },
+    "town_banner_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_barrel_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_bench_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_blacksmith_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_cart_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_church_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_corner_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_crate_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_crystal_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_gate_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_home_a_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_home_b_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_lamp_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_market_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_pillar_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_sign_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_stall_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_tavern_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_tomb_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_tower_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_wall_b.glb": {
+      "categoria": "cenario"
+    },
+    "weapons/axe_1handed.glb": {
+      "categoria": "arma"
+    },
+    "weapons/axe_2handed.glb": {
+      "categoria": "arma"
+    },
+    "weapons/axe_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/axe_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/axe_rare_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/dagger_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/dagger_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/dagger_rare_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/dagger.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_badge_color.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_rare_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_round_barbarian.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_spikes_color.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_spikes.glb": {
+      "categoria": "arma"
+    },
+    "weapons/shield_square.glb": {
+      "categoria": "arma"
+    },
+    "weapons/skeleton_axe.glb": {
+      "categoria": "arma"
+    },
+    "weapons/skeleton_blade.glb": {
+      "categoria": "arma"
+    },
+    "weapons/skeleton_shield_large_a.glb": {
+      "categoria": "arma"
+    },
+    "weapons/skeleton_staff.glb": {
+      "categoria": "arma",
+      "excecoes": {
+        "tris": {
+          "max": 1519,
+          "motivo": "KayKit legado (cajado do esqueleto), substituído na #98"
+        }
+      }
+    },
+    "weapons/staff_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/staff_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/staff_rare_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/staff.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_1handed.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_2handed_color.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_2handed.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/sword_rare_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/wand_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/wand_high_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/wand_rare_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/wand.glb": {
+      "categoria": "arma"
+    },
+    "wolf_b.glb": {
+      "categoria": "monstro"
+    }
+  }
+}

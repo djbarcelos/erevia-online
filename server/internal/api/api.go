@@ -44,10 +44,22 @@ type API struct {
 	log       *slog.Logger
 	providers map[string]*provider
 	secure    bool
+	// onAccountDeleted avisa a zona que uma conta sumiu (derruba quem estiver online).
+	onAccountDeleted func(store.DeletedAccount)
+	// errLimit: lotes de erros do cliente por IP e por conta (POST /api/client-errors).
+	errLimit *rateLimiter
+	// admin: portal de administração (admin.go).
+	admin *adminState
+	// bug: /bug completo (bug_reports.go).
+	bug *bugState
 }
 
+// OnAccountDeleted registra quem é avisado depois que uma conta é apagada (antes de servir).
+func (a *API) OnAccountDeleted(fn func(store.DeletedAccount)) { a.onAccountDeleted = fn }
+
 func New(st *store.Store, cfg Config, log *slog.Logger) *API {
-	a := &API{store: st, cfg: cfg, log: log, providers: map[string]*provider{}}
+	a := &API{store: st, cfg: cfg, log: log, providers: map[string]*provider{},
+		errLimit: newRateLimiter(ClientErrorsPerMinute, clientErrorRateWindow)}
 	for _, p := range []*provider{cfg.Google, cfg.Discord} {
 		if p != nil {
 			a.providers[p.name] = p
@@ -64,9 +76,13 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/auth/dev", a.handleDevLogin)
 	mux.HandleFunc("POST /api/auth/logout", a.handleLogout)
 	mux.HandleFunc("GET /api/me", a.handleMe)
+	mux.HandleFunc("DELETE /api/account", a.handleDeleteAccount)
 	mux.HandleFunc("GET /api/characters", a.handleListCharacters)
 	mux.HandleFunc("POST /api/characters", a.handleCreateCharacter)
 	mux.HandleFunc("GET /api/creation", a.handleCreation)
+	mux.HandleFunc("POST /api/client-errors", a.handleClientErrors)
+	a.registerBugReports(mux)
+	a.registerAdmin(mux)
 }
 
 // Authenticate devolve a conta da sessão no cookie (também usado pelo WebSocket).
@@ -232,6 +248,47 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"accountId": accountID, "displayName": name})
 }
 
+// AccountDeleteConfirm é o que o jogador digita para confirmar que quer apagar a conta.
+const AccountDeleteConfirm = "APAGAR"
+
+// handleDeleteAccount apaga a conta e tudo o que é dela (LGPD, art. 18), encerra a sessão
+// e derruba da zona quem estiver jogando com ela.
+func (a *API) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	if !a.checkPost(w, r) {
+		return
+	}
+	accountID, ok := a.requireAccount(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Confirm string `json:"confirm"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if strings.TrimSpace(body.Confirm) != AccountDeleteConfirm {
+		writeError(w, http.StatusBadRequest, "Digite "+AccountDeleteConfirm+" para confirmar.")
+		return
+	}
+	d, err := a.store.DeleteAccount(r.Context(), accountID)
+	if err != nil && !errors.Is(err, store.ErrNotFound) { // não existe mais: já foi apagada
+		a.internalError(w, err)
+		return
+	}
+	if err == nil {
+		a.log.Info("account deleted", "account", accountID, "characters", len(d.Characters), "clans", len(d.Clans))
+		if a.onAccountDeleted != nil {
+			a.onAccountDeleted(d)
+		}
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: SessionCookie, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: a.secure, SameSite: http.SameSiteLaxMode,
+	})
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // ---------- Personagens ----------
 
 func (a *API) handleListCharacters(w http.ResponseWriter, r *http.Request) {
@@ -338,6 +395,8 @@ var creationOptions = func() map[string]any {
 		// Visual do corpo: índice 0 = original da classe, i = lista[i-1].
 		"skins": game.SkinTones, "hairs": game.HairColors, "outfits": game.OutfitColors,
 		"heads": game.Heads, "hatClasses": hats, "barberPrice": game.BarberPrice,
+		// Cores de roupa do bestiário (família completa; índice próprio, fora da criação).
+		"bestiaryOutfits": game.BestiaryOutfits(),
 	}
 }()
 

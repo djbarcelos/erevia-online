@@ -18,6 +18,7 @@ type objectState struct {
 	owner  uint32
 	until  float64
 	banner *game.BannerDef
+	title  string // túmulo do chefe de campo: a dica (fieldboss.go)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -138,19 +139,24 @@ func (z *Zone) updateAuras() {
 			continue
 		}
 		b := o.obj.banner
+		if b == nil {
+			continue // túmulo: só some com o tempo
+		}
 		owner := z.players[o.obj.owner]
 		for _, p := range z.players {
 			if owner != nil && !p.dead && z.allies(owner, p) && dist(p.pos, o.pos) <= b.Radius {
 				z.applyAura(o, p, b.Effect, b.Value)
+				if p != owner {
+					z.markHelp(owner) // o estandarte erguido ajuda o grupo
+				}
 			}
 		}
 	}
 	for _, k := range z.players {
-		r := k.pl.rank(game.SkillCourage)
-		if r < 1 || k.dead {
+		v := k.pl.passives.Of(game.PassiveCourage)
+		if v <= 0 || k.dead {
 			continue
 		}
-		v := game.Skills[game.SkillCourage].PValue.At(r)
 		for _, p := range z.players {
 			if !p.dead && z.allies(k, p) && dist(p.pos, k.pos) <= game.CourageRadius {
 				z.applyAura(k, p, game.EffectCourage, v)
@@ -180,6 +186,7 @@ func (z *Zone) tickDoTs(e *entity) {
 		z.frame.combat = append(z.frame.combat, ev)
 		e.lastCombat = z.now
 		if e.mon != nil && src.pl != nil {
+			z.markHelp(src)
 			e.mon.hate[src.id] += dmg
 			e.mon.returning = false
 		}
@@ -218,9 +225,9 @@ func (z *Zone) spreadPlague(dead *entity) {
 	if src == nil {
 		return
 	}
-	def := &game.EffectDef{Kind: game.EffectPlague, Duration: game.Skills[game.SkillPlague].OnTarget.Duration.At(1), Value: ef.value}
+	def := &game.EffectDef{Kind: game.EffectPlague, Duration: ef.duration, Value: ef.value}
 	for _, m := range z.monsters {
-		if m != dead && !m.dead && !m.mon.hidden && dist(m.pos, dead.pos)-m.bodyRadius() <= game.PlagueSpread {
+		if m != dead && !m.dead && !m.mon.unseen() && dist(m.pos, dead.pos)-m.bodyRadius() <= game.PlagueSpread {
 			z.applyEffect(src, m, def)
 		}
 	}

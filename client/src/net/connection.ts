@@ -1,5 +1,27 @@
 import { create, fromBinary, toBinary, type MessageInitShape } from "@bufbuild/protobuf";
-import { ChatChannel, ClanCmdKind, ClanRank, ClientMessageSchema, PartyCmdKind, ServerMessageSchema, type ServerMessage } from "../gen/erevia/v1/game_pb";
+import {
+  AchievementCmdKind,
+  ChatChannel,
+  ClanCmdKind,
+  ClanRank,
+  ClientMessageSchema,
+  PartyCmdKind,
+  ServerMessageSchema,
+  type FriendCmdKind,
+  type SpecCmdKind,
+  type SubclassCmdKind,
+  type NpcTalkKind,
+  type MasteryCmdKind,
+  type ContractCmdKind,
+  type ReputationCmdKind,
+  BestiaryCmdKind,
+  type MailCmdKind,
+  type ServerMessage,
+  type TradeCmdKind,
+  type AuctionCmdKind,
+} from "../gen/erevia/v1/game_pb";
+import type { AuctionCmdOpts } from "../ui/windows/auction";
+import { reportClientError } from "./errors";
 
 const PING_INTERVAL_MS = 2000;
 
@@ -24,7 +46,18 @@ export class Connection {
     };
 
     this.ws.onmessage = (ev: MessageEvent<ArrayBuffer>) => {
-      const msg = fromBinary(ServerMessageSchema, new Uint8Array(ev.data));
+      const bytes = new Uint8Array(ev.data);
+      let msg: ServerMessage;
+      try {
+        msg = fromBinary(ServerMessageSchema, bytes);
+      } catch (err) {
+        // Cliente e servidor fora de sincronia (proto mudou?): relata e descarta a mensagem.
+        reportClientError("decode", `mensagem do servidor não decodifica: ${(err as Error)?.message ?? err}`, {
+          bytes: bytes.length,
+          head: [...bytes.subarray(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+        }, err);
+        return;
+      }
       if (msg.msg.case === "pong") {
         this.ping = Math.round(performance.now() - msg.msg.value.clientTime);
         return;
@@ -68,9 +101,24 @@ export class Connection {
     this.send({ case: "clanCmd", value: { kind, name: opts.name ?? "", targetId: opts.targetId ?? 0, rank: opts.rank ?? ClanRank.MEMBER, text: opts.text ?? "" } });
   }
 
+  /** Amigos: adicionar/remover (pelo nome ou pelo id) ou pedir a lista com as posições. */
+  friendCmd(kind: FriendCmdKind, opts: { name?: string; targetId?: number } = {}): void {
+    this.send({ case: "friendCmd", value: { kind, name: opts.name ?? "", targetId: opts.targetId ?? 0 } });
+  }
+
+  /** Correio: enviar, listar a caixa, marcar como lida ou apagar. */
+  mailCmd(kind: MailCmdKind, opts: { to?: string; subject?: string; body?: string; mailId?: bigint } = {}): void {
+    this.send({ case: "mailCmd", value: { kind, to: opts.to ?? "", subject: opts.subject ?? "", body: opts.body ?? "", mailId: opts.mailId ?? 0n } });
+  }
+
   /** Barbeiro: mudar o visual do corpo (custa moedas). */
   changeLook(npcId: number, look: { skin: number; hair: number; outfit: number; head: string; hideHat: boolean }): void {
     this.send({ case: "changeLook", value: { npcId, look } });
+  }
+
+  /** Portão: atravessar para outro mapa (o servidor responde com ZoneChange e um Welcome novo). */
+  useGate(npcId: number): void {
+    this.send({ case: "useGate", value: { npcId } });
   }
 
   /** Pedra de Teleporte: viajar para um destino. */
@@ -91,6 +139,11 @@ export class Connection {
   /** Moedas no armazém: > 0 guarda, < 0 retira, 0 só abre. */
   storageGold(npcId: number, amount: number): void {
     this.send({ case: "storageGold", value: { npcId, amount: BigInt(amount) } });
+  }
+
+  /** Troca entre jogadores: pedir, oferecer/tirar item da bolsa, moedas, travar, confirmar, cancelar. */
+  tradeCmd(kind: TradeCmdKind, opts: { targetId?: number; slot?: number; count?: number; gold?: number } = {}): void {
+    this.send({ case: "tradeCmd", value: { kind, targetId: opts.targetId ?? 0, slot: opts.slot ?? 0, count: opts.count ?? 0, gold: BigInt(opts.gold ?? 0) } });
   }
 
   cancelChannel(): void {
@@ -132,6 +185,79 @@ export class Connection {
 
   buy(npcId: number, itemId: string, count: number): void {
     this.send({ case: "buy", value: { npcId, itemId, count } });
+  }
+
+  /** Telemetria: amostra de FPS (a cada ~60 s). */
+  clientStats(fpsAvg: number, fpsLow: number, device: string, seconds: number): void {
+    this.send({ case: "clientStats", value: { fpsAvg, fpsLow, device, seconds } });
+  }
+
+  /** Pede o ranking (a janela Glória, quando abre e o que tem guardado está velho). */
+  rankingRequest(): void {
+    this.send({ case: "rankingRequest", value: {} });
+  }
+
+  /** Mestra dos Caminhos: falar (anda A Encruzilhada e abre a escolha) ou escolher o caminho. */
+  specCmd(kind: SpecCmdKind, npcId: number, spec = ""): void {
+    this.send({ case: "specCmd", value: { kind, npcId, spec } });
+  }
+
+  /** Guardião das Sendas (subclasse): falar, escolher a subclasse ou trocar a classe ativa. */
+  subclassCmd(kind: SubclassCmdKind, npcId: number, cls = ""): void {
+    this.send({ case: "subclassCmd", value: { kind, npcId, class: cls } });
+  }
+
+  /** Conversa com NPC: abrir, aceitar ou entregar a missão questId, perguntar sobre topic. */
+  npcTalk(kind: NpcTalkKind, npcId: number, questId = "", topic = ""): void {
+    this.send({ case: "npcTalk", value: { kind, npcId, questId, topic } });
+  }
+
+  /** Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, meus anúncios e retirar do correio. */
+  auctionCmd(kind: AuctionCmdKind, npcId: number, opts: AuctionCmdOpts = {}): void {
+    this.send({
+      case: "auctionCmd",
+      value: {
+        kind,
+        npcId,
+        query: opts.query,
+        slot: opts.slot ?? 0,
+        count: opts.count ?? 0,
+        price: BigInt(opts.price ?? 0),
+        hours: opts.hours ?? 0,
+        auctionId: opts.auctionId ?? 0n,
+        mailId: opts.mailId ?? 0n,
+      },
+    });
+  }
+
+  /** Maestria (nível máximo): pedir a árvore e o estado, gastar 1 ponto no nó ou redistribuir. */
+  masteryCmd(kind: MasteryCmdKind, node = ""): void {
+    this.send({ case: "masteryCmd", value: { kind, node } });
+  }
+
+  /** Quadro de Contratos: pedir o estado ou aceitar um contrato (perto do quadro). */
+  contractCmd(kind: ContractCmdKind, contract = "", npcId = 0): void {
+    this.send({ case: "contractCmd", value: { kind, contract, npcId } });
+  }
+
+  /** Reputação: pedir as facções e a loja, ou comprar uma oferta (perto do quadro). */
+  reputationCmd(kind: ReputationCmdKind, offer = "", npcId = 0): void {
+    this.send({ case: "reputationCmd", value: { kind, offer, npcId } });
+  }
+
+  /** Bestiário: pede o estado inteiro (a janela abriu). */
+  bestiaryCmd(): void {
+    this.send({ case: "bestiaryCmd", value: { kind: BestiaryCmdKind.BESTIARY_CMD_GET } });
+  }
+
+  /** Escolhe o título (id da conquista; "" tira). */
+  setTitle(id: string): void {
+    this.send({ case: "achievementCmd", value: { kind: AchievementCmdKind.ACHIEVEMENT_CMD_SET_TITLE, id } });
+  }
+
+  /** Ferreiro: criar um item com a receita. */
+  craft(npcId: number, recipeId: string): void {
+    this.send({ case: "craft", value: { npcId, recipeId } });
   }
 
   sell(npcId: number, slot: number, count: number): void {

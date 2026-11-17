@@ -7,7 +7,7 @@ const STORAGE_KEY = "erevia.debug";
  * Painel de desempenho (F3 ou ?debug=1): tempo de frame, draw calls, malhas ativas e
  * quanto tempo vai em animação e na interface. Serve para achar a causa de quedas de FPS.
  */
-export function setupPerfPanel(scene: Scene, gui: AdvancedDynamicTexture, hud: HTMLElement): void {
+export function setupPerfPanel(scene: Scene, gui: AdvancedDynamicTexture, hud: HTMLElement): () => void {
   let on = new URLSearchParams(location.search).has("debug");
   try {
     on ||= localStorage.getItem(STORAGE_KEY) === "1";
@@ -22,6 +22,9 @@ export function setupPerfPanel(scene: Scene, gui: AdvancedDynamicTexture, hud: H
     ["frame", "Frame"],
     ["draws", "Draws"],
     ["meshes", "Malhas"],
+    // Texturas da cena / do engine inteiro: depois de trocar de mapa e voltar, as duas
+    // voltam ao número de antes (nada vazou da cena descartada).
+    ["textures", "Texturas"],
     ["anim", "Anim"],
     ["gui", "GUI"],
     ["render", "Render"],
@@ -48,7 +51,7 @@ export function setupPerfPanel(scene: Scene, gui: AdvancedDynamicTexture, hud: H
   };
   apply();
 
-  window.addEventListener("keydown", (ev) => {
+  const onKey = (ev: KeyboardEvent) => {
     if (ev.key !== "F3") return;
     ev.preventDefault();
     on = !on;
@@ -58,7 +61,8 @@ export function setupPerfPanel(scene: Scene, gui: AdvancedDynamicTexture, hud: H
       /* ignora */
     }
     apply();
-  });
+  };
+  window.addEventListener("keydown", onKey);
 
   // GUI 2D (nomes, barras, números de dano): tempo de layout + desenho no canvas e quantas
   // vezes por segundo ela foi redesenhada (só redesenha quando algo muda).
@@ -72,14 +76,22 @@ export function setupPerfPanel(scene: Scene, gui: AdvancedDynamicTexture, hud: H
   });
 
   const ms = (v: number) => `${v.toFixed(1)} ms`;
-  window.setInterval(() => {
+  const timer = window.setInterval(() => {
     if (!on || !sceneInst) return;
     rows.get("frame")!.textContent = ms(sceneInst.frameTimeCounter.lastSecAverage);
     rows.get("draws")!.textContent = String(sceneInst.drawCallsCounter.current);
     rows.get("meshes")!.textContent = `${scene.getActiveMeshes().length} / ${scene.meshes.length}`;
+    rows.get("textures")!.textContent = `${scene.textures.length} / ${scene.getEngine().getLoadedTexturesCache().length}`;
     rows.get("anim")!.textContent = ms(sceneInst.animationsTimeCounter.lastSecAverage);
     rows.get("render")!.textContent = ms(sceneInst.renderTimeCounter.lastSecAverage);
     rows.get("gui")!.textContent = guiCount ? `${ms(guiMs / guiCount)} · ${guiCount * 2}/s` : "parada";
     guiMs = guiCount = 0;
   }, 500);
+  // Troca de mapa (zonas): a cena vai embora, o painel também.
+  return () => {
+    window.removeEventListener("keydown", onKey);
+    window.clearInterval(timer);
+    sceneInst?.dispose();
+    box.remove();
+  };
 }

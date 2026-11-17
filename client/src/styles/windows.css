@@ -1577,6 +1577,14 @@
   border-color: var(--zc);
 }
 
+/* Missão rastreada com o botão "Ir" ao lado */
+.wmap-quest-go {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: stretch;
+}
+
 .wmap-zone .zc {
   width: 10px;
   height: 34px;
@@ -1873,8 +1881,18 @@
 }
 
 .pw-rules,
-.pw-empty {
+.pw-empty,
+.pw-xp,
+.pw-xp-warn {
   margin: 0;
+}
+
+.pw-xp {
+  color: var(--gold);
+}
+
+.pw-xp-warn {
+  color: var(--warn);
 }
 
 /* ---------- Fase 4: janela do clã ---------- */
@@ -2042,4 +2060,290 @@
 .inv-win.picking [data-equip]:hover {
   outline: 2px solid #ffd36b;
   outline-offset: -2px;
+}
+
+/* ---------- Troca entre jogadores ---------- */
+
+.trade-panel {
+  width: min(440px, calc(100vw - 32px));
+}
+
+.tr-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.tr-offer {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(214, 180, 110, 0.18);
+  transition: border-color 0.15s;
+}
+
+.tr-offer.locked {
+  border-color: var(--gold);
+}
+
+.tr-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.tr-head {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--gold);
+}
+
+.tr-status {
+  font-size: 0.7rem;
+  color: var(--gold-hi);
+}
+
+.tr-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.tr-offer-gold {
+  font-size: 0.78rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tr-gold,
+.tr-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.tr-actions {
+  justify-content: flex-end;
+}
+
+.tr-gold-input {
+  width: 110px;
+}
+
+.tr-hint {
+  margin: 8px 0 0;
+}
+
+/* ---------- Criar (Ferreiro) ---------- */
+
+.craft-mats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  font-size: 0.72rem;
+}
+
+.craft-mat {
+  color: var(--text);
+}
+
+.craft-mat.missing {
+  color: var(--bad, #e07a6a);
+}
+
+/* ---------- Social: amigos e correio ---------- */
+
+.social-win {
+  display: grid;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.sw-pane {
+  display: grid;
+  gap: 10px;
+}
+
+.sw-pane[hidden] {
+  display: none;
+}
+
+.sw-row-form {
+  display: flex;
+  gap: 8px;
+}
+
+.sw-row-form .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sw-list {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.sw-list > p,
+.sw-foot {
+  margin: 0;
+}
+
+.sw-where {
+  white-space: nowrap;
+}
+
+.cl-row.online .sw-where {
+  color: var(--text);
+}
+
+.sw-compose {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(232, 207, 138, 0.06);
+  border: 1px solid rgba(232, 207, 138, 0.18);
+}
+
+.sw-body-input {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.sw-compose-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sw-mail-item {
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sw-mail-head {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 12px auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sw-mail-item.unread .sw-mail-head {
+  color: var(--text);
+}
+
+.sw-mail-head b {
+  color: var(--text);
+}
+
+.sw-subj {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sw-dot,
+.sw-unread {
+  color: var(--gold-hi);
+}
+
+.sw-mail-body {
+  margin: 0;
+  padding: 0 10px 8px 30px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sw-mail-acts {
+  justify-content: flex-end;
+  padding: 0 10px 8px;
+}
+
+/* Ramo da especialização (embaixo dos 3 ramos da classe). */
+.tg-spec {
+  --bc: var(--gold);
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 10px 12px 14px;
+  border-top: 2px solid color-mix(in srgb, var(--bc) 60%, transparent);
+  border-radius: 6px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bc) 12%, transparent), transparent);
+}
+
+.tg-spec.locked {
+  --bc: var(--dim);
+  text-align: center;
+}
+
+.tg-spec.locked small,
+.tg-spec-head small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.tg-spec > b,
+.tg-spec-head b {
+  font-family: var(--font-title);
+  color: var(--bc);
+  letter-spacing: 0.08em;
+}
+
+.tg-spec-head {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.tg-spec-nodes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.tg-spec-cell {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.tg-spec-lvl {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.tg-spec-lvl.locked {
+  color: var(--dim);
+}
+
+.tg-spec-link {
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tg-spec-link.lit {
+  background: var(--bc);
+  box-shadow: 0 0 10px var(--bc);
 }

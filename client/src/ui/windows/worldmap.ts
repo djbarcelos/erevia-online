@@ -2,16 +2,18 @@
  * Mapa do mundo (tecla M): terreno pintado, regiões de caça com faixa de nível, chefes,
  * locais da cidade, NPCs, outros jogadores, monstros e você. Arrastar move, roda/pinça
  * dá zoom, clique marca o destino e o personagem anda até lá. Painel lateral com o local
- * atual, camadas e regiões.
+ * atual, camadas e regiões. A missão rastreada aparece como área, ícone e uma linha reta
+ * tracejada de você até ela.
  */
 
-import { EntityKind } from "../../gen/erevia/v1/game_pb";
+import { EntityKind, QuestPlaceKind } from "../../gen/erevia/v1/game_pb";
 import { LANDMARKS, renderMapCanvas } from "../../world/map-painter";
 import { worldBounds, type WorldData } from "../../world/world-data";
 import { ui } from "../art";
 import { button, clamp, el, isCompact, toggle } from "../kit";
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS, type MapSource } from "../minimap";
-import { levelText, regionAt, type BossPoint, type Region } from "../regions";
+import { drawQuestTarget, type QuestTracker } from "../quest-nav";
+import { inSector, levelText, regionAt, sectorCenter, type BossPoint, type Region } from "../regions";
 
 export interface WorldMapDeps {
   map: MapSource;
@@ -27,6 +29,10 @@ export interface WorldMapDeps {
   bossStatus?(b: BossPoint): { alive: boolean; windowStartMs: number; windowEndMs: number } | undefined;
   /** Relógio do servidor (ms), para as janelas de renascimento. */
   serverNow?(): number;
+  /** Missão rastreada (área, ícone e linha até ela). */
+  quests?: QuestTracker;
+  /** Botão "Ir" da missão rastreada (anda até o lugar do passo). */
+  go?(questId: string): void;
 }
 
 const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -133,8 +139,12 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     b.append(el("span", "zc"), el("span", "zn", el("b", null, z.name), el("small", null, z.safe ? "Cidade murada: aqui ninguém ataca." : z.monsters)), el("span", "zl", levelText(z)));
     b.onclick = () => {
       if (z.safe) flyTo(0, 0, 4);
+      else if (z.rect) flyTo((z.rect.minX + z.rect.maxX) / 2, (z.rect.minZ + z.rect.maxZ) / 2, 1.4);
       else if (z.area) flyTo(z.area.x, z.area.z, Math.max(1.2, Math.min(4, 220 / (z.area.r * 3))));
-      else flyTo(0, (z.rMin + z.rMax) / 2, Math.max(1.2, Math.min(4, 220 / (z.rMax * 2))));
+      else if (z.sector) {
+        const c = sectorCenter(z);
+        flyTo(c.x, c.z, Math.max(1.2, Math.min(4, 220 / ((z.rMax - z.rMin) * 2.5))));
+      } else flyTo(0, (z.rMin + z.rMax) / 2, Math.max(1.2, Math.min(4, 220 / (z.rMax * 2))));
     };
     zoneList.append(b);
   }
@@ -160,7 +170,25 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     }
   };
   refreshBosses(performance.now());
-  side.append(el("h3", "wmap-title", "Erevia"), here, el("div", "wmap-sec", "Camadas"), layers, el("div", "wmap-sec", "Regiões"), zoneList);
+  // Missão rastreada: some sem alvo (ou com os marcadores desligados).
+  const questSec = el("div", "wmap-sec", "Missão rastreada");
+  const questRow = el("div", "wmap-quests");
+  const renderQuest = () => {
+    const t = d.quests?.target();
+    const q = d.quests?.tracked();
+    questSec.hidden = questRow.hidden = !t || !q;
+    if (!t || !q) return questRow.replaceChildren();
+    const b = el("button", "wmap-quest");
+    b.type = "button";
+    b.append(el("span", "qm", "◎"), el("span", null, el("b", null, q.title), el("small", null, t.name)));
+    b.onclick = () => flyTo(t.x, t.z, Math.max(1.6, Math.min(5, 90 / Math.max(10, t.radius * 3))));
+    if (!d.go) return questRow.replaceChildren(b);
+    const go = button("Ir", "btn btn-sm btn-gold wmap-go", () => d.go?.(q.id));
+    go.title = "Andar até o objetivo (WASD, clique no chão ou ser atacado param)";
+    questRow.replaceChildren(el("div", "wmap-quest-go", b, go));
+  };
+  const offQuests = d.quests?.onChange(renderQuest);
+  side.append(el("h3", "wmap-title", "Erevia"), here, questSec, questRow, el("div", "wmap-sec", "Camadas"), layers, el("div", "wmap-sec", "Regiões"), zoneList);
   if (d.bosses.length) side.append(el("div", "wmap-sec", "Chefes"), bossList);
   if (d.stones.length) {
     const stoneList = el("div", "wmap-quests");
@@ -343,6 +371,24 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
           ctx.stroke();
           continue;
         }
+        if (z.rect) {
+          // Bioma retangular (o Brejo, as Terras Mortas): o retângulo do bioma, com o nome no meio.
+          const rx = sx(z.rect.minX);
+          const ry = sy(z.rect.maxZ);
+          const rw = (z.rect.maxX - z.rect.minX) * scale;
+          const rh = (z.rect.maxZ - z.rect.minZ) * scale;
+          ctx.fillStyle = `rgba(${z.rgb},0.1)`;
+          ctx.fillRect(rx, ry, rw, rh);
+          ctx.setLineDash([7, 6]);
+          ctx.lineWidth = 1.4;
+          ctx.strokeStyle = `rgba(${z.rgb},0.6)`;
+          ctx.strokeRect(rx, ry, rw, rh);
+          ctx.setLineDash([]);
+          const fs = clamp(scale * 4.2, 10, 18);
+          label(z.name.toUpperCase(), rx + rw / 2, ry + rh / 2 - fs * 0.6, fs * 0.8, "#f4ead2", 700, "Cinzel, Georgia, serif");
+          label(levelText(z), rx + rw / 2, ry + rh / 2 + fs * 0.55, fs * 0.72, `rgb(${z.rgb})`, 700);
+          continue;
+        }
         if (z.area) {
           // Bioma: mancha de borda suave na cor do nível, com o nome no meio.
           const ax = sx(z.area.x);
@@ -368,6 +414,32 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
           label(levelText(z), ax, ay + fs * 0.55, fs * 0.72, `rgb(${z.rgb})`, 700);
           continue;
         }
+        if (z.sector) {
+          // Setor do anel: o pedaço entre os dois raios e os dois ângulos, por cima do anel.
+          // No mundo o ângulo cresce para o norte (+z); na tela o y desce, então o sinal vira.
+          const a0 = (-z.sector.a0 * Math.PI) / 180;
+          const a1 = (-z.sector.a1 * Math.PI) / 180;
+          const path = () => {
+            ctx.beginPath();
+            ctx.arc(sx(0), sy(0), z.rMax * scale, a0, a1, true);
+            ctx.arc(sx(0), sy(0), z.rMin * scale, a1, a0, false);
+            ctx.closePath();
+          };
+          path();
+          ctx.fillStyle = `rgba(${z.rgb},0.22)`;
+          ctx.fill();
+          ctx.setLineDash([7, 6]);
+          ctx.lineWidth = 1.6;
+          ctx.strokeStyle = `rgba(${z.rgb},0.85)`;
+          path();
+          ctx.stroke();
+          ctx.setLineDash([]);
+          const c = sectorCenter(z);
+          const fs = clamp(scale * 4.2, 10, 18);
+          label(z.name.toUpperCase(), sx(c.x), sy(c.z) - fs * 0.6, fs * 0.8, "#f4ead2", 700, "Cinzel, Georgia, serif");
+          label(levelText(z), sx(c.x), sy(c.z) + fs * 0.55, fs * 0.72, `rgb(${z.rgb})`, 700);
+          continue;
+        }
         ctx.beginPath();
         ctx.arc(sx(0), sy(0), z.rMax * scale, 0, Math.PI * 2);
         ctx.arc(sx(0), sy(0), z.rMin * scale, 0, Math.PI * 2, true);
@@ -386,6 +458,7 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
         // Afastado, só dois rótulos por zona (senão o mapa fica poluído).
         for (const a of scale < 2.6 ? [45, 225] : [45, 135, 225, 315]) {
           const rad = (a * Math.PI) / 180;
+          if (d.regions.some((g) => inSector(g, Math.cos(rad) * r, Math.sin(rad) * r))) continue; // o setor tem o próprio rótulo
           const x = sx(Math.cos(rad) * r);
           const y = sy(Math.sin(rad) * r);
           if (x < -80 || x > W + 80 || y < -40 || y > H + 40) continue;
@@ -478,6 +551,14 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
     }
     refreshBosses(now);
 
+    // Missão rastreada: linha reta tracejada até a área ou o ícone, com o nome.
+    const qt = d.quests?.target();
+    if (qt) {
+      drawQuestTarget(ctx, qt, me, sx, sy, scale, 9);
+      const fs = clamp(scale * 2.6, 10, 13);
+      label(qt.name, sx(qt.x), sy(qt.z) - Math.max(15, qt.radius * scale * (qt.kind === QuestPlaceKind.HUNT ? 1 : 0)) - fs * 0.6, fs, "#ffe6a6", 700);
+    }
+
     // Destino marcado + caminho
     if (waypoint) {
       const arrived = Math.hypot(me.x - waypoint.x, me.z - waypoint.z) < 1.5;
@@ -569,7 +650,9 @@ export function buildWorldMap(d: WorldMapDeps): HTMLElement {
   }
 
   raf = requestAnimationFrame(draw);
+  renderQuest();
   root.addEventListener("win-close", () => {
+    offQuests?.();
     alive = false;
     cancelAnimationFrame(raf);
   });

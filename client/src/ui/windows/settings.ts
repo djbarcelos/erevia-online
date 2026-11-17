@@ -14,6 +14,7 @@ import {
   tabs,
   toast,
   toggle,
+  type Quality,
   type Settings,
 } from "../kit";
 
@@ -24,6 +25,10 @@ export interface SettingsOpts {
   logout(): void;
   /** Dados para as abas Conta e Sobre. */
   info(): { account: string; character: string; level: number; ping: number; online: number };
+  /** Abre a janela "O que há de novo". */
+  news(): void;
+  /** Abre a caixinha "Relatar problema" (o mesmo que /bug no chat). */
+  reportBug(): void;
 }
 
 const pct = (v: number) => `${v}%`;
@@ -36,13 +41,28 @@ function group(title: string, ...rows: HTMLElement[]): HTMLElement {
   return el("section", "set-group", el("h3", "set-group-title", title), ...rows);
 }
 
+/** O que cada preset liga (o mesmo de world/render.ts: PRESETS). */
+const QUALITY_HINTS: Record<Quality, string> = {
+  baixa: "Render a 80%, sombras simples, sem brilho (bloom) nem SSAO. Para celulares.",
+  media: "Brilho nas chamas e efeitos, vinheta e sombras boas.",
+  alta: "Tudo da média, mais oclusão de ambiente (SSAO), FXAA e sombras suaves.",
+};
+
+function qualityHint(q: Quality, picked: boolean): string {
+  return `${QUALITY_HINTS[q]}${picked ? "" : " (escolhida pelo aparelho)"} Aplica na hora.`;
+}
+
 const set = <K extends keyof Settings>(k: K) => (v: Settings[K]) => settings.set(k, v);
 
 const ACTIONS: { id: string; label: string }[] = [
   { id: "inventory", label: "Inventário" },
   { id: "skills", label: "Árvore de skills" },
+  { id: "quests", label: "Diário de missões" },
   { id: "party", label: "Grupo" },
   { id: "clan", label: "Clã" },
+  { id: "social", label: "Social (amigos e correio)" },
+  { id: "glory", label: "Glória (ranking e conquistas)" },
+  { id: "bestiary", label: "Bestiário" },
   { id: "character", label: "Personagem / atributos" },
   { id: "map", label: "Mapa do mundo" },
   { id: "settings", label: "Configurações / fechar janela" },
@@ -76,21 +96,29 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "set-page",
         group(
           "Qualidade",
-          row(
-            "Predefinição",
-            segmented(
-              [
-                { id: "baixa", label: "Baixa" },
-                { id: "media", label: "Média" },
-                { id: "alta", label: "Alta" },
-                { id: "ultra", label: "Ultra" },
-              ],
-              s.quality,
-              set("quality"),
-            ),
-            "Ajusta sombras, distância e efeitos de uma vez.",
-          ),
-          row("Sombras", toggle(s.shadows, set("shadows"), "Sombras")),
+          (() => {
+            const hint = el("small", null, qualityHint(s.quality, s.qualityPicked));
+            const r = row(
+              "Predefinição",
+              segmented(
+                [
+                  { id: "baixa", label: "Baixa" },
+                  { id: "media", label: "Média" },
+                  { id: "alta", label: "Alta" },
+                ],
+                s.quality,
+                (v: Quality) => {
+                  // Escolha do jogador: deixa de seguir o aparelho. Aplica na hora (world/render.ts).
+                  settings.set("qualityPicked", true);
+                  settings.set("quality", v);
+                  hint.textContent = qualityHint(v, true);
+                },
+              ),
+            );
+            r.querySelector(".set-label")?.append(hint);
+            return r;
+          })(),
+          row("Sombras", toggle(s.shadows, set("shadows"), "Sombras"), "Desligar economiza bastante no celular."),
           row("Distância de visão", slider(s.viewDistance, 30, 150, 10, set("viewDistance"), (v) => `${v} m`)),
           row(
             "Limite de FPS",
@@ -114,12 +142,13 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "set-page",
         group(
           "Volume",
+          row("Sem som", toggle(s.muted, set("muted"), "Sem som"), "Desliga tudo; os volumes ficam guardados."),
           row("Geral", slider(s.vMaster, 0, 100, 1, set("vMaster"), pct)),
-          row("Música", slider(s.vMusic, 0, 100, 1, set("vMusic"), pct)),
-          row("Efeitos", slider(s.vSfx, 0, 100, 1, set("vSfx"), pct)),
-          row("Ambiente", slider(s.vAmbient, 0, 100, 1, set("vAmbient"), pct)),
+          row("Música", slider(s.vMusic, 0, 100, 1, set("vMusic"), pct), "Muda com a região do mapa."),
+          row("Efeitos", slider(s.vSfx, 0, 100, 1, set("vSfx"), pct), "Golpes, skills, passos e interface."),
+          row("Ambiente", slider(s.vAmbient, 0, 100, 1, set("vAmbient"), pct), "Floresta, cidade e noite."),
         ),
-        el("p", "hint-box small", "O protótipo ainda não tem som; os controles mostram como a tela vai ficar."),
+        el("p", "hint-box small", "No celular, o som começa no primeiro toque na tela."),
       ),
     controls: () => {
       const keys = el("div", "keybinds");
@@ -197,12 +226,32 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
           row("Tomar poção abaixo de", slider(s.autoPotion, 10, 90, 5, set("autoPotion"), pct)),
           row("Voltar à cidade sem poção", toggle(s.autoReturn, set("autoReturn"), "Voltar à cidade")),
           row("Pegar itens do chão", toggle(s.autoLoot, set("autoLoot"), "Pegar itens")),
+          row(
+            "Atacar monstros neutros",
+            toggle(s.autoNeutral, set("autoNeutral"), "Atacar neutros"),
+            "Neutros só atacam quem bate neles (como os Saqueadores, de dia). Desligado, a auto-caça passa por eles.",
+          ),
         ),
         group(
           "Tela",
           row("Nomes sobre os monstros", toggle(s.showNames, set("showNames"), "Nomes")),
           row("Números de dano", toggle(s.showDamage, set("showDamage"), "Números de dano")),
+          row(
+            "Tremor de câmera",
+            toggle(s.cameraShake, set("cameraShake"), "Tremor de câmera"),
+            "Nos seus críticos e nos golpes do chefe em você. Desligue se incomodar.",
+          ),
           row("Mostrar elmo", toggle(s.showHelm, set("showHelm"), "Mostrar elmo")),
+          row(
+            "Marcadores de missão",
+            toggle(s.questMarkers, set("questMarkers"), "Marcadores de missão"),
+            "A missão rastreada (clique no painel Missões) aparece no minimapa e no mapa, com a seta na borda da tela.",
+          ),
+          row(
+            "Continuar andando se atacado",
+            toggle(s.goKeepIfHit, set("goKeepIfHit"), "Continuar andando se atacado"),
+            "O botão Ir das missões para quando você leva dano. Ligado, ele segue até o lugar.",
+          ),
           row(
             "Idioma",
             select(
@@ -245,6 +294,15 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
         "set-page about",
         el("div", "about-logo", el("span", "logo-word small-logo", "EREVIA"), el("span", "muted small", "Fase 3 · interface nova")),
         group(
+          "Ajuda",
+          row(
+            "Relatar problema",
+            button("Relatar", "btn btn-sm btn-gold", opts.reportBug),
+            "Algo deu errado? Conte o que aconteceu: vai com um print da tela do jogo, o FPS e o ping (o mesmo que /bug no chat).",
+          ),
+        ),
+        group("Novidades", row("O que há de novo", button("Abrir", "btn btn-sm", opts.news), "O que mudou nas últimas versões do jogo.")),
+        group(
           "Conexão",
           row("Ping", el("span", opts.info().ping < 80 ? "ok" : "warn", `${opts.info().ping} ms`)),
           row("Entidades por perto", el("span", null, String(opts.info().online))),
@@ -267,6 +325,7 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
               ["Enter", "Chat"],
               ["Ctrl + clique", "Atacar jogador"],
               ["/g · /c", "Chat do grupo · clã"],
+              ["/bug texto", "Relatar um problema"],
             ].map(([k, l]) => el("div", "sc", el("kbd", null, k), el("span", null, l))),
           ),
         ),
@@ -275,7 +334,7 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
           el(
             "p",
             "small muted credits",
-            "Personagens, monstros, armas, animações e cenário: KayKit (Kay Lousberg), licença CC0. Interface, ícones e código: equipe Erevia.",
+            "Personagens, monstros, armas, animações e cenário: KayKit (Kay Lousberg), licença CC0. Sons e músicas: Kenney, lentikula, artisticdude, rubberduck, RandomMind, cynicmusic, Samza, yd e outros, licença CC0. Interface, ícones e código: equipe Erevia.",
           ),
         ),
       ),

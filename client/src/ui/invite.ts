@@ -55,7 +55,7 @@ export class InvitePrompt {
     const { inv } = cur;
     this.text.replaceChildren(
       el("b", null, inv.fromName),
-      inv.kind === InviteKind.CLAN ? ` convidou você para o clã ` : " convidou você para o grupo.",
+      inv.kind === InviteKind.CLAN ? ` convidou você para o clã ` : inv.kind === InviteKind.TRADE ? " quer trocar com você." : " convidou você para o grupo.",
       inv.kind === InviteKind.CLAN ? el("b", "invite-clan", `‹${inv.extra}›`) : "",
     );
     const tick = () => {

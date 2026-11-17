@@ -32,6 +32,13 @@ export interface BodyPalettes {
   heads: { id: string; name: string }[];
   hatClasses: string[];
   barberPrice: number;
+  /** Cores de roupa do Bestiário (família completa), com índice próprio (100 em diante). */
+  bestiaryOutfits?: (Shade & { index: number; family: string })[];
+}
+
+/** A cor de roupa do índice (as da criação e as do Bestiário). */
+export function outfitShade(pal: BodyPalettes, i: number): Shade | undefined {
+  return i <= pal.outfits.length ? pal.outfits[i - 1] : pal.bestiaryOutfits?.find((o) => o.index === i);
 }
 
 export const ORIGINAL_LOOK: BodyLook = { skin: 0, hair: 0, outfit: 0, head: "", hideHat: false };
@@ -155,5 +162,5 @@ export function paintTexture(data: Uint8Array, w: number, h: number, model: stri
   };
   if (look.skin > 0) fill(SKIN_CELLS[model] ?? [[0, 0, 1]], pal.skins[look.skin - 1]);
   if (look.hair > 0) fill(HAIR_CELLS, pal.hairs[look.hair - 1]);
-  if (look.outfit > 0) fill(OUTFIT_CELLS[model] ?? [], pal.outfits[look.outfit - 1]);
+  if (look.outfit > 0) fill(OUTFIT_CELLS[model] ?? [], outfitShade(pal, look.outfit));
 }

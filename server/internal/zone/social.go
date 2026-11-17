@@ -62,7 +62,7 @@ func (z *Zone) canHit(a, b *entity, force bool) (ok bool, why string, waitSafe b
 	case b == nil || b.dead || a == b:
 		return false, "", false
 	case b.mon != nil:
-		return !b.mon.hidden, "", false
+		return !b.mon.unseen(), "", false
 	case b.pl == nil || a.pl == nil:
 		return false, "", false
 	case z.allies(a, b):
@@ -121,7 +121,8 @@ func (z *Zone) broadcastStatus(p *entity) {
 }
 
 func (z *Zone) statusPB(p *entity) *pb.PlayerStatus {
-	return &pb.PlayerStatus{Id: p.id, PvpState: z.pvpState(p), ClanName: z.clanName(p)}
+	return &pb.PlayerStatus{Id: p.id, PvpState: z.pvpState(p), ClanName: z.clanName(p), Title: p.pl.ach.titleText(), Spec: p.pl.spec,
+		ActiveClass: p.pl.class, Level: uint32(p.level)}
 }
 
 func (z *Zone) selfPvpPB(p *entity) *pb.SelfPvp {
@@ -159,8 +160,11 @@ func (z *Zone) pvpDeath(dead, killer *entity) bool {
 	case pb.PvpState_PVP_STATE_FLAGGED:
 		killer.pl.pvpKills++
 		z.system(killer, fmt.Sprintf("Você venceu %s em combate.", dead.name))
+		z.achValue(killer, game.AchPvPWin, "", killer.pl.pvpKills)
+		z.contractPvP(killer, dead)
 	default:
 		z.system(killer, fmt.Sprintf("Você derrotou %s, que tinha karma.", dead.name))
+		z.contractPvP(killer, dead)
 	}
 	killer.pl.statsDirty = true
 	z.pvpChanged(killer)
@@ -240,6 +244,7 @@ func (z *Zone) dropPKItems(dead *entity, killer uint32) {
 		if g := z.dropItem(dead.pos, s.def, s.count, s.enchant, killer, pkDropReserve); g != nil {
 			added.Items = append(added.Items, z.groundPB(g))
 		}
+		z.trackItem(dead, false, s.def.ID, s.count, "pk_drop") // quem pegar do chão conta como loot
 		z.system(dead, fmt.Sprintf("Você deixou cair %s.", itemLabelEnchant(s.def, s.count, s.enchant)))
 		z.log.Info("pk drop", "id", dead.id, "item", s.def.ID, "count", s.count, "enchant", s.enchant)
 	}

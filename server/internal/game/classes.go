@@ -2,8 +2,11 @@
 // dano e progressão. Sem estado e sem I/O, para ser fácil de testar e balancear.
 package game
 
-// MaxLevel é o nível máximo desta fase.
-const MaxLevel = 20
+// MaxLevel é o nível máximo dos jogadores (tunnel#149). Do 20 ao 30 a caça é no Vale das
+// Pedras Vivas e a árvore de skills ganha o 5º degrau (nível 20); do 30 ao 40, no fundo do
+// Vale, em volta da Cripta e nos Confins Partidos (conteúdo provisório até as áreas novas do
+// docs/roadmap-areas.md). A Maestria abre no MaxLevel.
+const MaxLevel = 40
 
 // Stats são os atributos de combate de um personagem ou monstro num dado nível.
 type Stats struct {
@@ -34,6 +37,9 @@ type ClassDef struct {
 	// Skills que todo personagem da classe já começa sabendo (rank 1): as raízes dos ramos.
 	Skills   [2]uint32
 	Branches [3]Branch // os 3 ramos da árvore de skills (nomes vêm de skilltree.go)
+	// Tipos de arma (Weapons) e de mão secundária (Offhands) que a classe usa; a
+	// especialização pode trocar a lista (SpecDef.Weapons/Offhands).
+	Weapons, Offhands []string
 }
 
 var Classes = map[string]*ClassDef{
@@ -42,24 +48,28 @@ var Classes = map[string]*ClassDef{
 		Base:     Stats{MaxHP: 160, MaxMP: 40, PAtk: 8, MAtk: 4, PDef: 24, MDef: 15, Range: 2.2, AtkInterval: 1.2, Crit: 0.05, Speed: 5},
 		PerLevel: Stats{MaxHP: 22, MaxMP: 4, PAtk: 2.2, MAtk: 0.5, PDef: 3.5, MDef: 2},
 		Skills:   [2]uint32{SkillShieldBash, SkillFortress},
+		Weapons:  []string{WeaponSword}, Offhands: []string{OffhandShield},
 	},
 	"barbarian": {
 		ID: "barbarian", Name: "Bárbaro",
 		Base:     Stats{MaxHP: 150, MaxMP: 35, PAtk: 10, MAtk: 3, PDef: 16, MDef: 12, Range: 2.2, AtkInterval: 1.4, Crit: 0.10, Speed: 5},
 		PerLevel: Stats{MaxHP: 20, MaxMP: 3, PAtk: 3.0, MAtk: 0.4, PDef: 2.5, MDef: 1.5},
 		Skills:   [2]uint32{SkillBrutalStrike, SkillFury},
+		Weapons:  []string{WeaponAxe}, Offhands: []string{OffhandShield},
 	},
 	"mage": {
 		ID: "mage", Name: "Mago",
 		Base:     Stats{MaxHP: 95, MaxMP: 120, PAtk: 6, MAtk: 12, PDef: 12, MDef: 25, Range: 12, AtkInterval: 1.6, Crit: 0.05, Speed: 5, Magic: true},
 		PerLevel: Stats{MaxHP: 11, MaxMP: 14, PAtk: 0.6, MAtk: 3.2, PDef: 1.5, MDef: 3},
 		Skills:   [2]uint32{SkillFireball, SkillIceNova},
+		Weapons:  []string{WeaponStaff, WeaponWand},
 	},
 	"rogue": {
 		ID: "rogue", Name: "Ladino",
 		Base:     Stats{MaxHP: 120, MaxMP: 60, PAtk: 7, MAtk: 4, PDef: 16, MDef: 12, Range: 2.2, AtkInterval: 0.8, Crit: 0.25, Speed: 5.5},
 		PerLevel: Stats{MaxHP: 15, MaxMP: 6, PAtk: 2.0, MAtk: 0.5, PDef: 2, MDef: 1.5},
 		Skills:   [2]uint32{SkillBackstab, SkillShadowStep},
+		Weapons:  []string{WeaponDaggers},
 	},
 }
 

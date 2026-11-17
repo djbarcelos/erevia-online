@@ -1,0 +1,631 @@
+# Balanceamento — novembro de 2026
+
+A foto do jogo de hoje (main 33b8c84) tirada pelo simulador `server/cmd/balance` (tunnel#148). As tabelas abaixo são a saída de `go run ./cmd/balance` (em `server/`). Tudo é média por fórmula: rodar de novo dá os mesmos números. A versão em CSV sai com `-csv`, e a de noite com `-noite`.
+
+O teste `internal/balance` (`TestPowerBudget`, no `go test ./...` do CI) cobra o orçamento de poder. Os casos que o jogo de hoje já fura estão na lista de exceções conhecidas, com o número de hoje: o teste passa agora e falha se aparecer um caso novo ou se um conhecido piorar mais de 2 pontos. **Nada do balanceamento mudou nesta task.**
+
+## Leitura curta
+
+**Onde a curva aperta: no Vale das Pedras Vivas, e quem manda lá é o renascimento, não a força.**
+- Do 1 ao 30 são de 1 h 11 min (mago) a 1 h 31 min (cavaleiro Bastião) de caça sozinho, com o equipamento da loja +0. Com +3 o ganho é de 1 a 4 minutos.
+- Do 1 ao 19 o tempo por nível sobe devagar, de ~30 s para ~2 a 3,5 min. Do 20 ao 29 vai de ~2 min 45 s para 6 a 7 min por nível. Os 10 níveis do vale levam 44 a 48 min, mais da metade do total (62% para o mago, 53% para o cavaleiro).
+- No vale todo mundo mata mais rápido do que os golens renascem. São 12 golens espalhados do 20 ao 30; contando os de até 2 níveis de diferença, ~5,5 servem para cada nível, e cada um volta em 67,5 s na média. Isso dá um abate a cada ~12,4 s, ~290 por hora, para qualquer classe. Por isso o tempo do 20 ao 29 é igual para 6 dos 8 caminhos (44,1 min). Sem esse limite, o mago faria o 1→30 em 46 min e o Bastião em 1 h 29 min. Com mais gente caçando, o gargalo só piora: o próximo passo da curva (curva de XP, densidade e renascimento do vale) mexe aqui antes de mexer na XP.
+- O anel do 13 ao 20 (20 esqueletos, 40 s de renascimento) já segura as classes rápidas (mago, ladino e bárbaro) a partir do 13 (as linhas com **R**).
+
+**Qual classe sobra ou falta (tempo para matar em regime, +0).**
+- **O mago sobra, e muito**: leva de 47% a 86% menos tempo que a média para matar, em todas as faixas. A Bola de Fogo no rank 3 (310% do ataque mágico, recarga de 3 s, 15 de mana) mais o ataque básico derrubam o esqueleto do mesmo nível num golpe só do 1 ao 8 (0,1 a 0,3 s para matar), e em menos de 1 s até o 19. O preço é a fragilidade: sem poção, morre em 20 a 60 s lutando parado. Mago e ladino são os únicos que nunca aguentam sem poção (o ladino morre em 26 a 85 s); cavaleiro e bárbaro passam a aguentar do 10 e do 13 em diante.
+- **O cavaleiro falta**: leva de 62% a 113% mais tempo que a média para matar, e o Bastião é o pior do jogo (8,1 s contra 3,8 s de média no 25–30). Em troca, a partir do 10 aguenta lutar para sempre mesmo sem poção. É tanque por desenho, mas caçando sozinho o tempo até o 30 é o mais longo (1 h 31 min). O Bastião ainda toma 64 a 94 poções de mana por hora no vale (o Desafio do Bastião custa 35 de mana).
+- O bárbaro fica na média até o 19 (só 18% acima no 6–12). No vale, o Sanguinário leva 24% menos tempo que a média no 25–30, e o Caudilho fica na média.
+- O ladino fica na média até o 19; no vale, Sicário e Caçador levam de 18% a 24% menos tempo.
+- Entre os caminhos da mesma classe: Elementalista > Ocultista (1,6 s contra 2,0 s no 25–30), Sanguinário > Caudilho (2,9 s contra 3,6 s), Arauto > Bastião (6,2 s contra 8,1 s). Sicário e Caçador ficam quase iguais.
+
+**Quais itens furam.**
+- **O encantamento fura quase tudo.** Em 44 dos 48 degraus das escadas de raridade (comum → boa → rara → épica → lendária, por encaixe e por arma de classe), um +10 passa a peça +0 da raridade seguinte em mais de 25%. O bônus por nível é fixo por raridade (1 a 5 por passo, e cada passo acima do +3 vale o dobro: +10 = 17 passos), não proporcional à peça. Nas armas o +10 vale de 1,3 a 2× a próxima raridade (Lâmina da Aurora +10: 113 de poder contra 57 da lendária +0). Nas peças pequenas é pior: capa e luvas +10 passam do dobro da peça seguinte (Capa do Patrulheiro +10: 43,5 contra 17,5 da Capa do Crepúsculo), e botas e anéis ficam de +58% a +118%. Só ficam dentro o peito comum (+15%) e os colares comum, bom e raro (+9% a +23%). A lista completa está em "Fora do orçamento hoje".
+- **Peças +0 acima do orçamento**: as joias épicas e lendárias. Lágrima da Lua (+26%), Coração do Abismo (+26%) e Colar do Rei Ossário (+29%). O Manto das Cinzas (capa épica) fica logo abaixo da tolerância (+19%). Todas as armas ficam a até 11% do orçamento.
+- Abaixo do orçamento, sem falhar o teste: Luvas de Couro (−35%) e Brinco de Osso (−27%).
+
+**O que o modelo não vê** (para ler os números com cuidado): caça sozinho, de dia, sem mortes nem kiting; um monstro por vez (a área de efeito não rende mais); os efeitos no alvo (atordoar, enfraquecer) pegam sempre; o equipamento típico é só o da loja (comum e bom); a distância até o próximo monstro é uma estimativa pela densidade da região. As suposições estão em constantes comentadas em `server/internal/balance/` e resumidas logo abaixo.
+
+## Suposições
+
+- Fórmulas do pacote `game`: atributos (`CharacterStats`: classe, pontos, caminho, equipamento, passivas e regeneração), dano médio do golpe (`ExpectedHit`: acerto × ataque × 100/(100+defesa) × crítico), custo e recarga das skills (`SkillMPCost`, `SkillCooldownFor`), XP (`MonsterXP`, `XPToNext`) e monstros reais (`MonsterStats`, `DefaultSpawns`). Média por fórmula: sem sorteio.
+- Caça sozinho, de dia, sem XP em dobro. A luta anda no passo do tick da zona (0,05 s).
+- Pontos de atributo: 2 no atributo de dano e 1 no de apoio a cada nível (cavaleiro Força/Constituição, bárbaro Força/Constituição, mago Inteligência/Sabedoria, ladino Destreza/Força). O caminho escolhido no 20 soma o bônus dele.
+- Árvore: dano primeiro (ordem em `build.go`), o 5º degrau e as 3 skills do caminho do 20 em diante, o resto em defesa. Nenhuma pontuação fora das regras (`ValidateRanks`).
+- Equipamento típico: em cada encaixe a melhor peça comum ou boa que a classe usa no nível (pelo poder do item), tudo +0 ou tudo +3 (o encantamento seguro). Raras, épicas e lendárias ficam fora (são drop ou criação).
+- Rotação como a auto-caça do cliente: uma skill a cada 1 s, buffs que faltam primeiro, depois enfraquecer/marcar o alvo, depois a skill de mais dano pronta e com mana; o ataque básico corre junto. Poção de vida abaixo de 45% e de mana abaixo de 20% (as menores até o nível 9, as maiores depois), sem limite de estoque. Fuga e utilidade (Piscar, Passo Sombrio, Sumir, Escudo Arcano, Imortal, Provocar) ficam de fora.
+- Monstro: o do nível do jogador, na região onde o nível caça (o grupo de `DefaultSpawns` que cobre o nível; empate, a região mais nova: do 20 em diante, o Vale das Pedras Vivas). Monstros que dividem a região entram na proporção da quantidade. A luta abre no alcance do ataque básico; o monstro anda até o dele (quem bate de longe ganha esse tempo).
+- **Matar**: tempo médio em regime (as recargas seguem de uma luta para a outra); **abertura** é a primeira luta, com tudo pronto. **DPS**: dano por segundo da rotação numa luta longa contra o mesmo monstro. **Morrer**: lutando sem parar contra o monstro (que não cai), com regeneração de combate, com e sem poções; ∞ = aguenta mais de 5 min (ou volta à vida cheia no meio da luta).
+- **XP/h**: abate + deslocamento até o próximo (1,5 × a distância média ao vizinho mais perto, 0,5 × √(área por monstro)) ou descanso até 80% da vida e 50% da mana (regeneração de combate nos primeiros 5 s e depois ×5,0 na vida e ×3,3 na mana), o que for maior. Ninguém mata mais rápido do que os monstros do seu nível (±2) renascem (1,5× o tempo base, em média); onde isso limita, a linha leva **R**.
+- **Tempo no nível**: XP do nível ÷ XP/h. O acumulado soma do 1 até o nível. Sem mortes (quem morre caçando aparece como ∞).
+
+## Tempo até o 30
+
+| Caminho | +0 | +3 | +0 sem limite de renascimento | +3 sem limite |
+|---|---:|---:|---:|---:|
+| Cavaleiro/Bastião | 1 h 31 min | 1 h 27 min | 1 h 29 min | 1 h 24 min |
+| Cavaleiro/Arauto | 1 h 27 min | 1 h 23 min | 1 h 21 min | 1 h 16 min |
+| Bárbaro/Sanguinário | 1 h 22 min | 1 h 21 min | 1 h 09 min | 1 h 07 min |
+| Bárbaro/Caudilho | 1 h 23 min | 1 h 21 min | 1 h 10 min | 1 h 07 min |
+| Mago/Elementalista | 1 h 11 min | 1 h 10 min | 45 min 59 s | 45 min 10 s |
+| Mago/Ocultista | 1 h 11 min | 1 h 10 min | 46 min 50 s | 46 min 09 s |
+| Ladino/Sicário | 1 h 16 min | 1 h 14 min | 1 h 07 min | 1 h 06 min |
+| Ladino/Caçador | 1 h 16 min | 1 h 14 min | 1 h 08 min | 1 h 05 min |
+
+## Tempo para matar por faixa (regime, +0)
+
+Média dos níveis da faixa; entre parênteses, a distância da média da faixa (tolerância do teste: ±15%).
+
+- **1–5** (média 1,6 s): Cavaleiro 3,1 s (+96%) · Bárbaro 1,5 s (−3%) · Mago 0,2 s (−86%) · Ladino 1,5 s (−7%)
+- **6–12** (média 1,8 s): Cavaleiro 3,0 s (+74%) · Bárbaro 2,1 s (+18%) · Mago 0,3 s (−81%) · Ladino 1,6 s (−11%)
+- **13–19** (média 1,2 s): Cavaleiro 2,0 s (+70%) · Bárbaro 1,1 s (−5%) · Mago 0,5 s (−54%) · Ladino 1,1 s (−10%)
+- **20–24** (média 4,1 s): Cavaleiro/Bastião 8,1 s (+95%) · Cavaleiro/Arauto 6,8 s (+65%) · Bárbaro/Sanguinário 3,5 s (−14%) · Bárbaro/Caudilho 4,2 s (+2%) · Mago/Elementalista 2,0 s (−52%) · Mago/Ocultista 2,0 s (−52%) · Ladino/Sicário 3,2 s (−23%) · Ladino/Caçador 3,3 s (−20%)
+- **25–30** (média 3,8 s): Cavaleiro/Bastião 8,1 s (+113%) · Cavaleiro/Arauto 6,2 s (+62%) · Bárbaro/Sanguinário 2,9 s (−24%) · Bárbaro/Caudilho 3,6 s (−5%) · Mago/Elementalista 1,6 s (−58%) · Mago/Ocultista 2,0 s (−47%) · Ladino/Sicário 2,9 s (−24%) · Ladino/Caçador 3,2 s (−18%)
+
+## Orçamento de poder dos itens
+
+Poder = ataque + defesas + vida/10 + mana/10 + 1 por 1% de crítico e de velocidade + … (pesos em `power.go`). Orçamento = (6 + 1,4 × (nível − 1)) × raridade (comum ×1,0, boa ×1,1, rara ×1,2, épica ×1,5, lendária ×1,7) × peso do encaixe. **% orç.**: poder +0 ÷ orçamento (tolerância +20%). **+10 ÷ próxima**: o +10 contra a peça seguinte da escada +0 (tolerância +25%).
+
+| Família | Peça | Raridade | Nível | Poder +0 | +3 | +10 | Orçamento | % orç. | +10 ÷ próxima |
+|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| anel | Anel de Cobre | comum | 1 | 3,0 | 5,0 | 12,0 | 3,0 | +0% | +100% |
+| anel | Anel de Prata | boa | 6 | 6,0 | 9,0 | 23,0 | 7,2 | −16% | +92% |
+| anel | Anel de Ônix | rara | 13 | 12,0 | 17,0 | 38,0 | 13,7 | −12% | +58% |
+| anel | Selo do Senhor dos Ossos | épica | 18 | 24,0 | 30,0 | 58,0 | 22,3 | +7% | +87% |
+| anel | Anel do Rei Ossário | lendária | 20 | 31,0 | 39,0 | 74,0 | 27,7 | +12% | — |
+| brinco | Brinco de Osso | comum | 1 | 2,4 | 4,4 | 11,4 | 3,3 | −27% | +46% |
+| brinco | Brinco de Âmbar | boa | 6 | 7,8 | 10,8 | 24,8 | 7,9 | −1% | +50% |
+| brinco | Brinco de Safira | rara | 13 | 16,5 | 21,5 | 42,5 | 15,0 | +10% | +37% |
+| brinco | Lágrima da Lua | épica | 18 | 31,0 | 37,0 | 65,0 | 24,6 | +26% | — |
+| cabeça | Capuz de Couro | comum | 1 | 6,0 | 10,0 | 24,0 | 5,7 | +5% | +66% |
+| cabeça | Elmo de Ferro | boa | 6 | 14,5 | 20,5 | 48,5 | 13,6 | +7% | +83% |
+| cabeça | Elmo de Osso | rara | 13 | 26,5 | 36,5 | 78,5 | 26,0 | +2% | +83% |
+| cabeça | Elmo do Senhor dos Ossos | épica | 18 | 43,0 | 55,0 | 111,0 | 42,5 | +1% | — |
+| capa | Capa de Lã | comum | 1 | 4,0 | 8,0 | 22,0 | 3,9 | +3% | +132% |
+| capa | Capa do Patrulheiro | boa | 6 | 9,5 | 15,5 | 43,5 | 9,3 | +2% | +149% |
+| capa | Capa do Crepúsculo | rara | 13 | 17,5 | 27,5 | 69,5 | 17,8 | −2% | +101% |
+| capa | Manto das Cinzas | épica | 18 | 34,5 | 46,5 | 102,5 | 29,1 | +19% | — |
+| colar | Colar de Contas | comum | 1 | 4,5 | 6,5 | 13,5 | 4,8 | −6% | +23% |
+| colar | Colar do Lobo | boa | 6 | 11,0 | 14,0 | 28,0 | 11,4 | −4% | +22% |
+| colar | Amuleto Rúnico | rara | 13 | 23,0 | 28,0 | 49,0 | 21,9 | +5% | +9% |
+| colar | Coração do Abismo | épica | 18 | 45,0 | 51,0 | 79,0 | 35,8 | +26% | +39% |
+| colar | Colar do Rei Ossário | lendária | 20 | 57,0 | 65,0 | 100,0 | 44,3 | +29% | — |
+| escudo | Escudo Pesado | comum | 1 | 6,5 | 10,5 | 24,5 | 7,2 | −10% | +36% |
+| escudo | Escudo de Ferro | boa | 6 | 18,0 | 24,0 | 52,0 | 17,2 | +5% | +62% |
+| escudo | Escudo de Cravos | rara | 13 | 32,0 | 42,0 | 84,0 | 32,8 | −3% | +53% |
+| escudo | Égide Óssea | épica | 18 | 55,0 | 67,0 | 123,0 | 53,6 | +3% | — |
+| mãos | Luvas de Couro | comum | 1 | 2,8 | 6,8 | 20,8 | 4,2 | −35% | +124% |
+| mãos | Manoplas de Ferro | boa | 6 | 9,2 | 15,2 | 43,2 | 10,0 | −8% | +116% |
+| mãos | Manoplas Rúnicas | rara | 13 | 20,0 | 30,0 | 72,0 | 19,2 | +4% | +118% |
+| mãos | Garras do Ossário | épica | 18 | 33,0 | 45,0 | 101,0 | 31,3 | +5% | — |
+| peito | Gibão de Couro | comum | 1 | 9,5 | 13,5 | 27,5 | 9,6 | −1% | +15% |
+| peito | Cota de Malha | boa | 6 | 24,0 | 30,0 | 58,0 | 22,9 | +5% | +26% |
+| peito | Couraça de Osso | rara | 13 | 46,0 | 56,0 | 98,0 | 43,8 | +5% | +27% |
+| peito | Manto do Senhor dos Ossos | épica | 18 | 77,0 | 89,0 | 145,0 | 71,5 | +8% | — |
+| pernas | Calças de Couro | comum | 1 | 6,0 | 10,0 | 24,0 | 6,3 | −5% | +55% |
+| pernas | Grevas de Malha | boa | 6 | 15,5 | 21,5 | 49,5 | 15,0 | +3% | +62% |
+| pernas | Grevas de Osso | rara | 13 | 30,5 | 40,5 | 82,5 | 28,7 | +6% | +65% |
+| pernas | Grevas do Crepúsculo | épica | 18 | 50,0 | 62,0 | 118,0 | 46,9 | +7% | — |
+| pés | Botas de Viajante | comum | 1 | 4,0 | 8,0 | 22,0 | 4,5 | −11% | +83% |
+| pés | Botas de Ferro | boa | 6 | 12,0 | 18,0 | 46,0 | 10,7 | +12% | +109% |
+| pés | Botas do Vento | rara | 13 | 22,0 | 32,0 | 74,0 | 20,5 | +7% | +118% |
+| pés | Passos da Sombra | épica | 18 | 34,0 | 46,0 | 102,0 | 33,5 | +1% | — |
+| arma (bárbaro) | Machado de Lenhador | comum | 1 | 7,0 | 10,0 | 24,0 | 6,6 | +6% | +50% |
+| arma (bárbaro) | Machado de Guerra | boa | 6 | 16,0 | 22,0 | 50,0 | 15,7 | +2% | +72% |
+| arma (bárbaro) | Machado Rachador | rara | 13 | 29,0 | 38,0 | 80,0 | 30,1 | −4% | +82% |
+| arma (bárbaro) | Fúria do Norte | épica | 18 | 44,0 | 56,0 | 112,0 | 49,2 | −11% | +96% |
+| arma (bárbaro) | Machado do Rei Ossário | lendária | 20 | 57,0 | 72,0 | 142,0 | 61,0 | −6% | — |
+| arma (cavaleiro) | Espada de Treino | comum | 1 | 6,0 | 9,0 | 23,0 | 6,0 | +0% | +64% |
+| arma (cavaleiro) | Espada de Aço | boa | 6 | 14,0 | 20,0 | 48,0 | 14,3 | −2% | +78% |
+| arma (cavaleiro) | Lâmina do Vigia | rara | 13 | 27,0 | 36,0 | 78,0 | 27,4 | −1% | +73% |
+| arma (cavaleiro) | Lâmina da Aurora | épica | 18 | 45,0 | 57,0 | 113,0 | 44,7 | +1% | +98% |
+| arma (cavaleiro) | Lâmina do Rei Ossário | lendária | 20 | 57,0 | 72,0 | 142,0 | 55,4 | +3% | — |
+| arma (mago) | Cajado de Aprendiz | comum | 1 | 8,0 | 11,0 | 25,0 | 7,8 | +3% | +32% |
+| arma (mago) | Cajado de Carvalho | boa | 6 | 19,0 | 25,0 | 53,0 | 18,6 | +2% | +61% |
+| arma (mago) | Varinha Rúnica | rara | 13 | 33,0 | 42,0 | 84,0 | 35,6 | −7% | +56% |
+| arma (mago) | Cetro do Abismo | épica | 18 | 54,0 | 66,0 | 122,0 | 58,1 | −7% | +69% |
+| arma (mago) | Cetro do Rei Ossário | lendária | 20 | 72,0 | 87,0 | 157,0 | 72,0 | −0% | — |
+| arma (ladino) | Adagas Gêmeas | comum | 1 | 5,0 | 8,0 | 22,0 | 5,4 | −7% | +57% |
+| arma (ladino) | Adagas de Aço | boa | 6 | 14,0 | 20,0 | 48,0 | 12,9 | +9% | +92% |
+| arma (ladino) | Presas Sombrias | rara | 13 | 25,0 | 34,0 | 76,0 | 24,6 | +2% | +100% |
+| arma (ladino) | Presas do Crepúsculo | épica | 18 | 38,0 | 50,0 | 106,0 | 40,2 | −6% | +116% |
+| arma (ladino) | Garras do Rei Ossário | lendária | 20 | 49,0 | 64,0 | 134,0 | 49,9 | −2% | — |
+
+## Fora do orçamento hoje (exceções conhecidas do teste)
+
+- `enchant:armor_good` +26%: +10 Cota de Malha (58,0) contra Couraça de Osso +0 (46,0)
+- `enchant:armor_rare` +27%: +10 Couraça de Osso (98,0) contra Manto do Senhor dos Ossos +0 (77,0)
+- `enchant:axe_common` +50%: +10 Machado de Lenhador (24,0) contra Machado de Guerra +0 (16,0)
+- `enchant:axe_epic` +96%: +10 Fúria do Norte (112,0) contra Machado do Rei Ossário +0 (57,0)
+- `enchant:axe_good` +72%: +10 Machado de Guerra (50,0) contra Machado Rachador +0 (29,0)
+- `enchant:axe_rare` +82%: +10 Machado Rachador (80,0) contra Fúria do Norte +0 (44,0)
+- `enchant:boots_common` +83%: +10 Botas de Viajante (22,0) contra Botas de Ferro +0 (12,0)
+- `enchant:boots_good` +109%: +10 Botas de Ferro (46,0) contra Botas do Vento +0 (22,0)
+- `enchant:boots_rare` +118%: +10 Botas do Vento (74,0) contra Passos da Sombra +0 (34,0)
+- `enchant:cape_common` +132%: +10 Capa de Lã (22,0) contra Capa do Patrulheiro +0 (9,5)
+- `enchant:cape_good` +149%: +10 Capa do Patrulheiro (43,5) contra Capa do Crepúsculo +0 (17,5)
+- `enchant:cape_rare` +101%: +10 Capa do Crepúsculo (69,5) contra Manto das Cinzas +0 (34,5)
+- `enchant:daggers_common` +57%: +10 Adagas Gêmeas (22,0) contra Adagas de Aço +0 (14,0)
+- `enchant:daggers_epic` +116%: +10 Presas do Crepúsculo (106,0) contra Garras do Rei Ossário +0 (49,0)
+- `enchant:daggers_good` +92%: +10 Adagas de Aço (48,0) contra Presas Sombrias +0 (25,0)
+- `enchant:daggers_rare` +100%: +10 Presas Sombrias (76,0) contra Presas do Crepúsculo +0 (38,0)
+- `enchant:ear_common` +46%: +10 Brinco de Osso (11,4) contra Brinco de Âmbar +0 (7,8)
+- `enchant:ear_good` +50%: +10 Brinco de Âmbar (24,8) contra Brinco de Safira +0 (16,5)
+- `enchant:ear_rare` +37%: +10 Brinco de Safira (42,5) contra Lágrima da Lua +0 (31,0)
+- `enchant:gloves_common` +124%: +10 Luvas de Couro (20,8) contra Manoplas de Ferro +0 (9,2)
+- `enchant:gloves_good` +116%: +10 Manoplas de Ferro (43,2) contra Manoplas Rúnicas +0 (20,0)
+- `enchant:gloves_rare` +118%: +10 Manoplas Rúnicas (72,0) contra Garras do Ossário +0 (33,0)
+- `enchant:helm_common` +66%: +10 Capuz de Couro (24,0) contra Elmo de Ferro +0 (14,5)
+- `enchant:helm_good` +83%: +10 Elmo de Ferro (48,5) contra Elmo de Osso +0 (26,5)
+- `enchant:helm_rare` +83%: +10 Elmo de Osso (78,5) contra Elmo do Senhor dos Ossos +0 (43,0)
+- `enchant:legs_common` +55%: +10 Calças de Couro (24,0) contra Grevas de Malha +0 (15,5)
+- `enchant:legs_good` +62%: +10 Grevas de Malha (49,5) contra Grevas de Osso +0 (30,5)
+- `enchant:legs_rare` +65%: +10 Grevas de Osso (82,5) contra Grevas do Crepúsculo +0 (50,0)
+- `enchant:neck_epic` +39%: +10 Coração do Abismo (79,0) contra Colar do Rei Ossário +0 (57,0)
+- `enchant:ring_common` +100%: +10 Anel de Cobre (12,0) contra Anel de Prata +0 (6,0)
+- `enchant:ring_epic` +87%: +10 Selo do Senhor dos Ossos (58,0) contra Anel do Rei Ossário +0 (31,0)
+- `enchant:ring_good` +92%: +10 Anel de Prata (23,0) contra Anel de Ônix +0 (12,0)
+- `enchant:ring_rare` +58%: +10 Anel de Ônix (38,0) contra Selo do Senhor dos Ossos +0 (24,0)
+- `enchant:shield_good` +62%: +10 Escudo de Ferro (52,0) contra Escudo de Cravos +0 (32,0)
+- `enchant:shield_rare` +53%: +10 Escudo de Cravos (84,0) contra Égide Óssea +0 (55,0)
+- `enchant:shield_tower` +36%: +10 Escudo Pesado (24,5) contra Escudo de Ferro +0 (18,0)
+- `enchant:staff_common` +32%: +10 Cajado de Aprendiz (25,0) contra Cajado de Carvalho +0 (19,0)
+- `enchant:staff_epic` +69%: +10 Cetro do Abismo (122,0) contra Cetro do Rei Ossário +0 (72,0)
+- `enchant:staff_good` +61%: +10 Cajado de Carvalho (53,0) contra Varinha Rúnica +0 (33,0)
+- `enchant:staff_rare` +56%: +10 Varinha Rúnica (84,0) contra Cetro do Abismo +0 (54,0)
+- `enchant:sword_common` +64%: +10 Espada de Treino (23,0) contra Espada de Aço +0 (14,0)
+- `enchant:sword_epic` +98%: +10 Lâmina da Aurora (113,0) contra Lâmina do Rei Ossário +0 (57,0)
+- `enchant:sword_good` +78%: +10 Espada de Aço (48,0) contra Lâmina do Vigia +0 (27,0)
+- `enchant:sword_rare` +73%: +10 Lâmina do Vigia (78,0) contra Lâmina da Aurora +0 (45,0)
+- `item:ear_epic` +26%: Lágrima da Lua (épica, nível 18): poder 31,0, orçamento 24,6
+- `item:neck_epic` +26%: Coração do Abismo (épica, nível 18): poder 45,0, orçamento 35,8
+- `item:neck_legend` +29%: Colar do Rei Ossário (lendária, nível 20): poder 57,0, orçamento 44,3
+- `ttk:13–19:Cavaleiro` +70%: Cavaleiro no 13–19: 2,0 s para matar, média da faixa 1,2 s
+- `ttk:13–19:Mago` −54%: Mago no 13–19: 0,5 s para matar, média da faixa 1,2 s
+- `ttk:1–5:Cavaleiro` +96%: Cavaleiro no 1–5: 3,1 s para matar, média da faixa 1,6 s
+- `ttk:1–5:Mago` −86%: Mago no 1–5: 0,2 s para matar, média da faixa 1,6 s
+- `ttk:20–24:Cavaleiro/Arauto` +65%: Cavaleiro/Arauto no 20–24: 6,8 s para matar, média da faixa 4,1 s
+- `ttk:20–24:Cavaleiro/Bastião` +95%: Cavaleiro/Bastião no 20–24: 8,1 s para matar, média da faixa 4,1 s
+- `ttk:20–24:Ladino/Caçador` −20%: Ladino/Caçador no 20–24: 3,3 s para matar, média da faixa 4,1 s
+- `ttk:20–24:Ladino/Sicário` −23%: Ladino/Sicário no 20–24: 3,2 s para matar, média da faixa 4,1 s
+- `ttk:20–24:Mago/Elementalista` −52%: Mago/Elementalista no 20–24: 2,0 s para matar, média da faixa 4,1 s
+- `ttk:20–24:Mago/Ocultista` −52%: Mago/Ocultista no 20–24: 2,0 s para matar, média da faixa 4,1 s
+- `ttk:25–30:Bárbaro/Sanguinário` −24%: Bárbaro/Sanguinário no 25–30: 2,9 s para matar, média da faixa 3,8 s
+- `ttk:25–30:Cavaleiro/Arauto` +62%: Cavaleiro/Arauto no 25–30: 6,2 s para matar, média da faixa 3,8 s
+- `ttk:25–30:Cavaleiro/Bastião` +113%: Cavaleiro/Bastião no 25–30: 8,1 s para matar, média da faixa 3,8 s
+- `ttk:25–30:Ladino/Caçador` −18%: Ladino/Caçador no 25–30: 3,2 s para matar, média da faixa 3,8 s
+- `ttk:25–30:Ladino/Sicário` −24%: Ladino/Sicário no 25–30: 2,9 s para matar, média da faixa 3,8 s
+- `ttk:25–30:Mago/Elementalista` −58%: Mago/Elementalista no 25–30: 1,6 s para matar, média da faixa 3,8 s
+- `ttk:25–30:Mago/Ocultista` −47%: Mago/Ocultista no 25–30: 2,0 s para matar, média da faixa 3,8 s
+- `ttk:6–12:Bárbaro` +18%: Bárbaro no 6–12: 2,1 s para matar, média da faixa 1,8 s
+- `ttk:6–12:Cavaleiro` +74%: Cavaleiro no 6–12: 3,0 s para matar, média da faixa 1,8 s
+- `ttk:6–12:Mago` −81%: Mago no 6–12: 0,3 s para matar, média da faixa 1,8 s
+
+## XP em grupo (tunnel#151)
+
+O modo grupo do simulador (`go run ./cmd/balance -grupo`, em `server/internal/balance/group.go`) compara a XP por hora de cada membro de um grupo com a de quem caça sozinho, com as regras novas da zona (`game/party.go`): +10% na XP total do abate por membro que conta além do primeiro, dividida pelo nível; corte do grupo inteiro com mais de 8 níveis de diferença (9 = 50%, 10 = 40%, 11 = 30%, 12 = 20%, 13+ = 10%). `TestGroupOfThreeBeatsSolo` e `TestCarryDoesNotPay` (`internal/balance`) travam as duas metas abaixo.
+
+**Como o grupo luta no modelo.** Os três batem no mesmo monstro: a vida é uma só e cada um segue a própria rotação, então o tempo para matar sai do dano somado. O monstro só bate no primeiro (o cavaleiro, que segura o ódio). Os efeitos no alvo de cada um (marca, enfraquecer, atordoar) valem só para os golpes dele, o que subestima o grupo. Entre um abate e outro, o grupo anda na velocidade do mais lento e espera o mais cansado descansar. Para o renascimento, o grupo é um caçador só. O grupo escolhe os monstros de 0 a 5 níveis acima que mais rendem sem ninguém morrer.
+
+**Leitura curta.**
+- **A meta é cumprida: o grupo de 3 rende de 1,25× a 1,85× por membro**, do 5 ao 39, com a mesma gente na região nos dois casos (sozinhos, os 3 dividem os renascimentos). Esse é o caso que importa: do 13 em diante quem manda é o renascimento, não a força (ver "Leitura curta" lá em cima). Caçando os **mesmos monstros** de quem está sozinho, do 15 em diante o grupo fica em **1,20×**, que é o bônus de +20%: os dois lados matam no ritmo do renascimento, e o grupo ganha 1,2 abate dividido por 3 enquanto cada um sozinho ganharia 1/3. O que leva acima disso é caçar monstros mais altos (até +5), que sozinho mata devagar ou não aguenta. Contra a classe que mais rende sozinha (o mago), o grupo só perde no 5 (0,83×), onde o mago mata num golpe e nada limita o ritmo dele.
+- **Com monstros à vontade** (sem o limite do renascimento) **o grupo focado no mesmo monstro quase sempre rende menos** (0,64× a 0,83× do 20 ao 39 e 0,93× no 10; no 5 e no 15, onde os monstros de +5 valem bem mais, 1,27× e 1,41×). O abate do grupo leva ~1 s, mas a caminhada até o próximo é a mesma de quem está sozinho, então matar 3× mais rápido não vira 3× mais abates. Nesse caso o grupo rende mais **espalhado**: cada um no seu monstro, a até 40 m dos outros, todos contam (todos deram dano nos últimos 30 s) e cada abate vale 1,2/3 para cada um, ou seja **1,2× exato** de quem caça sozinho. A coluna "Região só sua" é o pior caso: a região inteira para um só, seja o grupo ou quem está sozinho; aí o grupo divide entre 3 o que um sozinho teria.
+- **Carregar não compensa.** Um nível 30 caçando os monstros dele com um nível 20 que ajuda: o baixo faz 0,39× do que faria sozinho e o alto, 0,28×. Com 13 níveis ou mais, 0,11× e 0,07×. Até 8 níveis de diferença não há corte, e ainda assim o baixo fica abaixo do que faria sozinho (0,74× a 0,88×), porque a parte dele é pelo nível. Quem não ajuda (não bate, não buffa) não conta: não leva XP nem derruba a do grupo.
+- **O mínimo de 10% do monstro fraco fica.** Caçar monstros 11 ou mais níveis abaixo, onde o mínimo de 10% vale, rende de 0,02× a 0,05× da XP por hora no próprio nível, mesmo matando num golpe e no ritmo do renascimento: a XP do monstro cai com o nível dele (nível^1,6) antes do corte. Um bot no monstro fraco não ganha nada que valha a pena, e baixar o mínimo não mudaria isso. O corte que pesa é o de 6 a 10 níveis (−15% por nível), e ele já leva a 0,29× a 0,36× com 8 níveis. (A linha do 20 contra monstros 19 abaixo mostra 8% porque a XP do nível 1 arredonda para 1.)
+
+### Grupo de 3 contra sozinho
+
+Grupo de 3 do mesmo nível (Cavaleiro/Bastião + Mago/Elementalista + Ladino/Sicário), +0, de dia. Bônus: +10% por membro além do primeiro; a XP é dividida pelo nível (aqui, 1/3 para cada). O grupo caça os monstros de até 5 níveis acima que mais rendem.
+
+Região dividida: os mesmos 3 na região nos dois casos (sozinhos, cada um fica com 1/3 dos renascimentos).
+
+| Nível | Caça (acima) | Matar (grupo) | s/abate | XP/abate (membro) | XP/h (membro) | XP/h sozinho (média) | Grupo ÷ sozinho | ÷ melhor sozinho | Mesmos monstros do solo | Monstros à vontade | Região só sua |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 5 | Esqueleto Guerreiro + Esqueleto Ladino (+5) | 0,6 s | 5,8 | 255 | 157.495 | 121.177 | 1,30× | 0,83× | 0,42× | 1,27× | 1,27× |
+| 10 | Esqueleto Mago + Esqueleto Guerreiro (+5) | 0,0 s | 4,8 R | 518 | 388.500 | 290.847 | 1,34× | 1,33× | 0,84× | 0,93× | 0,86× |
+| 15 | Esqueleto Mago + Esqueleto Guerreiro (+4) | 0,1 s | 4,8 R | 756 | 565.546 | 323.750 | 1,75× | 1,75× | 1,20× | 1,41× | 0,72× |
+| 20 | Vale das Pedras Vivas (+5) | 1,1 s | 12,4 R | 2.760 | 802.793 | 468.073 | 1,72× | 1,72× | 1,20× | 0,67× | 0,58× |
+| 25 | Fundo do Vale (+5) | 1,1 s | 12,4 R | 4.248 | 1.235.898 | 668.994 | 1,85× | 1,85× | 1,20× | 0,72× | 0,63× |
+| 30 | Confins Partidos (+5) | 0,9 s | 12,9 R | 5.909 | 1.654.576 | 1.029.915 | 1,61× | 1,61× | 1,20× | 0,83× | 0,55× |
+| 35 | Confins Partidos (+5) | 0,9 s | 12,9 R | 7.317 | 2.048.704 | 1.378.813 | 1,49× | 1,49× | 1,20× | 0,68× | 0,50× |
+| 39 | Confins Partidos (+1) | 0,6 s | 12,9 R | 7.317 | 2.048.704 | 1.639.493 | 1,25× | 1,25× | 1,20× | 0,64× | 0,42× |
+
+### Carregar um nível baixo
+
+Carregar: cavaleiro no nível alto caçando os monstros dele, com um mago de nível baixo que ajuda (conta no grupo).
+
+| Alto | Baixo | Diferença | XP que sobra | XP/h do baixo | Baixo sozinho | Baixo ÷ sozinho | XP/h do alto | Alto ÷ sozinho |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 30 | 22 | 8 | 100% | 1.437.920 | 1.635.782 | 0,88× | 1.960.800 | 0,68× |
+| 30 | 21 | 9 | 50% | 699.736 | 1.518.255 | 0,46× | 999.624 | 0,35× |
+| 30 | 20 | 10 | 40% | 543.795 | 1.404.218 | 0,39× | 815.693 | 0,28× |
+| 30 | 17 | 13 | 10% | 122.932 | 1.117.551 | 0,11× | 216.940 | 0,07× |
+| 39 | 31 | 8 | 100% | 2.396.002 | 3.256.145 | 0,74× | 3.014.326 | 0,61× |
+| 39 | 30 | 9 | 50% | 1.176.158 | 3.089.745 | 0,38× | 1.529.006 | 0,31× |
+| 39 | 25 | 14 | 10% | 211.341 | 2.006.982 | 0,11× | 329.692 | 0,07× |
+
+### Monstro muito abaixo do jogador
+
+Monstro fraco: um caçador sozinho (Mago/Elementalista, +0) caçando a região de monstros abaixo do nível dele. A regra: XP cheia até 5 níveis abaixo; depois −15% por nível, mínimo de 10%.
+
+| Nível | Monstros abaixo | Corte de XP | XP/h | ÷ no próprio nível |
+|---:|---:|---:|---:|---:|
+| 20 | 0 | 100% | 1.404.218 | 1,00× |
+| 20 | 5 | 100% | 971.250 | 0,69× |
+| 20 | 8 | 55% | 448.493 | 0,32× |
+| 20 | 11 | 10% | 51.639 | 0,04× |
+| 20 | 14 | 10% | 26.776 | 0,02× |
+| 20 | 19 | 8% | 1.331 | 0,00× |
+| 30 | 0 | 100% | 3.089.745 | 1,00× |
+| 30 | 5 | 100% | 2.006.982 | 0,65× |
+| 30 | 8 | 55% | 899.491 | 0,29× |
+| 30 | 11 | 10% | 140.178 | 0,05× |
+| 30 | 14 | 10% | 106.431 | 0,03× |
+| 30 | 19 | 10% | 69.990 | 0,02× |
+| 39 | 0 | 100% | 4.918.480 | 1,00× |
+| 39 | 5 | 100% | 3.791.200 | 0,77× |
+| 39 | 8 | 55% | 1.790.836 | 0,36× |
+| 39 | 11 | 10% | 240.582 | 0,05× |
+| 39 | 14 | 10% | 200.727 | 0,04× |
+| 39 | 19 | 10% | 140.509 | 0,03× |
+
+## Por nível
+
+Pares **a / b** = equipamento +0 / +3; o resto é +0. **R** = o renascimento limita o ritmo.
+
+### Cavaleiro (1–19)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | Esqueleto Lacaio | 15 / 18 | 2,4 / 1,9 | 1,2 | ∞ | 3 min 10 s | 1% | 12 | 698 | 8.379 / 9.144 | 0 | 34 s / 31 s | 34 s / 31 s |
+| 2 | Esqueleto Lacaio | 18 / 21 | 3,0 / 2,4 | 2,5 | ∞ | 3 min 53 s | 2% | 36 | 604 | 21.739 / 25.138 | 0 | 1 min 00 s / 53 s | 1 min 35 s / 1 min 24 s |
+| 3 | Esqueleto Lacaio | 21 / 23 | 3,4 / 3,0 | 2,5 | ∞ | ∞ | 2% | 70 | 590 | 41.274 / 44.168 | 0 | 1 min 18 s / 1 min 13 s | 2 min 53 s / 2 min 37 s |
+| 4 | Esqueleto Lacaio | 24 / 27 | 3,4 / 3,4 | 2,5 | ∞ | ∞ | 1% | 110 | 590 | 64.860 / 64.860 | 0 | 1 min 33 s / 1 min 33 s | 4 min 27 s / 4 min 11 s |
+| 5 | Esqueleto Lacaio | 30 / 33 | 3,1 / 3,1 | 2,5 | ∞ | ∞ | 2% | 158 | 462 | 72.922 / 90.589 | 77 | 2 min 16 s / 1 min 49 s | 6 min 43 s / 6 min 00 s |
+| 6 | Esqueleto Guerreiro + Esqueleto Ladino | 43 / 50 | 2,6 / 2,3 | 1,9 | ∞ | 2 min 29 s | 1% | 281 | 571 | 160.422 / 167.464 | 0 | 1 min 32 s / 1 min 28 s | 8 min 15 s / 7 min 29 s |
+| 7 | Esqueleto Guerreiro + Esqueleto Ladino | 46 / 53 | 3,1 / 2,3 | 2,2 | ∞ | 2 min 41 s | 2% | 360 | 503 | 180.974 / 215.475 | 0 | 1 min 55 s / 1 min 36 s | 10 min 11 s / 9 min 05 s |
+| 8 | Esqueleto Guerreiro + Esqueleto Ladino | 51 / 58 | 3,2 / 2,5 | 2,2 | ∞ | 2 min 45 s | 2% | 446 | 504 | 224.887 / 259.315 | 0 | 2 min 04 s / 1 min 47 s | 12 min 15 s / 10 min 53 s |
+| 9 | Esqueleto Guerreiro + Esqueleto Ladino | 56 / 62 | 3,2 / 2,5 | 2,2 | ∞ | 4 min 22 s | 2% | 538 | 506 | 272.030 / 312.806 | 0 | 2 min 13 s / 1 min 55 s | 14 min 28 s / 12 min 49 s |
+| 10 | Esqueleto Guerreiro + Esqueleto Ladino | 60 / 66 | 3,4 / 2,5 | 2,2 | ∞ | ∞ | 2% | 637 | 502 | 319.806 / 370.367 | 0 | 2 min 22 s / 2 min 03 s | 16 min 51 s / 14 min 52 s |
+| 11 | Esqueleto Guerreiro + Esqueleto Ladino | 65 / 71 | 3,4 / 2,6 | 2,2 | ∞ | ∞ | 1% | 742 | 504 | 373.920 / 423.578 | 0 | 2 min 30 s / 2 min 12 s | 19 min 21 s / 17 min 05 s |
+| 12 | Esqueleto Guerreiro + Esqueleto Ladino | 74 / 81 | 2,4 / 2,2 | 2,2 | ∞ | ∞ | 1% | 853 | 498 | 424.666 / 467.238 | 0 | 2 min 40 s / 2 min 25 s | 22 min 02 s / 19 min 31 s |
+| 13 | Esqueleto Mago + Esqueleto Guerreiro | 82 / 89 | 2,0 / 2,0 | 1,9 | ∞ | ∞ | 1% | 1.030 | 520 | 535.061 / 579.099 | 0 | 2 min 31 s / 2 min 20 s | 24 min 34 s / 21 min 51 s |
+| 14 | Esqueleto Mago + Esqueleto Guerreiro | 88 / 95 | 2,1 / 2,0 | 1,9 | ∞ | ∞ | 1% | 1.160 | 522 | 605.047 / 656.892 | 0 | 2 min 38 s / 2 min 25 s | 27 min 12 s / 24 min 17 s |
+| 15 | Esqueleto Mago + Esqueleto Guerreiro | 101 / 109 | 1,8 / 1,7 | 1,6 | ∞ | ∞ | 0% | 1.295 | 491 | 636.415 / 661.172 | 0 | 2 min 55 s / 2 min 48 s | 30 min 07 s / 27 min 05 s |
+| 16 | Esqueleto Mago + Esqueleto Guerreiro **R** | 106 / 114 | 1,9 / 1,7 | 1,6 | ∞ | ∞ | 0% | 1.436 | 494 | 708.504 / 744.957 | 0 | 3 min 01 s / 2 min 52 s | 33 min 08 s / 29 min 58 s |
+| 17 | Esqueleto Mago + Esqueleto Guerreiro **R** | 111 / 119 | 2,0 / 1,8 | 1,6 | ∞ | ∞ | 0% | 1.582 | 493 | 780.479 / 812.799 | 0 | 3 min 07 s / 3 min 00 s | 36 min 16 s / 32 min 58 s |
+| 18 | Esqueleto Mago + Esqueleto Guerreiro **R** | 116 / 124 | 2,0 / 1,8 | 1,6 | ∞ | ∞ | 0% | 1.733 | 487 | 843.914 / 904.228 | 0 | 3 min 17 s / 3 min 03 s | 39 min 33 s / 36 min 02 s |
+| 19 | Esqueleto Mago + Esqueleto Guerreiro **R** | 121 / 129 | 2,1 / 1,8 | 1,6 | ∞ | ∞ | 0% | 1.890 | 489 | 925.001 / 994.574 | 0 | 3 min 22 s / 3 min 08 s | 42 min 56 s / 39 min 11 s |
+
+### Cavaleiro/Bastião (20–30)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20 | Vale das Pedras Vivas **R** | 106 / 112 | 7,8 / 7,0 | 5,1 | ∞ | ∞ | 0% | 4.827 | 279 | 1.349.070 / 1.347.584 | 93 | 2 min 51 s / 2 min 51 s | 45 min 47 s / 42 min 02 s |
+| 21 | Vale das Pedras Vivas **R** | 109 / 115 | 7,8 / 7,0 | 5,1 | ∞ | ∞ | 0% | 5.219 | 281 | 1.465.285 / 1.466.390 | 94 | 3 min 11 s / 3 min 11 s | 48 min 58 s / 45 min 13 s |
+| 22 | Vale das Pedras Vivas **R** | 113 / 119 | 8,1 / 7,4 | 6,1 | ∞ | ∞ | 0% | 5.623 | 274 | 1.537.930 / 1.536.119 | 91 | 3 min 38 s / 3 min 38 s | 52 min 36 s / 48 min 52 s |
+| 23 | Vale das Pedras Vivas **R** | 117 / 123 | 7,8 / 7,5 | 6,1 | ∞ | ∞ | 0% | 6.037 | 271 | 1.634.342 / 1.663.791 | 90 | 4 min 04 s / 4 min 00 s | 56 min 41 s / 52 min 52 s |
+| 24 | Vale das Pedras Vivas **R** | 121 / 127 | 7,8 / 7,6 | 6,1 | ∞ | ∞ | 0% | 6.462 | 273 | 1.761.550 / 1.746.690 | 91 | 4 min 26 s / 4 min 28 s | 1 h 01 min / 57 min 21 s |
+| 25 | Vale das Pedras Vivas **R** | 125 / 131 | 8,0 / 8,0 | 6,1 | ∞ | ∞ | 0% | 6.899 | 273 | 1.885.879 / 1.915.257 | 91 | 4 min 50 s / 4 min 46 s | 1 h 06 min / 1 h 02 min |
+| 26 | Vale das Pedras Vivas **R** | 129 / 134 | 8,6 / 7,9 | 6,1 | ∞ | ∞ | 0% | 7.345 | 257 | 1.885.399 / 1.878.869 | 64 | 5 min 36 s / 5 min 37 s | 1 h 12 min / 1 h 08 min |
+| 27 | Vale das Pedras Vivas **R** | 133 / 138 | 8,7 / 7,9 | 6,1 | ∞ | ∞ | 0% | 7.803 | 257 | 2.005.665 / 2.005.985 | 64 | 6 min 04 s / 6 min 04 s | 1 h 18 min / 1 h 14 min |
+| 28 | Vale das Pedras Vivas **R** | 141 / 147 | 7,9 / 7,5 | 6,1 | ∞ | ∞ | 0% | 8.270 | 264 | 2.187.177 / 2.197.054 | 88 | 6 min 21 s / 6 min 20 s | 1 h 24 min / 1 h 20 min |
+| 29 | Vale das Pedras Vivas **R** | 145 / 151 | 7,9 / 7,6 | 6,1 | ∞ | ∞ | 0% | 8.748 | 266 | 2.330.580 / 2.324.517 | 89 | 6 min 47 s / 6 min 48 s | 1 h 31 min / 1 h 27 min |
+| 30 | Vale das Pedras Vivas **R** | 150 / 155 | 8,0 / 7,7 | 6,1 | ∞ | ∞ | 0% | 9.235 | 267 | 2.466.211 / 2.377.672 | 89 | 0 s / 0 s | 1 h 31 min / 1 h 27 min |
+
+### Cavaleiro/Arauto (20–30)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20 | Vale das Pedras Vivas **R** | 125 / 132 | 5,6 / 4,8 | 4,9 | ∞ | ∞ | 0% | 4.827 | 291 | 1.404.218 / 1.404.218 | 0 | 2 min 44 s / 2 min 44 s | 45 min 40 s / 41 min 55 s |
+| 21 | Vale das Pedras Vivas **R** | 132 / 139 | 5,6 / 4,8 | 4,9 | ∞ | ∞ | 0% | 5.219 | 291 | 1.518.255 / 1.518.255 | 0 | 3 min 04 s / 3 min 04 s | 48 min 44 s / 44 min 59 s |
+| 22 | Vale das Pedras Vivas **R** | 136 / 143 | 5,6 / 4,8 | 4,9 | ∞ | ∞ | 0% | 5.623 | 291 | 1.635.782 / 1.635.782 | 0 | 3 min 25 s / 3 min 25 s | 52 min 10 s / 48 min 25 s |
+| 23 | Vale das Pedras Vivas **R** | 141 / 148 | 5,6 / 4,8 | 4,9 | ∞ | ∞ | 0% | 6.037 | 291 | 1.756.218 / 1.756.218 | 0 | 3 min 47 s / 3 min 47 s | 55 min 57 s / 52 min 12 s |
+| 24 | Vale das Pedras Vivas **R** | 147 / 154 | 5,5 / 5,1 | 5,1 | ∞ | ∞ | 0% | 6.462 | 291 | 1.879.855 / 1.879.855 | 24 | 4 min 09 s / 4 min 09 s | 1 h 00 min / 56 min 22 s |
+| 25 | Vale das Pedras Vivas **R** | 151 / 158 | 5,5 / 5,1 | 5,1 | ∞ | ∞ | 0% | 6.899 | 291 | 2.006.982 / 2.006.982 | 0 | 4 min 33 s / 4 min 33 s | 1 h 05 min / 1 h 01 min |
+| 26 | Vale das Pedras Vivas **R** | 156 / 163 | 5,5 / 5,1 | 5,1 | ∞ | ∞ | 0% | 7.345 | 291 | 2.136.727 / 2.136.727 | 0 | 4 min 57 s / 4 min 57 s | 1 h 10 min / 1 h 06 min |
+| 27 | Vale das Pedras Vivas **R** | 161 / 167 | 5,5 / 5,1 | 5,1 | ∞ | ∞ | 0% | 7.803 | 291 | 2.269.964 / 2.269.964 | 0 | 5 min 21 s / 5 min 21 s | 1 h 15 min / 1 h 11 min |
+| 28 | Vale das Pedras Vivas **R** | 173 / 179 | 5,4 / 5,1 | 5,1 | ∞ | ∞ | 0% | 8.270 | 291 | 2.405.818 / 2.405.818 | 48 | 5 min 47 s / 5 min 47 s | 1 h 21 min / 1 h 17 min |
+| 29 | Vale das Pedras Vivas **R** | 178 / 184 | 5,5 / 5,4 | 5,1 | ∞ | ∞ | 0% | 8.748 | 290 | 2.533.486 / 2.533.486 | 48 | 6 min 14 s / 6 min 14 s | 1 h 27 min / 1 h 23 min |
+| 30 | Vale das Pedras Vivas **R** | 183 / 189 | 5,4 / 5,4 | 5,1 | ∞ | ∞ | 0% | 9.235 | 290 | 2.675.945 / 2.675.945 | 24 | 0 s / 0 s | 1 h 27 min / 1 h 23 min |
+
+### Bárbaro (1–19)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | Esqueleto Lacaio | 22 / 26 | 1,1 / 0,8 | 1,1 | ∞ | 2 min 08 s | 2% | 12 | 563 | 6.753 / 7.787 | 0 | 43 s / 37 s | 43 s / 37 s |
+| 2 | Esqueleto Lacaio | 27 / 31 | 1,1 / 1,4 | 1,1 | ∞ | 2 min 17 s | 2% | 36 | 548 | 19.741 / 26.333 | 0 | 1 min 07 s / 50 s | 1 min 49 s / 1 min 27 s |
+| 3 | Esqueleto Lacaio | 33 / 36 | 1,3 / 1,3 | 1,1 | ∞ | 2 min 32 s | 2% | 70 | 553 | 38.675 / 38.675 | 0 | 1 min 23 s / 1 min 23 s | 3 min 13 s / 2 min 50 s |
+| 4 | Esqueleto Lacaio | 38 / 42 | 1,9 / 1,9 | 1,1 | ∞ | 2 min 48 s | 3% | 110 | 622 | 68.444 / 68.444 | 0 | 1 min 28 s / 1 min 28 s | 4 min 42 s / 4 min 19 s |
+| 5 | Esqueleto Lacaio | 43 / 47 | 2,2 / 1,9 | 1,1 | ∞ | 3 min 08 s | 3% | 158 | 576 | 90.959 / 103.378 | 0 | 1 min 49 s / 1 min 36 s | 6 min 31 s / 5 min 55 s |
+| 6 | Esqueleto Guerreiro + Esqueleto Ladino | 61 / 69 | 2,3 / 2,2 | 1,1 | ∞ | 1 min 07 s | 4% | 281 | 594 | 166.861 / 172.187 | 0 | 1 min 28 s / 1 min 26 s | 8 min 00 s / 7 min 21 s |
+| 7 | Esqueleto Guerreiro + Esqueleto Ladino | 68 / 76 | 2,3 / 2,2 | 1,1 | ∞ | 1 min 08 s | 4% | 360 | 594 | 213.772 / 220.595 | 0 | 1 min 37 s / 1 min 34 s | 9 min 37 s / 8 min 56 s |
+| 8 | Esqueleto Guerreiro + Esqueleto Ladino | 74 / 81 | 2,3 / 2,2 | 1,1 | ∞ | 1 min 09 s | 4% | 446 | 594 | 264.840 / 273.293 | 0 | 1 min 45 s / 1 min 42 s | 11 min 23 s / 10 min 38 s |
+| 9 | Esqueleto Guerreiro + Esqueleto Ladino | 80 / 90 | 2,3 / 2,3 | 1,1 | ∞ | 1 min 34 s | 2% | 538 | 594 | 319.471 / 319.471 | 0 | 1 min 53 s / 1 min 53 s | 13 min 16 s / 12 min 31 s |
+| 10 | Esqueleto Guerreiro + Esqueleto Ladino | 93 / 102 | 1,9 / 1,5 | 1,1 | ∞ | 1 min 39 s | 2% | 637 | 595 | 379.262 / 418.042 | 0 | 2 min 00 s / 1 min 49 s | 15 min 16 s / 14 min 20 s |
+| 11 | Esqueleto Guerreiro + Esqueleto Ladino | 105 / 113 | 1,7 / 1,3 | 2,1 | ∞ | 1 min 43 s | 1% | 742 | 533 | 395.274 / 442.139 | 0 | 2 min 22 s / 2 min 07 s | 17 min 39 s / 16 min 28 s |
+| 12 | Esqueleto Guerreiro + Esqueleto Ladino | 112 / 120 | 1,6 / 1,3 | 2,1 | ∞ | 1 min 50 s | 1% | 853 | 554 | 472.838 / 513.272 | 0 | 2 min 24 s / 2 min 12 s | 20 min 03 s / 18 min 41 s |
+| 13 | Esqueleto Mago + Esqueleto Guerreiro **R** | 133 / 142 | 1,2 / 1,1 | 1,8 | ∞ | ∞ | 1% | 1.030 | 597 | 614.898 / 630.021 | 0 | 2 min 12 s / 2 min 09 s | 22 min 15 s / 20 min 50 s |
+| 14 | Esqueleto Mago + Esqueleto Guerreiro **R** | 141 / 151 | 1,2 / 1,1 | 1,8 | ∞ | ∞ | 0% | 1.160 | 600 | 695.719 / 712.665 | 0 | 2 min 17 s / 2 min 14 s | 24 min 33 s / 23 min 04 s |
+| 15 | Esqueleto Mago + Esqueleto Guerreiro **R** | 148 / 157 | 1,2 / 1,2 | 1,8 | ∞ | ∞ | 0% | 1.295 | 603 | 780.952 / 780.952 | 0 | 2 min 22 s / 2 min 22 s | 26 min 55 s / 25 min 27 s |
+| 16 | Esqueleto Mago + Esqueleto Guerreiro **R** | 170 / 180 | 1,1 / 1,1 | 1,8 | ∞ | ∞ | 0% | 1.436 | 548 | 786.176 / 786.176 | 0 | 2 min 43 s / 2 min 43 s | 29 min 39 s / 28 min 10 s |
+| 17 | Esqueleto Mago + Esqueleto Guerreiro **R** | 180 / 190 | 1,1 / 1,1 | 1,8 | ∞ | ∞ | 0% | 1.582 | 556 | 879.655 / 879.655 | 0 | 2 min 46 s / 2 min 46 s | 32 min 25 s / 30 min 57 s |
+| 18 | Esqueleto Mago + Esqueleto Guerreiro **R** | 191 / 200 | 1,0 / 1,0 | 1,8 | ∞ | ∞ | 0% | 1.733 | 574 | 994.799 / 994.799 | 0 | 2 min 47 s / 2 min 47 s | 35 min 12 s / 33 min 44 s |
+| 19 | Esqueleto Mago + Esqueleto Guerreiro **R** | 200 / 209 | 1,0 / 1,0 | 1,8 | ∞ | ∞ | 0% | 1.890 | 579 | 1.094.345 / 1.094.345 | 0 | 2 min 51 s / 2 min 51 s | 38 min 04 s / 36 min 35 s |
+
+### Bárbaro/Sanguinário (20–30)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20 | Vale das Pedras Vivas **R** | 174 / 181 | 5,0 / 5,0 | 3,1 | ∞ | ∞ | 0% | 4.827 | 291 | 1.404.218 / 1.404.218 | 0 | 2 min 44 s / 2 min 44 s | 40 min 48 s / 39 min 19 s |
+| 21 | Vale das Pedras Vivas **R** | 199 / 206 | 3,8 / 3,5 | 3,1 | ∞ | ∞ | 0% | 5.219 | 291 | 1.518.255 / 1.518.255 | 24 | 3 min 04 s / 3 min 04 s | 43 min 53 s / 42 min 24 s |
+| 22 | Vale das Pedras Vivas **R** | 235 / 242 | 3,1 / 2,8 | 3,1 | ∞ | ∞ | 0% | 5.623 | 287 | 1.616.244 / 1.635.782 | 0 | 3 min 28 s / 3 min 25 s | 47 min 21 s / 45 min 49 s |
+| 23 | Vale das Pedras Vivas **R** | 247 / 257 | 3,0 / 2,9 | 3,1 | ∞ | ∞ | 0% | 6.037 | 291 | 1.756.218 / 1.756.218 | 0 | 3 min 47 s / 3 min 47 s | 51 min 08 s / 49 min 37 s |
+| 24 | Vale das Pedras Vivas **R** | 264 / 275 | 2,9 / 2,9 | 3,1 | ∞ | ∞ | 0% | 6.462 | 291 | 1.879.855 / 1.879.855 | 0 | 4 min 09 s / 4 min 09 s | 55 min 18 s / 53 min 47 s |
+| 25 | Vale das Pedras Vivas **R** | 273 / 281 | 2,6 / 2,6 | 3,1 | ∞ | ∞ | 0% | 6.899 | 291 | 2.006.982 / 2.006.982 | 0 | 4 min 33 s / 4 min 33 s | 59 min 51 s / 58 min 20 s |
+| 26 | Vale das Pedras Vivas **R** | 281 / 289 | 2,7 / 2,7 | 3,1 | ∞ | ∞ | 0% | 7.345 | 291 | 2.136.727 / 2.136.727 | 0 | 4 min 57 s / 4 min 57 s | 1 h 05 min / 1 h 03 min |
+| 27 | Vale das Pedras Vivas **R** | 278 / 286 | 2,8 / 2,7 | 3,1 | ∞ | ∞ | 0% | 7.803 | 291 | 2.269.964 / 2.269.964 | 0 | 5 min 21 s / 5 min 21 s | 1 h 10 min / 1 h 09 min |
+| 28 | Vale das Pedras Vivas **R** | 311 / 320 | 2,6 / 2,6 | 3,1 | ∞ | ∞ | 0% | 8.270 | 291 | 2.405.818 / 2.405.818 | 24 | 5 min 47 s / 5 min 47 s | 1 h 16 min / 1 h 14 min |
+| 29 | Vale das Pedras Vivas **R** | 332 / 340 | 2,6 / 2,6 | 3,1 | ∞ | ∞ | 0% | 8.748 | 291 | 2.544.873 / 2.544.873 | 24 | 6 min 13 s / 6 min 13 s | 1 h 22 min / 1 h 21 min |
+| 30 | Vale das Pedras Vivas **R** | 352 / 361 | 2,6 / 2,6 | 3,1 | ∞ | ∞ | 0% | 9.235 | 291 | 2.686.545 / 2.686.545 | 24 | 0 s / 0 s | 1 h 22 min / 1 h 21 min |
+
+### Bárbaro/Caudilho (20–30)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20 | Vale das Pedras Vivas **R** | 165 / 172 | 5,5 / 5,1 | 3,1 | ∞ | ∞ | 0% | 4.827 | 290 | 1.397.505 / 1.404.218 | 24 | 2 min 45 s / 2 min 44 s | 40 min 49 s / 39 min 19 s |
+| 21 | Vale das Pedras Vivas **R** | 188 / 196 | 4,9 / 3,8 | 3,1 | ∞ | ∞ | 0% | 5.219 | 288 | 1.502.799 / 1.518.255 | 72 | 3 min 06 s / 3 min 04 s | 43 min 55 s / 42 min 24 s |
+| 22 | Vale das Pedras Vivas **R** | 205 / 212 | 4,5 / 4,1 | 3,5 | ∞ | ∞ | 0% | 5.623 | 285 | 1.603.942 / 1.635.782 | 71 | 3 min 29 s / 3 min 25 s | 47 min 25 s / 45 min 49 s |
+| 23 | Vale das Pedras Vivas **R** | 214 / 222 | 4,3 / 4,0 | 3,5 | ∞ | ∞ | 0% | 6.037 | 291 | 1.756.218 / 1.730.131 | 48 | 3 min 47 s / 3 min 50 s | 51 min 12 s / 49 min 40 s |
+| 24 | Vale das Pedras Vivas **R** | 239 / 247 | 3,8 / 3,4 | 3,5 | ∞ | ∞ | 0% | 6.462 | 291 | 1.879.855 / 1.841.005 | 73 | 4 min 09 s / 4 min 15 s | 55 min 22 s / 53 min 55 s |
+| 25 | Vale das Pedras Vivas **R** | 244 / 252 | 3,4 / 3,4 | 3,5 | ∞ | ∞ | 0% | 6.899 | 279 | 1.926.601 / 1.926.601 | 47 | 4 min 44 s / 4 min 44 s | 1 h 00 min / 58 min 40 s |
+| 26 | Vale das Pedras Vivas **R** | 257 / 264 | 3,4 / 3,4 | 3,5 | ∞ | ∞ | 0% | 7.345 | 282 | 2.072.454 / 2.072.454 | 47 | 5 min 06 s / 5 min 06 s | 1 h 05 min / 1 h 04 min |
+| 27 | Vale das Pedras Vivas **R** | 270 / 278 | 3,6 / 3,4 | 3,5 | ∞ | ∞ | 0% | 7.803 | 290 | 2.264.847 / 2.265.170 | 48 | 5 min 22 s / 5 min 22 s | 1 h 11 min / 1 h 09 min |
+| 28 | Vale das Pedras Vivas **R** | 283 / 290 | 3,5 / 3,3 | 3,5 | ∞ | ∞ | 0% | 8.270 | 291 | 2.405.818 / 2.393.026 | 73 | 5 min 47 s / 5 min 49 s | 1 h 16 min / 1 h 15 min |
+| 29 | Vale das Pedras Vivas **R** | 293 / 301 | 3,4 / 3,3 | 3,5 | ∞ | ∞ | 0% | 8.748 | 291 | 2.544.873 / 2.543.645 | 73 | 6 min 13 s / 6 min 13 s | 1 h 23 min / 1 h 21 min |
+| 30 | Vale das Pedras Vivas **R** | 304 / 312 | 3,6 / 3,1 | 3,5 | ∞ | ∞ | 0% | 9.235 | 284 | 2.627.278 / 2.666.499 | 71 | 0 s / 0 s | 1 h 23 min / 1 h 21 min |
+
+### Mago (1–19)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | Esqueleto Lacaio | 32 / 36 | 0,2 / 0,2 | 0,1 | ∞ | 60 s | 0% | 12 | 894 | 10.726 / 10.726 | 0 | 27 s / 27 s | 27 s / 27 s |
+| 2 | Esqueleto Lacaio | 39 / 43 | 0,3 / 0,3 | 0,1 | ∞ | 50 s | 0% | 36 | 1104 | 39.727 / 39.727 | 0 | 33 s / 33 s | 1 min 00 s / 1 min 00 s |
+| 3 | Esqueleto Lacaio | 48 / 52 | 0,2 / 0,2 | 0,1 | ∞ | 44 s | 0% | 70 | 1218 | 85.266 / 85.266 | 0 | 38 s / 38 s | 1 min 38 s / 1 min 38 s |
+| 4 | Esqueleto Lacaio | 55 / 59 | 0,2 / 0,2 | 0,1 | ∞ | 39 s | 0% | 110 | 1239 | 136.295 / 136.295 | 0 | 45 s / 45 s | 2 min 22 s / 2 min 22 s |
+| 5 | Esqueleto Lacaio | 66 / 70 | 0,1 / 0,1 | 0,1 | ∞ | 36 s | 0% | 158 | 1261 | 199.197 / 199.197 | 0 | 50 s / 50 s | 3 min 12 s / 3 min 12 s |
+| 6 | Esqueleto Guerreiro + Esqueleto Ladino | 92 / 101 | 0,0 / 0,0 | 0,1 | 1 min 03 s | 25 s | 0% | 281 | 956 | 268.713 / 268.713 | 0 | 55 s / 55 s | 4 min 07 s / 4 min 07 s |
+| 7 | Esqueleto Guerreiro + Esqueleto Ladino | 105 / 113 | 0,0 / 0,0 | 0,1 | 52 s | 24 s | 0% | 360 | 956 | 344.259 / 344.259 | 0 | 1 min 00 s / 1 min 00 s | 5 min 08 s / 5 min 08 s |
+| 8 | Esqueleto Guerreiro + Esqueleto Ladino | 134 / 146 | 0,0 / 0,0 | 0,1 | 42 s | 22 s | 0% | 446 | 956 | 426.499 / 426.499 | 0 | 1 min 05 s / 1 min 05 s | 6 min 13 s / 6 min 13 s |
+| 9 | Esqueleto Guerreiro + Esqueleto Ladino | 148 / 161 | 0,5 / 0,0 | 0,6 | 39 s | 22 s | 0% | 538 | 844 | 454.157 / 514.476 | 0 | 1 min 19 s / 1 min 10 s | 7 min 33 s / 7 min 24 s |
+| 10 | Esqueleto Guerreiro + Esqueleto Ladino | 167 / 180 | 0,5 / 0,0 | 0,6 | ∞ | 21 s | 0% | 637 | 844 | 537.729 / 609.148 | 0 | 1 min 24 s / 1 min 14 s | 8 min 58 s / 8 min 39 s |
+| 11 | Esqueleto Guerreiro + Esqueleto Ladino | 181 / 193 | 0,5 / 0,0 | 0,6 | ∞ | 20 s | 0% | 742 | 844 | 626.365 / 709.556 | 0 | 1 min 29 s / 1 min 19 s | 10 min 28 s / 9 min 58 s |
+| 12 | Esqueleto Guerreiro + Esqueleto Ladino | 200 / 210 | 0,5 / 0,0 | 0,6 | ∞ | 20 s | 0% | 853 | 844 | 720.067 / 815.703 | 0 | 1 min 34 s / 1 min 23 s | 12 min 02 s / 11 min 21 s |
+| 13 | Esqueleto Mago + Esqueleto Guerreiro **R** | 217 / 230 | 0,5 / 0,5 | 0,6 | ∞ | 33 s | 0% | 1.030 | 703 | 723.434 / 723.434 | 0 | 1 min 52 s / 1 min 52 s | 13 min 55 s / 13 min 14 s |
+| 14 | Esqueleto Mago + Esqueleto Guerreiro **R** | 237 / 250 | 0,5 / 0,5 | 0,6 | ∞ | 33 s | 0% | 1.160 | 703 | 814.785 / 814.785 | 0 | 1 min 57 s / 1 min 57 s | 15 min 52 s / 15 min 11 s |
+| 15 | Esqueleto Mago + Esqueleto Guerreiro **R** | 267 / 277 | 0,5 / 0,5 | 0,1 | ∞ | 34 s | 0% | 1.295 | 706 | 914.809 / 914.809 | 0 | 2 min 01 s / 2 min 01 s | 17 min 54 s / 17 min 13 s |
+| 16 | Esqueleto Mago + Esqueleto Guerreiro **R** | 291 / 302 | 0,5 / 0,5 | 0,1 | ∞ | 34 s | 0% | 1.436 | 706 | 1.014.061 / 1.014.061 | 0 | 2 min 06 s / 2 min 06 s | 20 min 01 s / 19 min 20 s |
+| 17 | Esqueleto Mago + Esqueleto Guerreiro **R** | 308 / 321 | 0,5 / 0,5 | 0,1 | ∞ | 32 s | 0% | 1.582 | 706 | 1.117.551 / 1.117.551 | 0 | 2 min 11 s / 2 min 11 s | 22 min 12 s / 21 min 31 s |
+| 18 | Esqueleto Mago + Esqueleto Guerreiro **R** | 327 / 341 | 0,5 / 0,5 | 0,1 | ∞ | 32 s | 0% | 1.733 | 706 | 1.224.220 / 1.224.220 | 0 | 2 min 15 s / 2 min 15 s | 24 min 28 s / 23 min 47 s |
+| 19 | Esqueleto Mago + Esqueleto Guerreiro **R** | 342 / 350 | 0,6 / 0,6 | 1,1 | ∞ | 35 s | 0% | 1.890 | 692 | 1.308.464 / 1.308.464 | 0 | 2 min 23 s / 2 min 23 s | 26 min 51 s / 26 min 10 s |
+
+### Mago/Elementalista (20–30)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20 | Vale das Pedras Vivas **R** | 376 / 391 | 1,8 / 1,8 | 1,1 | ∞ | 38 s | 0% | 4.827 | 291 | 1.404.218 / 1.404.218 | 0 | 2 min 44 s / 2 min 44 s | 29 min 35 s / 28 min 54 s |
+| 21 | Vale das Pedras Vivas **R** | 397 / 409 | 1,8 / 1,8 | 1,1 | ∞ | 38 s | 0% | 5.219 | 291 | 1.518.255 / 1.518.255 | 0 | 3 min 04 s / 3 min 04 s | 32 min 40 s / 31 min 59 s |
+| 22 | Vale das Pedras Vivas **R** | 417 / 430 | 1,8 / 1,8 | 1,1 | ∞ | 38 s | 0% | 5.623 | 291 | 1.635.782 / 1.635.782 | 0 | 3 min 25 s / 3 min 25 s | 36 min 05 s / 35 min 24 s |
+| 23 | Vale das Pedras Vivas **R** | 442 / 455 | 1,8 / 1,8 | 1,1 | ∞ | 38 s | 0% | 6.037 | 291 | 1.756.218 / 1.756.218 | 0 | 3 min 47 s / 3 min 47 s | 39 min 53 s / 39 min 12 s |
+| 24 | Vale das Pedras Vivas **R** | 467 / 479 | 1,8 / 1,5 | 1,1 | ∞ | 36 s | 0% | 6.462 | 291 | 1.879.855 / 1.879.855 | 0 | 4 min 09 s / 4 min 09 s | 44 min 03 s / 43 min 22 s |
+| 25 | Vale das Pedras Vivas **R** | 494 / 506 | 1,5 / 1,5 | 1,1 | ∞ | 36 s | 0% | 6.899 | 291 | 2.006.982 / 2.006.982 | 0 | 4 min 33 s / 4 min 33 s | 48 min 36 s / 47 min 55 s |
+| 26 | Vale das Pedras Vivas **R** | 522 / 534 | 1,5 / 1,5 | 1,1 | ∞ | 36 s | 0% | 7.345 | 291 | 2.136.727 / 2.136.727 | 0 | 4 min 57 s / 4 min 57 s | 53 min 33 s / 52 min 52 s |
+| 27 | Vale das Pedras Vivas **R** | 552 / 555 | 1,5 / 1,5 | 1,1 | ∞ | 36 s | 0% | 7.803 | 291 | 2.269.964 / 2.269.964 | 0 | 5 min 21 s / 5 min 21 s | 58 min 55 s / 58 min 14 s |
+| 28 | Vale das Pedras Vivas **R** | 571 / 584 | 1,5 / 1,5 | 1,1 | ∞ | 36 s | 0% | 8.270 | 291 | 2.405.818 / 2.405.818 | 0 | 5 min 47 s / 5 min 47 s | 1 h 05 min / 1 h 04 min |
+| 29 | Vale das Pedras Vivas **R** | 580 / 592 | 1,7 / 1,7 | 2,1 | ∞ | 41 s | 0% | 8.748 | 291 | 2.544.873 / 2.544.873 | 0 | 6 min 13 s / 6 min 13 s | 1 h 11 min / 1 h 10 min |
+| 30 | Vale das Pedras Vivas **R** | 601 / 613 | 1,7 / 1,7 | 2,1 | ∞ | 43 s | 0% | 9.235 | 291 | 2.686.545 / 2.686.545 | 0 | 0 s / 0 s | 1 h 11 min / 1 h 10 min |
+
+### Mago/Ocultista (20–30)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20 | Vale das Pedras Vivas **R** | 356 / 371 | 1,8 / 1,8 | 1,1 | ∞ | 38 s | 0% | 4.827 | 291 | 1.404.218 / 1.404.218 | 0 | 2 min 44 s / 2 min 44 s | 29 min 35 s / 28 min 54 s |
+| 21 | Vale das Pedras Vivas **R** | 372 / 381 | 1,8 / 1,8 | 1,1 | ∞ | 38 s | 0% | 5.219 | 291 | 1.518.255 / 1.518.255 | 0 | 3 min 04 s / 3 min 04 s | 32 min 40 s / 31 min 59 s |
+| 22 | Vale das Pedras Vivas **R** | 393 / 404 | 1,8 / 1,8 | 1,1 | ∞ | 38 s | 0% | 5.623 | 291 | 1.635.782 / 1.635.782 | 0 | 3 min 25 s / 3 min 25 s | 36 min 05 s / 35 min 24 s |
+| 23 | Vale das Pedras Vivas **R** | 426 / 438 | 1,8 / 1,8 | 1,1 | ∞ | 38 s | 0% | 6.037 | 291 | 1.756.218 / 1.756.218 | 0 | 3 min 47 s / 3 min 47 s | 39 min 53 s / 39 min 12 s |
+| 24 | Vale das Pedras Vivas **R** | 445 / 461 | 1,8 / 1,8 | 1,1 | ∞ | 43 s | 0% | 6.462 | 291 | 1.879.855 / 1.879.855 | 0 | 4 min 09 s / 4 min 09 s | 44 min 03 s / 43 min 22 s |
+| 25 | Vale das Pedras Vivas **R** | 486 / 497 | 1,8 / 1,8 | 1,1 | ∞ | 41 s | 0% | 6.899 | 291 | 2.006.982 / 2.006.982 | 0 | 4 min 33 s / 4 min 33 s | 48 min 36 s / 47 min 55 s |
+| 26 | Vale das Pedras Vivas **R** | 497 / 509 | 1,8 / 1,8 | 1,1 | ∞ | 47 s | 0% | 7.345 | 291 | 2.136.727 / 2.136.727 | 0 | 4 min 57 s / 4 min 57 s | 53 min 33 s / 52 min 52 s |
+| 27 | Vale das Pedras Vivas **R** | 517 / 530 | 1,8 / 1,8 | 1,1 | ∞ | 45 s | 0% | 7.803 | 291 | 2.269.964 / 2.269.964 | 0 | 5 min 21 s / 5 min 21 s | 58 min 55 s / 58 min 14 s |
+| 28 | Vale das Pedras Vivas **R** | 555 / 568 | 1,9 / 1,9 | 1,7 | ∞ | 46 s | 0% | 8.270 | 291 | 2.405.818 / 2.405.818 | 0 | 5 min 47 s / 5 min 47 s | 1 h 05 min / 1 h 04 min |
+| 29 | Vale das Pedras Vivas **R** | 562 / 574 | 2,1 / 2,1 | 2,1 | ∞ | 54 s | 2% | 8.748 | 291 | 2.544.873 / 2.544.873 | 0 | 6 min 13 s / 6 min 13 s | 1 h 11 min / 1 h 10 min |
+| 30 | Vale das Pedras Vivas **R** | 584 / 596 | 2,1 / 2,1 | 2,1 | ∞ | 58 s | 2% | 9.235 | 291 | 2.686.545 / 2.686.545 | 0 | 0 s / 0 s | 1 h 11 min / 1 h 10 min |
+
+### Ladino (1–19)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | Esqueleto Lacaio | 27 / 33 | 1,2 / 0,8 | 0,1 | ∞ | 1 min 24 s | 2% | 12 | 968 | 11.619 / 13.019 | 0 | 25 s / 22 s | 25 s / 22 s |
+| 2 | Esqueleto Lacaio | 32 / 38 | 1,2 / 1,2 | 0,1 | ∞ | 1 min 08 s | 3% | 36 | 968 | 34.856 / 34.856 | 0 | 38 s / 38 s | 1 min 02 s / 1 min 00 s |
+| 3 | Esqueleto Lacaio | 38 / 44 | 1,6 / 1,2 | 0,1 | ∞ | 1 min 00 s | 3% | 70 | 874 | 61.193 / 67.776 | 0 | 53 s / 48 s | 1 min 55 s / 1 min 47 s |
+| 4 | Esqueleto Lacaio | 42 / 48 | 1,6 / 1,6 | 0,1 | ∞ | 56 s | 3% | 110 | 874 | 96.160 / 96.160 | 0 | 1 min 03 s / 1 min 03 s | 2 min 58 s / 2 min 51 s |
+| 5 | Esqueleto Lacaio | 50 / 56 | 1,5 / 1,5 | 0,8 | ∞ | 53 s | 5% | 158 | 639 | 101.010 / 141.558 | 0 | 1 min 38 s / 1 min 10 s | 4 min 37 s / 4 min 01 s |
+| 6 | Esqueleto Guerreiro + Esqueleto Ladino | 72 / 85 | 1,9 / 1,9 | 0,4 | 2 min 47 s | 32 s | 5% | 281 | 655 | 184.120 / 190.620 | 0 | 1 min 20 s / 1 min 17 s | 5 min 57 s / 5 min 18 s |
+| 7 | Esqueleto Guerreiro + Esqueleto Ladino | 77 / 90 | 1,8 / 1,9 | 0,4 | 1 min 35 s | 30 s | 5% | 360 | 641 | 230.895 / 241.167 | 0 | 1 min 30 s / 1 min 26 s | 7 min 27 s / 6 min 45 s |
+| 8 | Esqueleto Guerreiro + Esqueleto Ladino | 84 / 96 | 1,8 / 1,9 | 0,4 | 1 min 06 s | 29 s | 5% | 446 | 636 | 283.562 / 294.445 | 0 | 1 min 38 s / 1 min 34 s | 9 min 06 s / 8 min 20 s |
+| 9 | Esqueleto Guerreiro + Esqueleto Ladino | 94 / 107 | 1,7 / 1,9 | 0,8 | 1 min 02 s | 28 s | 5% | 538 | 637 | 342.499 / 348.764 | 0 | 1 min 45 s / 1 min 43 s | 10 min 52 s / 10 min 04 s |
+| 10 | Esqueleto Guerreiro + Esqueleto Ladino | 112 / 128 | 1,2 / 0,8 | 0,6 | ∞ | 27 s | 4% | 637 | 776 | 494.196 / 542.421 | 0 | 1 min 32 s / 1 min 24 s | 12 min 24 s / 11 min 28 s |
+| 11 | Esqueleto Guerreiro + Esqueleto Ladino | 121 / 135 | 1,2 / 0,9 | 0,9 | ∞ | 27 s | 4% | 742 | 766 | 568.176 / 627.502 | 0 | 1 min 39 s / 1 min 29 s | 14 min 03 s / 12 min 57 s |
+| 12 | Esqueleto Guerreiro + Esqueleto Ladino | 128 / 142 | 1,2 / 1,2 | 0,9 | ∞ | 26 s | 4% | 853 | 763 | 651.079 / 673.882 | 0 | 1 min 44 s / 1 min 41 s | 15 min 48 s / 14 min 39 s |
+| 13 | Esqueleto Mago + Esqueleto Guerreiro **R** | 144 / 160 | 0,9 / 0,7 | 0,6 | ∞ | 51 s | 3% | 1.030 | 660 | 679.518 / 722.833 | 0 | 1 min 59 s / 1 min 52 s | 17 min 47 s / 16 min 31 s |
+| 14 | Esqueleto Mago + Esqueleto Guerreiro **R** | 150 / 167 | 1,1 / 0,9 | 1,5 | ∞ | 51 s | 4% | 1.160 | 625 | 724.778 / 813.985 | 0 | 2 min 12 s / 1 min 57 s | 19 min 59 s / 18 min 29 s |
+| 15 | Esqueleto Mago + Esqueleto Guerreiro **R** | 167 / 185 | 1,1 / 0,9 | 1,7 | ∞ | 50 s | 4% | 1.295 | 633 | 819.289 / 901.781 | 0 | 2 min 15 s / 2 min 03 s | 22 min 15 s / 20 min 32 s |
+| 16 | Esqueleto Mago + Esqueleto Guerreiro **R** | 175 / 192 | 1,1 / 0,9 | 1,7 | ∞ | 50 s | 4% | 1.436 | 632 | 906.858 / 999.619 | 0 | 2 min 21 s / 2 min 08 s | 24 min 37 s / 22 min 41 s |
+| 17 | Esqueleto Mago + Esqueleto Guerreiro **R** | 184 / 200 | 1,1 / 1,0 | 1,7 | ∞ | 50 s | 4% | 1.582 | 621 | 982.368 / 1.076.051 | 0 | 2 min 29 s / 2 min 16 s | 27 min 06 s / 24 min 57 s |
+| 18 | Esqueleto Mago + Esqueleto Guerreiro **R** | 201 / 218 | 1,1 / 1,0 | 1,6 | ∞ | 50 s | 4% | 1.733 | 624 | 1.081.425 / 1.191.421 | 0 | 2 min 33 s / 2 min 19 s | 29 min 40 s / 27 min 16 s |
+| 19 | Esqueleto Mago + Esqueleto Guerreiro **R** | 208 / 225 | 1,1 / 1,1 | 1,6 | ∞ | 50 s | 4% | 1.890 | 622 | 1.176.004 / 1.208.051 | 0 | 2 min 39 s / 2 min 35 s | 32 min 19 s / 29 min 52 s |
+
+### Ladino/Sicário (20–30)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20 | Vale das Pedras Vivas **R** | 205 / 221 | 3,2 / 3,2 | 3,1 | ∞ | 1 min 04 s | 9% | 4.827 | 291 | 1.404.218 / 1.404.218 | 0 | 2 min 44 s / 2 min 44 s | 35 min 04 s / 32 min 36 s |
+| 21 | Vale das Pedras Vivas **R** | 215 / 231 | 3,2 / 3,1 | 3,1 | ∞ | 1 min 04 s | 9% | 5.219 | 291 | 1.518.255 / 1.518.255 | 0 | 3 min 04 s / 3 min 04 s | 38 min 08 s / 35 min 40 s |
+| 22 | Vale das Pedras Vivas **R** | 224 / 241 | 3,2 / 3,1 | 3,1 | ∞ | 1 min 04 s | 9% | 5.623 | 291 | 1.635.782 / 1.635.782 | 0 | 3 min 25 s / 3 min 25 s | 41 min 34 s / 39 min 06 s |
+| 23 | Vale das Pedras Vivas **R** | 235 / 251 | 3,1 / 3,1 | 3,1 | ∞ | 1 min 04 s | 9% | 6.037 | 291 | 1.756.218 / 1.756.218 | 0 | 3 min 47 s / 3 min 47 s | 45 min 21 s / 42 min 53 s |
+| 24 | Vale das Pedras Vivas **R** | 252 / 268 | 3,1 / 3,0 | 3,1 | ∞ | 1 min 04 s | 9% | 6.462 | 291 | 1.879.855 / 1.879.855 | 0 | 4 min 09 s / 4 min 09 s | 49 min 31 s / 47 min 03 s |
+| 25 | Vale das Pedras Vivas **R** | 284 / 302 | 3,1 / 2,8 | 3,1 | ∞ | 1 min 07 s | 9% | 6.899 | 291 | 2.006.982 / 2.006.982 | 0 | 4 min 33 s / 4 min 33 s | 54 min 04 s / 51 min 36 s |
+| 26 | Vale das Pedras Vivas **R** | 304 / 321 | 2,8 / 2,6 | 3,1 | ∞ | 1 min 07 s | 9% | 7.345 | 291 | 2.136.727 / 2.136.727 | 0 | 4 min 57 s / 4 min 57 s | 59 min 01 s / 56 min 34 s |
+| 27 | Vale das Pedras Vivas **R** | 312 / 330 | 2,8 / 2,8 | 3,1 | ∞ | 1 min 07 s | 9% | 7.803 | 291 | 2.269.964 / 2.269.964 | 0 | 5 min 21 s / 5 min 21 s | 1 h 04 min / 1 h 02 min |
+| 28 | Vale das Pedras Vivas **R** | 328 / 347 | 2,7 / 2,6 | 3,1 | ∞ | 1 min 07 s | 8% | 8.270 | 291 | 2.405.818 / 2.405.818 | 0 | 5 min 47 s / 5 min 47 s | 1 h 10 min / 1 h 08 min |
+| 29 | Vale das Pedras Vivas **R** | 338 / 355 | 2,7 / 2,6 | 3,1 | ∞ | 1 min 09 s | 9% | 8.748 | 291 | 2.544.873 / 2.544.873 | 0 | 6 min 13 s / 6 min 13 s | 1 h 16 min / 1 h 14 min |
+| 30 | Vale das Pedras Vivas **R** | 346 / 364 | 3,0 / 2,6 | 3,1 | ∞ | 1 min 09 s | 8% | 9.235 | 291 | 2.686.545 / 2.686.545 | 0 | 0 s / 0 s | 1 h 16 min / 1 h 14 min |
+
+### Ladino/Caçador (20–30)
+
+| Nv | Região | DPS | Matar (s) | Abertura (s) | Morrer | Morrer sem poção | Vida/luta | XP/abate | Abates/h | XP/h | Poções/h | No nível | Acumulado |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 20 | Vale das Pedras Vivas **R** | 209 / 225 | 3,4 / 3,2 | 3,1 | ∞ | 1 min 02 s | 9% | 4.827 | 291 | 1.404.218 / 1.404.218 | 0 | 2 min 44 s / 2 min 44 s | 35 min 04 s / 32 min 36 s |
+| 21 | Vale das Pedras Vivas **R** | 226 / 242 | 3,2 / 3,1 | 3,1 | ∞ | 1 min 02 s | 9% | 5.219 | 291 | 1.518.255 / 1.518.255 | 0 | 3 min 04 s / 3 min 04 s | 38 min 08 s / 35 min 40 s |
+| 22 | Vale das Pedras Vivas **R** | 236 / 252 | 3,2 / 3,1 | 3,1 | ∞ | 1 min 02 s | 9% | 5.623 | 291 | 1.635.782 / 1.635.782 | 0 | 3 min 25 s / 3 min 25 s | 41 min 34 s / 39 min 06 s |
+| 23 | Vale das Pedras Vivas **R** | 246 / 262 | 3,3 / 3,1 | 3,1 | ∞ | 1 min 02 s | 9% | 6.037 | 291 | 1.756.218 / 1.756.218 | 0 | 3 min 47 s / 3 min 47 s | 45 min 21 s / 42 min 53 s |
+| 24 | Vale das Pedras Vivas **R** | 255 / 271 | 3,3 / 3,1 | 3,1 | ∞ | 1 min 04 s | 9% | 6.462 | 291 | 1.879.855 / 1.879.855 | 0 | 4 min 09 s / 4 min 09 s | 49 min 31 s / 47 min 03 s |
+| 25 | Vale das Pedras Vivas **R** | 263 / 278 | 3,3 / 3,1 | 3,1 | ∞ | 1 min 04 s | 9% | 6.899 | 291 | 2.006.982 / 2.006.982 | 0 | 4 min 33 s / 4 min 33 s | 54 min 04 s / 51 min 36 s |
+| 26 | Vale das Pedras Vivas **R** | 270 / 285 | 3,3 / 3,1 | 3,1 | ∞ | 1 min 04 s | 8% | 7.345 | 291 | 2.136.727 / 2.136.727 | 0 | 4 min 57 s / 4 min 57 s | 59 min 01 s / 56 min 34 s |
+| 27 | Vale das Pedras Vivas **R** | 277 / 292 | 3,3 / 3,1 | 3,1 | ∞ | 1 min 04 s | 8% | 7.803 | 291 | 2.269.964 / 2.269.964 | 0 | 5 min 21 s / 5 min 21 s | 1 h 04 min / 1 h 02 min |
+| 28 | Vale das Pedras Vivas **R** | 309 / 325 | 3,1 / 3,1 | 3,1 | ∞ | 1 min 07 s | 8% | 8.270 | 291 | 2.405.818 / 2.405.818 | 0 | 5 min 47 s / 5 min 47 s | 1 h 10 min / 1 h 08 min |
+| 29 | Vale das Pedras Vivas **R** | 317 / 333 | 3,2 / 3,1 | 3,1 | ∞ | 1 min 07 s | 8% | 8.748 | 291 | 2.544.873 / 2.544.873 | 0 | 6 min 13 s / 6 min 13 s | 1 h 16 min / 1 h 14 min |
+| 30 | Vale das Pedras Vivas **R** | 325 / 340 | 3,3 / 3,1 | 3,1 | ∞ | 1 min 07 s | 8% | 9.235 | 291 | 2.686.545 / 2.686.545 | 0 | 0 s / 0 s | 1 h 16 min / 1 h 14 min |
+
+## Graus de equipamento (tunnel#153): antes e depois
+
+O equipamento parava no 20: depois das épicas do 18 e das lendárias do Ozrhal (nível 20), só a ponte do 30 e do 35. Agora a progressão anda em **graus**, como no Lineage 2, e a raridade (comum → lendária) continua como a cor e a qualidade dentro do grau. O código chama o conceito de `Tier` (em `server/internal/game/tiers.go`); a raridade continua `Grade`.
+
+| Grau | Níveis | O que tem | Onde cai |
+|---|---|---|---|
+| sem grau | 1–9 | a loja e o kit inicial | loja |
+| D | 10–19 | armas comuns no 10, 13 e 16; os conjuntos no 13; escudo, capa e joias no 16; as épicas no 18 | esqueletos de 10–19 e o Ferreiro (32 receitas novas); as épicas do Capitão Ossudo (raro, à noite) e, menos, do Senhor dos Ossos |
+| C | 20–29 | armas comuns no 20, 23 e 26; os conjuntos no 23; escudo, capa e joias no 26; as épicas no 28 | golens e o Vale; as épicas do Senhor dos Ossos, de Vossk (raro) e do Ozrhal; as lendárias do Ozrhal (as do Rei Ossário, nível 20) |
+| B | 30–40 | a ponte do 30 e do 35; armas comuns e os conjuntos no 33; escudo, capa e joias no 36; as épicas no 38; joias lendárias no 40 | as elites do 30 ao 40; as épicas de Ômrun (raro) e do Ozrhal; as joias lendárias só do Ozrhal |
+
+- **Todo equipamento tem grau**, pelo nível exigido: o que já existia também (a rara do 13 é D, a lendária do 20 é C, a ponte é B).
+- **Nível mínimo e penalidade.** Abaixo do nível mínimo do grau a peça não se veste (uma peça do D pede o 10). Do mínimo do grau até o nível da peça, ela se veste com a **penalidade de nível**: −100 de precisão (~20 pontos percentuais de acerto a menos) e −40% de velocidade de ataque e de conjuração (golpes e recargas ~1,7× mais lentos). Vale uma vez, com uma ou com várias peças, e some no nível da peça. Antes, uma peça acima do nível simplesmente não se vestia. A dica do item mostra o grau, o nível mínimo e a penalidade; ao vestir, o jogo avisa.
+- **Pesos e conjuntos.** Cada grau tem um conjunto em cada peso (pesada, leve e manto), com cinco peças: peito, cabeça, pernas, mãos e pés. Qualquer classe veste qualquer peso. Cada peça existe comum (cai dos monstros) e **Exaltada** (épica, dos chefes); a Exaltada conta como a comum para o conjunto. O bônus vale com 2 e com 4 peças e é uma escolha, não só um número maior: a **pesada** aguenta (defesa, vida e regeneração de vida, com um pouco de ataque), a **leve** acerta e escapa (precisão e esquiva) e crita, o **manto** vive de mana (mana e regeneração de mana) e recarrega os feitiços antes. O ataque fica quase todo na arma, de propósito: o conjunto muda o jeito de caçar sem mexer no equilíbrio entre as classes.
+- **A conta é pura.** `game.EquipBonus(nível, peças vestidas)` soma as peças, o encantamento, os conjuntos e a penalidade. A zona (`computeStats`) e o simulador chamam a mesma função.
+- **Saque.** As peças dos graus ficam fora do sorteio por raridade (como a ponte). Um monstro comum do 10 em diante deixa cair, em 2% dos abates, uma peça comum do grau dele, entre as que pedem até o nível dele + 2. As épicas e as lendárias saem só da lista de saque dos chefes e do raid, com chance por peça.
+- **Números.** Cada peça é um perfil fixo de atributos escalado pela reta do orçamento (`6 + 1,4 × (nível − 1)`) e pela raridade: as armas comuns a 95% do orçamento (as do B a 112%: ficam entre a ponte do 30 e a do 35), as peças de conjunto, escudo, capa e joias a ~90% (o bônus de conjunto completa) e as épicas e lendárias a ~100%.
+- Modelos 3D: os de hoje (sem arte nova). O brilho e a cor por raridade continuam os mesmos.
+
+### O orçamento
+
+- **Todas as 160 peças novas passam no `TestPowerBudget`** sem exceção: nenhuma acima do orçamento (+20%) e nenhum +10 passando a peça seguinte da escada (+25%). Para isso, a escada das peças dos graus é por grau e encaixe e tem só dois degraus, a comum e a épica (ou a lendária, nas joias do B): uma rara no meio furaria a regra do encantamento, que soma um valor fixo por raridade (o problema já descrito em "Quais itens furam").
+- **Regra nova, mais apertada:** o conjunto inteiro, com os dois bônus, não pode passar a soma dos orçamentos das peças (a mesma folga de +20%). Os nove conjuntos ficam entre −2% e +2%, nas duas raridades.
+- **O equilíbrio entre as classes** (tempo para matar a ±15% da média da faixa) mudou porque o equipamento típico mudou. Dos 33 casos conhecidos, 23 melhoraram, 3 voltaram para a tolerância (Ladino/Caçador no 25–29 e no 30–34, Bárbaro/Caudilho no 35–40) e 5 pioraram 1 ou 2 pontos, dentro da folga do teste (Ladino/Caçador no 20–24, −20% → −21%; Mago/Elementalista no 25–29, −58% → −60%, e no 35–40, −50% → −51%; Mago/Ocultista no 35–40, −41% → −42%; Bárbaro no 6–12, +18% → +20%). Esses 5 ficam na lista com o número de antes, para a folga não crescer. Nenhum caso novo; o Bárbaro/Caudilho no 30–34 fica bem no limite (−15%).
+- O simulador também ganhou uma seção "Graus de equipamento" (`go run ./cmd/balance`), com as tabelas abaixo.
+
+### Antes e depois no simulador
+
+O equipamento típico passou a ter as peças comuns do grau: a arma, o conjunto do peso da classe (cavaleiro e bárbaro pesada, ladino leve, mago manto), o escudo, a capa e as joias. Antes, era só o que a loja vende (comum e boa, até o nível 6) e a ponte do 30 e do 35.
+
+**O que cada troca de equipamento rende.** No nível em que o equipamento típico muda, o tempo para matar com o equipamento novo contra o do nível de antes (o mesmo personagem e o mesmo monstro): é o salto de poder de cada troca, sem a mudança de caça no meio. **Antes**, o equipamento só mudava no 6, no 30 e no 35, e a ponte do 30 cortava de 16% a 36% de uma vez, depois de 24 níveis sem nada (Cavaleiro/Bastião −18%, Cavaleiro/Arauto −22%, Bárbaro/Sanguinário −18%, Bárbaro/Caudilho −16%, Mago/Elementalista −20%, Mago/Ocultista −26%, Ladino/Sicário −22%, Ladino/Caçador −36%). **Depois**, são dez trocas do 10 ao 36, quase todas cortando até ~20%:
+
+| Caminho | 10 | 13 | 16 | 20 | 23 | 26 | 30 | 33 | 35 | 36 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Cavaleiro/Bastião | −14% | −20% | −18% | −6% | −8% | −6% | −5% | −9% | −2% | +1% |
+| Cavaleiro/Arauto | −14% | −20% | −18% | −10% | −8% | −10% | −6% | −4% | −2% | +5% |
+| Bárbaro/Sanguinário | +0% | −16% | −21% | −4% | +1% | −7% | −3% | +9% | +0% | +5% |
+| Bárbaro/Caudilho | +0% | −16% | −21% | +2% | +2% | −8% | −25% | +5% | +0% | +22% |
+| Mago/Elementalista | +0% | +0% | −90% | −19% | +0% | −34% | −17% | +4% | +0% | +0% |
+| Mago/Ocultista | +0% | +0% | −90% | +0% | +0% | +0% | −2% | −1% | +0% | −2% |
+| Ladino/Sicário | +0% | −16% | −15% | −1% | −9% | +1% | −9% | +1% | −6% | −2% |
+| Ladino/Caçador | +0% | −16% | −15% | +0% | −3% | −7% | −7% | +4% | −1% | +4% |
+
+O que a tabela mostra: as trocas do D são as maiores (o equipamento vinha da loja do nível 6); do C em diante cada troca corta pouco. O mago aparece com −90% no 16 e −34% no 26 porque o tempo dele anda em degraus (mata em 1 ou 2 feitiços: um pouco mais de ataque e o segundo feitiço some). Os poucos números positivos (até +22%, Bárbaro/Caudilho no 36) são do tempo em regime, que também anda em degraus: um golpe um pouco mais forte muda quando as recargas voltam para a luta seguinte.
+
+**Tempo para matar por nível (regime, +0, "Matar" do simulador), antes → depois.** No 20 e no 30 a caça também muda (os golens do Vale; as elites do Fundo do Vale), e ali o tempo sobe por causa do monstro, não do equipamento. No 30 isso agora aparece: antes, a ponte do 30 chegava junto com as elites e escondia o salto delas (o equipamento típico vinha do nível 6); agora o jogador já chega no 30 com o equipamento do C, e o Fundo do Vale fica de 0% a 33% mais lento que o fim do Vale, conforme o caminho (Cavaleiro/Bastião 5,1 → 6,8 s; Ladino/Caçador 2,4 → 3,0 s; ver "O que ficou em aberto").
+
+| Caminho | 9 | 10 | 13 | 16 | 19 | 20 | 23 | 26 | 29 | 30 | 33 | 35 | 36 | 40 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Cavaleiro/Bastião | 3,2 → 3,2 | 3,4 → 2,9 | 2,0 → 1,6 | 1,9 → 1,5 | 2,1 → 1,5 | 7,8 → 5,1 | 7,8 → 5,6 | 8,6 → 5,6 | 7,9 → 5,1 | 7,7 → 6,8 | 4,9 → 4,2 | 4,1 → 3,9 | 4,1 → 3,9 | 4,6 → 4,1 |
+| Cavaleiro/Arauto | 3,2 → 3,2 | 3,4 → 2,9 | 2,0 → 1,6 | 1,9 → 1,5 | 2,1 → 1,5 | 5,6 → 4,0 | 5,6 → 3,8 | 5,5 → 4,0 | 5,5 → 3,9 | 5,4 → 4,7 | 3,3 → 3,1 | 3,2 → 2,9 | 3,2 → 2,9 | 3,4 → 3,0 |
+| Bárbaro/Sanguinário | 2,3 → 2,3 | 1,9 → 1,9 | 1,2 → 1,0 | 1,1 → 0,8 | 1,0 → 0,8 | 5,0 → 4,2 | 3,0 → 2,7 | 2,7 → 2,3 | 2,6 → 2,2 | 2,6 → 2,4 | 1,7 → 1,6 | 1,6 → 1,6 | 1,6 → 1,6 | 1,6 → 1,6 |
+| Bárbaro/Caudilho | 2,3 → 2,3 | 1,9 → 1,9 | 1,2 → 1,0 | 1,1 → 0,8 | 1,0 → 0,8 | 5,5 → 4,3 | 4,3 → 3,3 | 3,4 → 2,9 | 3,4 → 2,7 | 3,6 → 2,9 | 2,2 → 2,1 | 2,1 → 2,1 | 2,1 → 2,1 | 2,1 → 2,1 |
+| Mago/Elementalista | 0,6 → 0,6 | 0,6 → 0,6 | 0,6 → 0,6 | 0,5 → 0,1 | 0,6 → 0,6 | 1,8 → 1,5 | 1,8 → 1,5 | 1,5 → 1,1 | 1,7 → 1,4 | 1,7 → 1,7 | 1,3 → 1,3 | 1,2 → 1,3 | 1,3 → 1,4 | 1,4 → 1,3 |
+| Mago/Ocultista | 0,6 → 0,6 | 0,6 → 0,6 | 0,6 → 0,6 | 0,5 → 0,1 | 0,6 → 0,6 | 1,8 → 1,8 | 1,8 → 1,8 | 1,8 → 1,8 | 2,1 → 2,1 | 2,1 → 2,1 | 1,7 → 1,6 | 1,5 → 1,5 | 1,5 → 1,6 | 1,6 → 1,7 |
+| Ladino/Sicário | 1,7 → 1,7 | 1,2 → 1,2 | 0,9 → 0,7 | 1,1 → 0,9 | 1,1 → 0,9 | 3,2 → 3,0 | 3,1 → 2,3 | 2,8 → 2,0 | 2,7 → 2,0 | 2,6 → 2,2 | 1,9 → 1,7 | 1,9 → 1,6 | 1,9 → 1,6 | 2,0 → 1,8 |
+| Ladino/Caçador | 1,7 → 1,7 | 1,2 → 1,2 | 0,9 → 0,7 | 1,1 → 0,9 | 1,1 → 0,9 | 3,4 → 2,8 | 3,3 → 2,7 | 3,3 → 2,7 | 3,2 → 2,4 | 3,1 → 3,0 | 2,4 → 2,2 | 2,2 → 2,1 | 2,2 → 2,1 | 2,2 → 2,1 |
+
+**Tempo para matar por faixa (regime, +0), antes → depois**, com a distância da média da faixa (o que o teste cobra, ±15%):
+
+| Faixa | Média | Detalhe (antes → depois, distância da média) |
+|---|---:|---|
+| 1–5 | 1,6 → 1,6 s | Cavaleiro 3,1 → 3,1 s (+96% → +96%) · Bárbaro 1,5 → 1,5 s (−3% → −3%) · Mago 0,2 → 0,2 s (−86% → −86%) · Ladino 1,5 → 1,5 s (−7% → −7%) |
+| 6–12 | 1,8 → 1,7 s | Cavaleiro 3,0 → 2,9 s (+74% → +69%) · Bárbaro 2,1 → 2,1 s (+18% → +20%) · Mago 0,3 → 0,3 s (−81% → −80%) · Ladino 1,6 → 1,6 s (−11% → −9%) |
+| 13–19 | 1,2 → 1,0 s | Cavaleiro 2,0 → 1,6 s (+70% → +62%) · Bárbaro 1,1 → 1,0 s (−5% → +1%) · Mago 0,5 → 0,5 s (−54% → −51%) · Ladino 1,1 → 0,9 s (−10% → −12%) |
+| 20–24 | 4,1 → 3,3 s | Cavaleiro/Bastião 8,1 → 6,1 s (+95% → +86%) · Cavaleiro/Arauto 6,8 → 4,8 s (+65% → +44%) · Bárbaro/Sanguinário 3,5 → 3,1 s (−14% → −7%) · Bárbaro/Caudilho 4,2 → 3,6 s (+2% → +9%) · Mago/Elementalista 2,0 → 1,6 s (−52% → −52%) · Mago/Ocultista 2,0 → 2,0 s (−52% → −41%) · Ladino/Sicário 3,2 → 2,7 s (−23% → −18%) · Ladino/Caçador 3,3 → 2,6 s (−20% → −21%) |
+| 25–29 | 3,8 → 3,0 s | Cavaleiro/Bastião 8,1 → 5,9 s (+112% → +100%) · Cavaleiro/Arauto 6,2 → 4,5 s (+63% → +53%) · Bárbaro/Sanguinário 3,0 → 2,4 s (−23% → −18%) · Bárbaro/Caudilho 3,7 → 2,8 s (−5% → −6%) · Mago/Elementalista 1,6 → 1,2 s (−58% → −60%) · Mago/Ocultista 2,0 → 2,0 s (−48% → −33%) · Ladino/Sicário 2,9 → 2,3 s (−24% → −23%) · Ladino/Caçador 3,1 → 2,6 s (−18% → −14%) |
+| 30–34 | 3,5 → 3,1 s | Cavaleiro/Bastião 7,5 → 6,2 s (+114% → +98%) · Cavaleiro/Arauto 5,7 → 5,2 s (+65% → +64%) · Bárbaro/Sanguinário 2,4 → 2,2 s (−31% → −29%) · Bárbaro/Caudilho 3,4 → 2,7 s (−2% → −15%) · Mago/Elementalista 1,7 → 1,6 s (−51% → −48%) · Mago/Ocultista 2,0 → 1,9 s (−44% → −39%) · Ladino/Sicário 2,5 → 2,5 s (−27% → −19%) · Ladino/Caçador 2,6 → 2,7 s (−24% → −13%) |
+| 35–40 | 2,4 → 2,5 s | Cavaleiro/Bastião 5,2 → 4,7 s (+117% → +89%) · Cavaleiro/Arauto 3,9 → 3,9 s (+63% → +59%) · Bárbaro/Sanguinário 1,6 → 2,0 s (−36% → −19%) · Bárbaro/Caudilho 2,0 → 2,3 s (−18% → −8%) · Mago/Elementalista 1,2 → 1,2 s (−50% → −51%) · Mago/Ocultista 1,4 → 1,4 s (−41% → −42%) · Ladino/Sicário 1,9 → 2,0 s (−22% → −19%) · Ladino/Caçador 2,1 → 2,2 s (−14% → −10%) |
+
+A média cai em todas as faixas do 6 ao 34 (−17% a −21% do 13 ao 29) e fica praticamente igual no 35–40 (2,4 → 2,5 s). A distância entre as classes diminui na maior parte: o cavaleiro, o mais lento, ganha mais (Bastião +117% → +89% no 35–40), e o bárbaro e o ladino, que sobravam do 30 em diante, voltam para perto da média. No 35–40 o bárbaro mata um pouco mais devagar que antes (Sanguinário 1,6 → 2,0 s): o típico escolhe, pelo poder total, o Machado Ilvarin (nível 33, mais vida) no lugar do Machado da Partição (35, mais ataque e crítico). É a troca que os dois oferecem.
+
+**Tempo até o 40.** Com o renascimento limitando o ritmo, quase não muda (a caça já é mais rápida que os monstros renascem); sem esse limite, o equipamento novo tira de 5 a 22 horas do 1 ao 40:
+
+| Caminho | +0 antes | +0 depois | sem limite de renascimento, antes | sem limite, depois |
+|---|---:|---:|---:|---:|
+| Cavaleiro/Bastião | 104 h 55 min | 100 h 58 min | 87 h 21 min | 81 h 16 min |
+| Cavaleiro/Arauto | 101 h 18 min | 100 h 39 min | 73 h 47 min | 66 h 21 min |
+| Bárbaro/Sanguinário | 100 h 18 min | 99 h 55 min | 70 h 10 min | 61 h 29 min |
+| Bárbaro/Caudilho | 100 h 41 min | 99 h 55 min | 69 h 11 min | 63 h 37 min |
+| Mago/Elementalista | 98 h 43 min | 98 h 42 min | 36 h 58 min | 31 h 27 min |
+| Mago/Ocultista | 98 h 43 min | 98 h 42 min | 44 h 07 min | 35 h 24 min |
+| Ladino/Sicário | 99 h 31 min | 99 h 08 min | 67 h 03 min | 44 h 38 min |
+| Ladino/Caçador | 99 h 31 min | 99 h 08 min | 71 h 34 min | 50 h 29 min |
+
+### As peças
+
+Saída de `go run ./cmd/balance` (seção "Graus de equipamento"). Do 10 ao 40, o intervalo maior sem peça nova é de 3 níveis (o teste `TestNewGearEveryThreeLevels` cobra).
+
+#### Equipamento novo por nível
+
+| Nível | Grau | Peças novas |
+|---:|---|---|
+| 10 | D | armas comuns (4) |
+| 13 | D | peito (rara) (1) · armas comuns (4) · armas raras (4) · pés (rara) (1) · capa (rara) (1) · brinco (rara) (1) · mãos (rara) (1) · Conjunto de Ferro Negro (comum) (5) · cabeça (rara) (1) · pernas (rara) (1) · Conjunto do Batedor (comum) (5) · colar (rara) (1) · anel (rara) (1) · Conjunto do Acólito (comum) (5) · escudo (rara) (1) |
+| 16 | D | armas comuns (4) · escudo, capa e joias comuns (5) |
+| 18 | D | peito (épica) (1) · armas épicas (8) · pés (épica) (1) · escudo, capa e joias épicas (5) · capa (épica) (1) · brinco (épica) (1) · mãos (épica) (1) · Conjunto de Ferro Negro (épica) (5) · cabeça (épica) (1) · pernas (épica) (1) · Conjunto do Batedor (épica) (5) · colar (épica) (1) · anel (épica) (1) · Conjunto do Acólito (épica) (5) · escudo (épica) (1) |
+| 20 | C | armas comuns (4) · armas lendárias (4) · colar (lendária) (1) · anel (lendária) (1) |
+| 23 | C | armas comuns (4) · Conjunto de Granito (comum) (5) · Conjunto do Andarilho (comum) (5) · Conjunto do Geomante (comum) (5) |
+| 26 | C | armas comuns (4) · escudo, capa e joias comuns (5) |
+| 28 | C | armas épicas (4) · escudo, capa e joias épicas (5) · Conjunto de Granito (épica) (5) · Conjunto do Andarilho (épica) (5) · Conjunto do Geomante (épica) (5) |
+| 30 | B | ponte comum (8) · ponte rara (8) |
+| 33 | B | armas comuns (4) · Conjunto da Vigília (comum) (5) · Conjunto do Ceifador (comum) (5) · Conjunto do Tecelão (comum) (5) |
+| 35 | B | ponte comum (8) · ponte rara (8) |
+| 36 | B | escudo, capa e joias comuns (5) |
+| 38 | B | armas épicas (4) · escudo, capa e joias épicas (2) · Conjunto da Vigília (épica) (5) · Conjunto do Ceifador (épica) (5) · Conjunto do Tecelão (épica) (5) |
+| 40 | B | escudo, capa e joias lendárias (3) |
+
+#### Conjuntos
+
+Cinco peças (peito, cabeça, pernas, mãos e pés), comum e Exaltada (épica); a Exaltada conta como a comum. **Poder**: o conjunto inteiro +0 com os dois bônus, contra a soma dos orçamentos das peças (tolerância +20%).
+
+| Conjunto | Grau | Peso | Nível | 2 peças | 4 peças | Poder (comum) | Poder (Exaltada) |
+|---|---|---|---:|---|---|---:|---:|
+| Conjunto de Ferro Negro | D | Pesada | 13 | +4 def. física, +30 vida | +2 atq. físico, +2 def. mágica, +2 vida/s | 117,5 / 115,1 (+2%) | 228,6 / 225,7 (+1%) |
+| Conjunto do Batedor | D | Leve | 13 | +10 precisão, +6 esquiva | +30 vida, +2% crítico, +6 esquiva | 115,0 / 115,1 (−0%) | 224,4 / 225,7 (−1%) |
+| Conjunto do Acólito | D | Manto | 13 | +40 mana, +1 mana/s | +4 def. mágica, +2% conjuração, +1 mana/s | 116,5 / 115,1 (+1%) | 225,8 / 225,7 (+0%) |
+| Conjunto de Granito | C | Pesada | 23 | +6 def. física, +48 vida | +3 atq. físico, +3 def. mágica, +3,2 vida/s | 186,5 / 185,8 (+0%) | 336,2 / 331,8 (+1%) |
+| Conjunto do Andarilho | C | Leve | 23 | +16 precisão, +10 esquiva | +48 vida, +3% crítico, +10 esquiva | 184,8 / 185,8 (−1%) | 331,1 / 331,8 (−0%) |
+| Conjunto do Geomante | C | Manto | 23 | +65 mana, +1,6 mana/s | +6 def. mágica, +3% conjuração, +1,6 mana/s | 185,3 / 185,8 (−0%) | 332,9 / 331,8 (+0%) |
+| Conjunto da Vigília | B | Pesada | 33 | +9 def. física, +67 vida | +4 atq. físico, +4 def. mágica, +4,5 vida/s | 257,8 / 256,5 (+0%) | 445,1 / 437,8 (+2%) |
+| Conjunto do Ceifador | B | Leve | 33 | +22 precisão, +13 esquiva | +67 vida, +4% crítico, +13 esquiva | 252,2 / 256,5 (−2%) | 436,9 / 437,8 (−0%) |
+| Conjunto do Tecelão | B | Manto | 33 | +89 mana, +2,2 mana/s | +9 def. mágica, +4% conjuração, +2,2 mana/s | 256,1 / 256,5 (−0%) | 440,1 / 437,8 (+1%) |
+
+
+### O que ficou em aberto
+
+- **O muro do 30.** As elites do Fundo do Vale (30–35) levam até 33% mais tempo para matar que os golens do 29 (Cavaleiro/Bastião), mesmo com a ponte do 30. Antes, a ponte do 30 escondia isso. O ajuste natural é na área (vida das elites do 30 ou a curva dos Golens Ancestrais), não no equipamento.
+- **O encantamento** continua furando a regra do +10 nas escadas de antes (44 casos). As peças dos graus passam porque a escada delas tem dois degraus; uma rara no meio de um grau só cabe depois de o bônus do encantamento passar a depender da peça.
+- **O mago** continua o mais rápido de todos, e o tempo dele anda em degraus (1 ou 2 feitiços por abate): pequenas mudanças de ataque movem muito o número dele.
+- **Raras dos graus**: não existem (os graus têm comum, Exaltada e, no B, lendária). Os chefes ainda deixam cair as raras e épicas de antes pelo sorteio por raridade.
+- **Receitas do C e do B**: só o D sai do Ferreiro. As do C (com Núcleos Rúnicos) ficam para quando a economia do Vale for revista.

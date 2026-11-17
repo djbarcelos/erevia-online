@@ -6,9 +6,15 @@ export interface TeleportActions {
   travel(npcId: number, destId: number): void;
   /** Karma impede o teleporte (o servidor confere de novo). */
   karma(): number;
+  /** Viajante (Maestria): desconto no preço (0–1; o servidor cobra o mesmo). */
+  discount(): number;
 }
 
-/** Pedra de Teleporte: lista de destinos com o preço; viajar leva 2 s parado. */
+/**
+ * Pedra de Teleporte: lista de destinos com o preço; viajar leva 2 s parado. Um destino só vale
+ * depois que o personagem chegou a pé à pedra dele (o servidor manda os ids conhecidos em
+ * StonesKnown); os outros aparecem em cinza, só com a região.
+ */
 export class TeleportWindow {
   readonly root = el("div", "shop-panel tp-panel frame");
   private title = el("h2");
@@ -16,6 +22,10 @@ export class TeleportWindow {
   private note = el("p", "tp-note small");
   private goldEl = el("span", "shop-gold-value");
   private dests: TeleportDest[] = [];
+  /** Ids dos destinos já descobertos (StonesKnown). */
+  private known = new Set<number>();
+  /** Destino que o "Ir" da missão sugere (destacado; quem escolhe é o jogador). */
+  private suggested = 0;
   private unsubscribe: () => void;
   npcId = 0;
 
@@ -40,12 +50,20 @@ export class TeleportWindow {
     this.unsubscribe = store.onChange(() => this.render());
   }
 
+  /** Os destinos descobertos mudaram (ao entrar e a cada pedra nova). */
+  setKnown(ids: Iterable<number>): void {
+    this.known = new Set(ids);
+    this.render();
+  }
+
   get isOpen(): boolean {
     return !this.root.hidden;
   }
 
-  open(npcId: number, title: string, dests: TeleportDest[]): void {
+  /** `suggested`: destino destacado pelo "Ir" da missão (0 = nenhum). */
+  open(npcId: number, title: string, dests: TeleportDest[], suggested = 0): void {
     this.npcId = npcId;
+    this.suggested = suggested;
     this.title.textContent = title;
     this.dests = dests;
     this.root.hidden = false;
@@ -62,6 +80,12 @@ export class TeleportWindow {
     this.root.remove();
   }
 
+  /** Preço com o desconto, arredondado como no servidor. */
+  private priceOf(base: number): number {
+    const d = this.actions.discount();
+    return d > 0 ? Math.round(base * (1 - d)) : base;
+  }
+
   private render(): void {
     this.goldEl.textContent = fmt.format(this.store.gold);
     if (!this.isOpen) return;
@@ -70,7 +94,20 @@ export class TeleportWindow {
     this.note.hidden = !karma;
     this.list.replaceChildren();
     for (const d of this.dests) {
-      const poor = this.store.gold < d.price;
+      if (!this.known.has(d.id)) {
+        // Ainda não descoberta: cinza, com a região (chegue a pé até a pedra).
+        this.list.append(
+          el(
+            "div",
+            "shop-row tp-row unknown",
+            el("div", "tp-icon", "?"),
+            el("div", "shop-name", el("strong", null, "Pedra não descoberta"), el("span", "tp-region", d.region), el("span", "shop-price", "Chegue a pé até ela")),
+          ),
+        );
+        continue;
+      }
+      const price = this.priceOf(d.price);
+      const poor = this.store.gold < price;
       const go = button("Viajar", "btn btn-gold shop-btn", () => {
         this.actions.travel(this.npcId, d.id);
         this.close();
@@ -78,9 +115,16 @@ export class TeleportWindow {
       go.disabled = poor || karma;
       const row = el(
         "div",
-        `shop-row tp-row${poor ? " poor" : ""}`,
+        `shop-row tp-row${poor ? " poor" : ""}${d.id === this.suggested ? " suggested" : ""}`,
         el("div", "tp-icon", "✦"),
-        el("div", "shop-name", el("strong", null, d.name), el("span", "shop-price", `${fmt.format(d.price)} moedas`)),
+        el(
+          "div",
+          "shop-name",
+          el("strong", null, d.name),
+          d.region ? el("span", "tp-region", d.region) : null,
+          el("span", "shop-price", `${fmt.format(price)} moedas${price < d.price ? " (Viajante)" : ""}`),
+          d.id === this.suggested ? el("span", "tp-quest", "◎ Caminho da missão") : null,
+        ),
         go,
       );
       this.list.append(row);

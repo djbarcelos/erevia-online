@@ -17,7 +17,7 @@ func skillInfoPB(s *game.SkillDef) *pb.SkillInfo {
 		Description: s.Description, Fx: s.FX, Magic: s.Magic, Power: float32(s.Mult.At(1)),
 		ExtraCrit: float32(s.ExtraCrit),
 		Branch:    uint32(s.Branch), Tier: uint32(s.Tier), MaxRank: uint32(s.MaxRank), Passive: s.IsPassive(),
-		LevelReq: uint32(s.LevelReq()), Splash: float32(s.Splash),
+		LevelReq: uint32(s.LevelReq()), Splash: float32(s.Splash), Spec: s.Spec,
 	}
 	if s.IsPassive() {
 		info.Target = pb.SkillTarget_SKILL_TARGET_UNSPECIFIED

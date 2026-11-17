@@ -157,6 +157,9 @@ func (z *Zone) doClanJob(ctx context.Context, job clanJob) event {
 			cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			id, err = z.clanBackend.CreateClan(cctx, job.create.name, int64(job.create.player))
 			cancel()
+			if err != nil && !errors.Is(err, ErrClanNameTaken) {
+				z.ReportDBError("clan_create", err)
+			}
 		}
 		return clanCreatedEvent{req: *job.create, id: id, err: err}
 	}
@@ -171,6 +174,7 @@ func (z *Zone) doClanJob(ctx context.Context, job clanJob) event {
 			return nil
 		}
 		z.log.Error("clan op", "err", err, "kind", job.op.Kind, "clan", job.op.ClanID, "attempt", attempt)
+		z.ReportDBError("clan_op", err)
 		select {
 		case <-ctx.Done():
 			return nil
@@ -262,6 +266,7 @@ func (z *Zone) clanCreate(p *entity, name string) {
 		}
 		// As moedas saem já (e voltam se o banco recusar o nome).
 		p.pl.inv.gold -= req.cost
+		z.trackGold(p, "clan", -req.cost)
 		z.clanCreating[p.id] = req
 		z.inventoryChanged(p, false)
 	}
@@ -270,6 +275,10 @@ func (z *Zone) clanCreate(p *entity, name string) {
 // onClanCreated: o banco respondeu ao pedido de criar.
 func (z *Zone) onClanCreated(e clanCreatedEvent) {
 	delete(z.clanCreating, e.req.player)
+	if e.err == nil && z.gone[e.req.player] { // a conta foi apagada enquanto o banco criava
+		z.clanOp(ClanOp{Kind: ClanOpDisband, ClanID: e.id})
+		return
+	}
 	p := z.players[e.req.player]
 	if e.err != nil {
 		z.refundGold(e.req.player, e.req.cost)
@@ -307,6 +316,7 @@ func (z *Zone) onClanCreated(e clanCreatedEvent) {
 func (z *Zone) refundGold(id uint32, amount int64) {
 	if p := z.players[id]; p != nil {
 		p.pl.inv.gold += amount
+		z.trackGold(p, "clan_refund", amount)
 		z.inventoryChanged(p, false)
 		return
 	}

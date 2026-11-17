@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -45,8 +47,27 @@ type Config struct {
 	World          *world.World     // obstáculos e caminhos (nil = campo aberto)
 	Clans          []ClanData       // clãs salvos (carregados na partida)
 	Bosses         []BossData       // renascimento dos raid bosses (carregado na partida)
-	DevCommands    bool             // comandos de teste no chat (/raid); só com DEV_LOGIN
+	DevCommands    bool             // comandos de teste no chat (/raid, /catacumbas); só com DEV_LOGIN
 	Clock          func() time.Time // relógio do ciclo dia/noite (nil = time.Now)
+	Version        string           // versão do servidor (vai nos relatos de /bug)
+	// Eventos (events.go e invasion.go).
+	InvasionChance float64        // chance de invasão da cidade a cada noite (0 = só por GM)
+	XP2Days        []time.Weekday // dias de XP em dobro pelo horário (nil = só por GM)
+	EventLocation  *time.Location // fuso desses dias (nil = Brasília, UTC−3)
+	Events         []EventData    // eventos de GM salvos (carregados na partida)
+	// Zonas (manager.go): id e nome do mapa, portões (gate.go) e mapa sem a cidade (sem
+	// os NPCs da praça, as pedras de teleporte e o armazém).
+	Map      string // "" = starter
+	MapTitle string
+	Gates    []GateDef
+	NoTown   bool
+	// NoRares: sem monstros raros (rares.go). Eles são do mapa principal: a área de cada um
+	// está nas coordenadas dele e a hora da próxima aparição é uma linha só no banco.
+	NoRares bool
+	// Masmorras (instance.go): as ligadas neste processo (a porta aparece no mapa principal) e,
+	// na cópia de uma delas, o id da cópia ("catacumbas#3"; "" = não é cópia).
+	Dungeons []string
+	Instance string
 }
 
 func DefaultConfig() Config {
@@ -54,6 +75,7 @@ func DefaultConfig() Config {
 		Size: 300, TickRate: 20, MaxMovesPerSec: 10,
 		ChatPerSec: 1, ChatBurst: 3, SaveEvery: 30 * time.Second,
 		SafeRadius: 40, Spawns: game.DefaultSpawns(), Seed: 20261112,
+		InvasionChance: defaultInvasionChance, XP2Days: []time.Weekday{time.Saturday, time.Sunday},
 	}
 }
 
@@ -88,7 +110,37 @@ type JoinInfo struct {
 	ClanLeftAt time.Time
 	// Storage: o armazém da conta como está no banco (nil = vazio).
 	Storage *StorageData
-	Peer    Peer
+	// Moderação: GM da conta, silêncio no chat (zero = livre) e navegador (para o /bug).
+	GM         bool
+	MutedUntil time.Time
+	UserAgent  string
+	Quests     game.QuestState
+	// Conquistas desbloqueadas/progresso e a conquista do título em uso ("" = nenhum).
+	Achievements game.AchievementState
+	Title        string
+	// Especialização (segunda classe; "" = nenhuma).
+	Spec string
+	// Maestria (nível máximo): barra, bônus diário e pontos da árvore.
+	Mastery game.MasteryState
+	// Contratos do quadro e reputação com as facções (contracts.go).
+	Contracts  game.ContractState
+	Reputation game.ReputationState
+	// Bestiário: abates por monstro e famílias completas (bestiary.go).
+	Bestiary game.BestiaryState
+	// Pedras de Teleporte descobertas e a última cidade (teleport.go).
+	Discovered game.DiscoveryState
+	// Vitalidade: o estoque, a última saída e o maior nível da conta (vitality.go).
+	Vitality game.VitalityState
+	// Classes: subclasse (subclass.go). Class é a principal (a do corpo); XP, Attrs, Ranks,
+	// Hotbar e Spec são da classe ativa (Classes.Active; vazio = a principal).
+	Classes game.ClassSet
+	// LoadedAt: quando quem chama começou a ler o personagem do banco (o portal recusa
+	// um Join carregado antes de uma mudança sua; ver admin_actions.go).
+	LoadedAt time.Time
+	Peer     Peer
+	// Zone: o mapa gravado no banco (o gerente escolhe a zona; "" = starter).
+	Zone string
+	hop  *hopIn // só na entrega do portão (gate.go)
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -107,10 +159,28 @@ type SavedState struct {
 	PKs      int
 	PvPKills int
 	Look     game.Appearance
+	Quests   game.QuestState
+	// Conquistas e título (id da conquista), salvos junto com o personagem.
+	Achievements game.AchievementState
+	Title        string
+	Spec         string // especialização ("" = nenhuma)
+	Mastery      game.MasteryState
+	// Contratos aceitos hoje e nesta semana e a reputação com as facções.
+	Contracts  game.ContractState
+	Reputation game.ReputationState
+	Bestiary   game.BestiaryState
+	Discovered game.DiscoveryState
+	Vitality   int64         // XP bônus da vitalidade (vitality.go)
+	Classes    game.ClassSet // subclasse: todas as classes, com a ativa atualizada
 	// Storage: o armazém da conta, só quando mudou (vai na mesma transação).
 	Storage *StorageSave
+	// Auction: operações da casa de leilões ainda sem confirmação do banco (vão na mesma
+	// transação; o banco aplica cada uma uma vez só; ver auction.go).
+	Auction []AuctionOp
 	// Seq cresce a cada salvamento: o banco ignora um estado mais velho que o já gravado.
 	Seq int64
+	// Zone: o mapa onde o personagem está (no portão, o de destino).
+	Zone string
 }
 
 // recentState é o último estado de quem saiu. Ao voltar, vale mais que o banco (o
@@ -171,11 +241,12 @@ type frame struct {
 	levelUps []*pb.LevelUp
 	ends     []*pb.EffectEnd
 	casts    []*pb.SkillCast
-	// Avisos no chão do raid boss (começo, golpe e cancelamento).
+	// Avisos no chão das habilidades de monstro (começo, golpe e cancelamento).
 	telegraphs []*pb.Telegraph
 }
 
 type Zone struct {
+	stoneIdx []int // as pedras de teleporte desta zona (índices em allStones; teleport.go)
 	cfg      Config
 	log      *slog.Logger
 	events   chan event
@@ -215,11 +286,51 @@ type Zone struct {
 	clanBackend    ClanBackend
 	localClanSeq   int64
 	storages       map[int64]*storage // conta → armazém
-	bossBackend    BossBackend
-	bossJobs       chan BossData
-	telegraphs     []*telegraph
-	telegraphSeq   uint32
-	summonSeq      uint32
+	stats          tickStats
+	aoiDirty       bool // alguém entrou, saiu ou renasceu: atualizar a AOI já neste tick
+
+	modJobs       chan modJob
+	modBackend    ModBackend
+	telemetry     chan GameEvent
+	eventSink     EventSink
+	droppedEvents int
+	xpTally       xpTallies     // XP por fonte, gravada a cada minuto (xptally.go)
+	stopped       chan struct{} // fechado quando a zona para (a telemetria espera o fim das sessões)
+	telemetryDone chan struct{} // fechado quando a telemetria gravou o que faltava (TelemetryDone)
+	telemetryOnce sync.Once
+	bossBackend   BossBackend
+	regicide      string // quem mais causou dano na última morte do raid boss (a Lápide do Último Regicida)
+	bossJobs      chan BossData
+	telegraphs    []*telegraph
+	telegraphSeq  uint32
+	summonSeq     uint32
+	socialJobs    chan socialJob
+	socialBackend SocialBackend
+	mailSent      map[uint32][]time.Time // cartas enviadas na última hora, por remetente
+
+	rankingBackend RankingBackend
+	ranking        *rankingCache // último cálculo do ranking (nil = ainda não chegou)
+
+	gone       map[uint32]bool // personagens de contas apagadas (ver account.go)
+	invariants invariantGuard  // checagens do estado (ver invariants.go)
+
+	errs zoneErrors // panics, tick lento e erros do banco (ver errors.go)
+
+	inv          *invasion // invasão da cidade em andamento (nil = nenhuma)
+	xp2          xp2State
+	eventBackend EventBackend
+	eventJobs    chan EventData
+
+	paths []*entity   // fila de caminhos longos (ver pathqueue.go)
+	adm   *adminState // portal de administração (admin_actions.go e admin_ops.go)
+
+	auction auctionHouse // casa de leilões (auction.go)
+	rares   rareWorld    // monstros raros (rares.go)
+
+	mgr *Manager // zonas do processo e barramento (nil = zona sozinha, como nos testes)
+
+	dg     *dungeonRun // vida da cópia de uma masmorra (nil = zona comum; instance.go)
+	closed atomic.Bool // a cópia fechou: o login não pode mais ir para ela
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -245,7 +356,14 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		clanCreating:   map[uint32]*clanCreate{},
 		clanJobs:       make(chan clanJob, clanJobQueue),
 		storages:       map[int64]*storage{},
+		modJobs:        make(chan modJob, modJobQueue),
+		telemetry:      make(chan GameEvent, telemetryQueue),
+		stopped:        make(chan struct{}),
+		telemetryDone:  make(chan struct{}),
 		bossJobs:       make(chan BossData, 16),
+		eventJobs:      make(chan EventData, 16),
+		socialJobs:     make(chan socialJob, socialJobQueue),
+		mailSent:       map[uint32][]time.Time{},
 		rng:            rand.New(rand.NewPCG(cfg.Seed, cfg.Seed^0x9e3779b97f4a7c15)),
 		saves:          saves,
 	}
@@ -254,8 +372,13 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 	}
 	z.night = game.IsNight(game.DayPhase(z.cfg.Clock()))
 	z.spawnMonsters()
-	z.spawnNPCs()
+	if !cfg.NoTown {
+		z.spawnNPCs()
+	}
+	z.spawnMapStones()
+	z.spawnGates()
 	z.loadClans(cfg.Clans)
+	z.loadEvents(cfg.Events)
 	return z
 }
 
@@ -273,8 +396,9 @@ func (z *Zone) Chat(ctx context.Context, id uint32, text, to string, channel pb.
 	z.post(ctx, chatEvent{id: id, text: text, to: to, channel: channel})
 }
 
-// Social repassa um pedido de grupo, clã ou resposta a convite (*pb.PartyCmd,
-// *pb.ClanCmd, *pb.InviteReply).
+// Social repassa um pedido de grupo, clã, resposta a convite, amigos ou correio
+// (*pb.PartyCmd, *pb.ClanCmd, *pb.InviteReply, *pb.FriendCmd, *pb.MailCmd) ou da casa de
+// leilões (*pb.AuctionCmd).
 func (z *Zone) Social(ctx context.Context, id uint32, msg any) {
 	z.post(ctx, socialEvent{id: id, msg: msg})
 }
@@ -285,6 +409,23 @@ func (z *Zone) UseSkill(ctx context.Context, id, skill, target uint32, force boo
 	z.post(ctx, skillEvent{id: id, skill: skill, target: target, force: force})
 }
 func (z *Zone) Respawn(ctx context.Context, id uint32) { z.post(ctx, respawnEvent{id: id}) }
+
+// ClientStats repassa a amostra de desempenho do cliente (telemetria).
+func (z *Zone) ClientStats(ctx context.Context, id uint32, msg *pb.ClientStats) {
+	z.post(ctx, clientStatsEvent{id: id, msg: msg})
+}
+
+type clientStatsEvent struct {
+	id  uint32
+	msg *pb.ClientStats
+}
+
+func (clientStatsEvent) isEvent() {}
+
+// Trade repassa um comando de troca entre jogadores.
+func (z *Zone) Trade(ctx context.Context, id uint32, msg *pb.TradeCmd) {
+	z.post(ctx, tradeEvent{id: id, msg: msg})
+}
 
 // ItemAction repassa um pedido de item (*pb.PickUp, *pb.MoveItem, *pb.UseItem,
 // *pb.DestroyItem, *pb.Buy, *pb.Sell).
@@ -307,23 +448,38 @@ func (z *Zone) Run(ctx context.Context) {
 	defer ticker.Stop()
 	saveTicker := time.NewTicker(z.cfg.SaveEvery)
 	defer saveTicker.Stop()
-	go z.runClanWorker(ctx)
-	go z.runBossWorker(ctx)
+	// Workers com recover: um panic é registrado e o worker recomeça (ver errors.go).
+	z.goWorker(ctx, "clan", z.runClanWorker)
+	z.goWorker(ctx, "mod", z.runModWorker)
+	z.goWorker(ctx, "telemetry", z.runTelemetryWorker)
+	z.goWorker(ctx, "boss", z.runBossWorker)
+	z.goWorker(ctx, "social", z.runSocialWorker)
+	z.goWorker(ctx, "ranking", z.runRankingWorker)
+	z.goWorker(ctx, "event", z.runEventWorker)
+	z.goWorker(ctx, "auction", z.runAuctionWorker)
 
 	for {
 		select {
 		case <-ctx.Done():
+			z.runSystem(sysXPTally, z.endSessions) // fim de sessão e XP de quem estava online (telemetry.go)
+			close(z.stopped)
 			z.saveAll(true)
 			if z.saves != nil {
 				close(z.saves)
 			}
 			return
 		case e := <-z.events:
-			z.handle(e)
+			z.stats.events++
+			z.handleSafe(e)
 		case <-ticker.C:
+			start := time.Now()
 			z.update(dt.Seconds())
+			took := time.Since(start)
+			z.stats.add(took)
+			z.checkSlowTick(took)
+			z.flushTickStats(start)
 		case <-saveTicker.C:
-			z.saveAll(false)
+			z.runSystem(sysSaveAll, func() { z.saveAll(false) })
 		}
 	}
 }
@@ -344,10 +500,12 @@ func (z *Zone) handle(e event) {
 		z.onChat(e)
 	case attackEvent:
 		if p := z.players[e.id]; p != nil && !p.dead && z.spendAction(p) {
+			z.endEmote(p)
 			z.requestAttack(p, e.target, e.force)
 		}
 	case skillEvent:
 		if p := z.players[e.id]; p != nil && z.spendAction(p) {
+			z.endEmote(p)
 			z.requestSkill(p, e.skill, e.target, e.force)
 		}
 	case respawnEvent:
@@ -362,6 +520,21 @@ func (z *Zone) handle(e event) {
 		z.onSocial(e)
 	case clanCreatedEvent:
 		z.onClanCreated(e)
+	case modResultEvent:
+		z.onModResult(e)
+	case tradeEvent:
+		z.onTrade(e)
+	case rankingEvent:
+		z.setRanking(e.data)
+	case clientStatsEvent:
+		if p := z.players[e.id]; p != nil {
+			z.onClientStats(p, e.msg)
+		}
+	case socialDone:
+		e.fn()
+
+	case accountGoneEvent:
+		z.onAccountGone(e.d)
 	}
 }
 
@@ -385,6 +558,9 @@ func (z *Zone) get(id uint32) *entity {
 }
 
 func (z *Zone) onJoin(info JoinInfo) {
+	if z.refuseGone(info) || z.refuseAdminStale(info) {
+		return
+	}
 	// Mesmo personagem conectado em outro lugar: derruba a sessão antiga.
 	if old, ok := z.players[info.ID]; ok {
 		z.sendTo(old, &pb.ServerMessage{Msg: &pb.ServerMessage_Kicked{Kicked: &pb.Kicked{
@@ -395,21 +571,47 @@ func (z *Zone) onJoin(info JoinInfo) {
 	}
 
 	// O estado de quem acabou de sair (ainda salvando) vale mais que o do banco.
+	var aucOps []AuctionOp // casa de leilões: operações ainda sem confirmação
+	if info.hop != nil {
+		aucOps = info.hop.auction // portão: as que a zona de origem ainda não viu confirmadas
+	}
 	if r, ok := z.recent[info.ID]; ok {
 		st := r.state
 		info.X, info.Z, info.XP, info.HP, info.MP, info.Gold, info.Items = st.X, st.Z, st.XP, st.HP, st.MP, st.Gold, st.Items
 		info.Attrs, info.Ranks, info.Hotbar = st.Attrs, st.Ranks, st.Hotbar
 		info.Karma, info.PKs, info.PvPKills = st.Karma, st.PKs, st.PvPKills
 		info.Look = st.Look
+		info.Quests = st.Quests
+		info.Achievements, info.Title = st.Achievements, st.Title
+		info.Spec = st.Spec
+		info.Mastery = st.Mastery
+		info.Classes = st.Classes
+		info.Contracts, info.Reputation = st.Contracts, st.Reputation
+		aucOps = st.Auction
+		info.Bestiary = st.Bestiary
+		info.Discovered = st.Discovered
+		info.Vitality.Stored, info.Vitality.LastSeen = st.Vitality, r.at
 		delete(z.recent, info.ID)
 	}
 
 	level := game.LevelForXP(info.XP)
 	pos := z.freeSpot(clampToZone(Vec2{X: info.X, Z: info.Z}, z.bounds()))
-	attrs, ranks, hotbar := loadProgress(info.Class, level, info.Attrs, info.Ranks, info.Hotbar)
+	// info.Class é a principal (corpo e visual); a progressão que veio é da classe ativa.
+	classes := game.NormalClassSet(info.Class, info.Classes)
+	class := classes.Active
+	spec := ""
+	if game.SpecFor(class, info.Spec) != nil {
+		spec = info.Spec
+	}
+	attrs, ranks, hotbar := loadProgress(class, spec, level, info.Attrs, info.Ranks, info.Hotbar)
 	inv, skipped := loadInventory(info.Gold, info.Items)
 	if skipped > 0 {
 		z.log.Warn("items skipped on load", "id", info.ID, "count", skipped)
+	}
+	// Equipamento que a classe não usa (ou mão secundária junto de arma de duas mãos) vai para
+	// a bolsa; sem espaço, fica equipado: nada se perde e o invariante "equip" avisa.
+	if moved, stuck := inv.dropInvalidGear(class, spec, level); moved+stuck > 0 {
+		z.log.Warn("invalid gear on load", "id", info.ID, "moved", moved, "stuck", stuck)
 	}
 	p := &entity{
 		id: info.ID, kind: pb.EntityKind_ENTITY_KIND_PLAYER,
@@ -417,16 +619,25 @@ func (z *Zone) onJoin(info JoinInfo) {
 		pos: pos, dest: pos,
 		lastCombat: -math.MaxFloat64 / 2,
 		pl: &playerState{
-			peer: info.Peer, class: info.Class, xp: info.XP, emblem: game.EmblemOr(info.Class, info.Emblem),
+			peer: info.Peer, class: class, mainClass: info.Class, classes: classes,
+			xp: info.XP, emblem: game.EmblemOr(info.Class, info.Emblem),
 			look:       game.NormalAppearance(info.Class, info.Look),
 			cooldowns:  map[uint32]float64{},
 			moveTokens: z.cfg.MaxMovesPerSec, chatTokens: z.cfg.ChatBurst,
 			inv:   inv,
-			attrs: attrs, ranks: ranks, hotbar: hotbar,
+			attrs: attrs, ranks: ranks, hotbar: hotbar, spec: spec,
 			accountID: info.AccountID,
 			karma:     max(0, info.Karma), pks: max(0, info.PKs), pvpKills: max(0, info.PvPKills),
+			gm: info.GM, mutedUntil: info.MutedUntil, userAgent: truncateRunes(info.UserAgent, maxUserAgent),
+			quests:  loadQuests(info.Quests, level),
+			ach:     loadAchievements(info.Achievements, info.Title),
+			mastery: loadMastery(info.Mastery),
+			bst:     loadBestiary(info.Bestiary),
+			disc:    loadDiscovery(info.Discovered),
+			hop:     hopState{arrived: info.hop != nil},
 		},
 	}
+	p.pl.contracts = loadContracts(info.Contracts, info.Reputation)
 	p.pl.sentPvp = z.pvpState(p)
 	p.hp, p.mp = math.MaxFloat64, math.MaxFloat64
 	z.refreshStats(p) // classe + atributos + equipamento + passivas; limita a vida/mana ao máximo
@@ -442,37 +653,19 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.byName[strings.ToLower(p.name)] = p.id
 	z.clanOnJoin(p, info.ClanLeftAt)
 	z.storageOnJoin(p, info.Storage)
+	z.auctionOnJoin(p, aucOps)
 
-	// Avisa os outros que alguém chegou.
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Spawn{Spawn: &pb.Spawn{Entity: z.entityPB(p)}}}, p.id)
-
-	// Diz ao novo jogador quem ele é, quem já está aqui (inclui ele mesmo) e suas skills.
-	entities := make([]*pb.Entity, 0, len(z.players)+len(z.monsters)+len(z.npcs))
-	for _, other := range z.players {
-		entities = append(entities, z.entityPB(other))
-	}
+	// Os outros ficam sabendo pela AOI (updateAOI, no fim do tick), só quem está perto.
+	z.aoiDirty = true
+	// O novo jogador recebe quem ele é e o que está no raio dele, mais NPCs e objetos.
+	entities := z.welcomeEntities(p)
 	for _, n := range z.npcs {
 		entities = append(entities, z.entityPB(n))
-	}
-	for _, m := range z.monsters {
-		if !m.mon.hidden {
-			entities = append(entities, z.entityPB(m))
-		}
 	}
 	for _, o := range z.objects {
 		entities = append(entities, z.entityPB(o))
 	}
-	// A árvore inteira da classe (ativas e passivas); o cliente sabe o rank por Progress.
-	var skills []*pb.SkillInfo
-	for _, s := range game.ClassTree(info.Class) {
-		skills = append(skills, skillInfoPB(s))
-	}
-	var branches []*pb.SkillBranch
-	if c := game.Classes[info.Class]; c != nil {
-		for _, b := range c.Branches {
-			branches = append(branches, &pb.SkillBranch{Name: b.Name, Description: b.Description, Color: b.Color})
-		}
-	}
+	skills, branches := classTreePB(class)
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Welcome{Welcome: &pb.Welcome{
 		YourId:       p.id,
 		TickRate:     uint32(z.cfg.TickRate),
@@ -480,10 +673,11 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Entities:     entities,
 		Skills:       skills,
 		SafeRadius:   float32(z.cfg.SafeRadius),
-		Zones:        mapZones(z.cfg.Spawns),
+		Zones:        mapZones(z.mapZoneSpawns()),
 		ServerTimeMs: z.cfg.Clock().UnixMilli(),
 		DayCycleMs:   uint32(game.DayCycle.Milliseconds()),
 		SkillCatalog: skillCatalog(),
+		Weapons:      weaponCatalog(),
 		ItemCatalog:  itemCatalog,
 		Inventory:    inventoryPB(&p.pl.inv),
 		GroundItems:  z.groundList(),
@@ -495,14 +689,39 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Clan:         z.clanPB(p),
 		Enchant:      enchantRulesPB(),
 		Bosses:       z.bossList(),
+		Specs:        specCatalog(),
+		Map:          z.mapID(),
+		MapTitle:     z.mapTitle(),
 	}}})
 	z.sendSelfStats(p)
+	z.dailyRefresh(p) // as diárias de ontem saem antes do primeiro QuestLog
+	z.sendQuests(p, "")
+	z.questLevel(p) // objetivo de nível já cumprido (ex.: subiu antes da missão existir)
+	// Bestiário antes das conquistas: pode tirar um título de família que não vale.
+	z.bestiaryOnJoin(p)
+	z.achOnJoin(p)
+	z.masteryOnJoin(p)
+	z.subclassOnJoin(p)
+	z.contractsOnJoin(p)
+	z.sendStonesKnown(p)
+	z.vitalityOnJoin(p, info.Vitality, info.hop != nil)
+	z.eventsOnJoin(p)
+	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
 			z.sendAnyCooldown(p, id, ready-z.now)
 		}
 	}
 
+	p.pl.joinedAt = z.cfg.Clock()
+	if info.hop != nil { // chegou pelo portão: a sessão é a mesma
+		p.pl.joinedAt = info.hop.joinedAt
+	}
+	z.socialOnJoin(p)
+	if info.hop == nil {
+		z.track(p, "session", "start", 0, nil)
+	}
+	z.zonesOnJoin(p) // barramento e grupo entre zonas (gate.go)
 	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
 
@@ -511,12 +730,17 @@ func (z *Zone) onMove(e moveEvent) {
 	if !ok || p.dead || !z.spendAction(p) {
 		return
 	}
+	// NaN passa pelo clamp (min/max com NaN dão NaN) e deixaria o personagem fora do mapa
+	// para sempre; ±Inf o clamp já leva para a borda.
+	if math.IsNaN(e.x) || math.IsNaN(e.z) {
+		return
+	}
 	p.clearAction() // clicar no chão cancela o ataque
 	z.cancelChannel(p, "Você se moveu: viagem cancelada.")
 	if p.stunned(z.now) {
 		return
 	}
-	z.goTo(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.bounds()))
+	z.requestPath(p, clampToZone(Vec2{X: e.x, Z: e.z}, z.bounds()))
 }
 
 // onStop para o andar livre. Não gasta token (parar não é abusável, e perder o pedido
@@ -526,6 +750,7 @@ func (z *Zone) onStop(e stopEvent) {
 	if !ok || p.dead || p.act.kind != actNone {
 		return
 	}
+	p.pl.pathGoal = nil
 	p.stopMoving()
 }
 
@@ -544,6 +769,15 @@ func (z *Zone) onChat(e chatEvent) {
 	}
 	p.pl.chatTokens--
 
+	if isCommand(text, e.to, e.channel) {
+		z.command(p, text)
+		return
+	}
+	if left := z.mutedFor(p); left > 0 {
+		z.system(p, "Você está silenciado por mais "+minutesText(left)+".")
+		return
+	}
+
 	switch e.channel {
 	case pb.ChatChannel_CHAT_CHANNEL_PARTY:
 		z.partyChat(p, text)
@@ -554,20 +788,18 @@ func (z *Zone) onChat(e chatEvent) {
 	}
 
 	to := strings.TrimSpace(e.to)
-	if z.cfg.DevCommands && to == "" && strings.HasPrefix(text, "/raid") {
-		z.devRaid(p, strings.Fields(text)[1:])
-		return
-	}
-	if to == "" {
-		z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
+	if to == "" { // todas as zonas (bus.go)
+		z.broadcastGeneral(&pb.ServerMessage{Msg: &pb.ServerMessage_Chat{Chat: &pb.ChatMessage{
 			Channel: pb.ChatChannel_CHAT_CHANNEL_GENERAL, FromId: p.id, FromName: p.name, Text: text,
-		}}}, 0)
+		}}})
 		return
 	}
 
 	targetID, ok := z.byName[strings.ToLower(to)]
 	if !ok {
-		z.system(p, to+" não está online.")
+		if !z.whisperElsewhere(p, to, text) {
+			z.system(p, to+" não está online.")
+		}
 		return
 	}
 	target := z.players[targetID]
@@ -594,65 +826,108 @@ func (z *Zone) removePlayer(id uint32) {
 	if !ok {
 		return
 	}
+	hop := z.hopping(p) // saindo pelo portão: sessão e grupo continuam (gate.go)
 	delete(z.players, id)
 	z.saveCooldowns(p)
 	if z.byName[strings.ToLower(p.name)] == id {
 		delete(z.byName, strings.ToLower(p.name))
 	}
 	z.forgetTarget(id)
-	z.partyLeave(p, "")
+	z.endXPTally(p)
+	if !hop {
+		z.track(p, "session", "end", int64(z.cfg.Clock().Sub(p.pl.joinedAt).Seconds()), nil)
+	}
+	if p.pl.trade != nil {
+		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
+	}
+	if !hop {
+		z.partyLeave(p, "")
+	}
 	z.dropInvites(id)
 	z.clanOnLeave(p)
-	st := z.savedState(p)
-	z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
-	z.save([]SavedState{st}, false)
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: id}}}, 0)
+	z.socialOnLeave(p)
+	if !z.dropAfterPanic(p) { // caiu por panic: não grava o estado atual (ver errors.go)
+		st := z.savedState(p)
+		if !z.handOff(p, &st) { // portão: o estado segue para a outra zona, não para o recent
+			z.recent[id] = recentState{state: st, at: z.cfg.Clock()}
+		}
+		z.save([]SavedState{st}, false)
+	}
+	z.zonesOnLeave(p, hop)
+	// Quem o conhecia recebe o Despawn pela AOI no fim do tick.
+	p.gone = true
+	z.aoiDirty = true
 	z.log.Info("player left", "id", id, "name", p.name, "online", len(z.players))
 }
 
-// update avança a simulação um tick e envia o delta para todos.
+// update avança a simulação um tick e envia o delta para todos. Cada sistema roda em
+// runSystem (recover e tempo); cada jogador e monstro tem o seu recover (ver errors.go).
 func (z *Zone) update(dt float64) {
 	z.tick++
 	z.now += dt
-	z.updateDaytime()
+	z.runSystem(sysDaytime, z.updateDaytime)
+	z.runSystem(sysPaths, z.updatePaths)
 
 	if z.now >= z.nextAura {
 		z.nextAura = z.now + auraEvery
-		z.updateAuras()
+		z.runSystem(sysAuras, z.updateAuras)
 	}
-	for _, p := range z.players {
-		p.pl.moveTokens = math.Min(z.cfg.MaxMovesPerSec, p.pl.moveTokens+z.cfg.MaxMovesPerSec*dt)
-		p.pl.chatTokens = math.Min(z.cfg.ChatBurst, p.pl.chatTokens+z.cfg.ChatPerSec*dt)
-		z.step(p, dt)
-	}
-	for _, m := range z.monsters {
-		if m.dead {
-			z.updateDeadMonster(m)
-			continue
+	z.runSystem(sysPlayers, func() {
+		for _, p := range z.players {
+			z.guardPlayer(p, func() {
+				p.pl.moveTokens = math.Min(z.cfg.MaxMovesPerSec, p.pl.moveTokens+z.cfg.MaxMovesPerSec*dt)
+				p.pl.chatTokens = math.Min(z.cfg.ChatBurst, p.pl.chatTokens+z.cfg.ChatPerSec*dt)
+				z.step(p, dt)
+				z.checkEmote(p)
+			})
 		}
-		z.think(m)
-		z.step(m, dt)
-	}
-	z.updateTelegraphs()
+	})
+	z.runSystem(sysMonsters, func() {
+		for _, m := range z.monsters {
+			z.guardMonster(m, func() {
+				if m.dead {
+					z.updateDeadMonster(m)
+					return
+				}
+				z.think(m)
+				z.step(m, dt)
+			})
+		}
+	})
+	z.runSystem(sysTelegraphs, z.updateTelegraphs)
+	z.runSystem(sysInvasion, z.updateInvasion)
 
 	if z.tick%uint32(z.cfg.TickRate) == 0 { // 1×/s
-		z.expireGround()
-		z.expireFlags()
-		z.expireInvites()
-		z.syncParties()
+		z.runSystem(sysGround, z.expireGround)
+		z.runSystem(sysFlags, z.expireFlags)
+		z.runSystem(sysInvites, z.expireInvites)
+		z.runSystem(sysParties, z.syncParties)
+		z.runSystem(sysLeaveTown, z.checkLeaveTown)
+		z.runSystem(sysVisits, z.checkVisits) // lugares das missões (GoalVisit)
+		z.runSystem(sysInstance, z.updateInstance)
+		z.runSystem(sysTrades, z.checkTrades)
+		z.runSystem(sysXP2, z.updateXP2)
+		z.runSystem(sysXPTally, z.flushXPTallies)
+		z.runSystem(sysAdminOps, z.updateAdminOps)
+		if z.tick%uint32(z.cfg.TickRate*vitalityTownEvery) == 0 {
+			z.runSystem(sysVitality, z.updateVitalityTown)
+		}
 		if len(z.pending) > 0 {
-			z.save(nil, false)
+			z.runSystem(sysPendingSaves, func() { z.save(nil, false) })
 		}
 	}
-	z.saveDue()
+	z.runSystem(sysInvariants, z.checkInvariantsDue) // cada jogador 1×/s, espalhado entre os ticks
+	z.runSystem(sysSaveDue, z.saveDue)
 
-	z.flushSnapshot()
-	z.runAfterSnapshot()
-	for _, p := range z.players {
-		if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || int(math.Floor(p.mp)) != p.pl.sentMP {
-			z.sendSelfStats(p)
+	z.runSystem(sysSnapshot, z.flushSnapshot)
+	z.runSystem(sysAfterSnapshot, z.runAfterSnapshot)
+	z.runSystem(sysSelfStats, func() {
+		for _, p := range z.players {
+			if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || p.mpInt() != p.pl.sentMP {
+				z.sendSelfStats(p)
+			}
 		}
-	}
+	})
 }
 
 // step: efeitos, regeneração, ação e movimento de uma entidade viva.
@@ -677,6 +952,7 @@ func (z *Zone) step(e *entity, dt float64) {
 	}
 	if e.pl != nil {
 		z.updateChannel(e)
+		z.updateDiscovery(e)
 	}
 	z.regen(e, dt)
 	z.runAction(e)
@@ -692,19 +968,25 @@ func (z *Zone) step(e *entity, dt float64) {
 func (z *Zone) flushSnapshot() {
 	snap := &pb.Snapshot{Tick: z.tick}
 	collect := func(e *entity) {
+		e.encState, e.encHP = e.encState[:0], e.encHP[:0]
 		if e.moved && !e.dead {
-			snap.States = append(snap.States, &pb.EntityState{
+			st := &pb.EntityState{
 				Id: e.id,
 				X:  float32(e.pos.X), Z: float32(e.pos.Z),
 				TargetX: float32(e.dest.X), TargetZ: float32(e.dest.Z),
 				Speed: float32(e.speed(z.now)), Teleport: e.teleport,
-			})
+			}
+			snap.States = append(snap.States, st)
+			e.encState = encField(snapFieldStates, st)
 		}
 		e.moved, e.teleport = false, false
 		if hp, max := e.hpInt(), e.maxHPInt(); hp != e.sentHP || max != e.sentMaxHP {
-			snap.Hp = append(snap.Hp, &pb.HpUpdate{Id: e.id, Hp: uint32(hp), MaxHp: uint32(max)})
+			h := &pb.HpUpdate{Id: e.id, Hp: uint32(hp), MaxHp: uint32(max)}
+			snap.Hp = append(snap.Hp, h)
+			e.encHP = encField(snapFieldHp, h)
 			e.sentHP, e.sentMaxHP = hp, max
 		}
+		e.encTick = z.tick
 	}
 	for _, p := range z.players {
 		collect(p)
@@ -724,35 +1006,48 @@ func (z *Zone) flushSnapshot() {
 	snap.Telegraphs = z.frame.telegraphs
 	z.frame = frame{}
 
-	if len(snap.States)+len(snap.Hp)+len(snap.Combat)+len(snap.Effects)+len(snap.Deaths)+len(snap.Revives)+
-		len(snap.LevelUps)+len(snap.EffectEnds)+len(snap.Casts)+len(snap.Telegraphs) == 0 {
+	// Spawn/Despawn de quem entrou ou saiu do raio, e cada um recebe só o que conhece.
+	if z.tick%aoiEvery == 0 || z.aoiDirty {
+		z.aoiDirty = false
+		z.updateAOI()
+	}
+	if snapshotEmpty(snap) {
 		return
 	}
-	z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Snapshot{Snapshot: snap}}, 0)
+	z.sendSnapshots(snap)
 }
 
 func (z *Zone) sendSelfStats(p *entity) {
 	p.pl.statsDirty = false
 	p.pl.sentSelfHP = p.hpInt()
-	p.pl.sentMP = int(math.Floor(p.mp))
+	p.pl.sentMP = p.mpInt()
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_SelfStats{SelfStats: z.selfStats(p)}})
 }
 
 func (z *Zone) savedState(p *entity) SavedState {
+	z.checkInvariants(p) // nunca salva um estado quebrado sem corrigir (ou avisar)
 	s := SavedState{
-		ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: int(math.Floor(p.mp)),
+		ID: p.id, X: p.pos.X, Z: p.pos.Z, Level: p.level, XP: p.pl.xp, HP: p.hpInt(), MP: p.mpInt(),
 		Gold: p.pl.inv.gold, Items: p.pl.inv.records(), Seq: z.nextSeq(),
 		Attrs: p.pl.attrs, Ranks: maps.Clone(p.pl.ranks), Hotbar: slices.Clone(p.pl.hotbar),
 		Karma: p.pl.karma, PKs: p.pl.pks, PvPKills: p.pl.pvpKills, Look: p.pl.look,
-		Storage: z.storageSave(p),
+		Quests: p.pl.quests.state(), Storage: z.storageSave(p),
+		Achievements: p.pl.ach.state(), Title: p.pl.ach.title, Spec: p.pl.spec,
+		Mastery: p.pl.mastery.save(), Bestiary: p.pl.bst.state(), Discovered: p.pl.disc.state(), Auction: z.auctionSave(p), Zone: z.mapID(),
+		Classes: classSnapshot(p),
 	}
+	s.Contracts, s.Reputation = p.pl.contracts.save()
+	s.Vitality = p.pl.vit.stored
 	if p.dead { // quem sai morto volta na cidade, inteiro (a XP já foi descontada)
 		s.X, s.Z, s.HP, s.MP = 0, 0, -1, -1
+		if z.cfg.NoTown {
+			s.Zone = world.StarterMap
+		}
 	}
 	if s.HP >= p.maxHPInt() {
 		s.HP = -1
 	}
-	if float64(s.MP) >= math.Floor(p.stats.MaxMP) {
+	if s.MP >= p.maxMPInt() {
 		s.MP = -1
 	}
 	return s
@@ -768,7 +1063,7 @@ func (z *Zone) saveAll(blocking bool) {
 	wall := z.cfg.Clock()
 	z.pruneStorages()
 	for id, r := range z.recent {
-		if wall.Sub(r.at) > recentKeep {
+		if wall.Sub(r.at) > recentKeep && !keepRecent(r) {
 			delete(z.recent, id)
 		}
 	}
@@ -801,11 +1096,21 @@ func (z *Zone) save(batch []SavedState, blocking bool) {
 	if z.saves == nil {
 		return
 	}
+	z.noteSaved(batch) // o último estado salvo vale depois de um panic (ver errors.go)
 	if len(z.pending) > 0 {
 		merged := make([]SavedState, 0, len(z.pending)+len(batch))
 		newer := map[uint32]bool{}
-		for _, s := range batch {
+		for i, s := range batch {
 			newer[s.ID] = true
+			// O armazém só vai no salvamento em que mudou: o mais novo herda o do pendente.
+			if old, ok := z.pending[s.ID]; ok && s.Storage == nil && old.Storage != nil {
+				batch[i].Storage = old.Storage
+			}
+			// Operações da casa de leilões: o mais novo já leva todas as sem confirmação; o que
+			// só o pendente tem vai junto (o banco ignora as repetidas).
+			if old, ok := z.pending[s.ID]; ok {
+				batch[i].Auction = mergeOps(batch[i].Auction, old.Auction)
+			}
 		}
 		for id, s := range z.pending {
 			if !newer[id] {
@@ -842,15 +1147,26 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		Dead: e.dead, Scale: float32(e.scale),
 		Boss: e.mon != nil && e.mon.def.Boss,
 		Raid: e.mon != nil && e.mon.def.Raid,
+		Rare: e.mon != nil && e.mon.def.Rare != nil,
+	}
+	if e.mon != nil {
+		out.Tint = e.mon.def.Tint
+		out.Role = rolePB(e.mon.def) // papel na luta e neutro (archetypes.go; nil = bruto)
 	}
 	if e.pl != nil {
 		w, o, g := e.pl.inv.look()
 		out.Weapon, out.Offhand, out.WeaponGrade = w, o, uint32(g)
 		out.Emblem = e.pl.emblem
 		out.Look = lookPB(e.pl.look)
+		out.Armor = e.pl.inv.armorLook()
 		out.WeaponEnchant = uint32(e.pl.inv.weaponEnchant())
 		out.PvpState = z.pvpState(e)
 		out.ClanName = z.clanName(e)
+		out.Title = e.pl.ach.titleText()
+		out.Spec = e.pl.spec
+		if e.pl.class != e.model {
+			out.ActiveClass = e.pl.class
+		}
 	}
 	if e.npc != nil {
 		out.Title = e.npc.title
@@ -860,6 +1176,9 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 	}
 	if e.obj != nil {
 		out.Title = "Estandarte"
+		if e.obj.title != "" {
+			out.Title = e.obj.title // túmulo do chefe de campo: hora da morte e quem mais bateu
+		}
 	}
 	return out
 }

@@ -1,6 +1,6 @@
 /**
- * Interface do raid boss: a barra larga no topo da tela (nome, vida, marcas das fases,
- * fúria e tempo de luta) e o banner dos anúncios para o servidor inteiro.
+ * Interface do raid boss e do chefe de campo: a barra larga no topo da tela (nome, vida,
+ * marcas das fases, fúria e tempo de luta) e o banner dos anúncios.
  */
 
 import { AnnounceKind } from "../gen/erevia/v1/game_pb";
@@ -16,9 +16,11 @@ export interface RaidBarState {
   final: boolean;
   /** Início da luta (relógio do servidor, ms); 0 = parado. */
   fightStartMs: number;
+  /** Vidas (fração) em que as fases começam; vazio = as do raid. Chefe de campo: BossStatus.phaseMarks. */
+  marks?: readonly number[];
 }
 
-/** Marcas das fases na barra (server/internal/zone/raid.go: raidPhase2At, raidPhase3At). */
+/** Marcas das fases do raid na barra (server/internal/zone/raid.go: raidPhase2At, raidPhase3At). */
 const PHASE_MARKS = [0.7, 0.4];
 
 export class RaidUi {
@@ -32,16 +34,13 @@ export class RaidUi {
   private pct = el("span", "rb-pct");
   private bannerTimer = 0;
   private shown = false;
+  private track = el("div", "rb-track", this.lag, this.fill);
+  private marksKey = "";
 
   constructor(private serverNow: () => number) {
-    const track = el("div", "rb-track", this.lag, this.fill);
-    for (const m of PHASE_MARKS) {
-      const tick = el("i", "rb-mark");
-      tick.style.left = `${m * 100}%`;
-      track.append(tick);
-    }
-    track.append(this.pct);
-    this.bar.append(el("div", "rb-head", el("span", "rb-skull", "☠"), this.name, this.phase, this.timer), track);
+    this.setMarks(PHASE_MARKS);
+    this.track.append(this.pct);
+    this.bar.append(el("div", "rb-head", el("span", "rb-skull", "☠"), this.name, this.phase, this.timer), this.track);
     this.bar.hidden = true;
     this.banner.hidden = true;
   }
@@ -56,6 +55,7 @@ export class RaidUi {
       document.body.classList.toggle("raid-bar-on", on);
     }
     if (!s) return;
+    this.setMarks(s.marks?.length ? s.marks : PHASE_MARKS);
     const frac = s.maxHp > 0 ? Math.max(0, Math.min(1, s.hp / s.maxHp)) : 0;
     this.name.textContent = s.name;
     this.fill.style.width = `${frac * 100}%`;
@@ -68,6 +68,19 @@ export class RaidUi {
       const secs = Math.max(0, Math.floor((this.serverNow() - s.fightStartMs) / 1000));
       this.timer.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
     } else this.timer.textContent = "";
+  }
+
+  /** Desenha as marcas das fases (só quando mudam: o chefe é outro). */
+  private setMarks(marks: readonly number[]): void {
+    const key = marks.join(",");
+    if (key === this.marksKey) return;
+    this.marksKey = key;
+    for (const old of this.track.querySelectorAll(".rb-mark")) old.remove();
+    for (const m of marks) {
+      const tick = el("i", "rb-mark");
+      tick.style.left = `${m * 100}%`;
+      this.track.append(tick);
+    }
   }
 
   /** Banner grande no centro (anúncios do servidor). */

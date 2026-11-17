@@ -1,0 +1,214 @@
+/* Páginas legais (privacidade.html e termos.html): texto longo no visual do jogo. */
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--bg-0);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background:
+    radial-gradient(90% 50% at 50% 0%, rgba(58, 42, 72, 0.55), transparent 70%),
+    var(--bg-0);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.65;
+  -webkit-text-size-adjust: 100%;
+}
+
+.legal-top {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 20px 12px;
+  background: rgba(10, 8, 16, 0.92);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+}
+
+.legal-logo {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 1.3rem;
+  letter-spacing: 0.18em;
+  color: var(--gold);
+  text-decoration: none;
+}
+
+.legal-top nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-size: 0.9rem;
+}
+
+.legal-top nav a[aria-current="page"] {
+  color: var(--gold-hi);
+  text-decoration: none;
+}
+
+main {
+  width: min(780px, 100%);
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-title);
+  color: var(--gold);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: clamp(1.6rem, 5vw, 2.2rem);
+}
+
+h2 {
+  margin: 40px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 1.25rem;
+}
+
+h3 {
+  margin: 24px 0 4px;
+  font-size: 1.02rem;
+  color: var(--gold-hi);
+}
+
+p,
+li {
+  color: var(--text);
+}
+
+ul,
+ol {
+  padding-left: 1.3em;
+}
+
+li + li {
+  margin-top: 6px;
+}
+
+a {
+  color: var(--gold-hi);
+  text-decoration-color: var(--gold-lo);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: #fff3cf;
+}
+
+strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.updated {
+  margin: 0 0 24px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.lead {
+  font-size: 1.06rem;
+  color: var(--text);
+}
+
+/* Resumo no topo */
+.summary {
+  margin: 24px 0;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(22, 18, 31, 0.8);
+}
+
+.summary h2 {
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  font-size: 1.05rem;
+}
+
+.summary ul {
+  margin: 0;
+}
+
+/* Tabela de dados (rola de lado no celular) */
+.table-wrap {
+  overflow-x: auto;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(214, 180, 110, 0.12);
+}
+
+th {
+  font-family: var(--font-title);
+  font-weight: 500;
+  color: var(--gold);
+  background: rgba(28, 24, 39, 0.9);
+  white-space: nowrap;
+}
+
+tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Marcador a preencher antes de publicar: fica bem visível. */
+.ph {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(240, 198, 107, 0.18);
+  outline: 1px dashed var(--warn);
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.note {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-left: 3px solid var(--gold-lo);
+  background: rgba(214, 180, 110, 0.06);
+  color: var(--muted);
+}
+
+footer {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 0.85rem;
+}

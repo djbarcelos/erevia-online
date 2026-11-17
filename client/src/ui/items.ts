@@ -1,4 +1,4 @@
-import { ItemKind, ScrollKind, type EnchantRules, type Inventory, type ItemInfo } from "../gen/erevia/v1/game_pb";
+import { ItemKind, ScrollKind, type EnchantRules, type Inventory, type ItemBonus, type ItemInfo, type ItemSetInfo } from "../gen/erevia/v1/game_pb";
 import { classInfo } from "../classes";
 import { formatSeconds, render, STROKE, type Theme } from "./icons";
 
@@ -25,6 +25,58 @@ export function equippable(info: ItemInfo): boolean {
 
 export const GRADE_COLOR: Record<number, string> = { 1: "#e8e1d4", 2: "#7bd88f", 3: "#6fa8ff", 4: "#c08cff", 5: "#ff9a3c" };
 export const GRADE_NAME: Record<number, string> = { 1: "Comum", 2: "Bom", 3: "Raro", 4: "Épico", 5: "Lendário" };
+
+// ---------- Graus de equipamento (tunnel#153) ----------
+
+/** Letra do grau ("" = sem grau). O grau sai do nível exigido da peça. */
+export const TIER_LETTER: Record<number, string> = { 1: "D", 2: "C", 3: "B" };
+export const WEIGHT_NAME: Record<number, string> = { 1: "Pesada", 2: "Leve", 3: "Manto" };
+
+export function tierLetter(info: ItemInfo): string {
+  return TIER_LETTER[info.tier] ?? "";
+}
+
+/** Selo do grau ao lado do nome ("D", "C", "B"); null = sem grau. */
+export function tierBadge(info: ItemInfo): HTMLElement | null {
+  const t = tierLetter(info);
+  if (!t) return null;
+  const b = el("span", `tier-badge tier-${t.toLowerCase()}`, t);
+  b.title = `Grau ${t}`;
+  return b;
+}
+
+/** Conjuntos (o servidor manda o conjunto inteiro na primeira peça; nas outras, só o id). */
+const itemSets = new Map<string, ItemSetInfo>();
+/** O inventário do jogador local (a dica conta as peças do conjunto que ele veste). */
+let activeStore: ItemStore | undefined;
+
+/** As linhas de um bônus ("+10 de precisão"), na ordem da dica. */
+export function bonusParts(b: ItemBonus | undefined): string[] {
+  if (!b) return [];
+  const out: string[] = [];
+  const sign = (v: number) => (v > 0 ? "+" : "−");
+  const pct = (v: number) => `${sign(v)}${Math.round(Math.abs(v) * 100)}%`;
+  const num = (v: number) => `${sign(v)}${Math.abs(v) % 1 ? Math.abs(v).toFixed(1).replace(".", ",") : Math.abs(v)}`;
+  if (b.pAtk) out.push(`${num(b.pAtk)} de ataque físico`);
+  if (b.mAtk) out.push(`${num(b.mAtk)} de ataque mágico`);
+  if (b.pDef) out.push(`${num(b.pDef)} de defesa física`);
+  if (b.mDef) out.push(`${num(b.mDef)} de defesa mágica`);
+  if (b.maxHp) out.push(`${num(b.maxHp)} de vida`);
+  if (b.maxMp) out.push(`${num(b.maxMp)} de mana`);
+  if (b.crit) out.push(`${pct(b.crit)} de crítico`);
+  if (b.critDamage) out.push(`${pct(b.critDamage)} de dano crítico`);
+  if (b.accuracy) out.push(`${num(b.accuracy)} de precisão`);
+  if (b.evasion) out.push(`${num(b.evasion)} de esquiva`);
+  if (b.atkSpeed && Math.abs(b.atkSpeed - b.castSpeed) < 1e-6) out.push(`${pct(b.atkSpeed)} de velocidade de ataque e de conjuração`);
+  else {
+    if (b.atkSpeed) out.push(`${pct(b.atkSpeed)} de velocidade de ataque`);
+    if (b.castSpeed) out.push(`${pct(b.castSpeed)} de velocidade de conjuração`);
+  }
+  if (b.speed) out.push(`${num(b.speed)} m/s de movimento`);
+  if (b.hpRegen) out.push(`${num(b.hpRegen)}/s de vida`);
+  if (b.mpRegen) out.push(`${num(b.mpRegen)}/s de mana`);
+  return out;
+}
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -99,7 +151,21 @@ export class ItemStore {
   private listeners = new Set<() => void>();
 
   constructor(list: ItemInfo[]) {
-    for (const i of list) this.catalog.set(i.id, i);
+    for (const i of list) {
+      this.catalog.set(i.id, i);
+      if (i.set?.pieces.length) itemSets.set(i.set.id, i.set);
+    }
+    activeStore = this;
+  }
+
+  /** Quantas peças de cada conjunto o jogador veste. */
+  setPiecesWorn(): Map<string, number> {
+    const out = new Map<string, number>();
+    for (const s of this.equip) {
+      const id = s?.info.set?.id;
+      if (id) out.set(id, (out.get(id) ?? 0) + 1);
+    }
+    return out;
   }
 
   get(id: string): ItemInfo | undefined {
@@ -188,6 +254,12 @@ const GLYPHS: Record<string, string> = {
     <path d="M33 27 V20 M42 36 H49 M33 45 V52 M24 36 H17" stroke="#ffb050" stroke-width="2.2" ${STROKE}/>`,
   crown: `<path d="M12 44 L16 20 L26 32 L32 14 L38 32 L48 20 L52 44 Z" fill="#d6b46e"/><path d="M12 44 H52 V50 H12 Z" fill="#a8843a"/>
     <path d="M30 14 L36 50" stroke="#2a2420" stroke-width="2.5"/><circle cx="22" cy="44" r="2.5" fill="#e0453a"/><circle cx="42" cy="44" r="2.5" fill="#3a7ae0"/>`,
+  // Insígnia do Capitão (raro): distintivo de ferro com um crânio e a fita dourada.
+  insignia: `<path d="M24 6 H40 L36 20 H28 Z" fill="#b8333a"/><path d="M30 6 H34 L33 20 H31 Z" fill="#d6b46e"/>
+    <path d="M32 18 L48 24 V36 C48 46 40 52 32 56 C24 52 16 46 16 36 V24 Z" fill="#7d776e"/>
+    <path d="M32 22 L44 27 V36 C44 43 38 48 32 51 C26 48 20 43 20 36 V27 Z" fill="#9a948a"/>
+    <path d="M32 28 C27 28 25 31 25 35 C25 38 27 39 28 40 V43 H36 V40 C37 39 39 38 39 35 C39 31 37 28 32 28 Z" fill="#efe6d2"/>
+    <circle cx="29.5" cy="35" r="1.8" fill="#2a2420"/><circle cx="34.5" cy="35" r="1.8" fill="#2a2420"/>`,
   gold: `<ellipse cx="26" cy="42" rx="12" ry="5" fill="#a8843a"/><ellipse cx="26" cy="39" rx="12" ry="5" fill="#e8c260"/>
     <ellipse cx="38" cy="34" rx="12" ry="5" fill="#a8843a"/><ellipse cx="38" cy="31" rx="12" ry="5" fill="#e8c260"/>
     <ellipse cx="30" cy="24" rx="12" ry="5" fill="#a8843a"/><ellipse cx="30" cy="21" rx="12" ry="5" fill="#f3d488"/>`,
@@ -207,6 +279,46 @@ Object.assign(GLYPHS, {
     <path d="M32 28 C40 36 42 44 32 54 C22 44 24 36 32 28 Z" fill="#e89a3a"/><circle cx="29" cy="40" r="2" fill="#fff" opacity=".7"/>`,
   ring: `<ellipse cx="32" cy="40" rx="15" ry="12" fill="none" stroke="#e2c070" stroke-width="5"/>
     <path d="M25 24 L32 14 L39 24 L32 31 Z" fill="#d04050"/><path d="M29 22 L32 18" stroke="#fff" stroke-width="1.8" ${STROKE}/>`,
+});
+// Brejo de Lamagris (tunnel#139): o Antídoto e os materiais do pântano.
+GLYPHS.potion_antidote = GLYPHS.potion_hp.replace('#e0453a', '#6fcf4a') + `<path d="M31 41 L33 37 L35 41 M33 37 V45" stroke="#e8f8d0" stroke-width="2" ${STROKE}/>`;
+Object.assign(GLYPHS, {
+  brejo_scale: `<path d="M32 10 C46 10 54 20 52 34 C50 46 40 54 32 54 C24 54 14 46 12 34 C10 20 18 10 32 10 Z" fill="#4f7a4a"/>
+    <path d="M32 16 C41 16 47 23 46 33 C45 41 38 47 32 47 C26 47 19 41 18 33 C17 23 23 16 32 16 Z" fill="#7fb06a"/>
+    <path d="M24 28 Q32 22 40 28 M22 36 Q32 30 42 36 M26 43 Q32 39 38 43" stroke="#2f4a2c" stroke-width="2" fill="none" ${STROKE}/>`,
+  brejo_mud: `<path d="M12 46 C10 38 16 32 22 34 C22 24 30 18 38 22 C46 20 54 28 50 36 C56 40 54 50 44 50 H20 C16 50 12 50 12 46 Z" fill="#4a4730"/>
+    <path d="M20 40 C22 34 28 32 32 34" stroke="#7a7650" stroke-width="2.5" fill="none" ${STROKE}/>
+    <circle cx="40" cy="32" r="2.5" fill="#9fe870" opacity=".8"/><circle cx="28" cy="44" r="2" fill="#9fe870" opacity=".6"/>`,
+  brejo_gland: `<path d="M32 12 C46 14 52 28 48 40 C44 52 34 54 28 52 C18 50 12 40 16 28 C18 18 24 12 32 12 Z" fill="#c9c04a"/>
+    <path d="M30 18 C38 18 44 26 42 36 C40 44 34 48 28 46 C22 44 20 36 22 28 C24 22 26 18 30 18 Z" fill="#e8e27a"/>
+    <circle cx="24" cy="26" r="3" fill="#6b7d3e"/><circle cx="38" cy="40" r="3.5" fill="#6b7d3e"/><circle cx="36" cy="26" r="2" fill="#6b7d3e"/>
+    <path d="M30 12 C30 8 34 8 34 12" stroke="#6b7d3e" stroke-width="3" fill="none" ${STROKE}/>`,
+  brejo_reed: `<path d="M20 54 L24 14 M30 54 L32 10 M40 54 L38 16 M48 54 L44 22" stroke="#b8c4cc" stroke-width="3" ${STROKE}/>
+    <path d="M24 12 L24 22 M32 8 L32 20 M38 14 L38 24" stroke="#7a5a3a" stroke-width="5" ${STROKE}/>
+    <path d="M14 54 C22 48 42 48 50 54" stroke="#6b7d3e" stroke-width="3" fill="none" ${STROKE}/>`,
+});
+// Bosque Gris e Terras Mortas (tunnel#137): os materiais do Bando do Corvo, dos lobos, das aranhas e dos Devotos.
+Object.assign(GLYPHS, {
+  wolf_pelt: `<path d="M14 18 C22 10 42 10 50 18 L54 34 C50 36 48 40 50 48 L40 54 C38 50 26 50 24 54 L14 48 C16 40 14 36 10 34 Z" fill="#8b8f96"/>
+    <path d="M22 22 L28 34 L24 46 M42 22 L36 34 L40 46" stroke="#5a5e66" stroke-width="2.5" fill="none" ${STROKE}/>`,
+  wolf_fang: `<path d="M26 10 C40 12 44 30 36 54 C30 40 24 28 26 10 Z" fill="#efe6cf"/>
+    <path d="M30 16 C36 24 36 36 34 44" stroke="#bfae86" stroke-width="2.5" fill="none" ${STROKE}/>`,
+  moss_silk: `<path d="M32 8 V56 M12 20 L52 44 M52 20 L12 44" stroke="#c4d2c0" stroke-width="2" ${STROKE}/>
+    <path d="M32 18 L44 24 V40 L32 46 L20 40 V24 Z" fill="none" stroke="#9fb79a" stroke-width="2.5"/>
+    <path d="M32 27 L38 30 V36 L32 39 L26 36 V30 Z" fill="none" stroke="#7d8a6a" stroke-width="2"/>`,
+  crow_insignia: `<path d="M12 40 C20 20 34 14 50 18 L44 26 L52 30 C40 32 38 44 22 50 Z" fill="#a2302a"/>
+    <circle cx="42" cy="22" r="2" fill="#f5e6c8"/><path d="M50 18 L58 20 L50 24 Z" fill="#d6b46e"/>
+    <path d="M18 44 L26 40" stroke="#d6b46e" stroke-width="2.5" ${STROKE}/>`,
+  grave_ash: `<path d="M10 50 C12 36 24 30 32 18 C40 30 52 36 54 50 Z" fill="#8f8a80"/>
+    <path d="M22 46 C26 38 38 38 42 46" stroke="#5b5750" stroke-width="2.5" fill="none" ${STROKE}/>
+    <circle cx="32" cy="14" r="2.2" fill="#b9b3a6"/><circle cx="24" cy="24" r="1.6" fill="#b9b3a6"/>`,
+  black_candle: `<rect x="26" y="26" width="12" height="28" rx="2" fill="#2b2a33"/>
+    <path d="M32 8 C38 16 38 22 32 26 C26 22 26 16 32 8 Z" fill="#b8f0a0"/>
+    <path d="M22 54 H42" stroke="#4a4858" stroke-width="3" ${STROKE}/>`,
+  profane_tome: `<path d="M14 10 H46 V54 H14 Z" fill="#4b2f6a"/><path d="M14 10 H19 V54 H14 Z" fill="#2e1c44"/>
+    <path d="M26 22 H38 M26 30 H38 M26 38 H34" stroke="#8a5cff" stroke-width="2.5" ${STROKE}/><circle cx="32" cy="47" r="3" fill="#b8f0a0"/>`,
+  seal_fragment: `<path d="M12 36 L22 14 L44 10 L54 30 L46 52 L22 54 Z" fill="#6f6a62"/>
+    <path d="M26 22 L36 20 M30 30 L42 34 M24 40 L34 44" stroke="#8a5cff" stroke-width="2.5" ${STROKE}/>`,
 });
 GLYPHS.potion_hp_big = GLYPHS.potion_hp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;
 GLYPHS.potion_mp_big = GLYPHS.potion_mp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;
@@ -268,7 +380,17 @@ const KIND_LABEL: Partial<Record<ItemKind, string>> = {
   [ItemKind.RING]: "Anel",
 };
 
-const WEAPON_LABEL: Record<string, string> = { sword: "Espada", axe: "Machado", staff: "Cajado", daggers: "Adagas" };
+const WEAPON_LABEL: Record<string, string> = {
+  sword: "Espada",
+  axe: "Machado",
+  axe2h: "Machado de Duas Mãos",
+  staff: "Cajado",
+  wand: "Varinha",
+  daggers: "Adagas",
+  bow: "Arco",
+  crossbow: "Besta",
+  crossbow2h: "Besta Pesada",
+};
 
 export interface TipContext {
   myClass: string;
@@ -295,9 +417,15 @@ export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
     const name = el("strong", "", enchantedName(info, ench));
     name.style.color = GRADE_COLOR[info.grade] ?? GRADE_COLOR[1];
     const kind = [(info.kind === ItemKind.WEAPON && WEAPON_LABEL[info.weaponType]) || KIND_LABEL[info.kind] || "Item"];
+    if (info.armorWeight) kind.push(WEIGHT_NAME[info.armorWeight] ?? "");
     if (info.slot >= 0) kind.push(GRADE_NAME[info.grade] ?? "");
+    if (tierLetter(info)) kind.push(`Grau ${tierLetter(info)}`);
     if (info.slots.length > 1) kind.push("2 encaixes");
-    title.append(name, el("span", "tip-kind", kind.filter(Boolean).join(" · ")));
+    const nameLine = el("span", "tip-name");
+    nameLine.append(name);
+    const badge = tierBadge(info);
+    if (badge) nameLine.append(badge);
+    title.append(nameLine, el("span", "tip-kind", kind.filter(Boolean).join(" · ")));
     head.append(icon, title);
     t.append(head);
 
@@ -352,18 +480,59 @@ export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
     }
     if (stats.childElementCount) t.append(stats);
 
+    const set = info.set ? itemSets.get(info.set.id) : undefined;
+    if (set) t.append(setBlock(info, set));
     if (info.description) t.append(el("p", "tip-desc", info.description));
     if (info.slot >= 0) {
       const req: string[] = [];
       if (info.classes.length) req.push(info.classes.map((c) => classInfo(c).label).join(", "));
-      if (info.reqLevel > 1) req.push(`nível ${info.reqLevel}`);
+      // O grau tem um nível mínimo (abaixo dele não se veste); do mínimo até o nível da
+      // peça, ela vale com a penalidade de nível.
+      if (info.tierLevel > 1 && info.tierLevel < info.reqLevel) req.push(`nível ${info.reqLevel} (veste do ${info.tierLevel}, com penalidade)`);
+      else if (info.reqLevel > 1) req.push(`nível ${info.reqLevel}`);
       if (req.length) {
         const ok = (!info.classes.length || info.classes.includes(ctx.myClass)) && ctx.myLevel >= info.reqLevel;
         t.append(el("p", `tip-req${ok ? "" : " bad"}`, `Requer: ${req.join(" · ")}`));
       }
+      const pen = bonusParts(info.underLevel);
+      if (pen.length && ctx.myLevel < info.reqLevel) {
+        const wearable = ctx.myLevel >= (info.tierLevel || 1);
+        t.append(
+          el(
+            "p",
+            "tip-penalty",
+            wearable
+              ? `Abaixo do nível ${info.reqLevel}, vestir esta peça dá ${pen.join(", ")} (uma vez, com uma ou mais peças).`
+              : `Só se veste a partir do nível ${info.tierLevel}. Antes do nível ${info.reqLevel}: ${pen.join(", ")}.`,
+          ),
+        );
+      }
     }
     if (ctx.hint) t.append(el("p", "tip-key", ctx.hint));
     return t;
+}
+
+/** O conjunto na dica: nome com as peças vestidas, a escolha do conjunto, as peças (as
+ *  vestidas acesas) e os bônus de 2 e de 4 peças (os que valem, acesos). */
+function setBlock(info: ItemInfo, set: ItemSetInfo): HTMLElement {
+  const worn = activeStore?.setPiecesWorn().get(set.id) ?? 0;
+  const wornKinds = new Set<ItemKind>();
+  for (const s of activeStore?.equip ?? []) if (s?.info.set?.id === set.id) wornKinds.add(s.info.kind);
+  const box = el("div", "tip-set");
+  box.append(el("div", "tip-set-name", `${set.name} (${worn}/${set.pieces.length})`));
+  if (set.theme) box.append(el("div", "tip-set-theme", set.theme));
+  const pieces = el("ul", "tip-set-pieces");
+  for (const id of set.pieces) {
+    const p = activeStore?.get(id);
+    if (!p) continue;
+    pieces.append(el("li", wornKinds.has(p.kind) ? "on" : "", p.kind === info.kind ? `${p.name} ◂` : p.name));
+  }
+  box.append(pieces);
+  for (const b of set.bonuses) {
+    box.append(el("div", `tip-set-bonus${worn >= b.pieces ? " on" : ""}`, `${b.pieces} peças: ${bonusParts(b.bonus).join(", ")}`));
+  }
+  box.append(el("div", "tip-set-note", "A versão Exaltada de cada peça conta como ela."));
+  return box;
 }
 
 /** Uma dica flutuante compartilhada por inventário, loja e barra. */
