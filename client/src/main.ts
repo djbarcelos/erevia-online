@@ -47,7 +47,7 @@ import { ClientInvariants } from "./net/invariants";
 import { clearResume, readResume, reconnect, type Resume } from "./net/resume";
 import { Chat } from "./ui/chat";
 import { bugFromChat, noteServerMessage, openBugDialog, type BugDeps } from "./ui/bug-report";
-import { showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
+import { leaveLoadingScreen, setLoadingProgress, showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager, FERRY_TITLE } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
@@ -98,6 +98,7 @@ import { setupInput } from "./world/input";
 import { PickAreas } from "./world/pick";
 import { setupTouchCamera } from "./world/touch-camera";
 import { CharacterModels } from "./world/models";
+import { afterFrames, waitWorldReady } from "./world/ready";
 import { loadEnvironment, type Environment } from "./world/environment";
 import { DayNight, isNight, WorldClock } from "./world/daynight";
 import { configureKtx2 } from "./world/assets";
@@ -152,6 +153,8 @@ async function boot(): Promise<void> {
 }
 
 async function openCharacters(): Promise<void> {
+  // Enquanto o jogador escolhe o personagem, os modelos já baixam para o cache (sem criar a cena).
+  CharacterModels.warmCache();
   try {
     await showCharacters(play, () => location.reload());
   } catch (err) {
@@ -187,6 +190,7 @@ function play(character: CharacterInfo, resume?: Resume): void {
     if (msg.msg.case === "welcome") {
       started = true;
       clearResume();
+      performance.mark("erevia:welcome");
       const welcome = msg.msg.value;
       loading = loading
         .then(() => startGame(conn, character, welcome, engine))
@@ -237,10 +241,30 @@ function removeGameDom(): void {
   for (const e of document.querySelectorAll(".hud, .gwin-layer, .toasts, .tip, [data-menu], [data-sheet]")) e.remove();
 }
 
+/** Etapas da barra da tela de carregamento (o "Mapa" já conta ao chegar o Welcome). */
+const LOAD_STEPS = ["Mapa", "Cenário", "Personagens", "Preparando…"];
+
+/** Tempos da entrada no console (e nas marcas de performance): welcome, mundo pronto, tela fora. */
+function logEntryTimings(): void {
+  const at = (n: string) => performance.getEntriesByName(n).at(-1)?.startTime;
+  const w = at("erevia:welcome");
+  const p = at("erevia:pronto");
+  const o = at("erevia:tela-saiu");
+  const m = at("erevia:modelos");
+  const c = at("erevia:cenario");
+  if (w === undefined || p === undefined || o === undefined) return;
+  console.info(
+    `entrada: tela por ${Math.round(o - w)} ms (pronto em ${Math.round(p - w)} ms; cenário ${c ? Math.round(c - w) : "?"} ms, modelos ${m ? Math.round(m - w) : "?"} ms após o welcome)`,
+  );
+}
+
 async function startGame(conn: Connection, character: CharacterInfo, welcome: Welcome, engine?: AbstractEngine): Promise<Game> {
   // Mapa de cada zona: o principal em /world.json, os outros em /worlds/<id>.json.
+  // A tela de carregamento fica até o mundo estar pronto (ver o fim desta função).
+  const enterStart = performance.now();
+  setLoadingProgress(LOAD_STEPS, 0);
   const worldData = await loadWorldData(welcome.map);
-  showScreen(null);
+  setLoadingProgress(LOAD_STEPS, 1);
   const world = await createWorldScene(canvas, worldData, engine);
   const unwatchEngine = watchEngine(world.engine, "jogo");
   const clock = new WorldClock(Number(welcome.serverTimeMs), welcome.dayCycleMs);
@@ -249,6 +273,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const collision = new Collision(worldData);
   const picks = new PickAreas();
   const entities = new EntityManager(world.scene, world.gui, welcome.yourId, worldBounds(worldData), fx, world.shadows, collision, picks);
+  entities.holdCapsules(); // sem pílulas: as entidades esperam os modelos (ver CharacterModels.load abaixo)
   setSpecs(welcome.specs);
   entities.setSkillCatalog([...welcome.skillCatalog, ...welcome.skills]);
   for (const e of welcome.entities) entities.add(e);
@@ -258,7 +283,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // Cenário (árvores, cidade, montanhas) em segundo plano.
   let env: Environment | null = null;
-  loadEnvironment(world.scene, worldData, world.shadows)
+  const envLoaded = loadEnvironment(world.scene, worldData, world.shadows)
     .then((e) => {
       env = e;
       performance.mark("erevia:cenario");
@@ -271,15 +296,18 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
 
   // Texturas KTX2 dos assets novos (pipeline de arte) decodificam com os arquivos do próprio site.
   configureKtx2();
-  // Modelos 3D carregam em segundo plano; até lá, cápsulas coloridas.
-  CharacterModels.load(world.scene)
+  // Modelos 3D: a tela de carregamento espera por eles. Só se falharem de vez entram as cápsulas.
+  const modelsLoaded = CharacterModels.load(world.scene)
     .then((models) => {
       entities.setModels(models);
       performance.mark("erevia:modelos");
       // Remaster: o golem e os chefes (14 MB) baixam depois, no tempo ocioso e só em rede boa.
       window.setTimeout(() => models.prefetchLazy(), 20_000);
     })
-    .catch((err) => console.warn("modelos 3D indisponíveis, usando cápsulas", err));
+    .catch((err) => {
+      console.warn("modelos 3D indisponíveis, usando cápsulas", err);
+      entities.releaseCapsules();
+    });
 
   // ---------- Estado do jogador ----------
   const emblem = character.emblem ?? DEFAULT_LOOK[character.class]?.emblem ?? "#d6b46e";
@@ -1655,6 +1683,33 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       targetId: () => targetId,
     };
   }
+
+  // ---------- Entrada limpa: a tela só sai com o mundo pronto ----------
+  await waitWorldReady(
+    [
+      { label: LOAD_STEPS[1], wait: () => envLoaded },
+      { label: LOAD_STEPS[2], wait: async () => (await modelsLoaded, await entities.modelsSettled()) },
+      {
+        label: LOAD_STEPS[3],
+        wait: async () => {
+          await world.scene.whenReadyAsync(); // shaders compilados, com os modelos já na cena
+          await afterFrames(world.scene.onAfterRenderObservable, 3);
+        },
+      },
+    ],
+    {
+      onStage: (i) => setLoadingProgress(LOAD_STEPS, i + 1),
+      onStageError: (label, err) => reportClientError("model", "etapa da entrada falhou", { label, error: String((err as Error)?.message ?? err) }, err),
+      onTimeout: (label) => {
+        console.warn(`entrada no mundo: tempo esgotado em "${label}"`);
+        reportClientError("model", "entrada no mundo passou do teto de tempo", { label, waitedMs: Math.round(performance.now() - enterStart) });
+      },
+    },
+  );
+  performance.mark("erevia:pronto");
+  await leaveLoadingScreen(300);
+  performance.mark("erevia:tela-saiu");
+  logEntryTimings();
 
   let lastXp: bigint | null = null;
   return {
