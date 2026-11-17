@@ -18,6 +18,7 @@ import {
   InvasionPhase,
   PvpState,
   SkillTarget,
+  type AreaEventStatus,
   type EventStatus,
   type MasteryState,
   type ItemInfo,
@@ -233,6 +234,9 @@ export class Hud {
   private xp2El = el("span", "ev-xp2", "XP ×2");
   private invEl = el("span", "ev-inv");
   private events: EventStatus | null = null;
+  /** Evento de área (areaevent.go): painel com etapa, tempo e progresso, e os postos fechados. */
+  private areaEl = el("section", "area-event");
+  private area: AreaEventStatus | null = null;
   private serverNow: () => number = () => Date.now();
   private menuBtns = new Map<WindowId, HTMLButtonElement>();
   private autoBtn = el("button", "auto-btn");
@@ -299,7 +303,8 @@ export class Hud {
     this.questsEl.append(el("div", "q-panel-head", qHead, journal), this.questList);
     this.questsEl.hidden = true;
     // Quadro do jogador, buffs logo abaixo, depois o grupo; as missões ficam no mesmo bloco (no PC o CSS as leva para a direita).
-    const left = el("div", "hud-left", this.meEl, this.myEffects, el("div", "hud-side", this.partyEl, this.questsEl));
+    const left = el("div", "hud-left", this.meEl, this.myEffects, el("div", "hud-side", this.partyEl, this.areaEl, this.questsEl));
+    this.areaEl.hidden = true;
 
     // ---------- Alvo ----------
     const tClose = button("✕", "t-close");
@@ -801,6 +806,40 @@ export class Hud {
     this.renderEvents();
   }
 
+  /** Estado do evento de área (AreaEventStatus): nome, etapa, tempo, progresso e os postos fechados. */
+  setAreaEvent(s: AreaEventStatus, serverNow: () => number): void {
+    this.area = s;
+    this.serverNow = serverNow;
+    this.renderArea();
+  }
+
+  private renderArea(): void {
+    const s = this.area!;
+    const clock = (ms: number) => {
+      const left = Math.max(0, Math.ceil((ms - this.serverNow()) / 1000));
+      return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    };
+    const rows: HTMLElement[] = [];
+    if (s.active) {
+      const head = el("div", "ae-head", el("b", null, s.name), el("span", "ae-time", clock(Number(s.endsAtMs))));
+      rows.push(head);
+      if (s.warning) rows.push(el("div", "ae-label", `${s.label} (em ${clock(Number(s.endsAtMs))})`));
+      else {
+        rows.push(el("div", "ae-label", `Etapa ${s.stage}/${s.stages} · ${s.label}`));
+        if (s.goal > 1) {
+          const fill = el("i");
+          fill.style.width = `${Math.min(100, (100 * s.progress) / s.goal)}%`;
+          rows.push(el("div", "ae-bar", fill, el("span", null, `${s.progress}/${s.goal}`)));
+        }
+        if (s.detail) rows.push(el("div", "ae-detail", s.detail));
+      }
+    }
+    for (const c of s.closed) rows.push(el("div", "ae-closed", `${c.name} caiu · reabre em ${clock(Number(c.reopensAtMs))}`));
+    this.areaEl.hidden = rows.length === 0;
+    this.areaEl.classList.toggle("warning", s.warning);
+    this.areaEl.replaceChildren(...rows);
+  }
+
   private renderEvents(): void {
     const s = this.events!;
     const inv = s.invasion !== InvasionPhase.NONE;
@@ -1252,6 +1291,7 @@ export class Hud {
       const phase = this.cb.clock();
       this.clock.innerHTML = `${ui(isNight(phase) ? "moon" : "sun", 12)}${hourLabel(phase)}`;
       if (this.events) this.renderEvents();
+      if (this.area) this.renderArea();
     }
   }
 

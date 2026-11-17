@@ -43,6 +43,8 @@ func (z *Zone) kill(dead, killer *entity) {
 		}
 		if ms.invader {
 			z.invasionKilled(dead, killer)
+		} else if ms.evMob {
+			z.areaEventKilled(dead) // a recompensa do evento sai no fim
 		} else {
 			z.dropLoot(dead, owner)
 		}

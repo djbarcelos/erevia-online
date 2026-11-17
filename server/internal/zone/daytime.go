@@ -25,7 +25,8 @@ func (z *Zone) updateDaytime() {
 		Channel: pb.ChatChannel_CHAT_CHANNEL_SYSTEM, Text: text,
 	}}}, 0)
 	if night {
-		z.nightInvasion() // em algumas noites, os esqueletos atacam a cidade
+		z.nightInvasion()  // em algumas noites, os esqueletos atacam a cidade
+		z.areaEventNight() // e os eventos de área de gatilho noturno sorteiam (areaevent.go)
 	}
 }
 

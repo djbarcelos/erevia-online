@@ -80,7 +80,7 @@ func TestNPCIDsAreUniqueAndApart(t *testing.T) {
 	}
 	z := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil) // addNPC para a partida com id repetido
 	want := len(townNPCs) + len(teleportStones) + 5 /* armazém, Mestra, Quadro, Leiloeiro, Guardião */ +
-		len(game.SpawnedTalkers()) + len(cfg.Gates)
+		len(game.SpawnedTalkers()) + len(cfg.Gates) + len(game.Posts) /* o mercador de cada posto */
 	if len(z.npcs) != want {
 		t.Fatalf("%d NPCs na zona, quero %d (algum id repetido?)", len(z.npcs), want)
 	}

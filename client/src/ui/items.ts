@@ -319,6 +319,8 @@ Object.assign(GLYPHS, {
     <path d="M26 22 H38 M26 30 H38 M26 38 H34" stroke="#8a5cff" stroke-width="2.5" ${STROKE}/><circle cx="32" cy="47" r="3" fill="#b8f0a0"/>`,
   seal_fragment: `<path d="M12 36 L22 14 L44 10 L54 30 L46 52 L22 54 Z" fill="#6f6a62"/>
     <path d="M26 22 L36 20 M30 30 L42 34 M24 40 L34 44" stroke="#8a5cff" stroke-width="2.5" ${STROKE}/>`,
+  bastion_medal: `<circle cx="32" cy="38" r="15" fill="#c9a24a"/><circle cx="32" cy="38" r="10" fill="none" stroke="#7a5d1c" stroke-width="2.5"/>
+    <path d="M22 8 L32 24 L42 8 Z" fill="#8a1f1f"/><path d="M28 36 L32 30 L36 36 L32 44 Z" fill="#f5e6c8"/>`,
 });
 GLYPHS.potion_hp_big = GLYPHS.potion_hp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;
 GLYPHS.potion_mp_big = GLYPHS.potion_mp.replace('r="3"', 'r="4"') + `<path d="M44 14 L48 10 M48 18 L54 16" stroke="#ffd36b" stroke-width="2.5" ${STROKE}/>`;

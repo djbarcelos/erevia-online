@@ -2904,3 +2904,73 @@ section.party {
 .hud-screen.touch .menu-burger {
   border-color: var(--line-strong);
 }
+
+/* Evento de área (O Bastião resiste...): painel compacto na coluna do grupo, no mesmo estilo
+   translúcido dos painéis do HUD. Só texto e uma barra; atualiza 2×/s com o resto do HUD lento. */
+.area-event {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px 9px;
+  min-width: 190px;
+  max-width: 240px;
+  background: linear-gradient(90deg, rgba(23, 21, 31, 0.86), rgba(23, 21, 31, 0.55) 80%, transparent);
+  border-left: 2px solid var(--gold-deep);
+  font-size: 0.74rem;
+  text-shadow: 0 1px 2px #000;
+}
+
+.area-event.warning {
+  border-left-color: #c9852f;
+}
+
+.area-event .ae-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--gold-hi);
+  font-family: var(--font-title);
+  letter-spacing: 0.06em;
+}
+
+.area-event .ae-time {
+  font-variant-numeric: tabular-nums;
+  color: #e8e0d4;
+}
+
+.area-event .ae-label,
+.area-event .ae-detail {
+  color: #e8e0d4;
+}
+
+.area-event .ae-detail {
+  color: #b9b3a6;
+  font-size: 0.68rem;
+}
+
+.area-event .ae-bar {
+  position: relative;
+  height: 14px;
+  border: 1px solid var(--line);
+  background: rgba(10, 8, 14, 0.7);
+}
+
+.area-event .ae-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(90deg, var(--gold-deep), var(--gold));
+  opacity: 0.75;
+}
+
+.area-event .ae-bar span {
+  position: relative;
+  display: block;
+  text-align: center;
+  font-size: 0.66rem;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.area-event .ae-closed {
+  color: #ffb4a8;
+  font-size: 0.68rem;
+}

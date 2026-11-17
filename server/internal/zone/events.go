@@ -264,7 +264,7 @@ func ParseWeekdays(s string) ([]time.Weekday, error) {
 
 // ---------- Comando de GM ----------
 
-const eventUsage = "Uso: /evento invasao [agora|parar] · /evento xp2 horas · /evento xp2 off"
+const eventUsage = "Uso: /evento invasao [agora|parar] · /evento xp2 horas · /evento xp2 off · /evento area [id] [agora|parar]"
 
 // gmEvent: /evento (estado), /evento invasao [agora|parar], /evento xp2 horas|off.
 func (z *Zone) gmEvent(gm *entity, args []string) {
@@ -281,6 +281,8 @@ func (z *Zone) gmEvent(gm *entity, args []string) {
 		z.gmInvasion(gm, sub)
 	case "xp2":
 		z.gmXP2(gm, sub)
+	case "area", "área":
+		z.gmAreaEvent(gm, args[1:])
 	default:
 		z.system(gm, eventUsage)
 	}
@@ -379,6 +381,6 @@ func (z *Zone) eventsText() string {
 		}
 		days = strings.Join(names, ", ")
 	}
-	return fmt.Sprintf("XP em dobro: %s (horário: %s). Invasão: %s (chance por noite: %.0f%%).",
-		xp, days, z.invasionText(), z.cfg.InvasionChance*100)
+	return fmt.Sprintf("XP em dobro: %s (horário: %s). Invasão: %s (chance por noite: %.0f%%). %s",
+		xp, days, z.invasionText(), z.cfg.InvasionChance*100, z.areaEventsText())
 }

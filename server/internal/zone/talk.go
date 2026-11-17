@@ -54,6 +54,9 @@ func (z *Zone) spawnTalkers() {
 		if n.npc.talk == nil && n.npc.role != pb.NpcRole_NPC_ROLE_TELEPORT && n.npc.role != pb.NpcRole_NPC_ROLE_GATE {
 			n.npc.talk = game.TalkerByName(n.name)
 		}
+		if n.npc.talk != nil {
+			tagPostNPC(n) // o Irmão do posto fecha com ele
+		}
 	}
 }
 

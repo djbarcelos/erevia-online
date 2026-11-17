@@ -80,7 +80,7 @@ func rolePB(d *game.MonsterDef) *pb.MonsterRole {
 func (z *Zone) monsterAggressive(m *entity) bool {
 	ms := m.mon
 	switch {
-	case ms.invader:
+	case ms.invader, ms.evMob:
 		return true
 	case ms.def.Neutral:
 		return false
@@ -360,7 +360,7 @@ func (z *Zone) healerThink(m *entity) {
 	var best *entity
 	bestFrac := p.HealBelow
 	for _, o := range z.monsters {
-		if o == m || o.dead || o.mon.unseen() || o.mon.raid != nil || o.mon.invader != ms.invader || o.mon.returning {
+		if o == m || o.dead || o.mon.unseen() || o.mon.raid != nil || o.mon.invader != ms.invader || o.mon.evMob != ms.evMob || o.mon.returning {
 			continue
 		}
 		if dist(m.pos, o.pos) > p.HealRange+o.bodyRadius() {

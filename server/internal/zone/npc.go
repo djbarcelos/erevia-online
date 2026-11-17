@@ -20,6 +20,7 @@ type npcState struct {
 	crafts bool             // Ferreiro: cria itens com as receitas
 	look   *game.Appearance // NPC com modelo de herói: o visual dele
 	talk   *game.Talker     // conversa (talk.go); nil = o clique abre o serviço direto
+	post   string           // posto avançado a que pertence (fecha quando ele cai: areaevent.go)
 }
 
 type npcDef struct {
@@ -63,6 +64,7 @@ func (z *Zone) spawnNPCs() {
 	z.spawnAuctioneer(auctioneerID)
 	z.spawnGuardian(guardianID) // o Guardião das Sendas (subclass.go)
 	z.spawnTalkers()            // o Arauto e os contadores de história (talk.go), depois do Guardião
+	z.spawnPostNPCs()           // o mercador dos postos (areaevent.go), numa faixa de ids própria
 }
 
 // storageKeeper: o Guarda do Armazém, na praça, do lado oeste do poço.
@@ -102,6 +104,10 @@ func (z *Zone) npcList() []*pb.NpcInfo {
 func (z *Zone) shopNPC(p *entity, id uint32) *entity {
 	n := z.npcs[id]
 	if n == nil || p.dead {
+		return nil
+	}
+	if n.npc.post != "" && z.postClosed(n.npc.post) {
+		z.system(p, z.postRefusal(n.npc.post))
 		return nil
 	}
 	if dist(p.pos, n.pos) > shopRange {

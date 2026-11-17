@@ -547,6 +547,7 @@ message ServerMessage {
     SubclassState subclass = 67; // Subclasse: as classes do personagem e a ativa (janela do Guardião das Sendas)
     NpcDialog npc_dialog = 45; // a janela de conversa do NPC (resposta ao NpcTalk)
     StonesKnown stones_known = 48; // pedras de teleporte descobertas (ao entrar e quando descobre uma)
+    AreaEventStatus area_event = 49; // evento de área em andamento e postos fechados (areaevent.go)
   }
 }
 
@@ -763,6 +764,32 @@ message EventStatus {
   uint32 wave = 5; // onda atual (1…waves)
   uint32 waves = 6;
   uint32 alive = 7; // esqueletos vivos agora
+}
+
+// Evento de área com etapas (tunnel#142): "O Bastião resiste". active=false só limpa o painel
+// (restam os postos fechados, se houver). Vai ao entrar (se houver algo) e a cada mudança, no
+// máximo 1×/s.
+message AreaEventStatus {
+  bool active = 1;
+  string name = 2;
+  uint32 stage = 3; // etapa atual (1…stages)
+  uint32 stages = 4;
+  string label = 5; // o que fazer nesta etapa
+  uint32 progress = 6; // abates, ou segundos já segurados
+  uint32 goal = 7;
+  int64 ends_at_ms = 8; // fim do limite da etapa (ou começo, no aviso), relógio do servidor
+  string detail = 9; // linha curta extra (ex.: "Estandarte 80%")
+  bool warning = 10; // anunciado, ainda não começou
+  repeated ClosedPost closed = 11; // postos caídos
+}
+
+// Um posto avançado fechado (a pedra, o mercador e o NPC dele recusam até reopens_at_ms).
+message ClosedPost {
+  string key = 1;
+  string name = 2;
+  int64 reopens_at_ms = 3;
+  uint32 stone_id = 4; // id do destino da pedra (TeleportDest.id)
+  repeated uint32 npc_ids = 5; // mercador e NPC de história do posto
 }
 
 // ---------- Raid boss ----------
