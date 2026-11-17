@@ -168,3 +168,7 @@ Medi no jogo (KayKit, sem `?remaster=1`; `tools/art/remaster-herois/deslize.mjs`
 | Remaster golem de pedra | 2,8 | 0,29 | 1,00 |
 
 Efeito colateral aceito: o boneco chibi do KayKit passa a mexer as pernas a 2,5x (6 passos por segundo a 5 m/s) para o pé acompanhar o chão. Os esqueletos KayKit deixam de arrastar os pés e correm.
+
+### Monstros que andam longe (relato de produção: golens e Ômrun deslizando "de fundo")
+
+`entities.ts` congelava a animação além de `ANIM_DISTANCE = 50` m (e fora do frustum), então o monstro que vinha de longe se movia com a pose de parado. Agora, quem anda (`v.walking`, a velocidade da posição desenhada) continua animado até `ANIM_FAR_DISTANCE = 90` m: entre 50 e 90 m a animação roda a 15 Hz (o tempo pausado é recuperado ao acordar, `AnimController.catchUp`: no laboratório o clipe voltou a 4,8 quadros do esperado depois de 0,5 s pausado, em vez de 20); fora do frustum, ou parado e longe, continua congelada como antes. O golem de código (o do Vale, sem `?remaster=1`) usa o mesmo `v.anim` e o mesmo `walking`; ele só tem os clipes `idle` e `run` (sem clipe de andar, o `run` toca ao andar) e agora também tem a velocidade natural do passo (2,8 m/s, estimada pela geometria do clipe: perna de 1,1 m varrendo 0,85 rad em meio ciclo de 0,33 s), então toca na velocidade do chão como os outros modelos.

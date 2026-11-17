@@ -20,6 +20,7 @@ import {
   type GlowLayer,
   type Scene,
 } from "@babylonjs/core";
+import { RoleMap } from "./anim";
 import { mulberry32 } from "./map-painter";
 import type { AnimRole, CharacterInstance, OptionalRole } from "./models";
 import { setPaletteKind } from "./palette-material";
@@ -606,7 +607,9 @@ export function createGolem(scene: Scene, id: string): CharacterInstance {
   const glowLayer = (scene as unknown as { getGlowLayerByName?: (n: string) => GlowLayer | null }).getGlowLayerByName?.("glow") ?? null;
   glowLayer?.addIncludedOnlyMesh(glowMesh);
 
-  const anims = new Map<AnimRole, AnimationGroup>();
+  const anims = new RoleMap();
+  // Passo do clipe de correr: a perna (1,1 m do quadril ao chão) varre ~0,85 rad em meio ciclo de 10 quadros a 30 fps = 2,8 m/s.
+  anims.footSpeeds = { run: 2.8 };
   for (const role of Object.keys(CLIPS) as (keyof typeof CLIPS)[]) anims.set(role, buildGroup(role, id, nodes, glows, scene));
 
   const resetPose = () => {
