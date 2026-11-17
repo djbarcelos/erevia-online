@@ -47,7 +47,7 @@ import { ClientInvariants } from "./net/invariants";
 import { clearResume, readResume, reconnect, type Resume } from "./net/resume";
 import { Chat } from "./ui/chat";
 import { bugFromChat, noteServerMessage, openBugDialog, type BugDeps } from "./ui/bug-report";
-import { leaveLoadingScreen, setLoadingProgress, showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
+import { leaveLoadingScreen, setLoadingDestination, setLoadingProgress, showCharacters, showLogin, showMessage, showScreen } from "./ui/screens";
 import { EntityManager, FERRY_TITLE } from "./world/entities";
 import { Hud, HOTBAR_KEYS, HOTBAR_SIZE, type TargetExtras, type WindowId } from "./ui/hud";
 import { setupPerfPanel } from "./ui/perf";
@@ -182,6 +182,7 @@ function play(character: CharacterInfo, resume?: Resume): void {
       // inteira (entidades, cenário, minimapa) e espera o Welcome do mapa novo.
       const zc = msg.msg.value;
       showScreen("screen-loading", `Viajando para ${zc.title || zc.map}…`);
+      setLoadingDestination(zc.title || zc.map);
       const old = game;
       game = undefined;
       loading = loading.then(() => old?.unload());
@@ -192,6 +193,7 @@ function play(character: CharacterInfo, resume?: Resume): void {
       clearResume();
       performance.mark("erevia:welcome");
       const welcome = msg.msg.value;
+      setLoadingDestination(welcome.mapTitle || "Vel'Aran");
       loading = loading
         .then(() => startGame(conn, character, welcome, engine))
         .then((g) => {

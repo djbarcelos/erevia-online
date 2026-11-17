@@ -15,7 +15,65 @@ interface Ember {
   r: number;
 }
 
-export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; tint?: string } = {}): () => void {
+/** Silhueta de Vel'Aran (casas de telhado alto, torres e a cidadela) com janelas acesas, numa tela à parte. */
+function paintCity(w: number, h: number, dpr: number): HTMLCanvasElement {
+  const ch = Math.round(Math.min(h * 0.3, 260));
+  const c = document.createElement("canvas");
+  c.width = Math.round(w * dpr);
+  c.height = Math.round(ch * dpr);
+  const g = c.getContext("2d")!;
+  g.scale(dpr, dpr);
+  const rand = mulberry32(11);
+  const wins: [number, number, number, number][] = [];
+  // Duas fileiras: a de trás, mais clara e baixa; a da frente, quase preta.
+  for (const row of [
+    { color: "#1b1826", base: ch - 14, min: 34, max: 92, gap: 2 },
+    { color: "#100f17", base: ch, min: 50, max: 140, gap: 0 },
+  ]) {
+    let x = -10;
+    while (x < w + 10) {
+      const bw = 34 + rand() * 54;
+      const bh = row.min + rand() * (row.max - row.min);
+      g.fillStyle = row.color;
+      const kind = rand();
+      g.beginPath();
+      if (kind < 0.55) {
+        // casa com empena
+        g.moveTo(x, row.base);
+        g.lineTo(x, row.base - bh);
+        g.lineTo(x + bw / 2, row.base - bh - bw * 0.42);
+        g.lineTo(x + bw, row.base - bh);
+        g.lineTo(x + bw, row.base);
+      } else if (kind < 0.85) {
+        // torre com telhado em ponta
+        const tw = bw * 0.6;
+        g.rect(x, row.base - bh, bw, bh);
+        g.moveTo(x + bw / 2 - tw / 2, row.base - bh);
+        g.lineTo(x + bw / 2, row.base - bh - tw * 1.3);
+        g.lineTo(x + bw / 2 + tw / 2, row.base - bh);
+      } else {
+        // muralha com ameias
+        g.rect(x, row.base - bh * 0.6, bw, bh * 0.6);
+        for (let k = 0; k < bw; k += 9) g.rect(x + k, row.base - bh * 0.6 - 6, 5, 6);
+      }
+      g.fill();
+      if (row.gap === 0) {
+        const cols = Math.max(1, Math.floor(bw / 17));
+        const rows = Math.floor(bh / 24);
+        for (let r = 0; r < rows; r++)
+          for (let k = 0; k < cols; k++) if (rand() < 0.42) wins.push([x + 8 + k * 16 + rand() * 2, row.base - bh + 10 + r * 24, 5, 8]);
+      }
+      x += bw + row.gap * 3;
+    }
+  }
+  g.fillStyle = "rgba(246, 205, 120, 0.9)";
+  g.shadowColor = "rgba(240, 200, 110, 0.9)";
+  g.shadowBlur = 6;
+  for (const [wx, wy, ww, wh] of wins) g.fillRect(wx, wy, ww, wh);
+  return c;
+}
+
+export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; tint?: string; city?: boolean } = {}): () => void {
   const canvas = document.createElement("canvas");
   canvas.className = "backdrop";
   host.prepend(canvas);
@@ -26,6 +84,7 @@ export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; ti
   let dpr = 1;
   let ridges: { pts: number[]; color: string; y: number; amp: number }[] = [];
   const embers: Ember[] = [];
+  let city: HTMLCanvasElement | null = null;
   let raf = 0;
   let last = performance.now();
   let t = 0;
@@ -39,9 +98,9 @@ export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; ti
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const rand = mulberry32(7);
     const layers = [
-      { color: "#2a2340", y: 0.58, amp: 0.16 },
-      { color: "#1d1830", y: 0.68, amp: 0.12 },
-      { color: "#130f20", y: 0.8, amp: 0.08 },
+      { color: "#2a2638", y: 0.58, amp: 0.16 },
+      { color: "#201d2b", y: 0.68, amp: 0.12 },
+      { color: "#17151f", y: 0.8, amp: 0.08 },
     ];
     ridges = layers.map((l) => {
       const pts: number[] = [];
@@ -54,6 +113,7 @@ export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; ti
       }
       return { ...l, pts };
     });
+    city = opts.city ? paintCity(w, h, dpr) : null;
   };
 
   const spawnEmber = () => {
@@ -72,11 +132,11 @@ export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; ti
     t += dt;
     // Céu
     const sky = ctx.createLinearGradient(0, 0, 0, h);
-    sky.addColorStop(0, "#0b0a18");
-    sky.addColorStop(0.45, "#251a3a");
-    sky.addColorStop(0.62, opts.tint ?? "#5a3248");
-    sky.addColorStop(0.75, "#2a1a2a");
-    sky.addColorStop(1, "#0a0810");
+    sky.addColorStop(0, "#0f0e16");
+    sky.addColorStop(0.42, "#221f2c");
+    sky.addColorStop(0.62, opts.tint ?? "#4a3a4e");
+    sky.addColorStop(0.76, "#2a2230");
+    sky.addColorStop(1, "#0f0e16");
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, h);
 
@@ -91,9 +151,9 @@ export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; ti
     }
 
     // Lua com halo
-    const mx = w * 0.72;
+    const mx = w * 0.86;
     const my = h * 0.22;
-    const mr = Math.min(w, h) * 0.06;
+    const mr = Math.min(w, h) * 0.05;
     const halo = ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 6);
     halo.addColorStop(0, "rgba(255,226,180,0.35)");
     halo.addColorStop(1, "rgba(255,226,180,0)");
@@ -190,6 +250,9 @@ export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; ti
         ctx.fillRect(e.x - e.r * 4, e.y - e.r * 4, e.r * 8, e.r * 8);
       }
     }
+
+    // Silhueta da cidade, com as janelas acesas (pintada uma vez, em resize)
+    if (city) ctx.drawImage(city, 0, h - city.height / dpr, w, city.height / dpr);
 
     // Vinheta
     const v = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.75);

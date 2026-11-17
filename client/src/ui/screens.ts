@@ -30,7 +30,7 @@ function mount(kind: string, ...nodes: Node[]): void {
   preview?.dispose();
   preview = null;
   overlay.hidden = false;
-  if (!stopBg) stopBg = animatedBackdrop(overlay, { castle: kind !== "chars", tint: kind === "chars" ? "#3a2a48" : undefined });
+  if (!stopBg) stopBg = animatedBackdrop(overlay, { castle: false, city: true });
   content.className = `entry-content ${kind}`;
   content.replaceChildren(...nodes);
 }
@@ -51,15 +51,28 @@ export function showScreen(screen: Screen, text = "Carregando…"): void {
   }
   progress = null;
   const spinner = el("span", "spinner");
-  const label = el("p", "muted", text);
+  const label = el("p", "load-label", text);
   const fill = el("div", "load-fill");
   const bar = el("div", "load-bar", fill);
   bar.hidden = true;
   const stepsEl = el("ol", "load-steps");
   stepsEl.hidden = true;
-  mount("loading", el("div", "entry-loading", el("h1", "logo-word", "EREVIA"), spinner, bar, stepsEl, label));
-  progress = { spinner, bar, fill, stepsEl, label };
+  const place = el("h2", "load-place");
+  const dest = el("div", "load-dest", el("span", "load-over", "Você está indo para"), place);
+  dest.hidden = true;
+  const tip = el("p", "load-tip", art(ui("bulb", 18), "load-tip-icon"), el("span", null, LOAD_TIPS[Math.floor(Math.random() * LOAD_TIPS.length)]));
+  mount("loading", el("div", "entry-loading", dest, el("div", "load-mid", el("h1", "logo-word", "EREVIA"), spinner, bar, stepsEl, label), tip));
+  progress = { spinner, bar, fill, stepsEl, label, dest, place };
 }
+
+/** Dicas da tela de carregamento (só o que o jogo tem hoje). */
+const LOAD_TIPS = [
+  "Clique no chão para andar e em um monstro para atacar. As teclas 1 a 0 usam a barra de atalhos.",
+  "O Diário de missões (J) deixa você fixar até 3 missões no painel do HUD.",
+  "Em grupo, a experiência dos monstros é dividida entre quem está por perto.",
+  "O Barbeiro da praça muda o visual do seu personagem quando você quiser.",
+  "Poções na barra de atalhos gastam um toque e ficam em recarga por alguns segundos.",
+];
 
 interface LoadingUi {
   spinner: HTMLElement;
@@ -67,25 +80,34 @@ interface LoadingUi {
   fill: HTMLElement;
   stepsEl: HTMLElement;
   label: HTMLElement;
+  dest: HTMLElement;
+  place: HTMLElement;
 }
 let progress: LoadingUi | null = null;
 
+/** Diz, no alto da tela de carregamento, para onde o personagem está indo ("Você está indo para ..."). */
+export function setLoadingDestination(name: string): void {
+  if (!progress || !name) return;
+  progress.place.textContent = name;
+  progress.dest.hidden = false;
+}
+
 /**
  * Barra de progresso da entrada no mundo, com etapas ("Mapa", "Cenário"…): `current` é a etapa em curso
- * (steps.length = tudo pronto). Troca o spinner pela barra.
+ * (steps.length = tudo pronto). Troca o spinner pela barra, desenhada em um segmento por etapa.
  */
 export function setLoadingProgress(steps: string[], current: number): void {
   const p = progress;
   if (!p) return;
   p.spinner.hidden = true;
-  p.bar.hidden = false;
+  p.bar.hidden = true; // a barra contínua fica só para leitores de tela; o desenho são os segmentos
   p.stepsEl.hidden = false;
   const k = steps.length ? Math.min(1, current / steps.length) : 1;
   p.fill.style.width = `${Math.round(k * 100)}%`;
-  p.bar.setAttribute("role", "progressbar");
-  p.bar.setAttribute("aria-valuenow", String(Math.round(k * 100)));
+  p.stepsEl.setAttribute("role", "progressbar");
+  p.stepsEl.setAttribute("aria-valuenow", String(Math.round(k * 100)));
   p.stepsEl.replaceChildren(
-    ...steps.map((s, i) => el("li", i < current ? "done" : i === current ? "now" : "", s)),
+    ...steps.map((s, i) => el("li", i < current ? "done" : i === current ? "now" : "", el("i"), el("span", null, s))),
   );
   p.label.textContent = current < steps.length ? steps[current] : "Pronto";
 }
@@ -140,7 +162,7 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
 
   const social = el("div", "stack");
   if (providers.google) {
-    const a = el("a", "btn btn-block btn-social google");
+    const a = el("a", "btn btn-gold btn-block btn-social google");
     a.href = "/api/auth/google/login";
     a.innerHTML = `${ui("google", 20)}<span>Entrar com Google</span>`;
     social.append(a);
@@ -158,7 +180,7 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
   if (loginError) error.textContent = LOGIN_ERRORS[loginError] ?? "Falha no login.";
 
   if (providers.dev) {
-    if (social.childElementCount) card.append(el("div", "divider", "ou"));
+    if (social.childElementCount) card.append(el("div", "divider", "ou, no servidor de testes"));
     const form = el("form", "dev-login");
     const user = el("input", "input");
     user.placeholder = "Nome de usuário";
@@ -196,7 +218,7 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
   if (!providers.google && !providers.discord && !providers.dev) card.append(el("p", "muted", "Nenhum login configurado no servidor."));
   card.append(error, el("p", "login-legal small muted", "Ao entrar, você concorda com os ", legalLink("termos"), " e com a ", legalLink("privacidade"), "."));
 
-  const news = el("aside", "login-news frame glass", el("h2", "title", "Novidades"));
+  const news = el("aside", "login-news", el("h2", "title", "Novidades"));
   for (const n of NEWS) {
     news.append(
       el("article", "news-item", el("div", "news-meta", el("span", `news-tag t-${n.tag.toLowerCase()}`, n.tag)), el("h3", null, n.title), el("p", null, n.text)),
@@ -207,18 +229,21 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
   const logo = el(
     "header",
     "login-logo",
-    el("div", "logo-crest", el("span")),
+    el("p", "logo-over", "As terras de Vel'Aran"),
     el("h1", "logo-word", "EREVIA"),
     el("p", "logo-tag", "As terras partidas esperam por você"),
   );
+  const status = el("span", "srv-status", el("i", "srv-dot"), el("span", null, "Verificando o servidor…"));
+  void serverStatus(status);
   const layout = el(
     "div",
     "login-layout scroll",
-    el("div", "login-main", logo, card),
-    news,
+    el("div", "login-main", logo, news),
+    card,
     el(
       "footer",
       "login-foot",
+      status,
       newsLink(),
       legalLink("privacidade"),
       legalLink("termos"),
@@ -227,6 +252,19 @@ export function showLogin(providers: Providers, loginError: string | null, onLog
     ),
   );
   mount("login", layout);
+}
+
+/** Preenche o estado do servidor no rodapé do login (GET /healthz). */
+async function serverStatus(box: HTMLElement): Promise<void> {
+  const t0 = performance.now();
+  let ok = false;
+  try {
+    ok = (await fetch("/healthz", { cache: "no-store" })).ok;
+  } catch {
+    ok = false;
+  }
+  box.classList.toggle("down", !ok);
+  box.lastElementChild!.textContent = ok ? `Servidor online · ${Math.round(performance.now() - t0)} ms` : "Servidor indisponível";
 }
 
 // ---------------------------------------------------------------------------------------
@@ -367,6 +405,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
   // ---------- Seleção ----------
   const selectPanel = el("aside", "char-panel left frame glass select-panel");
   const selectFoot = el("div", "char-foot select-foot");
+  const detailPanel = el("aside", "char-panel right frame glass select-panel detail-panel");
   let picked = 0;
 
   /** "Mago · Nv 20" (a classe ativa) e, com subclasse, "Cavaleiro 30 · Mago 20". */
@@ -381,7 +420,11 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
       b.setAttribute("aria-pressed", String(i === picked));
       b.style.setProperty("--cc", info.color);
       b.style.setProperty("--emblem", c.emblem ?? DEFAULT_LOOK[c.class].emblem);
-      b.append(el("span", "roster-crest", info.label[0]), el("span", "roster-info", el("b", null, c.name), el("span", null, classLine(c, "Nv"))));
+      b.append(
+        el("span", "roster-crest", info.label[0]),
+        el("span", "roster-info", el("b", null, c.name), el("span", null, info.label + (c.classes && c.classes.length > 1 ? " · subclasse" : "")), el("small", null, CLASS_EXTRA[c.activeClass ?? c.class].role)),
+        el("span", "roster-lvl", el("small", null, "Nv"), el("b", null, String(c.level ?? 1))),
+      );
       const subs = classesLine(c);
       if (subs) b.title = subs;
       b.onclick = () => {
@@ -405,7 +448,26 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     const subs = classesLine(c);
     setPlate(c.name, classLine(c, "Nível") + (subs ? ` (${subs})` : ""), look.emblem);
     const play = button("Entrar no mundo", "btn btn-gold btn-play", () => onPlay(c));
-    selectFoot.replaceChildren(el("div", "foot-info", el("b", null, c.name), el("span", "muted small", classLine(c, "Nível") + (subs ? ` · ${subs}` : ""))), play);
+    selectFoot.replaceChildren(play);
+    const cls0 = classInfo(c.activeClass ?? c.class);
+    const cell = (k: string, ...v: (Node | string)[]) => el("div", "dt-cell", el("span", "label", k), el("b", null, ...v));
+    const sw = el("i", "dt-swatch");
+    sw.style.setProperty("--c", look.emblem);
+    detailPanel.style.setProperty("--cc", cls0.color);
+    detailPanel.replaceChildren(
+      el("h2", "title panel-title", "Detalhes"),
+      el("div", "dt-head", el("span", "dt-name", c.name), el("span", "dt-class", cls0.label)),
+      el("div", "dt-level", el("small", null, "Nível"), el("b", null, String(c.level ?? 1))),
+      el(
+        "div",
+        "dt-grid",
+        cell("Classe", cls0.label),
+        cell("Subclasse", subs ? c.classes!.slice(1).map((k) => classInfo(k.class).label).join(", ") : "Nenhuma"),
+        cell("Evolução", subs || "Classe base"),
+        cell("Emblema", sw),
+      ),
+      el("p", "hint-box small", "Clique duas vezes num cartão, ou use o botão abaixo, para entrar no mundo."),
+    );
   };
 
   // ---------- Criação ----------
@@ -617,7 +679,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     }
   }
 
-  root.append(stage, top, selectPanel, classPanel, mobileTabs.root, lookPanel, selectFoot, createFoot);
+  root.append(stage, top, selectPanel, detailPanel, classPanel, mobileTabs.root, lookPanel, selectFoot, createFoot);
   mount("chars", root);
   // O palco 3D é criado depois de o canvas estar na página (precisa do tamanho).
   preview = createPreview(canvas);
