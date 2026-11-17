@@ -11,7 +11,9 @@ import (
 // named entra com um nome próprio (os auxiliares antigos repetem o nome por classe).
 func named(z *Zone, id uint32, name, class string, x, zz float64) (*entity, *fakePeer) {
 	peer := &fakePeer{}
-	z.handle(joinEvent{info: JoinInfo{ID: id, Name: name, Class: class, X: x, Z: zz, Items: game.StarterKit(class), Peer: peer}})
+	z.handle(joinEvent{info: JoinInfo{ID: id, Name: name, Class: class, X: x, Z: zz, Items: game.StarterKit(class), Peer: peer,
+		// Como quem já tinha personagem antes das descobertas: as 5 pedras do mapa principal.
+		Discovered: game.DiscoveryState{Stones: game.LegacyStoneKeys}}})
 	return z.players[id], peer
 }
 

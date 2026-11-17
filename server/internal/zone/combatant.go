@@ -134,7 +134,8 @@ type playerState struct {
 	social socialState // amigos, emote e leitura do correio
 	// Conquistas, título escolhido e quando pode pedir o ranking de novo.
 	ach         achievements
-	bst         bestiary // abates por monstro e famílias (bestiary.go)
+	bst         bestiary  // abates por monstro e famílias (bestiary.go)
+	disc        discovery // pedras de teleporte descobertas e a última cidade (teleport.go)
 	rankingNext float64
 	// Maestria (nível máximo): barra, pontos da árvore e a soma dos efeitos (ver mastery.go).
 	mastery masteryState
@@ -340,6 +341,9 @@ func (e *entity) setDest(d Vec2) {
 func (e *entity) teleportTo(p Vec2) {
 	e.pos, e.dest, e.path = p, p, nil
 	e.moved, e.teleport = true, true
+	if e.pl != nil {
+		e.pl.disc.jumped = true // salto não descobre pedra (teleport.go)
+	}
 }
 
 func dist(a, b Vec2) float64 { return math.Hypot(a.X-b.X, a.Z-b.Z) }

@@ -66,8 +66,9 @@ type Character struct {
 	Contracts  game.ContractState
 	Reputation game.ReputationState
 	// Bestiário: abates por monstro e famílias completas.
-	Bestiary game.BestiaryState
-	Zone     string // mapa onde está ("" = starter)
+	Bestiary   game.BestiaryState
+	Discovered game.DiscoveryState
+	Zone       string // mapa onde está ("" = starter)
 	// Vitalidade: estoque, última saída e maior nível da conta.
 	Vitality game.VitalityState
 	Classes  game.ClassSet // subclasse: as classes (Class é a principal; a progressão é da ativa)
@@ -146,7 +147,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		GM: char.GM, MutedUntil: char.MutedUntil, UserAgent: r.UserAgent(), Quests: char.Quests,
 		Achievements: char.Achievements, Title: char.Title, Spec: char.Spec, Mastery: char.Mastery, LoadedAt: loadedAt, Peer: sess,
 		Contracts: char.Contracts, Reputation: char.Reputation,
-		Bestiary: char.Bestiary,
+		Bestiary: char.Bestiary, Discovered: char.Discovered,
 		Zone:     char.Zone,
 		Vitality: char.Vitality, Classes: char.Classes,
 	})

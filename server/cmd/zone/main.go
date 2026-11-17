@@ -263,7 +263,7 @@ func saveBatch(st *store.Store, rep reporter, z *zone.Zone, log *slog.Logger, ba
 			Achievements: p.Achievements, Title: p.Title, Spec: p.Spec, Mastery: p.Mastery, Zone: p.Zone, Classes: p.Classes,
 			Contracts: p.Contracts, Reputation: p.Reputation,
 			Auction:  auctionOps(p.Auction),
-			Bestiary: p.Bestiary,
+			Bestiary: p.Bestiary, Discovered: p.Discovered,
 			Vitality: p.Vitality,
 		}
 		if s := p.Storage; s != nil {
@@ -347,7 +347,7 @@ func (b *wsBackend) LoadCharacter(ctx context.Context, accountID int64, id uint3
 		GM:         c.GM, MutedUntil: derefTime(c.MutedUntil), Quests: c.Quests,
 		Achievements: c.Achievements, Title: c.Title, Spec: c.Spec, Mastery: c.Mastery, Zone: c.Zone, Classes: c.Classes,
 		Contracts: c.Contracts, Reputation: c.Reputation,
-		Bestiary: c.Bestiary,
+		Bestiary: c.Bestiary, Discovered: c.Discovered,
 		Vitality: c.Vitality,
 	}, nil
 }
