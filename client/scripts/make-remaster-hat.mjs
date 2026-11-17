@@ -7,11 +7,15 @@
 // (4) prende o elmo rigidamente no osso da cabeça do cavaleiro novo, deslocado pela diferença entre os
 // ossos da cabeça dos dois rigs. A cabeça sem elmo continua no corpo; "esconder chapéu" liga e desliga o nó Hat.
 //
+// Modo --cuty=<y>: para chapéus que a malha não separa em ilha própria (o chapéu pontudo do mago): tudo o que
+// fica acima de y (centro do triângulo), com a cor da textura em cor de vértice.
+//
 // Uso (dentro de client/): node scripts/make-remaster-hat.mjs <v3_raw.glb> <bare_raw.glb> <saida.glb> [--scale=1] [--dy=0] [--dz=0]
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { PNG } from 'pngjs';
 import jpeg from 'jpeg-js';
+import { MeshoptSimplifier } from 'meshoptimizer';
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const opt = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => a.slice(2).split('=')));
@@ -82,8 +86,9 @@ for (let t = 0; t < idx.length; t += 3) {
   e.tris.push(t);
   for (let k = 0; k < 3; k++) e.maxY = Math.max(e.maxY, P.getElement(idx[t + k], [0, 0, 0])[1]);
 }
-const head = [...isl.values()].sort((a, b) => b.maxY - a.maxY)[0];
-console.log(`ilha da cabeça: ${head.tris.length} triângulos, topo y=${head.maxY.toFixed(3)}`);
+const cutY = opt.cuty !== undefined ? +opt.cuty : null;
+const head = cutY !== null ? { tris: [...isl.values()].flatMap((e) => e.tris) } : [...isl.values()].sort((a, b) => b.maxY - a.maxY)[0];
+console.log(`ilha da cabeça: ${head.tris.length} triângulos, topo y=${(head.maxY ?? NaN).toFixed(3)}`);
 
 const rgb2hsv = ([r, g, b]) => {
   r /= 255; g /= 255; b /= 255;
@@ -102,6 +107,7 @@ for (const t of head.tris) {
   const cy = (P.getElement(idx[t], [0, 0, 0])[1] + P.getElement(idx[t + 1], [0, 0, 0])[1] + P.getElement(idx[t + 2], [0, 0, 0])[1]) / 3;
   const cz = (P.getElement(idx[t], [0, 0, 0])[2] + P.getElement(idx[t + 1], [0, 0, 0])[2] + P.getElement(idx[t + 2], [0, 0, 0])[2]) / 3;
   // a nuca também é elmo (o rosto está na frente, em +z)
+  if (cutY !== null) { if (cy > cutY) hat.push(t); continue; }
   if (cy > top || (cz < headZ - 0.005 && cy > headY - 0.1)) { hat.push(t); forced.add(t); continue; }
   let votes = 0;
   const c = [0, 1, 2].map((k) => UV.getElement(idx[t + k], [0, 0]));
@@ -131,11 +137,18 @@ for (const t of hat) {
       pos.push(dOld[0] + (p[0] - dOld[0]) * sc * +(opt.xs ?? 1) + off[0], dOld[1] + (p[1] - dOld[1]) * sc + off[1], dOld[2] + (p[2] - dOld[2]) * zs + off[2]);
       nor.push(...n);
       let c = px(uv[0], uv[1]);
-      if (!metal(c) && (p[1] > top || p[2] < headZ - 0.005)) c = [150, 158, 172]; // cabelo sob o elmo: aço
+      if (cutY === null && !metal(c) && (p[1] > top || p[2] < headZ - 0.005)) c = [150, 158, 172]; // cabelo sob o elmo: aço
       col.push(lin(c[0]), lin(c[1]), lin(c[2]), 1);
     }
     ind.push(remap.get(i));
   }
+}
+// --maxtris=<n>: reduz o chapéu a n triângulos (o corpo do Meshy já usa ~7.400 dos 8.000 do orçamento)
+if (opt.maxtris && ind.length / 3 > +opt.maxtris) {
+  await MeshoptSimplifier.ready;
+  const [simp] = MeshoptSimplifier.simplify(Uint32Array.from(ind), new Float32Array(pos), 3, +opt.maxtris * 3, 1, []);
+  ind.length = 0;
+  for (const i of simp) ind.push(i);
 }
 const root = bare.getRoot();
 const buffer = root.listBuffers()[0];
