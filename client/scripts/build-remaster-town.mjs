@@ -18,6 +18,7 @@ import { flatten, getBounds, join } from '@gltf-transform/functions';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { bakeVertexAO } from './lib/vertex-ao.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const RAW = resolve(root, 'assets-src/meshy/raw');
@@ -26,11 +27,11 @@ const KIT = JSON.parse(readFileSync(resolve(import.meta.dirname, '../src/world/k
 
 /** kind: item KayKit que a peça substitui; mode: 'fit' (uniforme) | 'axes' (cada eixo) | 'meters' (altura/largura em m). */
 export const PIECES = {
-  tavern: { kind: 'tavern', mode: 'fit', scale: 9 },
-  church: { kind: 'church', mode: 'fit', scale: 9 },
-  blacksmith: { kind: 'blacksmith', mode: 'fit', scale: 9 },
+  tavern: { kind: 'tavern', mode: 'fit', scale: 9, stretchY: 1.25 },
+  church: { kind: 'church', mode: 'fit', scale: 9, stretchY: 1.35 },
+  blacksmith: { kind: 'blacksmith', mode: 'fit', scale: 9, stretchY: 1.15 },
   market: { kind: 'market', mode: 'fit', scale: 9 },
-  home_a: { kind: 'home_a', mode: 'fit', scale: 7.5 },
+  home_a: { kind: 'home_a', mode: 'fit', scale: 7.5, stretchY: 1.3 },
   home_b: { kind: 'home_b', mode: 'fit', scale: 7.5 },
   tower: { kind: 'tower_a', mode: 'fit', scale: 9 },
   wall: { kind: 'wall_straight', mode: 'axes' },
@@ -40,6 +41,10 @@ export const PIECES = {
   bench: { mode: 'meters', width: 1.9 },
   lamp: { mode: 'meters', height: 3.6 },
   sign: { mode: 'meters', height: 2.4 },
+  barrel: { kind: 'barrel', mode: 'fit', scale: 4.5, hmax: 1.6 },
+  crate: { kind: 'crate_a_big', mode: 'fit', scale: 4.5, hmax: 1.6 },
+  banner: { mode: 'meters', height: 0.29 }, // unidades do kit: o flag_blue do world.json tem escala 10
+  corner: { mode: 'meters', height: 7.6 }, // trecho de canto da muralha (extra, escala 1)
   // Identidade das regiões (adereços avulsos, só no remaster)
   tomb: { mode: 'meters', height: 1.5 },
   crystal: { mode: 'meters', height: 2.4 },
@@ -47,6 +52,9 @@ export const PIECES = {
 };
 
 const io = new NodeIO();
+/** AO por vértice em COLOR_0 (desligue com --no-ao). O piso é o quanto o AO mais fechado escurece (0 = preto). */
+const AO = !process.argv.includes('--no-ao');
+const AO_FLOOR = 0.55;
 
 function fixBadNormals(prim) {
   const pos = prim.getAttribute('POSITION');
@@ -100,7 +108,9 @@ export async function normalize(name) {
   else if (spec.mode === 'fit') {
     const R = 0.42 * Math.max(kw, kd); // raio do colisor em unidades do kit
     const u = Math.min(kw / w, kd / d, (kh * (spec.hmax ?? 1.15)) / h, (1.5 * R) / (0.5 * Math.hypot(w, d)));
-    s = [u, u, u];
+    // Depois da pegada, estica só em Y até a altura KayKit (no máximo stretchY): a pegada não muda.
+    const sy = spec.stretchY ? Math.min(Math.max(kh / (h * u), 1), spec.stretchY) : 1;
+    s = [u, u * sy, u];
   } else if (spec.mode === 'box') {
     const u = Math.min(spec.box[0] / w, spec.box[1] / h, spec.box[2] / d);
     s = [u, u, u];
@@ -129,6 +139,19 @@ export async function normalize(name) {
       // A inversão de dois eixos (rotação) mantém o sentido dos triângulos; escala positiva também.
     }
   }
+  if (AO) {
+    // AO por vértice em COLOR_0 (scripts/lib/vertex-ao.mjs); o jogo multiplica pela cor base.
+    const maxDist = 0.12 * Math.max(...dim.map((v, i) => v * s[i]));
+    const buffer = doc.getRoot().listBuffers()[0];
+    for (const mesh of doc.getRoot().listMeshes()) {
+      for (const prim of mesh.listPrimitives()) {
+        const ao = bakeVertexAO(prim.getAttribute('POSITION').getArray(), prim.getAttribute('NORMAL').getArray(), prim.getIndices().getArray(), { maxDist });
+        const col = new Uint8Array(ao.length * 3);
+        ao.forEach((a, i) => col.fill(Math.round(255 * (AO_FLOOR + (1 - AO_FLOOR) * a)), i * 3, i * 3 + 3));
+        prim.setAttribute('COLOR_0', doc.createAccessor().setType('VEC3').setArray(col).setNormalized(true).setBuffer(buffer));
+      }
+    }
+  }
   for (const node of doc.getRoot().listNodes()) node.setTranslation([0, 0, 0]).setRotation([0, 0, 0, 1]).setScale([1, 1, 1]);
   mkdirSync(OUT, { recursive: true });
   const file = resolve(OUT, `town_${name}_b.glb`);
@@ -138,7 +161,8 @@ export async function normalize(name) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const names = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(PIECES);
+  const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+  const names = args.length ? args : Object.keys(PIECES);
   for (const n of names) {
     const r = await normalize(n);
     const m = r.scale ?? (r.unit ? (n === 'cart' ? 4.5 : n === 'wall' || n === 'gate' ? 1 : 1) : 1);

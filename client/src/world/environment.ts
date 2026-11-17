@@ -14,7 +14,7 @@ import {
 import { loadNatureKit, natureExtras, remapNature } from "./nature-remaster";
 import { addRemasterPlaza } from "./plaza-remaster";
 import { REMASTER } from "./remaster";
-import { regionProps, townExtras } from "./town-layout";
+import { regionProps, townExtras, wallCorners } from "./town-layout";
 import { loadTownProtos } from "./town-remaster";
 import { monolithProtos } from "./teleport-stone";
 import { heightAt, terrain } from "./terrain";
@@ -84,6 +84,7 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
       ...natureExtras(world),
       ...townExtras(),
       ...regionProps(world).filter((o) => o.k === "town_pillar"),
+      ...wallCorners(world),
     ];
   }
 

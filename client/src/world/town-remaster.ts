@@ -11,6 +11,12 @@ import { EXTRA_FILES, TOWN_KITS } from "./town-layout";
 
 const BASE = "/models/";
 
+/**
+ * AO por vértice (COLOR_0) das peças, desligado por padrão: nos prints de dia ele assenta as bases dos
+ * prédios, mas de noite só escurece (docs/arte/remaster-cidade.md). `?remaster=1&ao=1` liga, para comparar.
+ */
+const VERTEX_AO = new URLSearchParams(location.search).get("ao") === "1";
+
 /** Carrega as peças: tipo → malha (já no espaço do mundo, sem o __root__ do glTF). */
 export async function loadTownProtos(scene: Scene): Promise<Map<string, Mesh>> {
   const files = { ...TOWN_KITS, ...EXTRA_FILES };
@@ -24,6 +30,8 @@ export async function loadTownProtos(scene: Scene): Promise<Map<string, Mesh>> {
       mesh.setParent(null);
       mesh.bakeCurrentTransformIntoVertices();
       mesh.name = `town:${kind}`;
+      // O AO assado por vértice multiplica a cor base (thin instances dividem a mesma geometria).
+      mesh.useVertexColors = VERTEX_AO;
       // Pedra, madeira e telha pintadas: sem metal e sem brilho de plástico.
       const mat = mesh.material;
       if (mat instanceof PBRMaterial) {

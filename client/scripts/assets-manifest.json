@@ -205,6 +205,12 @@
     "stone_golem_b.glb": {
       "categoria": "monstro"
     },
+    "town_banner_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_barrel_b.glb": {
+      "categoria": "cenario"
+    },
     "town_bench_b.glb": {
       "categoria": "cenario"
     },
@@ -215,6 +221,12 @@
       "categoria": "cenario"
     },
     "town_church_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_corner_b.glb": {
+      "categoria": "cenario"
+    },
+    "town_crate_b.glb": {
       "categoria": "cenario"
     },
     "town_crystal_b.glb": {
