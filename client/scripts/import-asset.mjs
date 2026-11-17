@@ -4,7 +4,7 @@
 //
 // Uso (dentro de client/):
 //   node scripts/import-asset.mjs <arquivo.glb> <categoria> [nome] [--check] [--force]
-//        [--no-lod] [--lod-prune] [--no-ktx2] [--etc1s] [--resize=<px>] [--max-tris=<n>] [--variantes=<regex>]
+//        [--no-lod] [--lod-prune] [--no-lod2=<regex>] [--no-ktx2] [--etc1s] [--resize=<px>] [--max-tris=<n>] [--variantes=<regex>]
 //   categorias: personagem, arma, monstro, chefe, cenario
 //   ex.: node scripts/import-asset.mjs ~/arte/CH_Knight/exports/CH_Knight.glb personagem knight_b
 //
@@ -52,7 +52,8 @@ if (maxTris) {
 }
 
 if (!flags.has('--no-lod')) {
-  const lod = await generateLods(doc, category, { prune: flags.has('--lod-prune') });
+  const noLod2 = process.argv.slice(2).find((a) => a.startsWith('--no-lod2='));
+  const lod = await generateLods(doc, category, { prune: flags.has('--lod-prune'), noLod2: noLod2 ? new RegExp(noLod2.slice(10)) : null });
   console.log(lod.generated ? `  LOD gerado: ${lod.generated} nó(s) _LOD1/_LOD2` : `  LOD: ${lod.skipped}`);
 }
 

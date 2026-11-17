@@ -16,6 +16,9 @@
     "anims-special.glb": {
       "categoria": "animacao"
     },
+    "barbarian_b.glb": {
+      "categoria": "personagem"
+    },
     "barbarian.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -54,6 +57,9 @@
         "^Head_"
       ]
     },
+    "mage_b.glb": {
+      "categoria": "personagem"
+    },
     "mage.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -87,6 +93,9 @@
     "props/loot_sack.glb": {
       "categoria": "cenario"
     },
+    "rogue_b.glb": {
+      "categoria": "personagem"
+    },
     "rogue.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -110,13 +119,7 @@
       }
     },
     "skeleton_minion_b.glb": {
-      "categoria": "monstro",
-      "excecoes": {
-        "lod2": {
-          "max": 967,
-          "motivo": "malha do Meshy em cascas soltas: o simplify trava perto desse piso (o limite é 500); só vale além de 35 m"
-        }
-      }
+      "categoria": "monstro"
     },
     "skeleton_minion.glb": {
       "categoria": "monstro",
@@ -132,13 +135,7 @@
       }
     },
     "skeleton_rogue_b.glb": {
-      "categoria": "monstro",
-      "excecoes": {
-        "lod2": {
-          "max": 824,
-          "motivo": "malha do Meshy em cascas soltas: o simplify trava perto desse piso (o limite é 500); só vale além de 35 m"
-        }
-      }
+      "categoria": "monstro"
     },
     "skeleton_rogue.glb": {
       "categoria": "monstro",
@@ -170,13 +167,7 @@
       }
     },
     "stone_golem_b.glb": {
-      "categoria": "monstro",
-      "excecoes": {
-        "lod2": {
-          "max": 608,
-          "motivo": "malha do Meshy em cascas soltas: o simplify trava perto desse piso (o limite é 500); só vale além de 35 m"
-        }
-      }
+      "categoria": "monstro"
     },
     "weapons/axe_1handed.glb": {
       "categoria": "arma"

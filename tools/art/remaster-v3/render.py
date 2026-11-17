@@ -24,8 +24,8 @@ os.makedirs(out, exist_ok=True)
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete()
 bpy.ops.import_scene.gltf(filepath=glb)
-arm = next(o for o in bpy.data.objects if o.type == "ARMATURE")
-mesh = next(o for o in bpy.data.objects if o.type == "MESH" and o.parent == arm)
+arm = next((o for o in bpy.data.objects if o.type == "ARMATURE"), None)  # sem esqueleto: só o modo angles
+mesh = next(o for o in bpy.data.objects if o.type == "MESH" and (arm is None or o.parent == arm))
 sc = bpy.context.scene
 sc.render.fps = 30
 actions = list(bpy.data.actions)
@@ -121,9 +121,10 @@ def sheet(images, cols, path):
     out_img.save()
 
 center = mathutils.Vector((0, 0, h / 2))
-idle = next((a for a in actions if a.name.endswith("Idle")), actions[0])
-s, e = play(idle)
-sc.frame_set(s)
+if actions:
+    idle = next((a for a in actions if a.name.endswith("Idle")), actions[0])
+    s, e = play(idle)
+    sc.frame_set(s)
 if mode == "angles":
     imgs = []
     for name, d in (("front", (0, -1, 0)), ("tq", (-0.7, -0.7, 0.15)), ("side", (-1, 0, 0)), ("back", (0, 1, 0))):
@@ -131,9 +132,15 @@ if mode == "angles":
         imgs.append(shot(os.path.join(out, f"_{name}.png")))
     sheet(imgs, 4, os.path.join(out, f"{prefix}-angulos.jpg"))
 else:
-    for act in actions:
+    # clips = todos os clipes (7 quadros); range:<clipe>:<ini s>:<fim s>:<n> = um trecho de um clipe com n quadros
+    sel = [(a, 7, None) for a in actions]
+    if mode.startswith("range:"):
+        _, cname, t0, t1, cn = mode.split(":")
+        sel = [(a, int(cn), (float(t0) * 30, float(t1) * 30)) for a in actions if a.name == cname]
+    for act, n, win in sel:
         s, e = play(act)
-        n = 7
+        if win:
+            s, e = int(win[0]), min(int(win[1]), e)
         frames = [s + round(i * (e - s) / (n - 1)) for i in range(n)]
         imgs = []
         for f in frames:
@@ -141,7 +148,7 @@ else:
             hips = bone_world("mixamorig:Hips", f)
             aim((-1, 0, 0), mathutils.Vector((hips.x, hips.y, h / 2)))  # câmera segue o quadril em x/y
             imgs.append(shot(os.path.join(out, f"_f{f}.png"), 160, 240))
-        sheet(imgs, 7, os.path.join(out, f"{prefix}-clip-{act.name}.jpg"))
+        sheet(imgs, n, os.path.join(out, f"{prefix}-clip-{act.name}.jpg"))
 for f in os.listdir(out):
     if f.startswith("_"):
         os.remove(os.path.join(out, f))

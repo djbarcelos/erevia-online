@@ -59,15 +59,14 @@ Fases do Ozrhal: o servidor decide as fases (`zone/raid.go`); o cliente toca o q
 
 | Peça | LOD0 | LOD1 | LOD2 | Orçamento | Ossos | Textura | Arquivo |
 |---|---|---|---|---|---|---|---|
-| Lacaio | 3.969 | 1.487 | 967 | monstro 4.000 / 1.500 / 500 | 30 | 1024 KTX2 | `skeleton_minion_b.glb` 1,9 MB |
-| Ladino | 3.969 | 1.156 | 824 | idem | 30 | 1024 KTX2 | `skeleton_rogue_b.glb` 2,0 MB |
+| Lacaio | 3.969 | 1.487 | 436 | monstro 4.000 / 1.500 / 500 | 30 | 1024 KTX2 | `skeleton_minion_b.glb` 1,9 MB |
+| Ladino | 3.969 | 1.156 | 416 | idem | 30 | 1024 KTX2 | `skeleton_rogue_b.glb` 2,0 MB |
 | Mago | 3.969 | 1.267 | 499 | idem | 30 | 1024 KTX2 | `skeleton_mage_b.glb` 2,0 MB |
-| Golem | 3.970 | 1.488 | 608 | idem | 30 | 1024 KTX2 | `stone_golem_b.glb` 1,9 MB |
+| Golem | 3.970 | 1.488 | 429 | idem | 30 | 1024 KTX2 | `stone_golem_b.glb` 1,9 MB |
 | Senhor dos Ossos | 9.494 | 3.154 | 1.104 | chefe 15.000 / 5.000 / 2.000 | 30 | 2048 KTX2 | `bone_lord_b.glb` 5,8 MB |
 | Ozrhal | 9.553 | 3.157 | 1.319 | chefe idem | 30 | 2048 KTX2 | `ozrhal_b.glb` 6,0 MB |
 
-Exceções registradas no manifesto (`assets-manifest.json`): o LOD2 do lacaio, do ladino e do golem passa de 500 (967, 824 e 608). A malha do Meshy é feita de cascas soltas e o simplify do meshoptimizer trava perto desse piso; o LOD2 só vale além de 35 m. O Meshy entrega 3% a mais de triângulos que o pedido, então o import ganhou `--max-tris` (aperta o LOD0 até o limite, 4.031 para 3.969).
-
+Depois do merge com a main (que trouxe o `simplifySloppy` dos heróis), o LOD2 dos três comuns que travavam voltou ao orçamento (436, 416 e 429): a bisseção do erro roda primeiro e o `simplifySloppy` entra se ainda sobrar mais de 120% do alvo. Sem exceções no manifesto. 
 Mudanças no pipeline (`client/scripts/`):
 
 - `import-asset.mjs --max-tris=<n>` + `capTriangles` em `lib/asset-optimize.mjs` (com teste).
@@ -113,7 +112,7 @@ A diferença (8% e 4%) está dentro do ruído do SwiftShader, que gasta o tempo 
 ## Em aberto
 
 1. O Ozrhal e o Senhor dos Ossos não têm print de corpo inteiro no jogo: o personagem de teste chega perto e a câmera, que demora a recentrar depois do `/tp`, não os enquadra de longe de forma automática. O Blender (`angulos-golem-chefes.jpg`) mostra a silhueta completa.
-2. LOD2 acima de 500 no lacaio, ladino e golem (exceções no manifesto).
+2. (resolvido no merge: LOD2 dentro do orçamento nos seis modelos.)
 3. Peso: 1,9 a 2,0 MB por comum e ~6 MB por chefe (UASTC); ETC1S cortaria bastante, testar.
 4. Os monstros que usam as ações religadas (parado, dano, morte) compartilham o mesmo "dano" e a mesma "morte" do esqueleto guerreiro; trocar por ações próprias custa 3 créditos cada. A pose parada do lacaio (crânio grande) inclina bastante a cabeça; um idle próprio resolve.
 5. A repintura de pele/cor por máscara não existe para os monstros (o `tint` multiplicativo das variantes funciona, mas não foi conferido em jogo no remaster).

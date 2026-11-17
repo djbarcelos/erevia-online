@@ -12,6 +12,9 @@ export const REMASTER = new URLSearchParams(location.search).get("remaster") ===
 /** Modelo do jogo → arquivo remasterizado (sem a extensão). */
 export const REMASTER_FILES: Record<string, string> = {
   knight: "knight_b",
+  barbarian: "barbarian_b",
+  mage: "mage_b",
+  rogue: "rogue_b",
   skeleton_warrior: "skeleton_warrior_b",
   // Bestiário (tunnel#98).
   skeleton_minion: "skeleton_minion_b",
@@ -49,6 +52,9 @@ export const REMASTER_HEIGHTS: Record<string, number> = {
 /** Modelo do jogo → máscara de repintura (PNG ao lado do GLB; ver scripts/make-remaster-mask.mjs). */
 export const REMASTER_MASKS: Record<string, string> = {
   knight: "knight_b.mask.png",
+  barbarian: "barbarian_b.mask.png",
+  mage: "mage_b.mask.png",
+  rogue: "rogue_b.mask.png",
 };
 
 /** Distâncias (m) a partir das quais cada LOD entra (guia de arte, seção 5). */
