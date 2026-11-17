@@ -235,13 +235,12 @@ func (z *Zone) switchClass(p *entity, n *entity, class string) {
 		return
 	}
 	level := game.LevelForXP(target.XP)
-	inv := &pl.inv
-	var off []int // encaixes com o que a classe nova não usa
-	for i := range inv.equip {
-		if s := inv.equip[i]; !s.empty() && canEquip(s.def, i, class, level) != "" {
-			off = append(off, i)
-		}
+	newSpec := ""
+	if game.SpecFor(class, target.Spec) != nil {
+		newSpec = target.Spec
 	}
+	inv := &pl.inv
+	off := inv.invalidGear(class, newSpec, level) // encaixes com o que a classe nova não usa
 	free := 0
 	for _, s := range inv.bag {
 		if s.empty() {
@@ -258,10 +257,7 @@ func (z *Zone) switchClass(p *entity, n *entity, class string) {
 	z.cancelChannel(p, "")
 	p.clearAction()
 	storeActive(p, set)
-	for _, i := range off {
-		b := inv.firstFree()
-		inv.bag[b], inv.equip[i] = inv.equip[i], stack{}
-	}
+	inv.dropInvalidGear(class, newSpec, level)
 	hpFrac, mpFrac := barFrac(p.hp, p.stats.MaxHP), barFrac(p.mp, p.stats.MaxMP)
 	spec := ""
 	if game.SpecFor(class, target.Spec) != nil {

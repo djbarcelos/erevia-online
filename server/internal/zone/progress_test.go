@@ -636,3 +636,31 @@ func TestExecuteTwinBladesJudgmentLifestealSplashParalysis(t *testing.T) {
 		t.Errorf("ember rain should splash: %v", hit)
 	}
 }
+
+// A mecânica reage ao tipo da passiva, não ao ID: um total de PassiveLifesteal injetado
+// (como uma skill nova de qualquer classe daria) faz o roubo de vida funcionar.
+func TestLifestealByPassiveKind(t *testing.T) {
+	z := newCombatZone(fixed("skeleton_warrior", 10, 32, 0))
+	var m *entity
+	for _, mm := range z.monsters {
+		m = mm
+	}
+	r, _ := joinAt(z, 1, "rogue", 31, 0, 0)
+	atLevel(z, r, 20)
+	m.stats.MaxHP, m.hp = 1e6, 1e6
+	r.hp = r.stats.MaxHP / 2
+	hp := r.hp
+	for i := 0; i < 8; i++ {
+		z.basicAttack(r, m)
+	}
+	if r.hp > hp {
+		t.Fatal("sem a passiva não deve curar")
+	}
+	r.pl.passives[game.PassiveLifesteal] = 0.5
+	for i := 0; i < 8; i++ {
+		z.basicAttack(r, m)
+	}
+	if r.hp <= hp {
+		t.Error("PassiveLifesteal deveria curar, de qualquer skill")
+	}
+}

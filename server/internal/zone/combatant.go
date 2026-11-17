@@ -29,6 +29,7 @@ type activeEffect struct {
 	kind     game.EffectKind
 	value    float64
 	until    float64
+	duration float64 // duração com que foi aplicado (o contágio da Praga repete)
 	source   uint32  // quem aplicou (venenos dão o crédito do abate; provocar aponta o alvo)
 	nextTick float64 // venenos/queimaduras: próximo segundo de dano
 }
@@ -90,6 +91,8 @@ type playerState struct {
 	// Progressão (Fase B): pontos de atributo gastos, ranks da árvore e barra de atalhos.
 	attrs  game.Attrs
 	ranks  map[uint32]int
+	// passives: o total de cada tipo de passiva aprendida (refreshStats recalcula).
+	passives game.Passives
 	hotbar []string
 	// Especialização (segunda classe, nível 20): id do caminho ("" = ainda não escolheu).
 	spec string
@@ -263,7 +266,7 @@ func (e *entity) def(magic bool, now float64) float64 {
 
 // addEffect aplica (ou renova) um efeito; o mais novo do mesmo tipo substitui o antigo.
 func (e *entity) addEffect(def *game.EffectDef, now float64, source uint32) {
-	ef := activeEffect{kind: def.Kind, value: def.Value, until: now + def.Duration, source: source, nextTick: now + 1}
+	ef := activeEffect{kind: def.Kind, value: def.Value, until: now + def.Duration, duration: def.Duration, source: source, nextTick: now + 1}
 	for i := range e.effects {
 		if e.effects[i].kind == def.Kind {
 			e.effects[i] = ef

@@ -113,7 +113,7 @@ func bridgeItems() []*ItemDef {
 					name, aname = name+" "+c.weaponRare, aname+" "+c.armorRare
 					price *= 3
 				}
-				w := weapon(BridgeWeaponID(c.class, lvl, g), name, c.class, g, lvl, scaleBonus(c.weaponStats, f), price, c.model, c.off, wDesc)
+				w := weapon(generatedWeaponType(c.class, c.model), BridgeWeaponID(c.class, lvl, g), name, c.class, g, lvl, scaleBonus(c.weaponStats, f), price, c.model, c.off, wDesc)
 				a := gear(BridgeArmorID(c.class, lvl, g), aname, KindArmor, []string{c.class}, g, lvl, scaleBonus(c.armorStats, f), price, "", "armor", aDesc)
 				w.Bridge, a.Bridge = true, true
 				out = append(out, w, a)

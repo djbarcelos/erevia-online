@@ -224,6 +224,10 @@ message SpecInfo {
   string color = 5; // "#rrggbb"
   Attrs bonus = 6; // bônus passivo de atributos
   string bonus_text = 7; // "+12 Constituição"
+  // Armas e mãos secundárias que a especialização usa; vazio = as da classe (Welcome.weapons
+  // descreve cada tipo de arma).
+  repeated string weapons = 8;
+  repeated string offhands = 9;
 }
 
 // ---------- Ranking, conquistas e títulos ----------
@@ -1054,6 +1058,21 @@ message Welcome {
   repeated SpecInfo specs = 22; // as especializações de todas as classes
   string map = 23; // id do mapa desta zona ("" ou "starter" = o mapa de sempre, /world.json)
   string map_title = 24; // nome do mapa (minimapa e mapa do mundo)
+  repeated WeaponInfo weapons = 25; // os tipos de arma: alcance, intervalo, empunhadura
+}
+
+// Um tipo de arma (sword, axe, axe2h, staff, wand, daggers, bow, crossbow, crossbow2h). Alcance
+// e intervalo são os do ataque básico com a arma equipada (antes da Destreza).
+message WeaponInfo {
+  string type = 1;
+  string name = 2;
+  float range = 3; // metros
+  float interval = 4; // segundos entre ataques básicos
+  bool magic = 5; // o ataque básico usa MAtk/MDef
+  uint32 hands = 6; // 1 ou 2 (arma de 2 mãos ocupa a mão secundária)
+  bool dual = 7; // arma dupla: também ocupa a mão secundária
+  string anim = 8; // animação do ataque
+  string projectile = 9; // projétil ("" = corpo a corpo)
 }
 
 // Zona de caça: um anel (ou setor de anel) ao redor da cidade, um disco próprio ou um ponto
@@ -1319,7 +1338,7 @@ message ItemInfo {
   // Encaixes onde o item pode ir (0 arma, 1 mão secundária, 2 peito, 3 cabeça, 4 pernas,
   // 5 mãos, 6 pés, 7 capa, 8 colar, 9–10 brincos, 11–12 anéis). `slot` é o primeiro.
   repeated uint32 slots = 20;
-  string weapon_type = 21; // armas: sword, axe, staff, daggers
+  string weapon_type = 21; // armas: sword, axe, axe2h, staff, wand, daggers, bow, crossbow, crossbow2h
   ScrollKind scroll = 22;
   bool blessed = 23; // pergaminho abençoado: falhar não quebra (volta a +0)
   // Graus de equipamento (tunnel#153). O grau sai do nível exigido; abaixo de tier_level a
@@ -1331,6 +1350,7 @@ message ItemInfo {
   // conjunto; nas outras, só id e nome: o cliente junta pelo id.
   ItemSetInfo set = 27;
   ItemBonus under_level = 28; // o que vestir antes de req_level tira (uma vez, com uma ou mais peças); vazio = não se aplica
+  uint32 hands = 29; // armas: 1 ou 2 mãos (0 = não é arma)
 }
 
 // Conjunto de armadura (tunnel#153): as peças comuns, na ordem do corpo (a versão épica de
