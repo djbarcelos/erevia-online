@@ -205,6 +205,8 @@ export class RaidDirector {
         if (!d.crown && m.parent instanceof TransformNode) d.crown = this.buildCrown(m.parent);
         continue;
       }
+      // Ozrhal do remaster (ozrhal_b): a malha do Meshy já tem coroa, ossos e cores próprios.
+      if (/^Mesh_\d/.test(m.name)) continue;
       this.tint(m);
     }
   }

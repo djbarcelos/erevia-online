@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { checkAssets } from '../../scripts/check-assets.mjs';
 import { measure } from '../../scripts/lib/asset-budget.mjs';
-import { compressTextures, generateLods, resizeTextures } from '../../scripts/lib/asset-optimize.mjs';
+import { capTriangles, compressTextures, generateLods, resizeTextures } from '../../scripts/lib/asset-optimize.mjs';
 import { denseDoc, makeDoc, writeGlb } from './helpers.mjs';
 
 // Registrar a extensão ensina o gltf-transform a medir imagens KTX2.
@@ -64,6 +64,17 @@ test('resizeTextures reduz por potências de 2 até o limite e deixa texturas pe
   const small = makeDoc({ nodes: [['Corpo', 4]], texture: 32 });
   assert.equal(await resizeTextures(small, 64), 0);
   assert.equal(measure(small).texture, 32);
+});
+
+test('capTriangles simplifica o LOD0 até o limite e não mexe em quem já cabe', async () => {
+  const fits = denseDoc(30);
+  const r0 = await capTriangles(fits, 100000);
+  assert.equal(r0.before, r0.after);
+  const doc = denseDoc(60); // 7200 triângulos
+  const r = await capTriangles(doc, 6000);
+  assert.equal(r.before, 7200);
+  assert.ok(r.after <= 6000 && r.after > 4000, `depois ${r.after}`);
+  assert.equal(measure(doc).tris[0], r.after);
 });
 
 test('generateLods com prune também gera os dois LODs', async () => {

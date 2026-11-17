@@ -31,6 +31,9 @@
         }
       }
     },
+    "bone_lord_b.glb": {
+      "categoria": "chefe"
+    },
     "env-forest.glb": {
       "categoria": "cenario",
       "porPeca": true
@@ -75,6 +78,9 @@
         }
       }
     },
+    "ozrhal_b.glb": {
+      "categoria": "chefe"
+    },
     "plaza_BannerPost_b.glb": {
       "categoria": "cenario"
     },
@@ -96,6 +102,9 @@
         "^Head_"
       ]
     },
+    "skeleton_mage_b.glb": {
+      "categoria": "monstro"
+    },
     "skeleton_mage.glb": {
       "categoria": "monstro",
       "excecoes": {
@@ -109,6 +118,9 @@
         }
       }
     },
+    "skeleton_minion_b.glb": {
+      "categoria": "monstro"
+    },
     "skeleton_minion.glb": {
       "categoria": "monstro",
       "excecoes": {
@@ -121,6 +133,9 @@
           "motivo": "KayKit legado, substituído na #98"
         }
       }
+    },
+    "skeleton_rogue_b.glb": {
+      "categoria": "monstro"
     },
     "skeleton_rogue.glb": {
       "categoria": "monstro",
@@ -150,6 +165,9 @@
           "motivo": "KayKit legado, substituído na #98"
         }
       }
+    },
+    "stone_golem_b.glb": {
+      "categoria": "monstro"
     },
     "weapons/axe_1handed.glb": {
       "categoria": "arma"

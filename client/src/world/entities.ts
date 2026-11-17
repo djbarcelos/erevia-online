@@ -48,6 +48,7 @@ import { settings } from "../ui/kit";
 import { skillFxColors } from "../ui/skill-themes";
 import type { EntityProbe } from "../net/invariants";
 import { FIGHT_MS, type HuntCandidate } from "./huntrules";
+import { remasterModelOf } from "./remaster";
 import { ARCH, neutralNow } from "./roles";
 import { groundClearance, heightAt, terrain } from "./terrain";
 
@@ -1734,7 +1735,11 @@ export class EntityManager {
 
   private attachModel(v: View): void {
     if (v.model3d || !this.models) return;
-    const inst = this.models.instantiate(v.model, String(v.id), undefined, v.look);
+    // ?remaster=1: os chefes com silhueta própria (Senhor dos Ossos, Ozrhal) têm modelo à parte.
+    const bossModel = v.boss ? remasterModelOf(v.model, true) : v.model;
+    const inst =
+      (bossModel !== v.model ? this.models.instantiate(bossModel, String(v.id), undefined, v.look) : null) ??
+      this.models.instantiate(v.model, String(v.id), undefined, v.look);
     if (!inst) return;
     if (v.kind === EntityKind.PLAYER) inst.setWeapons(v.weapon, v.offhand, v.grade, v.weaponEnchant);
     inst.root.parent = v.visual;
