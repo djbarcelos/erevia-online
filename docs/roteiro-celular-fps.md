@@ -22,7 +22,7 @@ Troque `SEU-ENDERECO` pelo endereço do jogo (o mesmo que você abre para jogar)
 | 2 | `https://SEU-ENDERECO/?bench=1&remaster=1&quality=media` | o remaster no preset médio |
 | 3 | `https://SEU-ENDERECO/?bench=1&quality=baixa` | o jogo de hoje (sem `remaster`), para comparar |
 
-(`quality=alta` é opcional: só vale num aparelho topo de linha.)
+(`quality=alta` é opcional: só vale num aparelho topo de linha.) Uma rodada extra, se der tempo: `https://SEU-ENDERECO/?bench=1&remaster=1&quality=baixa&chunks=1` (liga os recortes da natureza, que no computador não ganharam FPS; no celular a GPU pode pesar mais).
 
 Como abrir: cole o endereço com `?bench=1...` na barra do navegador, entre no mundo normalmente e **não toque em nada**. Uma caixa preta aparece em cima da tela com "Aquecendo..." e depois "Medindo FPS n/36...". A câmera passa pelas 10 regiões, de dia e de noite. Dura uns 3 minutos.
 

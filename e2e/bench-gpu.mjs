@@ -123,7 +123,7 @@ try {
       await cdpProf.send("Profiler.setSamplingInterval", { interval: 200 });
       await cdpProf.send("Profiler.start");
     }
-    await page.waitForFunction(() => window.__ereviaBench?.done === true, null, { timeout: 15 * 60_000, polling: 2000 });
+    await page.waitForFunction(() => window.__ereviaBench?.done === true, null, { timeout: 6 * 60_000, polling: 2000 });
     const seconds = (Date.now() - t0) / 1000;
     if (cdpProf) {
       const { profile } = await cdpProf.send("Profiler.stop");

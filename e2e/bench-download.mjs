@@ -78,7 +78,7 @@ try {
       // Os modelos (personagens) e o cenário chegam em segundo plano: espera os dois marcadores do cliente.
       const marks = async () => page.evaluate(() => Object.fromEntries(performance.getEntriesByType("mark").filter((m) => m.name.startsWith("erevia:")).map((m) => [m.name, Math.round(m.startTime)])));
       let mk = await marks();
-      for (let i = 0; i < 1200 && !(mk["erevia:modelos"] && mk["erevia:cenario"]); i++) {
+      for (let i = 0; i < (net === "3g" ? 600 : 120) && !(mk["erevia:modelos"] && mk["erevia:cenario"]); i++) {
         await page.waitForTimeout(500);
         mk = await marks();
       }
