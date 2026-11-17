@@ -29,8 +29,15 @@ func TestStonesAreListedWithDestinations(t *testing.T) {
 			continue
 		}
 		n++
-		if len(info.Dests) != len(teleportStones)-1 {
-			t.Fatalf("stone %d lists %d destinations", info.Id, len(info.Dests))
+		// As pedras listam as outras pedras; o barco do Brejo lista só o outro lado da lagoa.
+		same := 0
+		for _, o := range teleportStones {
+			if o.ferry == teleportStones[z.npcs[info.Id].npc.stone].ferry {
+				same++
+			}
+		}
+		if len(info.Dests) != same-1 {
+			t.Fatalf("stone %d lists %d destinations, want %d", info.Id, len(info.Dests), same-1)
 		}
 		if z.npcs[info.Id].name == info.Dests[0].Name {
 			t.Fatal("a stone does not list itself")
@@ -42,7 +49,7 @@ func TestStonesAreListedWithDestinations(t *testing.T) {
 }
 
 func TestValeStoneIsLastAndKeepsOldIDs(t *testing.T) {
-	want := []string{"Cidade", "Arredores", "Campos dos Ossos", "Ermos Partidos", "Vale das Pedras Vivas"}
+	want := []string{"Cidade", "Arredores", "Campos dos Ossos", "Ermos Partidos", "Vale das Pedras Vivas", "Posto do Barqueiro", "Cais do Barqueiro", "Ilha dos Vaga-lumes"}
 	if len(teleportStones) != len(want) {
 		t.Fatalf("%d pedras, esperava %d", len(teleportStones), len(want))
 	}

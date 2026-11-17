@@ -63,6 +63,7 @@ const (
 	TalkMonk     = "Gaspar"   // Fundo do Vale
 	TalkKnight   = "Bertrand" // Vigília Ossária
 	TalkCaptain  = "Rovena"   // Confins Partidos
+	TalkFerry    = "Tomé"     // Brejo de Lamagris (o Barqueiro, no Posto)
 	TalkMerchant = "Lívia"
 	TalkSmith    = "Bruno"
 	TalkBoard    = "Iselda"
@@ -212,7 +213,30 @@ var Talkers = []*Talker{
 				Text: "Cinco Pedras-Selo prendem o rei, uma em cada canto das Terras Partidas. A Ordem tem a primeira. " +
 					"As outras estão no Brejo, nas Minas de Brasaferro, na Costa e nas Ruínas de Ilvaren. Quando as estradas para lá abrirem, a Guarda vai precisar de você."},
 		}},
+	brejoTalker, // Brejo de Lamagris (tunnel#139): o Barqueiro
 }
+
+// brejoTalker: Tomé, o Barqueiro, no Posto do Barqueiro (a entrada do Brejo). Fica no fim da lista (os ids
+// dos NPCs seguem a ordem). O barco dele é a pedra do cais (zone/teleport.go).
+var brejoTalker = &Talker{Name: TalkFerry, Title: "Barqueiro do Brejo", Region: BrejoRegion,
+	Spawn:    &TalkSpawn{Model: "barbarian", X: 169, Z: -3, Look: &Appearance{Skin: 2, Hair: 6, Outfit: 3, Head: "barbarian"}},
+	Greeting: "Cuidado com onde pisa, forasteiro. O Brejo come bota, e depois come o dono da bota. Eu levo e trago gente pela lagoa, e faço Antídoto para quem tem juízo.",
+	Busy:     "A lagoa não espera, e eu também não. Termine o que combinamos.",
+	Accepted: "Vá com cuidado. Quem volta do Brejo conta; quem não volta vira conversa de Afogado.",
+	Idle:     "Por ora não tenho mais o que lhe pedir. O barco leva à Ilha dos Vaga-lumes por 10 moedas, e o Ferreiro Bruno faz o Antídoto, se você trouxer as glândulas.",
+	Topics: []TalkTopic{
+		{ID: "regiao", Label: "Sobre o Brejo de Lamagris",
+			Text: "O Lamagris era um rio que ia da serra ao mar. Quando a Partição derrubou a encosta, ele se espalhou e se afogou em cima de Vau Velho, a minha aldeia. " +
+				"A água parada guardou os mortos, e o veneno do selo do rei, que escorre pelos veios, levanta os Afogados de noite."},
+		{ID: "brejeiros", Label: "Sobre os Brejeiros",
+			Text: "Homens-lagarto, que sempre viveram aqui. Não servem a ninguém: defendem a água deles. De dia deixam o viajante passar; " +
+				"à noite, com os Afogados rondando, entram em pânico e atacam quem vir. Bata em um deles de dia e o acampamento inteiro vem junto."},
+		{ID: "barco", Label: "Sobre o barco",
+			Text: "O bote ao lado do cais atravessa a lagoa até a Ilha dos Vaga-lumes, por 10 moedas a ida e 10 a volta. Lá à noite as luzinhas sobem do capim e dá até para esquecer onde se está."},
+		{ID: "antidoto", Label: "Sobre o Antídoto",
+			Text: "O veneno do Brejo derruba o mais valente em dois minutos. A Glândula de Sapo e o Junco-de-Prata, que só cresce na margem, dão um remédio que limpa o veneno na hora. " +
+				"Eu ensinei a receita ao Ferreiro Bruno, na cidade: leve as duas coisas a ele."},
+	}}
 
 // TalkerByName: a conversa do NPC pelo nome (nil se ele não conversa).
 func TalkerByName(name string) *Talker {

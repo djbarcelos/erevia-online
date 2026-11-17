@@ -9,7 +9,9 @@
  *   importantes: praça, pedras de teleporte, chefes, covil do raid, spawns da estrada);
  * - no resto, colinas de até ~1,8 m de altura e inclinação máxima de ~6° (a altura sobe a
  *   partir do plano, nunca fica abaixo dele, então estradas e praça ficam nos vales);
- * - o lago fica fora do retângulo jogável (a água não bloqueia nada: ninguém chega nela).
+ * - a lagoa de Vau Velho (Brejo de Lamagris, tunnel#139) fica no meio do pântano: rasa e andável (o servidor não
+ *   sabe dela), com duas partes fundas (a aldeia afogada e o fosso da Ilha dos Vaga-lumes), que o servidor bloqueia
+ *   com colisores; o pântano é quase plano.
  *
  * Este arquivo não importa nada do Babylon (roda no `npm run test:unit`).
  */
@@ -37,7 +39,7 @@ const VALE_HILL_SCALE = 0.55;
 /** Cripta: plano dentro do retângulo do bioma. */
 const CRYPT_BLEND = 14;
 
-/** Lago: elipse fora da borda leste do mapa principal. */
+/** Lagoa de Vau Velho: uma elipse rasa com partes fundas e uma ilha (a entrada `brejo` do world.json). */
 export interface Lake {
   cx: number;
   cz: number;
@@ -45,19 +47,41 @@ export interface Lake {
   rz: number;
   /** Altura da superfície da água. */
   level: number;
+  /** Partes fundas (a água passa do joelho; o servidor bota colisores em volta). */
+  deeps: { x: number; z: number; r: number }[];
+  /** Ilha dentro de uma parte funda (sobe acima da água). */
+  island: { x: number; z: number; r: number } | null;
 }
 
 /** Altura do chão de fora do mapa (além da malha do terreno). */
 export const EDGE_Y = -2.2;
 
-/** Fundo da bacia do lago (m). */
-const LAKE_BED = -1.9;
+/** Fundo da parte rasa da lagoa (m): a água bate no joelho (a superfície fica em −0,35). */
+const LAKE_SHALLOW = -0.8;
+/** Fundo das partes fundas (m). */
+const LAKE_DEEP = -1.9;
+/** Quanto a ilha sobe acima da água (m). */
+const ISLAND_UP = 0.3;
+/** O pântano é quase plano: as colinas dele valem esta fração. */
+const BREJO_HILL_SCALE = 0.25;
+const BREJO_BLEND = 16;
+/** Posto do Barqueiro e cais: planos num disco (raio, e a faixa em que a colina volta). */
+const POST_FLAT = 14;
+const DOCK_FLAT = 9;
+const SPOT_BLEND = 10;
+/** A parte funda desce em tanto (m) além do raio dela. */
+const DEEP_BANK = 4;
 /** Distância normalizada (u) em que a bacia começa e em que chega ao fundo. */
 const LAKE_BANK_OUT = 1.55;
 const LAKE_BANK_IN = 0.85;
 
-/** O lago do mapa principal. A margem oeste (u = 1,2) fica em x ≈ 153, depois da borda (150). */
-export const MAIN_LAKE: Lake = { cx: 190, cz: 52, rx: 31, rz: 38, level: -0.35 };
+/** A lagoa do mapa (a entrada `brejo` do world.json); null se o mapa não tem o Brejo. */
+export function lakeOf(world: WorldData): Lake | null {
+  const b = biomeById(world, "brejo");
+  const l = b?.lagoon;
+  if (!l) return null;
+  return { cx: l.x, cz: l.z, rx: l.rx, rz: l.rz, level: l.level, deeps: b.deeps ?? [], island: b.island ?? null };
+}
 
 // ---------------------------------------------------------------------------------------
 // Ruído (determinístico, sem texturas)
@@ -139,8 +163,18 @@ function distToRect(x: number, z: number, r: Bounds): number {
   return Math.hypot(dx, dz);
 }
 
-function biomeById(world: WorldData, id: string): { bounds?: Bounds; vale?: { x: number; z: number; r: number } } | null {
-  const b = world.biomes?.find((e) => e.id === id) as { bounds?: Bounds; vale?: { x: number; z: number; r: number } } | undefined;
+interface BiomeInfo {
+  bounds?: Bounds;
+  vale?: { x: number; z: number; r: number };
+  lagoon?: { x: number; z: number; rx: number; rz: number; level: number };
+  deeps?: { x: number; z: number; r: number }[];
+  island?: { x: number; z: number; r: number };
+  post?: { x: number; z: number };
+  dock?: { x: number; z: number };
+}
+
+function biomeById(world: WorldData, id: string): BiomeInfo | null {
+  const b = world.biomes?.find((e) => e.id === id) as BiomeInfo | undefined;
   if (b) return b;
   if (id === "vale" && world.biome) return { vale: world.biome.vale, bounds: { minX: -1e9, maxX: 1e9, minZ: world.biome.zTo, maxZ: world.biome.zFrom } };
   return null;
@@ -161,7 +195,9 @@ export function buildHeightField(world: WorldData, hilly = true, withLake = true
   if (!hilly) return { ...FLAT_FIELD, extent, bounds, world };
 
   const isMain = !world.id || world.id === "starter";
-  const lake = isMain && withLake ? MAIN_LAKE : null;
+  const lake = isMain && withLake ? lakeOf(world) : null;
+  const brejo = biomeById(world, "brejo");
+  const brejoZone = brejo?.bounds ?? null;
   const crypt = biomeById(world, "cripta")?.bounds ?? null;
   const vale = biomeById(world, "vale");
   const valeDisc = vale?.vale ?? null;
@@ -189,6 +225,12 @@ export function buildHeightField(world: WorldData, hilly = true, withLake = true
       }
     }
     if (m > 0 && crypt) m = Math.min(m, smoothstep(0, CRYPT_BLEND, distToRect(x, z, crypt)));
+    if (m > 0 && brejoZone) {
+      // O pântano é quase plano; o posto e o cais ficam planos de vez.
+      m *= 1 - (1 - BREJO_HILL_SCALE) * (1 - smoothstep(0, BREJO_BLEND, distToRect(x, z, brejoZone)));
+      if (brejo?.post) m = Math.min(m, smoothstep(POST_FLAT, POST_FLAT + SPOT_BLEND, Math.hypot(x - brejo.post.x, z - brejo.post.z)));
+      if (brejo?.dock) m = Math.min(m, smoothstep(DOCK_FLAT, DOCK_FLAT + SPOT_BLEND, Math.hypot(x - brejo.dock.x, z - brejo.dock.z)));
+    }
     if (m > 0 && valeZone) {
       // Colinas mais baixas no Vale (a transição acompanha a borda do bioma) e plano no miolo.
       const inVale = 1 - smoothstep(0, 20, distToRect(x, z, valeZone));
@@ -205,12 +247,21 @@ export function buildHeightField(world: WorldData, hilly = true, withLake = true
     const edge = Math.min(x - extent.minX, extent.maxX - x, z - extent.minZ, extent.maxZ - z);
     const inside = smoothstep(0, 30, edge);
     h = h * inside + EDGE_Y * (1 - inside);
-    // Bacia do lago.
+    // Bacia da lagoa: rasa até o meio, funda nas duas partes fundas, com a ilha subindo dentro de uma delas.
     if (lake) {
       const u = lakeU(x, z);
       if (u < LAKE_BANK_OUT) {
         const b = smoothstep(LAKE_BANK_OUT, LAKE_BANK_IN, u);
-        h += (LAKE_BED - h) * b;
+        h += (LAKE_SHALLOW - h) * b;
+      }
+      for (const d of lake.deeps) {
+        const t = smoothstep(d.r + DEEP_BANK, d.r, Math.hypot(x - d.x, z - d.z));
+        if (t > 0) h += (LAKE_DEEP - h) * t;
+      }
+      const i = lake.island;
+      if (i) {
+        const t = smoothstep(i.r + 1.5, i.r - 1.5, Math.hypot(x - i.x, z - i.z));
+        if (t > 0) h += (Math.max(h, lake.level + ISLAND_UP) - h) * t;
       }
     }
     return h;
@@ -356,6 +407,9 @@ export const REGION_SPLAT: Record<string, Splat> = {
   "Ermos Partidos": [0.1, 0.46, 0.18, 0.26],
   "Vale das Pedras Vivas": [0.18, 0.04, 0.5, 0.28],
   "Cripta Esquecida": [0, 0.04, 0.8, 0.16],
+  // Brejo de Lamagris: lodo (terra) com musgo, sem pedra; as Terras Mortas (extensão): terra cinza e cascalho.
+  "Brejo de Lamagris": [0.34, 0.56, 0, 0.1],
+  "Terras Mortas": [0.06, 0.34, 0.2, 0.4],
 };
 
 /** Raio (do centro da cidade) onde cada região do anel está inteira; entre dois, mistura. */
@@ -389,6 +443,12 @@ export function regionSplat(world: WorldData, x: number, z: number): Splat {
     // Entra no Vale pela fronteira do bioma (a névoa e a cor já mudam ali).
     const inside = 1 - smoothstep(0, 16, distToRect(x, z, vale.bounds));
     if (inside > 0) w = lerp4(w, REGION_SPLAT["Vale das Pedras Vivas"], inside);
+  }
+  for (const [id, region] of [["brejo", "Brejo de Lamagris"], ["terras-mortas", "Terras Mortas"]] as const) {
+    const bounds = biomeById(world, id)?.bounds;
+    if (!bounds) continue;
+    const inside = 1 - smoothstep(0, 16, distToRect(x, z, bounds));
+    if (inside > 0) w = lerp4(w, REGION_SPLAT[region], inside);
   }
   const crypt = biomeById(world, "cripta")?.bounds;
   if (crypt) {

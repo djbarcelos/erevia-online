@@ -54,7 +54,7 @@ var contractBoard = npcDef{name: "Iselda", title: "Quadro de Contratos", model: 
 	look: &game.Appearance{Skin: 2, Hair: 3, Outfit: 2, Head: "knight"}}
 
 // boardID: o id do quadro (logo depois da Mestra dos Caminhos, em spawnNPCs).
-var boardID = npcIDBase + uint32(len(townNPCs)+len(teleportStones)+2)
+var boardID = npcIDBase + uint32(len(townNPCs)+legacyStones+2)
 
 func (z *Zone) spawnBoard(id uint32) {
 	d := contractBoard

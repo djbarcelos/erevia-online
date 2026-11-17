@@ -68,6 +68,24 @@ var (
 	lootBoss = []LootEntry{{"broken_crown", 1, 1, 1}, {"shadow_essence", 1, 2, 4}, {"potion_hp_l", 1, 2, 3}, {"potion_mp_l", 1, 1, 2},
 		{"scroll_ench_weapon", 0.5, 1, 1}, {"scroll_ench_armor", 0.6, 1, 2},
 		{"scroll_ench_weapon_b", 0.15, 1, 1}, {"scroll_ench_armor_b", 0.2, 1, 1}}
+	// Brejo de Lamagris (14–20): o que cai de cada bicho do pântano. Os pergaminhos seguem o
+	// ritmo dos brutos da faixa (lootFighter).
+	lootBrejeiro = []LootEntry{{"brejeiro_scale", 0.4, 1, 2}, {"silver_reed", 0.2, 1, 1}, {"potion_hp_s", 0.1, 1, 2}, {"potion_mp_s", 0.06, 1, 1},
+		{"scroll_ench_armor", 0.015, 1, 1}, {"scroll_ench_weapon", 0.008, 1, 1},
+		{"scroll_ench_armor_b", 0.003, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+	lootToad = []LootEntry{{"frog_gland", 0.2, 1, 1}, {"silver_reed", 0.12, 1, 1}, {"black_mud", 0.25, 1, 2}, {"potion_hp_s", 0.08, 1, 2},
+		{"scroll_ench_armor", 0.015, 1, 1}, {"scroll_ench_weapon", 0.008, 1, 1},
+		{"scroll_ench_armor_b", 0.003, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+	lootMud = []LootEntry{{"black_mud", 0.4, 1, 2}, {"silver_reed", 0.1, 1, 1}, {"potion_mp_s", 0.08, 1, 1},
+		{"scroll_ench_armor", 0.012, 1, 1}, {"scroll_ench_weapon", 0.006, 1, 1}}
+	lootDrowned = []LootEntry{{"skull_cracked", 0.2, 1, 1}, {"black_mud", 0.2, 1, 1}, {"shadow_essence", 0.1, 1, 1}, {"potion_hp_s", 0.08, 1, 1},
+		{"scroll_ench_armor", 0.015, 1, 1}, {"scroll_ench_weapon", 0.008, 1, 1},
+		{"scroll_ench_armor_b", 0.003, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+	// Mãe-Lodo (chefe de campo, nível 21): materiais do Brejo garantidos e os épicos do grau C.
+	lootMother = append([]LootEntry{{"black_mud", 1, 3, 5}, {"frog_gland", 1, 2, 3}, {"potion_hp_l", 1, 2, 3}, {"potion_mp_l", 1, 1, 2},
+		{"scroll_ench_weapon", 0.5, 1, 1}, {"scroll_ench_armor", 0.6, 1, 2},
+		{"scroll_ench_weapon_b", 0.15, 1, 1}, {"scroll_ench_armor_b", 0.2, 1, 1}}, tierLoot(TierC, GradeEpic, 0.015)...)
+
 	// Raid: tudo garantido, menos os pergaminhos (os equipamentos vêm de gearDrops).
 	lootRaid = []LootEntry{{"raid_fragment", 1, 1, 1}, {"shadow_essence", 1, 5, 8}, {"potion_hp_l", 1, 4, 6}, {"potion_mp_l", 1, 3, 4},
 		{"scroll_ench_weapon", 0.8, 1, 2}, {"scroll_ench_armor", 1, 2, 3},
@@ -245,6 +263,59 @@ var Monsters = map[string]*MonsterDef{
 	"rubble_shard": {ID: "rubble_shard", Name: "Cascalho Vivo", Model: "stone_golem", Tint: "#b39b7d",
 		HP: 45, HPLvl: 10, Atk: 7, AtkLv: 1.4, Def: 14, DefLv: 2.4, Range: 2.2, Interval: 2.0, Speed: 3.4, Aggressive: true, XPBase: 6, Scale: 0.7, BodyRadius: 0.5,
 		NoGear: true},
+
+	// ---- Brejo de Lamagris (tunnel#139, 14–20) ----
+	// Os modelos "brejeiro", "frog_b" e "slime_b" são das famílias de monstro (tunnel#135); enquanto o
+	// arquivo de cada um não existe, o cliente usa um modelo reserva (client/src/world/remaster.ts, MODEL_FALLBACK).
+	//
+	// Brejeiros (homens-lagarto): neutros de dia, agressivos à noite, quando os afogados os deixam em pânico.
+	// Lanceiro: a matilha é o acampamento (o spawn): bater em um puxa os 4.
+	"brejeiro_lanceiro": {ID: "brejeiro_lanceiro", Name: "Brejeiro Lanceiro", Model: "brejeiro",
+		HP: 80, HPLvl: 24, Atk: 9, AtkLv: 2.2, Def: 13, DefLv: 3.2, Range: 3.2, Interval: 1.7, Speed: 4.0, XPBase: 20, Scale: 1.05,
+		Archetype: ArchPack, NeutralByDay: true, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 3, GoldMax: 5.5, Loot: lootBrejeiro},
+	// Xamã: cura um aliado abaixo de 50% e joga "Lama nos Olhos" (cegueira de 2 s) em quem ele ataca.
+	"brejeiro_xama": {ID: "brejeiro_xama", Name: "Brejeiro Xamã", Model: "brejeiro", Tint: "#7fb3a4",
+		HP: 60, HPLvl: 18, Atk: 10, AtkLv: 2.3, Def: 9, DefLv: 2.2, Range: 9, Interval: 2.2, Speed: 3.6, Magic: true, XPBase: 22, Scale: 1.05,
+		Archetype: ArchHealer, NeutralByDay: true, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 3, GoldMax: 5.5, Loot: lootBrejeiro,
+		Abilities: []AbilityDef{{ID: "xama_lama", Shape: ShapeCircle, Target: AimCurrent, Radius: 3.5,
+			Delay: 1.2, Cooldown: 12, First: 4, Mult: 0.8, Effect: &EffectDef{Kind: EffectBlind, Duration: 2, Value: 0.5}}}},
+	// Sapo-Boi: bruto que prende com a língua (linha de 8 m, 1 s de aviso). É o único bruto do Brejo: entra nas
+	// contas de caça do 14 ao 20 (a curva do Guerreiro Esqueleto, com uns 14% a mais de vida e um pouco menos de ataque).
+	"sapo_boi": {ID: "sapo_boi", Name: "Sapo-Boi", Model: "frog_b",
+		HP: 80, HPLvl: 25, Atk: 7, AtkLv: 1.7, Def: 12, DefLv: 3.0, Range: 2.4, Interval: 1.6, Speed: 3.8, Aggressive: true, XPBase: 17, Scale: 1.25, BodyRadius: 0.8,
+		GoldChance: 0.7, GoldMin: 2.5, GoldMax: 4.5, Loot: lootToad,
+		Abilities: []AbilityDef{{ID: "sapo_lingua", Shape: ShapeLine, Target: AimCurrent, Length: 8, Width: 1.6,
+			Delay: 1.0, Cooldown: 8, First: 3, Mult: 1.1, Effect: &EffectDef{Kind: EffectRoot, Duration: 1.5}}}},
+	// Lodo Vivo: ao morrer vira 2 Lodinhos (30% da vida); o golpe dá lentidão de 20% por 3 s.
+	"lodo_vivo": {ID: "lodo_vivo", Name: "Lodo Vivo", Model: "slime_b", Tint: "#6b7d3e",
+		HP: 70, HPLvl: 20, Atk: 8, AtkLv: 1.9, Def: 8, DefLv: 2.4, Range: 2, Interval: 1.6, Speed: 3.2, Aggressive: true, XPBase: 17, Scale: 1.2, BodyRadius: 0.7,
+		Archetype: ArchSplitter, Arch: ArchParams{SplitInto: "lodo_menor"}, BestiaryExtra: true,
+		GoldChance: 0.6, GoldMin: 2, GoldMax: 4, Loot: lootMud,
+		Abilities: []AbilityDef{{ID: "lodo_golpe", Shape: ShapeCircle, Target: AimCurrent, Radius: 2,
+			Delay: 1.0, Cooldown: 5, First: 2, Mult: 1.2, Effect: &EffectDef{Kind: EffectSlow, Duration: 3, Value: 0.2}}}},
+	// Lodinho (30% da vida do Lodo Vivo, e as invocações da Mãe-Lodo e da Velha Escamosa): não renasce e não deixa saque.
+	"lodo_menor": {ID: "lodo_menor", Name: "Lodinho", Model: "slime_b", Tint: "#6b7d3e",
+		HP: 24, HPLvl: 7, Atk: 5, AtkLv: 1.2, Def: 6, DefLv: 1.6, Range: 1.8, Interval: 1.6, Speed: 3.6, Aggressive: true, XPBase: 4, Scale: 0.7, BodyRadius: 0.4,
+		NoGear: true},
+	// Afogado: sai da água quando você chega a 4,5 m (o 1º golpe dói 50% a mais) e agarra por 1,5 s. Só à noite,
+	// no lugar de parte dos sapos. É um esqueleto com algas e verde-água.
+	"afogado": {ID: "afogado", Name: "Afogado", Model: "skeleton_warrior", Tint: "#6fa89a",
+		HP: 85, HPLvl: 25, Atk: 10, AtkLv: 2.3, Def: 11, DefLv: 2.8, Range: 2.0, Interval: 1.5, Speed: 4.2, Aggressive: true, XPBase: 21, Scale: 1.05,
+		Archetype: ArchAmbusher, BestiaryExtra: true, GoldChance: 0.7, GoldMin: 3, GoldMax: 5, Loot: lootDrowned,
+		Abilities: []AbilityDef{{ID: "afogado_agarrao", Shape: ShapeCircle, Target: AimCurrent, Radius: 2.2,
+			Delay: 1.0, Cooldown: 10, First: 5, Mult: 1.0, Effect: &EffectDef{Kind: EffectRoot, Duration: 1.5}}}},
+	// Mãe-Lodo (chefe de campo, nível 21): no meio da lagoa de Vau Velho. Golfada em cone (lentidão de 30%), Maré de
+	// Lama (4 círculos em quem está na luta, com veneno) e Lodinhos a cada 25 s (até 3 vivos).
+	"mae_lodo": {ID: "mae_lodo", Name: "Mãe-Lodo", Model: "slime_b", Tint: "#5b5a3a",
+		HP: 520, HPLvl: 78, Atk: 16, AtkLv: 3.2, Def: 22, DefLv: 4, Range: 3.2, Interval: 2.0, Speed: 3.2, Aggressive: true, XPBase: 125, Scale: 2.8, BodyRadius: 1.6, Boss: true,
+		Archetype: ArchSummoner, Arch: ArchParams{Summon: "lodo_menor", SummonCount: 3, SummonMax: 3, SummonCD: 25, SummonFirst: 12},
+		GoldChance: 1, GoldMin: 30, GoldMax: 45, Loot: lootMother,
+		Abilities: []AbilityDef{
+			{ID: "mae_golfada", Shape: ShapeCone, Target: AimSelf, Radius: 7, Arc: 60,
+				Delay: 1.5, Cooldown: 9, First: 4, Mult: 1.6, Effect: &EffectDef{Kind: EffectSlow, Duration: 4, Value: 0.3}},
+			{ID: "mae_mare", Shape: ShapeCircle, Target: AimRandom, Count: 4, Radius: 3,
+				Delay: 1.8, Cooldown: 16, First: 8, Mult: 1.3, Effect: &EffectDef{Kind: EffectPoison, Duration: 6, Value: 12}},
+		}},
 }
 
 // ImmuneTo informa se o efeito não pega no monstro.
@@ -422,7 +493,7 @@ const ownedMargin = 6.0
 // fora dela sem mudar a contagem. Numa região, os spawns WhenDay e WhenNight devem somar a
 // mesma quantidade (os noturnos trocam os do dia, não somam).
 func DefaultSpawns() []Spawn {
-	return []Spawn{
+	spawns := []Spawn{
 		{Monster: "skeleton_minion", Count: 30, RMin: 46, RMax: 74, LevelMin: 1, LevelMax: 5, Respawn: 20},
 		{Monster: "skeleton_warrior", Count: 12, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
 		{Monster: "skeleton_rogue", Count: 12, RMin: 80, RMax: 108, LevelMin: 6, LevelMax: 12, Respawn: 30},
@@ -479,6 +550,8 @@ func DefaultSpawns() []Spawn {
 		{Monster: "rubble_golem", Count: 2, Area: true, X: 0, Z: -270, Radius: 52, LevelMin: 20, LevelMax: 30, Respawn: 45,
 			Region: "Vale das Pedras Vivas"},
 	}
+	// Brejo de Lamagris (tunnel#139): no fim da lista, sem mudar os ids de quem já existia.
+	return append(spawns, brejoSpawns()...)
 }
 
 // ExpandSpawns sorteia as posições (determinístico para a mesma semente).

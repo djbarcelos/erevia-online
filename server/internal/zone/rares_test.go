@@ -247,23 +247,23 @@ func TestRareRumorGuaranteedLootAndRise(t *testing.T) {
 	}
 }
 
-func TestRareHunterNeedsTheFourDifferentRares(t *testing.T) {
+func TestRareHunterNeedsTheFiveDifferentRares(t *testing.T) {
 	z := newCombatZone()
 	p, _ := joinAt(z, 1, "knight", 0, 0, 0)
-	for range 4 {
+	for range 5 {
 		z.achEvent(p, game.AchKill, "rare_ossudo")
 	}
 	if _, ok := p.pl.ach.unlocked["rare_hunter"]; ok {
-		t.Fatal("matar o mesmo raro 4 vezes não vale")
+		t.Fatal("matar o mesmo raro 5 vezes não vale")
 	}
-	if info := z.achInfo(p, game.Achievements["rare_hunter"], false); info.Count != 1 || info.Need != 4 {
-		t.Fatalf("progresso %d/%d, esperava 1/4", info.Count, info.Need)
+	if info := z.achInfo(p, game.Achievements["rare_hunter"], false); info.Count != 1 || info.Need != 5 {
+		t.Fatalf("progresso %d/%d, esperava 1/5", info.Count, info.Need)
 	}
-	for _, id := range []string{"rare_captain", "rare_vossk", "rare_omrun"} {
+	for _, id := range []string{"rare_captain", "rare_vossk", "rare_omrun", "rare_escamosa"} {
 		z.achEvent(p, game.AchKill, id)
 	}
 	if _, ok := p.pl.ach.unlocked["rare_hunter"]; !ok {
-		t.Fatal("os 4 raros diferentes desbloqueiam o Caçador de Raros")
+		t.Fatal("os 5 raros diferentes desbloqueiam o Caçador de Raros")
 	}
 }
 

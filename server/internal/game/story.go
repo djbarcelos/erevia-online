@@ -67,6 +67,9 @@ var (
 	spotRiftNW    = spot{"rachadura_no", "Rachadura do Noroeste", -122, 122, 8}
 	spotRiftSW    = spot{"rachadura_so", "Rachadura do Sudoeste", -122, -122, 8}
 	spotRiftSE    = spot{"rachadura_se", "Rachadura do Sudeste", 122, -122, 8}
+	spotDock      = spot{"cais_barqueiro", "Cais do Barqueiro", DockX, DockZ, 7}
+	spotIsland    = spot{"ilha_vagalumes", "Ilha dos Vaga-lumes", IslandX, IslandZ, 7}
+	spotMother    = spot{"vau_velho", "Lagoa de Vau Velho", MotherX, MotherZ, 12}
 )
 
 func visit(s spot, text string) QuestStep {
@@ -204,6 +207,32 @@ var storyQuests = concatLines(
 			Done: "Ele cai e volta, eu sei. Mas antes de cair, o que ele gritou? Pedras que acordam ao sul... " +
 				"Desça até o Vale: a Ilvarin do acampamento sabe ler isso.",
 			Reward: QuestReward{XP: boss, Items: items("scroll_ench_weapon", 1)}},
+	),
+	// ---- Brejo de Lamagris (15–20): o Barqueiro Tomé ----
+	line(BrejoRegion, TalkFerry, 20,
+		&QuestDef{ID: "bre_convite", Title: "O Barqueiro do Brejo",
+			Text:  "Na ponta da estrada leste, onde o chão vira lama, um barqueiro chamado Tomé mantém um posto e leva gente pela lagoa. Ele conhece o Brejo como ninguém, e anda precisando de braços.",
+			Steps: []QuestStep{talk(TalkFerry, "Falar com Tomé, no Posto do Barqueiro", "")}},
+		&QuestDef{ID: "bre_sapos", Title: "Línguas compridas", Level: 15,
+			Text:   "Os Sapos-Boi do Brejo prendem quem passa com a língua e deixam o viajante parado, à espera de coisa pior. Tomé pede que você derrube alguns, para a margem do posto ficar limpa.",
+			Steps:  []QuestStep{kill("sapo_boi", 10, "Derrotar Sapos-Boi")},
+			Done:   "Dez a menos. A língua deles é rápida, mas o aviso aparece no chão: ande de lado, e não para trás. Eu devia ter ensinado isso a mais gente.",
+			Reward: QuestReward{Items: items("potion_hp_s", 5)}},
+		&QuestDef{ID: "bre_glandulas", Title: "Remédio de pântano", Level: 16,
+			Text:   "O veneno do Brejo derruba o mais valente em dois minutos, e a cura é feita com a glândula do Sapo-Boi. Traga algumas a Tomé: ele ensina a receita e deixa você levar uns frascos prontos.",
+			Steps:  []QuestStep{deliver("frog_gland", 4, TalkFerry, "Entregar 4 Glândulas de Sapo a Tomé")},
+			Done:   "Com glândula e junco-de-prata, o Ferreiro Bruno faz o Antídoto lá na cidade. Leve estes três frascos que eu tinha guardados e nunca saia do posto sem um.",
+			Reward: QuestReward{Items: items("potion_antidote", 3, "potion_hp_s", 3)}},
+		&QuestDef{ID: "bre_ilha", Title: "A ilha das luzes", Level: 18,
+			Text:   "O Lodo Vivo se arrasta da água até a margem e cobre a trilha do cais. Limpe a trilha e atravesse no barco de Tomé até a Ilha dos Vaga-lumes: ele quer saber se as luzes ainda sobem do capim.",
+			Steps:  []QuestStep{kill("lodo_vivo", 8, "Derrotar Lodos Vivos"), visit(spotIsland, "Chegar à Ilha dos Vaga-lumes, de barco")},
+			Done:   "Ainda sobem, então. Meu filho gostava de ficar lá, olhando. Eu já não vou: sempre acho que ele vai estar na beira da água, com os outros, parado e de olhos abertos.",
+			Reward: QuestReward{Items: items("potion_mp_l", 3, "potion_antidote", 2)}},
+		&QuestDef{ID: "bre_mae", Title: "A Mãe-Lodo", Level: 20,
+			Text:   "No meio da lagoa de Vau Velho, onde só a torre da capela aparece, uma massa de lama do tamanho de uma casa guarda o que sobrou da aldeia. Quem a derruba não vence o Brejo, mas faz a água respirar de novo. Junte um grupo.",
+			Steps:  []QuestStep{visit(spotMother, "Chegar à lagoa de Vau Velho"), kill("mae_lodo", 1, "Derrotar a Mãe-Lodo")},
+			Done:   "A água parou de ferver. Ouça: de noite, o sino da capela afundada ainda toca, abafado, e o que está preso nele não é só sino. Quando a Guarda perguntar das Pedras-Selo, diga que uma está debaixo daquela água.",
+			Reward: QuestReward{XP: boss, Items: items("scroll_ench_weapon_b", 1, "potion_antidote", 3)}},
 	),
 	// ---- Vale das Pedras Vivas (20–30): a tecelã Maelis ----
 	line("Vale das Pedras Vivas", TalkWeaver, 30,

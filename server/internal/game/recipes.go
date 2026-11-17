@@ -36,6 +36,8 @@ var RecipeList = append([]*Recipe{
 	// Faixa 1 (ossos e crânios).
 	recipe("craft_ench_armor", "scroll_ench_armor", 150, mat("bone_old", 15), mat("skull_cracked", 2)),
 	recipe("craft_cape_good", "cape_good", 250, mat("bone_old", 20), mat("skull_cracked", 3)),
+	// Brejo de Lamagris: a primeira poção de receita (3 Antídotos por vez).
+	antidoteRecipe(),
 	// Faixa 2: equipamento raro.
 	recipe("craft_ring_rare", "ring_rare", 800, mat("bone_old", 30), mat("skull_cracked", 10)),
 	recipe("craft_ear_rare", "ear_rare", 800, mat("bone_old", 30), mat("skull_cracked", 10)),
@@ -64,6 +66,13 @@ var RecipeList = append([]*Recipe{
 	recipe("craft_ring_legend", "ring_legend", 8000, mat("rune_core", 5), mat("shadow_essence", 5)),
 	recipe("craft_neck_legend", "neck_legend", 9000, mat("rune_core", 6), mat("shadow_essence", 6)),
 }...)...)
+
+// antidoteRecipe: 3 Antídotos por 2 Glândulas de Sapo e 1 Junco-de-Prata (que só crescem no Brejo).
+func antidoteRecipe() *Recipe {
+	r := recipe("craft_potion_antidote", "potion_antidote", 60, mat("frog_gland", 2), mat("silver_reed", 1))
+	r.Count = 3
+	return r
+}
 
 // Recipes: as receitas por id.
 var Recipes = func() map[string]*Recipe {

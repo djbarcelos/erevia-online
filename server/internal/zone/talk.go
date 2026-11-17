@@ -25,7 +25,9 @@ import (
 var talkerFirstID = guardianID + 1
 
 // lastNPCID: o maior id de NPC fixo (fora os portões, que têm faixa própria em gateIDBase).
-func lastNPCID() uint32 { return talkerFirstID + uint32(len(game.SpawnedTalkers())) - 1 }
+func lastNPCID() uint32 {
+	return talkerFirstID + uint32(len(game.SpawnedTalkers())+len(teleportStones)-legacyStones) - 1
+}
 
 // spawnTalkers cria os NPCs novos (na zona do mapa de cada um) e liga a conversa dos NPCs
 // da praça pelo nome.

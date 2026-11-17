@@ -23,6 +23,9 @@ type stoneDef struct {
 	name  string
 	x, z  float64
 	price int64 // preço para chegar aqui
+	// ferry: o barco do Brejo (Cais do Barqueiro e Ilha dos Vaga-lumes). Só liga os dois, e as
+	// pedras comuns não o listam.
+	ferry bool
 }
 
 // teleportStones: praça da cidade, um acampamento em cada anel de caça e um no Vale das
@@ -35,7 +38,15 @@ var teleportStones = []stoneDef{
 	// No fim da estrada sul, na entrada do vale dos golens (sempre no fim da lista: o id
 	// de cada destino é a posição + 1).
 	{name: "Vale das Pedras Vivas", x: 6, z: -198, price: 220},
+	// Brejo de Lamagris (tunnel#139): a pedra do Posto do Barqueiro, na entrada do pântano.
+	{name: "Posto do Barqueiro", x: 162, z: 5, price: 180},
+	// O barco de Tomé: do cais até a Ilha dos Vaga-lumes (e de volta) por 10 moedas.
+	{name: "Cais do Barqueiro", x: game.DockX, z: game.DockZ, price: 10, ferry: true},
+	{name: "Ilha dos Vaga-lumes", x: game.IslandX, z: game.IslandZ, price: 10, ferry: true},
 }
+
+// ferryModel: o barco de Tomé (o cliente desenha um bote, sem arquivo 3D).
+const ferryModel = "ferry_boat"
 
 // channelState: o que o jogador está canalizando (pedra ou pergaminho).
 type channelState struct {
@@ -47,14 +58,31 @@ type channelState struct {
 	itemID string // pergaminho: consumido só no fim
 }
 
+// legacyStones: as pedras que já existiam antes do Brejo. Os ids delas (e de tudo que vem depois na praça) não
+// mudam: as pedras e os barcos do Brejo ficam depois dos contadores de história (extraStoneID).
+const legacyStones = 5
+
+// extraStoneID: o id do NPC da pedra i (as do Brejo vêm depois do último contador de história).
+func extraStoneID(i int) uint32 {
+	return talkerFirstID + uint32(len(game.SpawnedTalkers())) + uint32(i-legacyStones)
+}
+
 func (z *Zone) spawnStones(firstID uint32) {
 	for i, d := range teleportStones {
+		id := firstID + uint32(i)
+		if i >= legacyStones {
+			id = extraStoneID(i)
+		}
 		pos := z.freeSpot(Vec2{X: d.x, Z: d.z})
+		model, title := stoneModel, "Pedra de Teleporte"
+		if d.ferry {
+			model, title = ferryModel, "Barco do Tomé"
+		}
 		z.addNPC(&entity{
-			id: firstID + uint32(i), kind: pb.EntityKind_ENTITY_KIND_NPC,
-			name: d.name, model: stoneModel, level: 1, scale: 1,
+			id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
+			name: d.name, model: model, level: 1, scale: 1,
 			pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
-			npc: &npcState{title: "Pedra de Teleporte", role: pb.NpcRole_NPC_ROLE_TELEPORT, stone: i},
+			npc: &npcState{title: title, role: pb.NpcRole_NPC_ROLE_TELEPORT, stone: i},
 		})
 	}
 }
@@ -63,7 +91,7 @@ func (z *Zone) spawnStones(firstID uint32) {
 func (z *Zone) stoneDests(from int) []*pb.TeleportDest {
 	var out []*pb.TeleportDest
 	for i, d := range teleportStones {
-		if i == from {
+		if i == from || d.ferry != teleportStones[from].ferry {
 			continue
 		}
 		out = append(out, &pb.TeleportDest{Id: uint32(i + 1), Name: d.name, X: float32(d.x), Z: float32(d.z), Price: uint32(d.price)})
@@ -78,7 +106,7 @@ func (z *Zone) startTeleport(p *entity, npcID, destID uint32) {
 		return
 	}
 	i := int(destID) - 1
-	if i < 0 || i >= len(teleportStones) || i == n.npc.stone {
+	if i < 0 || i >= len(teleportStones) || i == n.npc.stone || teleportStones[i].ferry != teleportStones[n.npc.stone].ferry {
 		return
 	}
 	d := teleportStones[i]

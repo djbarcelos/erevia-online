@@ -67,6 +67,8 @@ type RareDef struct {
 	Guards    int          // "Formação!": chama Guards escudeiros (RareGuardID) ao chegar a GuardsAt
 	GuardsAt  float64
 	Shout     string // o que ele grita ao chamar a guarda ou levantar
+	// Summon: chama Lodinhos (ou outro lacaio) como o invocador, no lugar do papel do hospedeiro.
+	Summon string
 }
 
 // Escudeiros do Capitão Ossudo: chegam com um escudo que segura RareGuardShield × a vida.
@@ -102,6 +104,15 @@ var Rares = []*RareDef{
 		// Pisão: anel de 3 a 7 m em volta dele, 2,0 s de aviso (colado nele, escapa).
 		Abilities: []AbilityDef{{ID: "omrun_stomp", Shape: ShapeDonut, Target: AimSelf, Inner: 3, Radius: 7,
 			Delay: 2, Cooldown: 12, First: 6, Mult: 1.8, Effect: &EffectDef{Kind: EffectSlow, Duration: 3, Value: 0.4}}}},
+	// Brejo de Lamagris (tunnel#139): a anciã dos Brejeiros nasce no lugar de um Xamã (que ela supera: invoca 2
+	// Lodinhos em vez de curar) e atira lama envenenada em quem luta com ela.
+	{ID: "rare_escamosa", Name: "Velha Escamosa", Host: "brejeiro_xama", Chance: 0.02, Level: 20,
+		Rumor: "Algo grande se move no Brejo… o coaxar parou de repente.",
+		Loot: append([]LootEntry{{"brejeiro_scale", 1, 3, 3}, {"frog_gland", 0.5, 1, 2}}, tierLoot(TierD, GradeEpic, 0.02)...),
+		// Lama envenenada: 2 círculos de 3 m em quem está na luta, 1,5 s de aviso.
+		Abilities: []AbilityDef{{ID: "escamosa_lama", Shape: ShapeCircle, Target: AimRandom, Count: 2, Radius: 3,
+			Delay: 1.5, Cooldown: 10, First: 4, Mult: 1.2, Effect: &EffectDef{Kind: EffectPoison, Duration: 5, Value: 10}}},
+		Summon: "lodo_menor"},
 }
 
 // RaresByHost: os raros de cada hospedeiro.
@@ -145,6 +156,9 @@ func rareMonster(r *RareDef, host *MonsterDef) *MonsterDef {
 	d.GoldChance, d.GoldMin, d.GoldMax = 1, host.GoldMin*RareGoldMult, host.GoldMax*RareGoldMult
 	d.Loot = append(slices.Clone(r.Loot), host.Loot...)
 	d.Abilities = append(slices.Clone(host.Abilities), r.Abilities...)
+	if r.Summon != "" {
+		d.Archetype, d.Arch = ArchSummoner, ArchParams{Summon: r.Summon}
+	}
 	return &d
 }
 

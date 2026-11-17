@@ -94,6 +94,9 @@ var BestiaryFamilies = []*BestiaryFamilyDef{
 		Outfit: Shade{"Violeta Ossário", "#cdb6ec", "#4b3468"}},
 	{ID: "golems_ancient", Name: "Golens Ancestrais", Models: []string{"stone_golem", "golem_"}, High: true, Title: "Coração de Pedra Viva",
 		Outfit: Shade{"Musgo Rúnico", "#a4d6bb", "#2e5444"}},
+	// Brejo de Lamagris (14–20): os Brejeiros, os sapos e o lodo (o Afogado é esqueleto e fica com os Esqueletos).
+	{ID: "brejo", Name: "Gente do Brejo", Models: []string{"brejeiro", "frog_", "slime_"}, Title: "Senhor do Lodaçal",
+		Outfit: Shade{"Lodo de Vau", "#b4c78a", "#3d4a2a"}},
 }
 
 // BestiaryBaseMaxLevel: as famílias de base têm os monstros que nascem só até este nível (o

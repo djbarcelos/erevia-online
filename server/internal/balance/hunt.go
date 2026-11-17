@@ -2,6 +2,7 @@ package balance
 
 import (
 	"math"
+	"slices"
 	"strings"
 
 	"erevia/server/internal/game"
@@ -52,7 +53,14 @@ type Hunt struct {
 	LevelMin, LevelMax int
 }
 
+// brejoRow: o spawn é de um dos grupos do Brejo de Lamagris. Os grupos são discos pequenos (4 a 5 monstros),
+// mas quem caça ali anda pelo pântano inteiro: para o simulador, é uma região só, com a área do bioma.
+func brejoRow(s game.Spawn) bool { return s.Area && s.Region == game.BrejoRegion }
+
 func spawnArea(s game.Spawn) float64 {
+	if brejoRow(s) {
+		return game.BrejoHuntArea
+	}
 	if s.Area {
 		return math.Pi * s.Radius * s.Radius
 	}
@@ -60,6 +68,9 @@ func spawnArea(s game.Spawn) float64 {
 }
 
 func sameRegion(a, b game.Spawn) bool {
+	if brejoRow(a) && brejoRow(b) {
+		return true
+	}
 	return a.Area == b.Area && a.RMin == b.RMin && a.RMax == b.RMax && a.X == b.X && a.Z == b.Z && a.Radius == b.Radius
 }
 
@@ -95,11 +106,18 @@ func HuntFor(level int) Hunt {
 	var names []string
 	var respawn float64
 	for _, s := range spawns {
-		if !huntable(s) || !sameRegion(s, ref) || s.LevelMin != ref.LevelMin || s.LevelMax != ref.LevelMax {
+		if !huntable(s) || !sameRegion(s, ref) || (!brejoRow(s) && (s.LevelMin != ref.LevelMin || s.LevelMax != ref.LevelMax)) {
 			continue
 		}
+		if brejoRow(s) { // os grupos do Brejo cobrem juntos do 14 ao 20
+			h.LevelMin, h.LevelMax = min(h.LevelMin, s.LevelMin), max(h.LevelMax, s.LevelMax)
+		}
 		d := game.Monsters[s.Monster]
-		h.Monsters = append(h.Monsters, HuntMonster{d, s.Count})
+		if i := slices.IndexFunc(h.Monsters, func(m HuntMonster) bool { return m.Def == d }); i >= 0 {
+			h.Monsters[i].Count += s.Count
+		} else {
+			h.Monsters = append(h.Monsters, HuntMonster{d, s.Count})
+		}
 		h.Count += s.Count
 		respawn += s.Respawn * float64(s.Count)
 		names = append(names, d.Name)
