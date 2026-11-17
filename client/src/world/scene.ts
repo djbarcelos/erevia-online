@@ -210,6 +210,11 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
   const gui = AdvancedDynamicTexture.CreateFullscreenUI("ui", true, scene);
   // Nomes, barras e números de dano ficam fora do pós-processamento (SSAO e FXAA do preset alto).
   if (gui.layer) gui.layer.applyPostProcess = false;
+  // Só para medir (docs/desempenho-remaster.md): ?gui=0 esconde a interface 3D; ?guiscale=0.5 desenha a textura dela em meia resolução.
+  const guiParams = new URLSearchParams(location.search);
+  if (guiParams.get("gui") === "0") gui.rootContainer.isVisible = false;
+  const guiScale = Number(guiParams.get("guiscale"));
+  if (guiScale > 0 && guiScale <= 1) gui.renderScale = guiScale;
 
   const onResize = () => engine.resize();
   window.addEventListener("resize", onResize);
