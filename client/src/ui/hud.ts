@@ -267,7 +267,7 @@ export class Hud {
     crest.setAttribute("aria-label", "Abrir personagem");
     crest.onclick = () => cb.openWindow("character");
     tooltip(crest, () => `Personagem <span class="muted">(${keyLabel(settings.get().keys.character)})</span>`);
-    this.meEl.append(crest, el("div", "me-body", this.meName, this.hpBar.root, this.mpBar.root), this.myEffects);
+    this.meEl.append(crest, el("div", "me-body", this.meName, this.hpBar.root, this.mpBar.root));
     // Selo da vitalidade: dica no hover (PC) e no toque (celular, onde a barra de XP é fina).
     const vit = this.vitEl as HTMLButtonElement;
     vit.type = "button";
@@ -298,7 +298,8 @@ export class Hud {
     tooltip(journal, () => `<b>Diário de missões</b> <span class="muted">(${keyLabel(settings.get().keys.quests)})</span><br>Todas as missões; fixe até 3 aqui no painel.`);
     this.questsEl.append(el("div", "q-panel-head", qHead, journal), this.questList);
     this.questsEl.hidden = true;
-    const left = el("div", "hud-left", this.meEl, el("div", "hud-side", this.partyEl, this.questsEl));
+    // Quadro do jogador, buffs logo abaixo, depois o grupo; as missões ficam no mesmo bloco (no PC o CSS as leva para a direita).
+    const left = el("div", "hud-left", this.meEl, this.myEffects, el("div", "hud-side", this.partyEl, this.questsEl));
 
     // ---------- Alvo ----------
     const tClose = button("✕", "t-close");
@@ -325,7 +326,7 @@ export class Hud {
     // ---------- Minimapa ----------
     const openBadge = el("span", "mm-open");
     openBadge.innerHTML = ui("map", 14);
-    const frame = el("button", "mm-frame", this.miniCanvas, el("span", "mm-n", "N"), this.clock, openBadge);
+    const frame = el("button", "mm-frame", this.miniCanvas, el("span", "mm-n", "N"), openBadge);
     frame.type = "button";
     frame.setAttribute("aria-label", "Abrir o mapa do mundo");
     frame.onclick = () => cb.openWindow("map");
@@ -343,7 +344,9 @@ export class Hud {
     tooltip(this.xpBar.root, () => this.xpTip());
     this.xpBar.root.onclick = () => this.mastery?.active && cb.openMastery();
     tooltip(this.invEl, () => "<h4>Invasão da cidade</h4>Esqueletos entram pelos 4 portões. Enquanto durar, as estradas e a praça deixam de ser zona segura (o PvP continua proibido). A recompensa sai no fim, pelo dano e pelos abates.");
-    const mini = el("div", "hud-minimap", this.zoneName, frame, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl, this.eventsEl);
+    // Aro dourado no alto e, embaixo, a plaqueta com a região e a hora.
+    const plaque = el("div", "mm-plaque", this.zoneName, this.clock);
+    const mini = el("div", "hud-minimap", frame, plaque, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl, this.eventsEl);
 
     // ---------- Menu ☰ (toque) ----------
     const burger = el("button", "menu-burger");
@@ -376,7 +379,7 @@ export class Hud {
       this.menuBtns.set(m.id, b);
       menu.append(b);
     }
-    const bottom = el("div", "hud-bottom", el("div", "hb-row", hotbarEl, this.autoBtn, menu));
+    const bottom = el("div", "hud-bottom", el("div", "hb-row", hotbarEl, this.autoBtn));
 
     // ---------- Auto-caça ----------
     this.autoPill.hidden = true;
@@ -438,7 +441,7 @@ export class Hud {
     cluster.append(this.attackBtn, pageBtn, targetBtn, this.potionBtn, this.autoTouch);
     const touch = el("div", "touch-ui", joy.root, cluster);
 
-    this.root.append(left, mini, this.target, topRight, this.chatRoot, bottom, this.xpBar.root, this.autoPill, this.loot, touch, this.questArrow.el, this.bannerEl, this.channelEl, this.death);
+    this.root.append(left, mini, this.target, topRight, this.chatRoot, bottom, menu, this.xpBar.root, this.autoPill, this.loot, touch, this.questArrow.el, this.bannerEl, this.channelEl, this.death);
     this.quests.onChange(() => this.markTracked());
     this.quests.onPanel(() => this.renderQuests());
     document.body.append(this.root);

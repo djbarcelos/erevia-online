@@ -309,6 +309,7 @@ const UI: Record<string, string> = {
   clan: `<path d="M6 3v18"/><path d="M6 4h12l-3 4.5 3 4.5H6"/>`,
   users: `<circle cx="9" cy="8" r="3.5"/><path d="M2 20c1-4 4-6 7-6s6 2 7 6"/><circle cx="17" cy="7" r="2.5"/><path d="M17 12c2 0 4 1.5 5 5"/>`,
   scroll: `<path d="M6 4h11a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M9 9h7M9 13h7"/>`,
+  bulb: `<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.3 1 2.1h5c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>`,
   shop: `<path d="M4 9l2-5h12l2 5"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/>`,
   mail: `<rect x="3" y="6" width="18" height="13" rx="1"/><path d="M3 7l9 7 9-7"/>`,
   skull: `<path d="M12 3c-4.4 0-8 3.2-8 7.4 0 2.5 1.2 4.3 2.8 5.3V19a1 1 0 0 0 1 1h8.4a1 1 0 0 0 1-1v-3.3c1.6-1 2.8-2.8 2.8-5.3C20 6.2 16.4 3 12 3Z"/><circle cx="9" cy="11" r="1.6"/><circle cx="15" cy="11" r="1.6"/><path d="M10 20v-2.5M14 20v-2.5"/>`,
