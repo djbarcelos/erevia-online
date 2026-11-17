@@ -1364,3 +1364,73 @@
     display: none;
   }
 }
+
+/* Login (redesign): botões largos, card sem moldura, novidades no canto. */
+.login-card.frame {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+  max-width: 372px;
+}
+
+.login-card .card-title {
+  display: none;
+}
+
+.btn-social {
+  height: 52px;
+  border-radius: 6px;
+  font-family: var(--font-cond);
+  font-size: 1.1rem;
+  box-shadow: none;
+}
+
+.btn-social.google {
+  background: #ece6da;
+  color: #0c0e15;
+  border-color: #ece6da;
+}
+
+.btn-social.discord {
+  background: rgba(236, 230, 218, 0.07);
+  border: 1px solid rgba(236, 230, 218, 0.22);
+  color: #ece6da;
+}
+
+.login-news.frame {
+  align-self: end;
+  background: rgba(9, 10, 16, 0.74);
+}
+
+.login-news .title {
+  font-size: 1.6rem;
+}
+
+.news-tag {
+  font-family: var(--font-cond);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+/* Carregamento (redesign): marca no canto, conteúdo embaixo à esquerda. */
+.entry-content.loading {
+  place-items: end start;
+  padding: 0 88px 88px;
+}
+
+.entry-loading {
+  justify-items: start;
+}
+
+.entry-loading .logo-word {
+  position: fixed;
+  left: 56px;
+  top: 36px;
+  font-size: 1.7rem;
+}
