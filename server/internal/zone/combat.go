@@ -419,6 +419,7 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 			if heal > 0 && src.hp < src.stats.MaxHP {
 				src.hp = math.Min(src.stats.MaxHP, src.hp+heal)
 				ev.Heal = uint32(heal)
+				z.areaEventHeal(src, heal)
 			}
 		}
 		// Lâmina Envenenada
@@ -477,6 +478,9 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 	}
 	if dst.mon != nil && dst.mon.invader {
 		z.invasionCredit(src, math.Min(dmg, dst.hp))
+	}
+	if dst.mon != nil && dst.mon.evMob {
+		z.areaEventCredit(src, math.Min(dmg, dst.hp))
 	}
 	if dst.mon != nil && src.pl != nil {
 		dst.mon.addDamage(src.id, math.Min(dmg, dst.hp)) // crédito do abate (party.go)

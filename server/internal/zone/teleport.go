@@ -116,6 +116,7 @@ type channelState struct {
 	place  string
 	price  int64
 	itemID string // pergaminho: consumido só no fim
+	stone  int    // teleporte: o índice da pedra de destino em allStones (+1; 0 = não é pedra)
 }
 
 // legacyStones: as pedras que já existiam antes do Brejo. Os ids delas (e de tudo que vem depois na praça) não
@@ -149,7 +150,7 @@ func (z *Zone) spawnStones(firstID uint32) {
 			id: id, kind: pb.EntityKind_ENTITY_KIND_NPC,
 			name: d.name, model: model, level: 1, scale: 1,
 			pos: pos, dest: pos, stats: game.Stats{MaxHP: 1}, hp: 1,
-			npc: &npcState{title: title, role: pb.NpcRole_NPC_ROLE_TELEPORT, stone: i},
+			npc: &npcState{title: title, role: pb.NpcRole_NPC_ROLE_TELEPORT, stone: i, post: postKeyOf(d.key)},
 		})
 		z.stoneIdx = append(z.stoneIdx, i)
 	}
@@ -198,6 +199,8 @@ func (z *Zone) startTeleport(p *entity, npcID, destID uint32) {
 	switch {
 	case p.pl.karma > 0:
 		z.system(p, "A pedra não responde a quem tem karma.")
+	case z.stoneClosed(i):
+		z.system(p, z.stoneRefusal(i))
 	case !d.ferry && !p.pl.disc.known[d.key]:
 		z.system(p, "Você ainda não conhece essa pedra: chegue até ela a pé.")
 	case p.pl.inv.gold < z.teleportPrice(p, d.price):
@@ -207,7 +210,7 @@ func (z *Zone) startTeleport(p *entity, npcID, destID uint32) {
 	default:
 		z.startChannel(p, &channelState{
 			kind: pb.ChannelKind_CHANNEL_KIND_TELEPORT, until: z.now + z.channelTime(p, teleportChannel),
-			dest: Vec2{X: d.x, Z: d.z}, mapID: d.stoneMap(), place: d.name, price: z.teleportPrice(p, d.price),
+			dest: Vec2{X: d.x, Z: d.z}, mapID: d.stoneMap(), place: d.name, price: z.teleportPrice(p, d.price), stone: i + 1,
 		}, "Viajando para "+d.name)
 	}
 }
@@ -291,6 +294,10 @@ func (z *Zone) updateChannel(p *entity) {
 	}
 	switch ch.kind {
 	case pb.ChannelKind_CHANNEL_KIND_TELEPORT:
+		if ch.stone > 0 && z.stoneClosed(ch.stone-1) {
+			z.system(p, z.stoneRefusal(ch.stone-1))
+			return
+		}
 		if inv.gold < ch.price {
 			z.system(p, "Moedas insuficientes para a viagem.")
 			return

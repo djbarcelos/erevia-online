@@ -19,21 +19,22 @@ import (
 type xpSource uint8
 
 const (
-	xpMonster  xpSource = iota // abate sozinho (sem os extras abaixo)
-	xpParty                    // abate em grupo: a parte deste membro, com o bônus do grupo
-	xpNight                    // o extra da noite (game.NightXP)
-	xpEvent                    // o extra da XP em dobro (fim de semana ou GM, events.go)
-	xpQuest                    // recompensa de missão
-	xpInvasion                 // recompensa da defesa da cidade
-	xpDeath                    // perdida ao morrer (negativa)
-	xpContract                 // recompensa de contrato do quadro (contracts.go)
-	xpVitality                 // o extra da vitalidade (vitality.go)
-	xpCatchup                  // o extra da recuperação do 2º personagem (vitality.go)
-	xpSubclass                 // o extra do bônus Duas Sendas (subclass.go)
+	xpMonster   xpSource = iota // abate sozinho (sem os extras abaixo)
+	xpParty                     // abate em grupo: a parte deste membro, com o bônus do grupo
+	xpNight                     // o extra da noite (game.NightXP)
+	xpEvent                     // o extra da XP em dobro (fim de semana ou GM, events.go)
+	xpQuest                     // recompensa de missão
+	xpInvasion                  // recompensa da defesa da cidade
+	xpDeath                     // perdida ao morrer (negativa)
+	xpContract                  // recompensa de contrato do quadro (contracts.go)
+	xpVitality                  // o extra da vitalidade (vitality.go)
+	xpCatchup                   // o extra da recuperação do 2º personagem (vitality.go)
+	xpSubclass                  // o extra do bônus Duas Sendas (subclass.go)
+	xpAreaEvent                 // recompensa de um evento de área (areaevent.go)
 	numXPSources
 )
 
-var xpSourceNames = [numXPSources]string{"monster", "party", "night_bonus", "event_bonus", "quest", "invasion", "death_loss", "contract", "vitality", "catchup", "subclass_bonus"}
+var xpSourceNames = [numXPSources]string{"monster", "party", "night_bonus", "event_bonus", "quest", "invasion", "death_loss", "contract", "vitality", "catchup", "subclass_bonus", "area_event"}
 
 const xpTallyEvery = 60.0 // segundos de jogo entre as gravações
 

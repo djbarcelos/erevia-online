@@ -316,8 +316,16 @@ type Zone struct {
 
 	errs zoneErrors // panics, tick lento e erros do banco (ver errors.go)
 
-	inv          *invasion // invasão da cidade em andamento (nil = nenhuma)
-	xp2          xp2State
+	inv *invasion // invasão da cidade em andamento (nil = nenhuma)
+	xp2 xp2State
+	// Eventos de área e postos caídos (areaevent.go).
+	ae           *areaEvent
+	aeCool       map[string]float64 // recarga de cada evento (z.now)
+	aeWindow     map[string]float64
+	aeDay        map[string]int
+	aeDirty      bool
+	aeNextSend   float64
+	postUntil    map[string]float64 // posto fechado até (z.now)
 	eventBackend EventBackend
 	eventJobs    chan EventData
 
@@ -345,6 +353,10 @@ func New(cfg Config, log *slog.Logger, saves chan<- []SavedState) *Zone {
 		byName:         make(map[string]uint32),
 		savedCooldowns: map[uint32]map[uint32]time.Time{},
 		npcs:           map[uint32]*entity{},
+		aeCool:         map[string]float64{},
+		aeWindow:       map[string]float64{},
+		aeDay:          map[string]int{},
+		postUntil:      map[string]float64{},
 		ground:         map[uint32]*groundItem{},
 		recent:         map[uint32]recentState{},
 		pending:        map[uint32]SavedState{},
@@ -706,6 +718,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.sendStonesKnown(p)
 	z.vitalityOnJoin(p, info.Vitality, info.hop != nil)
 	z.eventsOnJoin(p)
+	z.areaEventsOnJoin(p)
 	z.adminOpsOnJoin(p)
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
@@ -896,6 +909,7 @@ func (z *Zone) update(dt float64) {
 	})
 	z.runSystem(sysTelegraphs, z.updateTelegraphs)
 	z.runSystem(sysInvasion, z.updateInvasion)
+	z.runSystem(sysAreaEvent, z.updateAreaEvents)
 
 	if z.tick%uint32(z.cfg.TickRate) == 0 { // 1×/s
 		z.runSystem(sysGround, z.expireGround)

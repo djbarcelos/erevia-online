@@ -24,6 +24,8 @@ export class TeleportWindow {
   private dests: TeleportDest[] = [];
   /** Ids dos destinos já descobertos (StonesKnown). */
   private known = new Set<number>();
+  /** Ids dos destinos de postos caídos (AreaEventStatus.closed): fechados até o posto reabrir. */
+  private closed = new Map<number, string>();
   /** Destino que o "Ir" da missão sugere (destacado; quem escolhe é o jogador). */
   private suggested = 0;
   private unsubscribe: () => void;
@@ -53,6 +55,12 @@ export class TeleportWindow {
   /** Os destinos descobertos mudaram (ao entrar e a cada pedra nova). */
   setKnown(ids: Iterable<number>): void {
     this.known = new Set(ids);
+    this.render();
+  }
+
+  /** Os postos fechados mudaram (id do destino -> nome do posto). */
+  setClosed(closed: Map<number, string>): void {
+    this.closed = closed;
     this.render();
   }
 
@@ -102,6 +110,18 @@ export class TeleportWindow {
             "shop-row tp-row unknown",
             el("div", "tp-icon", "?"),
             el("div", "shop-name", el("strong", null, "Pedra não descoberta"), el("span", "tp-region", d.region), el("span", "shop-price", "Chegue a pé até ela")),
+          ),
+        );
+        continue;
+      }
+      if (this.closed.has(d.id)) {
+        // Posto caído: a pedra está apagada até ele reabrir (o servidor recusa de qualquer jeito).
+        this.list.append(
+          el(
+            "div",
+            "shop-row tp-row unknown",
+            el("div", "tp-icon", "✕"),
+            el("div", "shop-name", el("strong", null, d.name), el("span", "tp-region", d.region), el("span", "shop-price", "O posto caiu: pedra fechada")),
           ),
         );
         continue;

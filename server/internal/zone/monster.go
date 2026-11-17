@@ -35,6 +35,7 @@ type monsterState struct {
 	// Invasão da cidade (invasion.go): marcha para a praça, não deixa saque e conta para
 	// a recompensa. leash > 0 troca a coleira padrão.
 	invader bool
+	evMob   bool // monstro de um evento de área (areaevent.go): marcha, não deixa saque, soma o dano
 	leash   float64
 	// Habilidades com aviso no chão (abilities.go): quando cada uma fica pronta, a geração
 	// (muda ao desistir da luta: cancela os avisos pendentes) e se a luta já começou.
@@ -143,7 +144,7 @@ func (z *Zone) think(m *entity) {
 	}
 
 	// Invasores procuram alvo a cada invAggroEvery ticks (são muitos de uma vez na cidade).
-	if z.monsterAggressive(m) && len(ms.hate) == 0 && (!ms.invader || (z.tick+m.id)%invAggroEvery == 0) {
+	if z.monsterAggressive(m) && len(ms.hate) == 0 && ((!ms.invader && !ms.evMob) || (z.tick+m.id)%invAggroEvery == 0) {
 		if p := z.nearestPlayer(m.pos, z.aggroRange()); p != nil {
 			ms.hate[p.id] = 1
 		}
@@ -169,7 +170,7 @@ func (z *Zone) think(m *entity) {
 	if (role || ms.summon) && z.archCalm(m) {
 		return
 	}
-	if ms.invader {
+	if ms.invader || ms.evMob {
 		z.marchInvader(m) // sem alvo: segue para a praça (e briga com quem achar no caminho)
 		return
 	}

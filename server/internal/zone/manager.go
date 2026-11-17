@@ -46,6 +46,7 @@ type Manager struct {
 	hops   atomic.Int64 // travessias de portão desde a partida
 	inst   instanceHost // cópias das masmorras (instance.go)
 	lookup ZoneLookup   // mapa gravado no banco (portal: personagem offline)
+	posts  postBoard    // postos avançados fechados, vistos por todas as zonas (areaevent.go)
 }
 
 // Hops: travessias de portão desde a partida.

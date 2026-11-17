@@ -891,6 +891,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   );
   // Destinos de teleporte já descobertos a pé (StonesKnown); a balsa do Brejo vale sempre.
   const knownStones = new Set<number>();
+  /** Postos caídos (AreaEventStatus): a loja e o Irmão do posto recusam até ele reabrir. */
+  const closedPostNpcs = new Map<number, string>();
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma, discount: () => mastery?.teleportDiscount ?? 0 }, hud.element);
   const specWin = new SpecWindow(
     store,
@@ -961,6 +963,11 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     const d = entities.distanceTo(id);
     const root = entities.rootOf(id);
     if (!info || d === null || !root) return;
+    if (d <= SHOP_OPEN_DIST && closedPostNpcs.has(id)) {
+      pendingShop = 0;
+      toast(`${closedPostNpcs.get(id)} caiu: ${info.name} fechou até o posto reabrir.`);
+      return;
+    }
     if (d <= SHOP_OPEN_DIST) {
       pendingShop = 0;
       gameAudio.ui("open");
@@ -2069,6 +2076,18 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         case "eventStatus":
           hud.setEvents(msg.msg.value, serverNow);
           break;
+        case "areaEvent": {
+          const a = msg.msg.value;
+          hud.setAreaEvent(a, serverNow);
+          closedPostNpcs.clear();
+          const closedStones = new Map<number, string>();
+          for (const c of a.closed) {
+            closedStones.set(c.stoneId, c.name);
+            for (const id of c.npcIds) closedPostNpcs.set(id, c.name);
+          }
+          teleportWin.setClosed(closedStones);
+          break;
+        }
         case "contracts": {
           const c = msg.msg.value;
           contracts.setContracts(c);
