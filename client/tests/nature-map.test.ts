@@ -21,6 +21,13 @@ test("os itens KayKit do mundo que o kit cobre apontam para uma peça existente 
   for (const [kind, e] of Object.entries(kinds)) {
     assert.ok(map.models.includes(e.model), `${kind}: peça ${e.model} desconhecida`);
     assert.ok(e.s.every((v) => v > 0 && Number.isFinite(v)), `${kind}: escala inválida`);
+    // As peças do Brejo (tronco, juncos, cabana, bote: build-brejo-kit.mjs) não substituem item do KayKit: o arquivo já tem o
+    // tamanho real, em escala 1.
+    if (!(sizes as Record<string, number[]>)[kind]) {
+      assert.deepEqual(e.s, [1, 1, 1], `${kind}: peça nova do Brejo em escala 1`);
+      assert.equal(e.model, kind);
+      continue;
+    }
     // A peça nova tem altura 1: a escala em y é a altura do item antigo (o vento conta com ela).
     assert.ok(Math.abs(e.s[1] - (sizes as Record<string, number[]>)[kind][1]) < 0.01, `${kind}: altura mudou`);
   }
