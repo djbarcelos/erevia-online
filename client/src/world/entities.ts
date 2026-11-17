@@ -35,6 +35,7 @@ import {
 } from "../gen/erevia/v1/game_pb";
 import { gameAudio } from "../audio";
 import { AnimController } from "./anim";
+import { updateMotion } from "./motion";
 import { toBodyLook, type BodyLook } from "./body-look";
 import type { Fx, FxBody, FxHandle } from "./fx";
 import type { CharacterInstance, CharacterModels } from "./models";
@@ -68,6 +69,7 @@ const LOCAL_SMOOTH_RATE = 10;
 const LOCAL_HISTORY_MS = 2000;
 /** Velocidade de referência da animação de corrida (m/s). */
 const RUN_ANIM_SPEED = 5;
+
 /** Nomes e barras só aparecem até esta distância do jogador (o alvo sempre aparece). */
 const LABEL_DISTANCE = 30;
 /** Além desta distância da câmera (ou fora da tela) o personagem congela a animação. */
@@ -216,6 +218,11 @@ interface View extends EntityInfo {
   boss: boolean;
   scale: number;
   speed: number;
+  /** Posição desenhada no quadro anterior, velocidade desenhada (m/s, suavizada) e se está andando de fato (com histerese). */
+  px: number;
+  pz: number;
+  vis: number;
+  walking: boolean;
   /** Posição do servidor, extrapolada localmente em direção ao destino. */
   server: { x: number; z: number };
   target: { x: number; z: number };
@@ -274,6 +281,8 @@ export class EntityManager {
    * quando discordam de onde estávamos há um ping. Desligado = segue o servidor (caminho
    * em volta de obstáculos, aproximação de ataque, auto-caça), como os outros personagens.
    */
+  /** Só para medir o deslize no navegador (?e2e=1&legacymove=1): volta à regra antiga (destino do servidor e velocidade nominal). */
+  private legacyMove = new URLSearchParams(location.search).has("legacymove");
   private localDriven = false;
   /** Posições previstas recentes do jogador local, para comparar com snapshots atrasados. */
   private localHistory: { t: number; x: number; z: number }[] = [];
@@ -586,6 +595,7 @@ export class EntityManager {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
       model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, emblem, look: toBodyLook(e.look),
       weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, cls: e.activeClass || e.model, baseColor, clanText, titleText, pkRing: null,
+      px: e.x, pz: e.z, vis: 0, walking: false,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
@@ -1536,9 +1546,13 @@ export class EntityManager {
       }
       if (v.id === this.localId) this.recordLocal(v);
 
-      const moving = dist > 0.05 && !v.dead;
+      // Anda de verdade o que se vê andar: a velocidade vem da posição DESENHADA, não do destino do servidor (que chega
+      // antes de a posição desenhada alcançar e fazia o personagem escorregar tocando o parado, ou correr no lugar).
+      updateMotion(v, pos.x, pos.z, dt, v.dead);
+      const steering = dist > 0.05 && !v.dead;
+      const moving = this.legacyMove ? steering : v.walking;
       if (v.id === this.localId) this.footsteps(v, moving, dt);
-      if (moving) {
+      if (steering) {
         v.visual.rotation.y = lerpAngle(v.visual.rotation.y, Math.atan2(dx, dz), blend);
         v.faceYaw = null;
       } else if (v.faceYaw !== null) {
@@ -1561,7 +1575,7 @@ export class EntityManager {
         }
         // Andar acaba com o emote na hora (o aviso do servidor chega depois).
         if (moving && v.anim.emoting) v.anim.endEmote();
-        v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active, v.speed);
+        v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active, this.legacyMove ? v.speed : v.vis);
       }
     }
   }
@@ -1644,6 +1658,16 @@ export class EntityManager {
       if (v) out.push(new Vector3(v.root.position.x, 1.1 * v.scale, v.root.position.z));
     }
     return out;
+  }
+
+  /** Estado de movimento de uma entidade neste quadro (testes no navegador: deslize = velocidade desenhada contra clipes). */
+  motionProbe(id: number): Record<string, number | boolean> | null {
+    const v = this.views.get(id);
+    if (!v) return null;
+    return {
+      x: v.root.position.x, z: v.root.position.z, vis: v.vis, walking: v.walking, speed: v.speed,
+      dist: Math.hypot(v.target.x - v.server.x, v.target.z - v.server.z), scale: v.scale, ...(v.anim?.debug() ?? {}),
+    };
   }
 
   /** Posição na tela (pixels CSS) do meio do corpo. Usado pelos testes no navegador. */
@@ -1751,6 +1775,8 @@ export class EntityManager {
     v.model3d = inst;
     this.fixBounds(v);
     v.anim = new AnimController(inst.anims, inst.resetPose, inst.impacts);
+    v.anim.setBodyScale(v.scale);
+    v.anim.legacy = this.legacyMove;
     v.hand = undefined; // modelo novo: procura o encaixe da mão de novo no próximo golpe
     v.capsule?.dispose();
     v.capsule = null;

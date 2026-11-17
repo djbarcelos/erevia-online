@@ -81,7 +81,8 @@ type AnimSet = Record<Exclude<AnimRole, OptionalRole>, string> & Partial<Record<
 const HERO_BASE = { idle: "Idle_A", run: "Running_A", buff: "Ranged_Magic_Raise", hit: "Hit_A", death: "Death_A" };
 const SKELETON_BASE = {
   idle: "Skeletons_Idle",
-  run: "Skeletons_Walking",
+  // O Skeletons_Walking é um arrastar de pés de 0,4 m/s: a 3,5 m/s o esqueleto deslizava 9 vezes. O correr do KayKit acompanha o chão.
+  run: "Running_A",
   buff: "Ranged_Magic_Raise",
   hit: "Hit_A",
   death: "Skeletons_Death",
@@ -128,6 +129,23 @@ const CLIP_IMPACT: Record<string, number> = {
  * da biblioteca do Meshy (ver docs/arte/remaster-v3.md): parado, andar, correr, golpe de espada, dano
  * (Hit Reaction 1), morte (Dead) e o grito de espada (Sword Shout) para buff/acenar/dançar.
  */
+/**
+ * Velocidade natural dos clipes de correr e andar de cada modelo, em m/s do mundo com a escala do modelo (o pé de
+ * apoio em relação ao quadril; medida no laboratório com tools/art/remaster-herois/foot-speeds.mjs e clip-speeds.mjs).
+ * O `AnimController` toca o clipe a `velocidade desenhada / natural`. O KayKit é um boneco chibi: o correr dele
+ * é de 2 m/s, e a 5 m/s tocado a 1x os pés deslizavam 2,5 vezes mais rápido que o chão.
+ */
+const FOOT_SPEEDS_KAYKIT: Record<string, { walk?: number; run: number }> = {
+  knight: { run: 1.98 }, barbarian: { run: 2.18 }, mage: { run: 1.9 }, rogue: { run: 2.4 },
+  npc_merchant: { run: 2.41 }, npc_smith: { run: 2.3 },
+  skeleton_minion: { run: 2.41 }, skeleton_warrior: { run: 1.94 }, skeleton_rogue: { run: 2.27 }, skeleton_mage: { run: 1.91 },
+};
+const FOOT_SPEEDS_REMASTER: Record<string, { walk?: number; run: number }> = {
+  knight: { walk: 1.36, run: 4.13 }, barbarian: { walk: 1.39, run: 4.23 }, mage: { walk: 1.29, run: 3.79 }, rogue: { walk: 1.41, run: 4.44 },
+  skeleton_warrior: { walk: 1.52, run: 4.77 }, skeleton_minion: { walk: 0.92, run: 2.42 }, skeleton_rogue: { walk: 1.42, run: 4.45 },
+  skeleton_mage: { walk: 1.5, run: 4.91 }, stone_golem: { walk: 0.56, run: 5.63 }, bone_lord: { walk: 1.36, run: 4.15 }, ozrhal: { walk: 1.45, run: 4.43 },
+};
+
 /** Conjunto de clipes de um herói do remaster: prefixo do arquivo + o clipe de cada papel (docs/arte/remaster-herois.md). */
 function heroSet(p: string, over: Partial<Record<AnimRole, string>> = {}): AnimSet {
   return {
@@ -689,6 +707,7 @@ export class CharacterModels {
 
     // Animações (só as do conjunto do modelo), reaplicadas pelo nome dos ossos.
     const anims = new RoleMap();
+    anims.footSpeeds = (assets.remaster ? FOOT_SPEEDS_REMASTER : FOOT_SPEEDS_KAYKIT)[model];
     const cloned = new Map<string, AnimationGroup>();
     const impacts: Partial<Record<AnimRole, number>> = {};
     const groupFor = (animName: string): AnimationGroup | null => {
