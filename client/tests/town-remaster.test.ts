@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { NodeIO } from "@gltf-transform/core";
 import { EXTMeshoptCompression, KHRTextureBasisu } from "@gltf-transform/extensions";
 import { getBounds } from "@gltf-transform/functions";
-import { EXTRA_FILES, TOWN_KITS, townExtras } from "../src/world/town-layout.ts";
+import { EXTRA_FILES, SMALL_PROPS, TOWN_KITS, townExtras, wallCorners } from "../src/world/town-layout.ts";
 import type { WorldData } from "../src/world/world-data.ts";
 
 const root = resolve(import.meta.dirname, "..");
@@ -92,7 +92,7 @@ test("nenhum NPC fica dentro de um prédio novo e os adereços novos não ficam 
   assert.ok(npcs.length >= 6, `achei só ${npcs.length} NPCs nos fontes do servidor`);
   const boxes: Array<{ kind: string; o: WorldData["objects"][number]; poly: Array<[number, number]> }> = [];
   for (const kind of Object.keys(TOWN_KITS)) {
-    if (kind === "tent" || kind === "wheelbarrow") continue; // adereços sem colisão: o NPC pode estar perto
+    if (SMALL_PROPS.has(kind)) continue; // adereços sem colisão: o NPC pode estar perto
     const b = await box(TOWN_KITS[kind]);
     for (const o of world.objects.filter((x) => x.k === kind)) boxes.push({ kind, o, poly: corners(o, b, []) });
   }
@@ -114,5 +114,16 @@ test("nenhum NPC fica dentro de um prédio novo e os adereços novos não ficam 
     for (const [name, x, z] of npcs) assert.ok(Math.hypot(e.x - x, e.z - z) >= 2, `${e.k} em (${e.x}, ${e.z}) a menos de 2 m de ${name}`);
     for (const c of world.colliders) assert.ok(Math.hypot(e.x - c.x, e.z - c.z) >= c.r + 0.4, `${e.k} em (${e.x}, ${e.z}) em cima de um colisor em (${c.x}, ${c.z})`);
     for (const bx of boxes) assert.ok(!inside(e.x, e.z, bx.poly, 0.5), `${e.k} em (${e.x}, ${e.z}) dentro de ${bx.kind}`);
+  }
+});
+
+test("os torreões de canto ficam nos vértices da muralha, sem repetir as torres grandes", () => {
+  const corners = wallCorners(world);
+  const towers = world.objects.filter((o) => o.k === "tower_a").length;
+  assert.equal(corners.length, world.wall.sides - towers);
+  const vertexR = world.wall.apothem / Math.cos(Math.PI / world.wall.sides);
+  for (const c of corners) {
+    assert.ok(Math.abs(Math.hypot(c.x, c.z) - vertexR) < 0.05, `canto em (${c.x}, ${c.z}) fora do vértice`);
+    for (const t of world.objects.filter((o) => o.k === "tower_a")) assert.ok(Math.hypot(c.x - t.x, c.z - t.z) > 3, "canto em cima de torre");
   }
 });

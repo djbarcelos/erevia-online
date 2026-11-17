@@ -23,6 +23,10 @@ export const PIECES = {
   tomb: [prp, 'Fantasy graveyard tombstone: a weathered pale bone-grey stone headstone with a rounded top and a carved skull relief, leaning slightly, a few small rust-orange (#b04a2e) iron nails and dry grass tufts at the base, a small mound of dry yellowish soil. '],
   crystal: [prp, 'A cluster of three glowing amber (#f0a640) crystals growing out of a small mossy grey rock base (#7d7f86, moss #5f7a44), one tall central crystal and two smaller ones, carved glowing runes on the rock, magical ancient look. '],
   pillar: [prp, 'A broken ancient cracked-earth stone pillar in warm brown (#8c5a3c) with orange (#d8873a) glowing cracks, jagged broken top, a few fallen stone chunks at the base, hostile desert ruins look. '],
+  barrel: [prp, 'Fantasy wooden barrel: warm brown planks, two dark iron hoops and a lighter lid, slightly bulging, a few small wine-red stains, simple and chunky. '],
+  crate: [prp, 'Fantasy wooden shipping crate: chunky warm brown planks with darker corner frames and iron nails, a cross brace on the front, a slightly open lid showing straw, simple and chunky. '],
+  corner: [bld, 'A round stone corner buttress turret for a fantasy city wall: a stout cylindrical sandstone pillar about as wide as the wall thickness, slightly taller than the wall, crenellated top with small merlons, a base plinth of larger stones, arrow slit, plain and symmetrical so that it looks the same from every side, a flat bottom. '],
+  banner: [prp, 'A tall wooden gate banner pole standing upright: a dark brown pole with a gold finial on top and a long vertical deep red (#9e2b25) banner with gold trim and a simple gold sun emblem hanging from a crossbar, small stone base. '],
   sign: [prp, 'Wooden signpost with two arrow-shaped direction boards without any text, on a stone base with a small lantern hook. '],
 };
 

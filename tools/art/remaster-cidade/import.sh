@@ -9,6 +9,6 @@ node scripts/build-remaster-town.mjs
 for p in tavern church blacksmith market home_a home_b tower wall gate; do
   node scripts/import-asset.mjs ../assets-src/meshy/town/town_${p}_b.glb cenario town_${p}_b --no-lod --resize=1024 --etc1s "$@"
 done
-for p in stall cart bench lamp sign tomb crystal pillar; do
+for p in stall cart bench lamp sign tomb crystal pillar barrel crate banner corner; do
   node scripts/import-asset.mjs ../assets-src/meshy/town/town_${p}_b.glb cenario town_${p}_b --no-lod --resize=512 --etc1s "$@"
 done

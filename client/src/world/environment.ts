@@ -13,7 +13,7 @@ import {
 } from "@babylonjs/core";
 import { addRemasterPlaza } from "./plaza-remaster";
 import { REMASTER } from "./remaster";
-import { regionProps, townExtras } from "./town-layout";
+import { regionProps, townExtras, wallCorners } from "./town-layout";
 import { loadTownProtos } from "./town-remaster";
 import { monolithProtos } from "./teleport-stone";
 import { heightAt, terrain } from "./terrain";
@@ -70,7 +70,7 @@ export async function loadEnvironment(scene: Scene, world: WorldData, shadows: S
 
   // Remaster (tunnel#100): os prédios e adereços da cidade vêm do kit novo, no mesmo layout.
   // Cada peça nova ocupa o lugar do item antigo de mesmo nome (a escala do world.json já está na malha).
-  const extras = REMASTER && !world.kits ? [...townExtras(), ...regionProps(world)] : [];
+  const extras = REMASTER && !world.kits ? [...townExtras(), ...regionProps(world), ...wallCorners(world)] : [];
   if (REMASTER && !world.kits) {
     for (const [kind, mesh] of await loadTownProtos(scene)) {
       protos.get(kind)?.setEnabled(false);
