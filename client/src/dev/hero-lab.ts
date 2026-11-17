@@ -4,7 +4,8 @@
  * `CharacterModels` do jogo. Os prints dos heróis (docs/arte/remaster-herois/) saem daqui.
  *
  * window.lab.show({ cam: "front"|"side"|"back"|"three", items: [{ model, right, left, role, t, look }] })
- *   role = papel de animação (idle, walk, run, attack, hit, death, buff...), t = 0..1 do clipe.
+ *   role = papel de animação (idle, walk, run, attack, hit, death, buff...), t = 0..1 do clipe,
+ *   grade = grau do item (1-5): escolhe a forma da arma (comum, rara, alta) e o brilho, como no jogo.
  */
 import { ArcRotateCamera, Color4, Engine, HemisphericLight, DirectionalLight, Scene, TransformNode, Vector3, type AnimationGroup } from "@babylonjs/core";
 import { configureKtx2 } from "../world/assets";
@@ -12,7 +13,7 @@ import { AnimController } from "../world/anim";
 import { CharacterModels, WEAPON_GRIPS, type AnimRole, type CharacterInstance, type Grip } from "../world/models";
 import { setBodyPalettes, type BodyLook } from "../world/body-look";
 
-interface Item { model: string; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook }
+interface Item { model: string; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook; grade?: number }
 interface Spec { grips?: Record<string, Grip>; radius?: number; cam?: "front" | "side" | "back" | "three"; items: Item[]; gap?: number; height?: number }
 
 configureKtx2();
@@ -51,6 +52,7 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
     spec.items.forEach((it, k) => {
       const inst = models!.instantiate(it.model, `lab${k}`, { "handslot.r": it.right ?? null, "handslot.l": it.left ?? null }, it.look);
       if (!inst) return;
+      if (it.grade) inst.setWeapons(it.right ?? null, it.left ?? null, it.grade, 0);
       inst.root.position.x = (k - (n - 1) / 2) * gap;
       const g: AnimationGroup | undefined = inst.anims.get(it.role ?? "idle");
       if (g) {

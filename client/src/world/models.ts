@@ -26,7 +26,7 @@ import { reportClientError } from "../net/errors";
 import { RoleMap } from "./anim";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, REMASTER, REMASTER_FILES, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS } from "./remaster";
+import { lodFor, REMASTER, REMASTER_FILES, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_ONLY, REMASTER_WEAPONS, WEAPON_FORM_FILES, remasterWeapon } from "./remaster";
 import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
 
 /**
@@ -259,6 +259,9 @@ const GRADE_GLOW: Record<number, Color3> = { 3: new Color3(0.15, 0.35, 0.9), 4: 
 /** Encantamento: +4 a +6 brilha dourado; +7 ou mais, dourado forte e pulsando. */
 const ENCHANT_GLOW = { light: new Color3(0.45, 0.33, 0.08), strong: new Color3(1, 0.72, 0.22) };
 
+/** Fração do brilho de raridade e de encantamento nas armas do remaster. */
+const SOFT_GLOW = 0.12;
+
 /** Qual brilho a arma usa: o do encantamento vence o da raridade. */
 function glowKey(grade: number, enchant: number): string | null {
   if (enchant >= 7) return "e2";
@@ -312,6 +315,8 @@ interface ModelAssets {
 
 /** Escala extra das armas do remaster que dividem o arquivo com outra (REMASTER_WEAPONS). */
 const weaponScale = new Map<AssetContainer, number>();
+/** Formas por raridade das armas do remaster (WEAPON_FORM_FILES), por arquivo. */
+const weaponForms = new Map<string, AssetContainer>();
 
 export class CharacterModels {
   private constructor(
@@ -461,7 +466,7 @@ export class CharacterModels {
     // stone_golem e os chefes só têm arquivo no remaster; sem ele o golem é o de código e os chefes reaproveitam os esqueletos.
     const modelIds = [...Object.keys(WEAPONS), ...MONSTER_MODELS, ...(REMASTER ? ["stone_golem", ...REMASTER_ONLY] : [])];
 
-    const [animContainers, weaponList, bodies] = await Promise.all([
+    const [animContainers, weaponList, bodies, formList] = await Promise.all([
       Promise.all(ANIM_FILES.map(load)),
       // ?remaster=1: a arma nova no lugar (e o KayKit de sempre se o arquivo faltar).
       Promise.all(
@@ -480,11 +485,14 @@ export class CharacterModels {
           return [id, rm ?? (await tryLoad(`${id}.glb`)), !!rm] as const;
         }),
       ),
+      // ?remaster=1: as formas por raridade (comum, rara e alta de cada família); o grau do item escolhe uma.
+      Promise.all(WEAPON_FORM_FILES.filter(() => REMASTER).map(async (f) => [f, await tryLoad(`weapons/${f}.glb`)] as const)),
     ]);
+    for (const [f, c] of formList) if (c) weaponForms.set(f, c);
     const weaponByFile = new Map(weaponList);
     // Material de paleta: personagens, monstros e armas com a borda e o degradê mais fortes
     // que o cenário. As cópias (repintura, brilho) herdam o tipo.
-    for (const c of [...bodies.map(([, b]) => b), ...weaponList.map(([, w]) => w)]) {
+    for (const c of [...bodies.map(([, b]) => b), ...weaponList.map(([, w]) => w), ...formList.map(([, w]) => w)]) {
       for (const m of c?.materials ?? []) setPaletteKind(m, "char");
     }
 
@@ -518,13 +526,16 @@ export class CharacterModels {
   }
 
   /** Cópia do material com brilho (uma por material + tipo de brilho; "e2" pulsa). */
-  private glowMaterial(base: Material, glow: string): Material {
-    const key = `${base.uniqueId}:${glow}`;
+  private glowMaterial(base: Material, glow: string, soft = false): Material {
+    const key = `${base.uniqueId}:${glow}${soft ? "s" : ""}`;
     let mat = this.glowMats.get(key);
     if (!mat) {
       mat = base.clone(`${base.name}-${glow}`) ?? base;
-      const c =
-        glow === "e2" ? ENCHANT_GLOW.strong.clone() : glow === "e1" ? ENCHANT_GLOW.light : GRADE_GLOW[Number(glow.slice(1))];
+      // Remaster (soft): as armas têm luz pintada e a forma é o que diz a raridade; o brilho é um toque, não uma mancha.
+      const f = soft ? SOFT_GLOW : 1;
+      const c = (
+        glow === "e2" ? ENCHANT_GLOW.strong.clone() : glow === "e1" ? ENCHANT_GLOW.light : GRADE_GLOW[Number(glow.slice(1))]
+      ).scale(f);
       const target = mat instanceof PBRMaterial || mat instanceof StandardMaterial ? mat : null;
       if (target) target.emissiveColor = c;
       if (glow === "e2" && target) {
@@ -532,7 +543,7 @@ export class CharacterModels {
         const scene = mat.getScene();
         scene.onBeforeRenderObservable.add(() => {
           const k = 0.55 + 0.45 * Math.sin(performance.now() / 260);
-          target.emissiveColor.copyFromFloats(ENCHANT_GLOW.strong.r * k, ENCHANT_GLOW.strong.g * k, ENCHANT_GLOW.strong.b * k);
+          target.emissiveColor.copyFromFloats(ENCHANT_GLOW.strong.r * k * f, ENCHANT_GLOW.strong.g * k * f, ENCHANT_GLOW.strong.b * k * f);
         });
       }
       this.glowMats.set(key, mat);
@@ -604,7 +615,11 @@ export class CharacterModels {
       heldFile.delete(slot);
       const hand = byName.get(slot);
       if (!hand || !container) return;
-      const w = container.instantiateModelsToScene((n) => `${n}#${id}`, false);
+      // Remaster: o grau do item troca a forma (comum, rara ou alta) e a escala que o nome do modelo pede.
+      const name = this.weaponFileOf.get(container) ?? "";
+      const form = assets.remaster && grade > 0 ? remasterWeapon(name, grade) : undefined;
+      const formC = form ? weaponForms.get(form.file) : undefined;
+      const w = (formC ?? container).instantiateModelsToScene((n) => `${n}#${id}`, false);
       const wRoot = w.rootNodes[0] as TransformNode;
       // O __root__ do glTF converte o sistema de coordenadas; dentro do esqueleto isso já foi
       // feito, então prendemos o filho direto e descartamos o __root__ da arma.
@@ -624,13 +639,13 @@ export class CharacterModels {
           new Vector3(use.pos[0] * mirror, use.pos[1], use.pos[2]).rotateByQuaternionToRef(SLOT_INV, child.position);
           if (grip.scale) child.scaling.scaleInPlace(grip.scale);
         }
-        const ws = weaponScale.get(container);
+        const ws = formC ? form?.scale : weaponScale.get(container);
         if (ws) child.scaling.scaleInPlace(ws);
         nodes.push(child);
         const glow = glowKey(grade, enchant);
         if (glow) {
-          for (const m of child.getChildMeshes(false)) if (m.material) m.material = this.glowMaterial(m.material, glow);
-          if (child instanceof AbstractMesh && child.material) child.material = this.glowMaterial(child.material, glow);
+          for (const m of child.getChildMeshes(false)) if (m.material) m.material = this.glowMaterial(m.material, glow, assets.remaster);
+          if (child instanceof AbstractMesh && child.material) child.material = this.glowMaterial(child.material, glow, assets.remaster);
         }
       }
       wRoot.dispose();
