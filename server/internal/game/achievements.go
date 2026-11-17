@@ -107,8 +107,8 @@ var AchievementList = append([]*AchievementDef{
 	{ID: "first_trade", Name: "Negócio Fechado", Text: "Concluir uma troca com outro jogador.", Title: "Mercador", Goal: AchTrade, Count: 1},
 	{ID: "craft_legend", Name: "Forja Lendária", Text: "Criar um item lendário no Ferreiro.", Title: "Mestre Ferreiro", Goal: AchCraft, Count: int(GradeLegendary)},
 	{ID: "pvp_win", Name: "Duelista", Text: "Vencer um jogador em combate (que estava lutando).", Title: "Duelista", Goal: AchPvPWin, Count: 1},
-	{ID: "rare_hunter", Name: "Caçador de Raros", Text: "Derrotar os 4 monstros raros: Ossudo, o Teimoso; Capitão Ossudo; Vossk, o Cinzento; e Ômrun, Golem Ancião.",
-		Title: "Caçador de Raros", Goal: AchKill, Target: "rare_ossudo|rare_captain|rare_vossk|rare_omrun", Count: 4, Each: true},
+	{ID: "rare_hunter", Name: "Caçador de Raros", Text: "Derrotar os 5 monstros raros: Ossudo, o Teimoso; Capitão Ossudo; Vossk, o Cinzento; Ômrun, Golem Ancião; e a Velha Escamosa.",
+		Title: "Caçador de Raros", Goal: AchKill, Target: "rare_ossudo|rare_captain|rare_vossk|rare_omrun|rare_escamosa", Count: 5, Each: true},
 }, RepTitleAchievements...) // os títulos da loja de reputação no fim (reputation.go)
 
 // Achievements: as conquistas por id.

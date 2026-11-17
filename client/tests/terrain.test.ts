@@ -9,7 +9,7 @@ import {
   clearRadius,
   heightAt,
   HILL_AMPLITUDE,
-  MAIN_LAKE,
+  lakeOf,
   rayTerrain,
   regionSplat,
   setTerrain,
@@ -91,24 +91,37 @@ test("o campo ativo é o que setTerrain define", () => {
   assert.equal(heightAt(80, 60), 0);
 });
 
-test("o lago fica fora do retângulo jogável: a água nunca está onde se anda", () => {
+test("a lagoa de Vau Velho: rasa e andável no meio (onde a Mãe-Lodo luta), funda só dentro dos colisores do servidor", () => {
   const lake = field.lake!;
-  assert.deepEqual(lake, MAIN_LAKE);
-  const b = field.bounds;
-  let water = 0;
-  for (let x = b.minX; x <= b.maxX; x += 1) {
-    for (let z = b.minZ; z <= b.maxZ; z += 1) {
-      // Dentro do jogável o chão nunca fica abaixo do nível da água.
-      assert.ok(field.heightAt(x, z) > lake.level - 0.05, `água em ${x},${z} (jogável)`);
+  assert.deepEqual(lake, lakeOf(world));
+  assert.equal(lake.deeps.length, 2);
+  const colliders = world.colliders.filter((c) => c.x > 150 && c.z > -150 && c.z < 60);
+  // Dentro do anel de colisores de uma parte funda ninguém chega a pé.
+  const blocked = (x: number, z: number) =>
+    colliders.some((c) => Math.hypot(c.x - x, c.z - z) < c.r + 0.4) || lake.deeps.some((d) => Math.hypot(d.x - x, d.z - z) < d.r + 1.5);
+  let shallow = 0;
+  let wading = 0;
+  for (let x = 150; x <= 330; x += 1) {
+    for (let z = -150; z <= 60; z += 1) {
+      const depth = lake.level - field.heightAt(x, z);
+      // O que se anda (livre de colisor) nunca passa de 0,9 m de água: nada de nadar onde o servidor deixa pisar.
+      if (!blocked(x, z) && depth > 0) {
+        wading++;
+        assert.ok(depth < 0.9, `${depth.toFixed(2)} m de água em ${x},${z}, sem colisor`);
+      }
+      if (depth > 0.2 && depth < 0.9) shallow++;
     }
   }
-  for (let x = field.extent.minX; x <= field.extent.maxX; x += 2) {
-    for (let z = field.extent.minZ; z <= field.extent.maxZ; z += 2) if (field.heightAt(x, z) < lake.level) water++;
-  }
-  assert.ok(water > 300, `lago pequeno demais (${water} amostras)`);
-  // O centro do lago é fundo, a borda do jogável é terra firme.
-  assert.ok(field.heightAt(lake.cx, lake.cz) < lake.level - 1);
-  assert.ok(field.heightAt(b.maxX, lake.cz) > lake.level);
+  assert.ok(wading > 2000, `a lagoa andável é pequena (${wading} m²)`);
+  assert.ok(shallow > 2000);
+  // Os fundos (aldeia afogada e fosso) são mesmo fundos, e a ilha sobe acima da água.
+  for (const d of lake.deeps) assert.ok(field.heightAt(d.x + (d === lake.deeps[1] ? 7 : 0), d.z) < lake.level - 1.2, `fundo em ${d.x},${d.z}`);
+  assert.ok(field.heightAt(lake.island!.x, lake.island!.z) > lake.level);
+  // A Mãe-Lodo está na água rasa, no meio da lagoa; o cais e o posto estão em terra firme.
+  const mother = field.heightAt(250, -40);
+  assert.ok(mother < lake.level && lake.level - mother < 0.9, `Mãe-Lodo a ${lake.level - mother} m de profundidade`);
+  assert.ok(field.heightAt(188, -10) > lake.level + 0.05);
+  assert.equal(field.heightAt(165, 0), 0);
 });
 
 test("o lago não existe em outros mapas", () => {

@@ -126,14 +126,29 @@ func TestEmbeddedWorld(t *testing.T) {
 	}
 }
 
-func TestEmbeddedWorldGrowsSouthOnly(t *testing.T) {
+// O mapa cresceu duas vezes: para o sul (o Vale, até z = −330) e para leste (o Brejo de Lamagris e as Terras
+// Mortas, até x = 330, tunnel#139).
+func TestEmbeddedWorldGrowsSouthAndEast(t *testing.T) {
 	w, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	b := w.Bounds
-	if b.MinX != -150 || b.MaxX != 150 || b.MaxZ != 150 || b.MinZ != -330 {
-		t.Fatalf("o mapa deveria crescer só para o sul (até z=-330): %+v", b)
+	if b.MinX != -150 || b.MaxX != 330 || b.MaxZ != 150 || b.MinZ != -330 {
+		t.Fatalf("o mapa deveria ir de x −150 a 330 e de z −330 a 150: %+v", b)
+	}
+	// A estrada leste vai até o Posto do Barqueiro, e o Brejo é alcançável a pé.
+	east := w.NearestFree(Point{50, 0})
+	for _, goal := range []Point{{165, 0}, {200, 20}, {300, -100}, {170, 120}} {
+		to := w.NearestFree(goal)
+		path := w.FindPath(east, to)
+		if len(path) == 0 {
+			t.Fatalf("sem caminho até %v", goal)
+		}
+		pathOK(t, w, east, path)
+		if end := path[len(path)-1]; math.Hypot(end.X-to.X, end.Z-to.Z) > 0.5 {
+			t.Errorf("caminho até %v parou em %v", goal, end)
+		}
 	}
 	// O vale é alcançável a pé pela cidade (portão sul → estrada → entrada do vale) e
 	// dá para andar até o fundo da área dos golens.

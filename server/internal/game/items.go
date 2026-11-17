@@ -93,7 +93,8 @@ const (
 	CooldownNone = iota
 	CooldownHP
 	CooldownMP
-	CooldownReturn // Pergaminho de Retorno
+	CooldownReturn   // Pergaminho de Retorno
+	CooldownAntidote // Antídoto (receita do Ferreiro)
 )
 
 // CooldownSeconds: recarga de cada grupo de consumível.
@@ -134,6 +135,7 @@ type ItemDef struct {
 	Cooldown    int // grupo de recarga (consumíveis)
 	HealHP      float64
 	HealMP      float64
+	Cleanse     bool       // poção que limpa veneno e peste (o Antídoto)
 	Scroll      ScrollKind // pergaminhos: o que faz
 	Blessed     bool       // encantar: falhar não quebra (volta a +0)
 	RepOnly     bool       // só na loja de reputação (reputation.go): não cai de monstro
@@ -244,6 +246,13 @@ func scroll(id, name string, kind ScrollKind, price int64, desc string) *ItemDef
 func blessed(d *ItemDef) *ItemDef {
 	d.Blessed = true
 	d.Grade = GradeRare
+	return d
+}
+
+// antidote: a poção que limpa veneno e peste (zone/items.go, drink).
+func antidote(id, name string, price int64, icon, desc string) *ItemDef {
+	d := stackable(id, name, KindPotion, price, icon, desc)
+	d.Cooldown, d.Cleanse = CooldownAntidote, true
 	return d
 }
 
@@ -425,6 +434,8 @@ var Items = func() map[string]*ItemDef {
 		potion("potion_hp_l", "Poção de Vida Maior", CooldownHP, 260, 0, 75, "potion_hp_big", "Recupera 260 de vida na hora."),
 		potion("potion_mp_s", "Poção de Mana Menor", CooldownMP, 0, 50, 25, "potion_mp", "Recupera 50 de mana na hora."),
 		potion("potion_mp_l", "Poção de Mana Maior", CooldownMP, 0, 160, 90, "potion_mp_big", "Recupera 160 de mana na hora."),
+		// A primeira poção de receita (Ferreiro, recipes.go): não está à venda, só se faz com a Glândula de Sapo do Brejo.
+		antidote("potion_antidote", "Antídoto", 60, "potion_antidote", "Limpa veneno e peste na hora. Receita do Ferreiro, com a Glândula de Sapo do Brejo."),
 
 		// Pergaminhos.
 		scroll("scroll_return", "Pergaminho de Retorno", ScrollReturn, 120,
@@ -446,6 +457,11 @@ var Items = func() map[string]*ItemDef {
 		stackable("raid_fragment", "Fragmento do Rei Ossário", KindMaterial, 5000, "crown",
 			"Um pedaço da coroa de Ozrhal. Ainda está frio como uma tumba."),
 		stackable("broken_crown", "Coroa Partida", KindMaterial, 1500, "crown", "A coroa do Senhor dos Ossos. Vale uma fortuna."),
+		// Brejo de Lamagris (14–20): materiais dos Brejeiros, dos sapos e do lodo.
+		stackable("brejeiro_scale", "Escama de Brejeiro", KindMaterial, 45, "brejo_scale", "Escama verde-escura, dura como casco. Os Brejeiros trocam por sal."),
+		stackable("black_mud", "Lodo Negro", KindMaterial, 55, "brejo_mud", "Lama que não seca nem fede. Pesa mais do que parece."),
+		stackable("frog_gland", "Glândula de Sapo", KindMaterial, 120, "brejo_gland", "A glândula de um Sapo-Boi. Base do Antídoto do Ferreiro."),
+		stackable("silver_reed", "Junco-de-Prata", KindMaterial, 90, "brejo_reed", "Junco que só cresce nas margens, de dia. Brilha como prata molhada."),
 		stackable("captain_insignia", "Insígnia do Capitão", KindMaterial, 900, "insignia",
 			"O distintivo de ferro do Capitão Ossudo (raro dos Campos dos Ossos, só à noite)."),
 
