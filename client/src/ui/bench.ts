@@ -62,6 +62,10 @@ interface Sample {
   fps: number;
   frameMs: number;
   p95Ms: number;
+  /** Pior 1% dos quadros (ms). */
+  p99Ms: number;
+  /** Triângulos desenhados por quadro (inclui sombras e malhas com instâncias). */
+  tris: number;
   cpuMs: number;
   /** Partes do tempo de CPU: desenho da cena, render targets (sombras, brilho), escolha das malhas ativas e animação. */
   renderMs: number;
@@ -89,6 +93,8 @@ export interface BenchResult {
   sceneCensus: CensusRow[];
   /** Entidades por tipo e nome, com as malhas e os nós de cada uma. */
   entities: EntityRow[];
+  /** Texturas carregadas e uma estimativa da memória que ocupam (MB), mais o heap do JS. */
+  memory: { textures: number; textureMB: number; heapMB: number };
 }
 
 interface EntityRow {
@@ -236,7 +242,7 @@ export async function runBench(d: BenchDeps): Promise<BenchResult> {
 
   const device = deviceInfo(d.engine);
   const table = renderTable(device, samples);
-  const result = { device, samples, table, census: census(d.scene), sceneCensus: census(d.scene, notScenery(d)), entities: entityCensus(d) };
+  const result = { device, samples, table, census: census(d.scene), sceneCensus: census(d.scene, notScenery(d)), entities: entityCensus(d), memory: memoryInfo(d.scene) };
   window.__ereviaBench = { done: true, progress: "pronto", result };
   console.log(table);
 
@@ -283,6 +289,7 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
   let anim = 0;
   let draws = 0;
   let active = 0;
+  let tris = 0;
   let frames = 0;
   const start = performance.now();
   await new Promise<void>((done) => {
@@ -295,6 +302,7 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
       anim += inst.animationsTimeCounter.current;
       draws += inst.drawCallsCounter.current;
       active += d.scene.getActiveMeshes().length;
+      tris += d.scene.getActiveIndices() / 3;
       frames++;
       if (performance.now() - start >= sampleMs()) {
         d.scene.onAfterRenderObservable.remove(obs);
@@ -318,6 +326,8 @@ async function measure(d: BenchDeps, inst: SceneInstrumentation, p: { x: number;
     fps: round((frames * 1000) / elapsed, 1),
     frameMs: round(dts.reduce((s, v) => s + v, 0) / Math.max(dts.length, 1), 1),
     p95Ms: round(dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.95))] ?? 0, 1),
+    p99Ms: round(dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.99))] ?? 0, 1),
+    tris: Math.round(tris / f),
     cpuMs: round(cpu / f, 1),
     renderMs: round(render / f, 1),
     targetsMs: round(targets / f, 1),
@@ -363,6 +373,25 @@ async function sceneOnly(d: BenchDeps, inst: SceneInstrumentation) {
   }
 }
 
+/**
+ * Memória de GPU das texturas, estimada: KTX2 conta 1 byte por pixel (BC7/ASTC/ETC), o resto 4
+ * (RGBA8), com mipmaps (+33%). Não conta buffers de geometria nem render targets.
+ */
+function memoryInfo(scene: Scene): BenchResult["memory"] {
+  let bytes = 0;
+  let n = 0;
+  for (const t of scene.textures) {
+    const size = t.getSize();
+    if (!size.width) continue;
+    n++;
+    const url = (t as unknown as { url?: string }).url ?? "";
+    const compressed = /ktx2?$/i.test(url.split("?")[0]) || !!(t.getInternalTexture() as unknown as { _compression?: string } | null)?._compression;
+    bytes += size.width * size.height * (compressed ? 1 : 4) * (t.noMipmap ? 1 : 1.33);
+  }
+  const heap = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0;
+  return { textures: n, textureMB: round(bytes / 1048576, 1), heapMB: round(heap / 1048576, 1) };
+}
+
 function deviceInfo(engine: AbstractEngine): Record<string, string | number> {
   const gl = (engine as unknown as { getGlInfo?: () => { renderer: string } }).getGlInfo?.();
   return {
@@ -379,8 +408,8 @@ function deviceInfo(engine: AbstractEngine): Record<string, string | number> {
 function renderTable(device: Record<string, string | number>, samples: Sample[]): string {
   const lines = Object.entries(device).map(([k, v]) => `${k}: ${v}`);
   lines.push("");
-  lines.push("| Região | Hora | FPS | Frame (ms) | p95 (ms) | CPU (ms) | Draws | Malhas ativas / total | Cenário: draws, ativas / total | Jogadores | Monstros |");
-  lines.push("|---|---|---|---|---|---|---|---|---|---|---|");
+  lines.push("| Região | Hora | FPS | Frame (ms) | p95 (ms) | p99 (ms) | CPU (ms) | Draws | Triângulos | Malhas ativas / total | Cenário: draws, ativas / total | Jogadores | Monstros |");
+  lines.push("|---|---|---|---|---|---|---|---|---|---|---|---|---|");
   const groups = new Map<string, Sample[]>();
   for (const s of samples) {
     const k = `${s.region}|${s.time}`;
@@ -390,8 +419,8 @@ function renderTable(device: Record<string, string | number>, samples: Sample[])
     const avg = (f: (s: Sample) => number) => round(g.reduce((t, s) => t + f(s), 0) / g.length, 1);
     const max = (f: (s: Sample) => number) => Math.max(...g.map(f));
     lines.push(
-      `| ${g[0].region} | ${g[0].time} | ${avg((s) => s.fps)} | ${avg((s) => s.frameMs)} | ${max((s) => s.p95Ms)} | ` +
-        `${avg((s) => s.cpuMs)} | ${max((s) => s.draws)} | ${max((s) => s.active)} / ${g[0].meshes} | ` +
+      `| ${g[0].region} | ${g[0].time} | ${avg((s) => s.fps)} | ${avg((s) => s.frameMs)} | ${max((s) => s.p95Ms)} | ${max((s) => s.p99Ms)} | ` +
+        `${avg((s) => s.cpuMs)} | ${max((s) => s.draws)} | ${avg((s) => s.tris)} | ${max((s) => s.active)} / ${g[0].meshes} | ` +
         `${max((s) => s.sceneDraws)}, ${max((s) => s.sceneActive)} / ${g[0].sceneMeshes} | ` +
         `${max((s) => s.players)} | ${max((s) => s.monsters)} |`,
     );
