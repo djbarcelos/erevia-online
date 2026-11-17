@@ -37,6 +37,7 @@ import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL
  */
 
 const BASE = "/models/";
+let warmed = false;
 
 /** Shader da repintura do remaster (ver tintMaterial). Cores em gama; `outfit` e `skin` já em 0-1. */
 const TINT_SHADER = "remasterTint";
@@ -557,6 +558,32 @@ export class CharacterModels {
     if (mat instanceof PBRMaterial) mat.albedoTexture = tex;
     else if (mat instanceof StandardMaterial) mat.diffuseTexture = tex;
     return mat;
+  }
+
+  /**
+   * Aquece o cache HTTP com os .glb que o load() vai pedir (tela de escolha de personagem), sem criar cena.
+   * Quando o load() pede o mesmo arquivo, vem do cache. Falhas são ignoradas (o load() reporta as dele).
+   */
+  static warmCache(): void {
+    if (warmed) return;
+    warmed = true;
+    const allWeapons = { ...WEAPONS, ...MONSTER_WEAPONS, ...NPC_WEAPONS };
+    const weaponFiles = [...new Set([...Object.values(allWeapons).flatMap((w) => Object.values(w)), ...ITEM_WEAPONS])];
+    const ids = [...Object.keys(WEAPONS), ...MONSTER_MODELS, ...(REMASTER ? ["stone_golem", ...REMASTER_ONLY] : [])].filter(
+      (id) => !(REMASTER && REMASTER_LAZY.includes(id)),
+    );
+    const files = [
+      ...ANIM_FILES,
+      ...weaponFiles.map((w) => (REMASTER && REMASTER_WEAPONS[w] ? `weapons/${REMASTER_WEAPONS[w].file}.glb` : `weapons/${w}.glb`)),
+      ...(REMASTER ? WEAPON_FORM_FILES.map((f) => `weapons/${f}.glb`) : []),
+      ...ids.map((id) => (REMASTER && REMASTER_FILES[id] ? `${REMASTER_FILES[id]}.glb` : `${id}.glb`)),
+    ];
+    // Poucos de cada vez, para não brigar com a tela de personagens.
+    const queue = [...new Set(files)];
+    const worker = async () => {
+      for (let f = queue.shift(); f; f = queue.shift()) await fetch(BASE + f).then((r) => r.arrayBuffer()).catch(() => undefined);
+    };
+    for (let i = 0; i < 3; i++) void worker();
   }
 
   /** Baixa modelos, armas e animações em paralelo. Arquivos que faltarem são ignorados. */

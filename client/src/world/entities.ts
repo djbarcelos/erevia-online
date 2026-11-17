@@ -312,6 +312,10 @@ export class EntityManager {
   private lastDeathShow = 0;
   private selectRing: Mesh;
   private models: CharacterModels | null = null;
+  /** Entrada no mundo: enquanto os modelos não chegam, nenhuma entidade vira cápsula (ver holdCapsules). */
+  private capsulesHeld = false;
+  /** Entidades esperando o download do próprio modelo (golem, chefes, NPCs do remaster): invisíveis até chegar. */
+  private lazyWaits = new Map<number, Promise<boolean>>();
   private targetId = 0;
   private catalog = new Map<number, SkillInfo>();
   /** Passos do jogador local correndo (poeira): fração do passo atual e o pé. */
@@ -483,6 +487,30 @@ export class EntityManager {
       for (const v of this.views.values()) if (v.kind !== EntityKind.OBJECT) this.attachModel(v);
     };
     for (const v of this.views.values()) if (v.kind !== EntityKind.OBJECT) this.attachModel(v);
+    this.releaseCapsules();
+  }
+
+  /** Entrada no mundo: segura as cápsulas até os modelos carregarem (ou falharem: releaseCapsules). */
+  holdCapsules(): void {
+    this.capsulesHeld = true;
+  }
+
+  /** Solta as cápsulas: quem ficou sem modelo (e não espera um download) vira cápsula, o último recurso. */
+  releaseCapsules(): void {
+    this.capsulesHeld = false;
+    for (const v of this.views.values()) {
+      if (v.kind === EntityKind.OBJECT || v.model === STONE_MODEL || v.model3d || v.capsule) continue;
+      if (this.wantsCapsule(v)) v.capsule = this.createCapsule(v);
+    }
+  }
+
+  private wantsCapsule(v: View): boolean {
+    return !this.capsulesHeld && !this.lazyWaits.has(v.id);
+  }
+
+  /** Resolve quando nenhuma entidade espera mais o download do próprio modelo (só esses downloads, não o pacote todo). */
+  async modelsSettled(): Promise<void> {
+    while (this.lazyWaits.size) await Promise.allSettled([...this.lazyWaits.values()]);
   }
 
   setTarget(id: number): void {
@@ -634,7 +662,7 @@ export class EntityManager {
       return;
     }
     if (this.models) this.attachModel(v);
-    if (!v.model3d) v.capsule = this.createCapsule(v);
+    if (!v.model3d && this.wantsCapsule(v)) v.capsule = this.createCapsule(v);
     if (v.dead) this.showDead(v, true);
     else if (fade && e.kind === EntityKind.MONSTER) this.fadeIn(v);
   }
@@ -705,6 +733,7 @@ export class EntityManager {
   }
 
   private disposeView(v: View): void {
+    this.lazyWaits.delete(v.id);
     v.model3d?.dispose();
     // Materiais são compartilhados (modelo, anel, efeitos): só as malhas são descartadas.
     v.root.dispose(false, false);
@@ -1808,7 +1837,17 @@ export class EntityManager {
     // Remaster: golem, chefes e NPCs baixam sob demanda; até chegar a entidade fica como cápsula (não o modelo de outro).
     for (const m of new Set([npcModel, bossModel, v.model])) {
       if (!m || !this.models.pending(m)) continue;
-      void this.models.ensure(m);
+      // Sem cápsula: a entidade fica invisível, pede o modelo na hora e aparece com fade quando ele chega.
+      if (!this.lazyWaits.has(v.id)) {
+        const p = this.models.ensure(m);
+        this.lazyWaits.set(v.id, p);
+        void p.then((ok) => {
+          if (this.lazyWaits.get(v.id) !== p) return;
+          this.lazyWaits.delete(v.id);
+          // O modelo falhou de vez: aí sim, a cápsula.
+          if (!ok && this.views.get(v.id) === v && !v.model3d && !v.capsule) v.capsule = this.createCapsule(v);
+        });
+      }
       return;
     }
     // O visual do servidor (pele, cabelo, roupa) é de herói: só vale nos modelos de NPC que têm máscara de repintura.
@@ -1836,6 +1875,7 @@ export class EntityManager {
     v.capsule?.dispose();
     v.capsule = null;
     if (v.dead) this.showDead(v, true);
+    else if (this.lazyWaits.has(v.id)) this.fadeIn(v); // chegou depois de a entidade aparecer: entra aos poucos
   }
 
   /**
