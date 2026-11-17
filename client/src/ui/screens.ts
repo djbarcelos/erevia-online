@@ -6,6 +6,7 @@
 import "../styles/tokens.css";
 import "../styles/kit.css";
 import "../styles/screens.css";
+import "../styles/vigilia.css";
 import { api, ApiError, type CharacterInfo, type ClassId, type CreationOption, type CreationOptions, type LookChoice, type Providers } from "../api";
 import { CLASSES, classInfo } from "../classes";
 import { ui, uniqueIds } from "./art";
