@@ -8,7 +8,9 @@
 // A máscara está no mesmo espaço UV da textura-base (linha 0 = v 0, como no glTF).
 //
 // Uso (dentro de client/):
-//   node scripts/make-remaster-mask.mjs <cru.glb> <saida.png> [--pano=<regex>]
+//   node scripts/make-remaster-mask.mjs <cru.glb> <saida.png> [--cloth=red|blue|green|brown] [--skin=head|all]
+//   --cloth: a cor do pano que a repintura troca (cavaleiro: red; mago: blue; ladino: green; bárbaro: brown).
+//   --skin: head = só a pele da cabeça (a armadura cobre o resto); all = pele em qualquer lugar (bárbaro, braços à mostra).
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import jpeg from 'jpeg-js';
@@ -16,6 +18,19 @@ import { writeFileSync } from 'node:fs';
 import { PNG } from 'pngjs';
 
 const [input, output] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const opt = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => a.slice(2).split('=')));
+const clothKind = opt.cloth ?? 'red';
+const skinAll = (opt.skin ?? 'head') === 'all';
+/** O pixel é pano da cor pedida (e não pele). */
+const isCloth = (r, g, b) => {
+  const mx = Math.max(r, g, b);
+  const mn = Math.min(r, g, b);
+  if (mx - mn < 18) return false;
+  if (clothKind === 'blue') return b >= 1.25 * r && b >= 1.05 * g;
+  if (clothKind === 'green') return g >= 1.1 * r && g >= 1.03 * b;
+  if (clothKind === 'brown') return r >= 1.15 * g && g >= 0.9 * b && mx < 150 && r - b > 20 && !(r > g && g > b && r - b > 28 && mx >= 150);
+  return r >= 70 && r >= 1.4 * g && r >= 1.4 * b;
+};
 const OUT = 512;
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const doc = await io.read(input);
@@ -73,8 +88,8 @@ for (let i = 0; i < W * H; i++) {
   const g = data[i * 4 + 1];
   const b = data[i * 4 + 2];
   const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-  if (r >= 70 && r >= 1.4 * g && r >= 1.4 * b) cloth[i] = 1;
-  if (head[i] && r > g && g > b && r - b > 28 && luma > 95) {
+  if (isCloth(r, g, b)) cloth[i] = 1;
+  if ((skinAll || head[i]) && r > g && g > b && r - b > 28 && luma > 95) {
     skinMask[i] = 1;
     skinLuma += luma;
     skinN++;

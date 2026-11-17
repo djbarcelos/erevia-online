@@ -123,16 +123,30 @@ const CLIP_IMPACT: Record<string, number> = {
  * da biblioteca do Meshy (ver docs/arte/remaster-v3.md): parado, andar, correr, golpe de espada, dano
  * (Hit Reaction 1), morte (Dead) e o grito de espada (Sword Shout) para buff/acenar/dançar.
  */
+/** Conjunto de clipes de um herói do remaster: prefixo do arquivo + o clipe de cada papel (docs/arte/remaster-herois.md). */
+function heroSet(p: string, over: Partial<Record<AnimRole, string>> = {}): AnimSet {
+  return {
+    idle: `${p}Idle`, walk: `${p}Walk`, run: `${p}Run`, attack: `${p}Attack`, skill: `${p}Attack`, buff: `${p}Raise`, hit: `${p}Hit`, death: `${p}Death`,
+    wave: `${p}Wave`, dance: `${p}Dance`, sit: `${p}Sit`, ...over,
+  };
+}
 const REMASTER_SETS: Record<string, AnimSet> = {
-  knight: {
-    idle: "KB_Idle", walk: "KB_Walk", run: "KB_Run", attack: "KB_Attack", skill: "KB_Attack", buff: "KB_Raise", hit: "KB_Hit", death: "KB_Death",
-    wave: "KB_Raise", dance: "KB_Raise", sit: "KB_Idle",
-  },
+  knight: heroSet("KB_"),
+  barbarian: heroSet("BB_", { skill: "BB_Skill" }),
+  mage: heroSet("MB_", { skill: "MB_Skill", buff: "MB_Skill" }),
+  rogue: heroSet("RB_", { skill: "RB_Skill" }),
   skeleton_warrior: { idle: "SW_Idle", walk: "SW_Walk", run: "SW_Run", attack: "SW_Attack", skill: "SW_Attack", buff: "SW_Raise", hit: "SW_Hit", death: "SW_Death" },
 };
 /** O golpe encosta quando a mão termina o movimento rápido (quadro 16 de 30, medido na velocidade da mão). */
 CLIP_IMPACT.KB_Attack = 16 / 30;
 CLIP_IMPACT.SW_Attack = 16 / 30;
+// Heróis novos: o fim do movimento rápido da mão, medido no Blender (tools/art/remaster-herois/impact.py).
+CLIP_IMPACT.BB_Attack = 33 / 30;
+CLIP_IMPACT.BB_Skill = 41 / 30;
+CLIP_IMPACT.MB_Attack = 18 / 30;
+CLIP_IMPACT.MB_Skill = 17 / 30;
+CLIP_IMPACT.RB_Attack = 20 / 30;
+CLIP_IMPACT.RB_Skill = 22 / 30;
 
 export type Slot = "handslot.r" | "handslot.l";
 
@@ -558,7 +572,10 @@ export class CharacterModels {
       ? this.watchLod({ root, level: 0, set: (l) => ((lodLevel = l), refreshVis()) })
       : () => {};
     let head = { id: firstHead, mesh: bodyMeshes.find((m) => m.name.split("#")[0] === `Head_${firstHead}`) };
-    const baseMat = bodyMeshes.find((m) => m !== head.mesh)?.material ?? bodyMeshes[0]?.material ?? null;
+    // O elmo separável (remaster) tem material próprio (aço liso, cor de vértice): a repintura não o toca.
+    const isHatMesh = (m: AbstractMesh) => /^Hat(_LODd)?(.d+)?$/.test(m.name.split("#")[0]);
+    const paintable = () => bodyMeshes.filter((m) => !isHatMesh(m));
+    const baseMat = bodyMeshes.find((m) => m !== head.mesh && !isHatMesh(m))?.material ?? bodyMeshes[0]?.material ?? null;
     let painted: BodyLook | null = null; // cores em uso (material repintado)
     let disposed = false;
     /** Troca a cabeça (Barbeiro, criação): a nova é copiada do arquivo e a velha, descartada. */
@@ -589,12 +606,12 @@ export class CharacterModels {
       if (!baseMat || (painted && colorKey(model, painted) === colorKey(model, l))) return;
       if (painted) this.releasePaint(model, painted);
       painted = null;
-      for (const m of bodyMeshes) m.material = baseMat;
+      for (const m of paintable()) m.material = baseMat;
       if (!needsRepaint(l)) return;
       painted = l;
       void this.acquirePaint(model, baseMat, l).then((mat) => {
         if (!mat || disposed || painted !== l) return;
-        for (const m of bodyMeshes) m.material = mat;
+        for (const m of paintable()) m.material = mat;
       });
     };
     if (look) applyLook(look);

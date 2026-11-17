@@ -16,6 +16,9 @@
     "anims-special.glb": {
       "categoria": "animacao"
     },
+    "barbarian_b.glb": {
+      "categoria": "personagem"
+    },
     "barbarian.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -51,6 +54,9 @@
         "^Head_"
       ]
     },
+    "mage_b.glb": {
+      "categoria": "personagem"
+    },
     "mage.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -80,6 +86,9 @@
     },
     "props/loot_sack.glb": {
       "categoria": "cenario"
+    },
+    "rogue_b.glb": {
+      "categoria": "personagem"
     },
     "rogue.glb": {
       "categoria": "personagem",
