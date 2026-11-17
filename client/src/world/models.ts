@@ -72,7 +72,7 @@ const ANIM_FILES = [
 /** Emotes (/acenar, /sentar, /dancar): só os heróis têm. */
 export type EmoteRole = "wave" | "sit" | "dance";
 /** Papéis que só alguns modelos têm: os emotes e o andar (o remaster; os outros só correm). */
-export type OptionalRole = EmoteRole | "walk";
+export type OptionalRole = EmoteRole | "walk" | "break1" | "break2" | "break3";
 export type AnimRole = "idle" | "run" | "attack" | "skill" | "buff" | "hit" | "death" | OptionalRole;
 type AnimSet = Record<Exclude<AnimRole, OptionalRole>, string> & Partial<Record<OptionalRole, string>>;
 
@@ -130,11 +130,11 @@ const CLIP_IMPACT: Record<string, number> = {
 function heroSet(p: string, over: Partial<Record<AnimRole, string>> = {}): AnimSet {
   return {
     idle: `${p}Idle`, walk: `${p}Walk`, run: `${p}Run`, attack: `${p}Attack`, skill: `${p}Attack`, buff: `${p}Raise`, hit: `${p}Hit`, death: `${p}Death`,
-    wave: `${p}Wave`, dance: `${p}Dance`, sit: `${p}Sit`, ...over,
+    wave: `${p}Wave`, dance: `${p}Dance`, sit: `${p}Sit`, break1: `${p}Break1`, break2: `${p}Break2`, ...over,
   };
 }
 const REMASTER_SETS: Record<string, AnimSet> = {
-  knight: heroSet("KB_"),
+  knight: heroSet("KB_", { skill: "KB_Skill" }),
   barbarian: heroSet("BB_", { skill: "BB_Skill" }),
   mage: heroSet("MB_", { skill: "MB_Skill", buff: "MB_Skill" }),
   rogue: heroSet("RB_", { skill: "RB_Skill" }),
@@ -148,8 +148,8 @@ const REMASTER_SETS: Record<string, AnimSet> = {
   ozrhal: { idle: "OZ_Idle", walk: "OZ_Walk", run: "OZ_Run", attack: "OZ_Attack", skill: "OZ_Stomp", buff: "OZ_Roar", hit: "OZ_Hit", death: "OZ_Death" },
 };
 /** O golpe encosta quando a mão termina o movimento rápido (quadro 16 de 30, medido na velocidade da mão). */
-CLIP_IMPACT.KB_Attack = 16 / 30;
 CLIP_IMPACT.SW_Attack = 16 / 30;
+CLIP_IMPACT.KB_Skill = 16 / 30;
 // Bestiário: o quadro de impacto de cada golpe, medido na velocidade das mãos (tools/art/remaster-monstros/speeds.py).
 CLIP_IMPACT.MN_Attack = 0.6;
 CLIP_IMPACT.RG_Attack = 0.53;
@@ -165,7 +165,8 @@ CLIP_IMPACT.OZ_Attack = 0.47;
 CLIP_IMPACT.OZ_Stomp = 1.0;
 CLIP_IMPACT.OZ_Roar = 0.8;
 // Heróis novos: o fim do movimento rápido da mão, medido no Blender (tools/art/remaster-herois/impact.py).
-CLIP_IMPACT.BB_Attack = 33 / 30;
+CLIP_IMPACT.BB_Attack = 34 / 30;
+CLIP_IMPACT.KB_Attack = 33 / 30; // corte em arco (Charged Slash); a estocada de antes virou KB_Skill
 CLIP_IMPACT.BB_Skill = 41 / 30;
 CLIP_IMPACT.MB_Attack = 18 / 30;
 CLIP_IMPACT.MB_Skill = 17 / 30;
@@ -189,13 +190,17 @@ export interface Grip {
   scale?: number;
   /** Mão em que os números foram calibrados (padrão: direita). Na outra mão a pega é espelhada. */
   hand?: "r" | "l";
+  /** Pega calibrada na outra mão (os ossos das duas mãos do Meshy não são espelhos exatos); sem ela, espelha. */
+  other?: { rot: [number, number, number]; pos: [number, number, number] };
 }
 /** Inverso da rotação dos encaixes (0,5 0,5 0,5 0,5): com ele a arma fica no eixo do osso da mão (X lateral, Y ao longo do braço, Z para a frente). */
 const SLOT_INV = new Quaternion(-0.5, -0.5, -0.5, 0.5);
-const BLADE: Grip = { rot: [125, 0, 20], pos: [0, 0, 0] };
+const BLADE: Grip = { rot: [125, 0, 20], pos: [0, 0, 0], scale: 1.2 };
 const SHIELD: Grip = { rot: [0, 20, 0], pos: [-0.02, -0.45, 0.12], hand: "l" };
 export const WEAPON_GRIPS: Record<string, Grip> = {
-  sword_1handed: BLADE, axe_1handed: BLADE, dagger: BLADE, wand: BLADE,
+  sword_1handed: BLADE, axe_1handed: BLADE, wand: BLADE,
+  // adaga: o cabo na palma (a mão do rig fica aberta, sem dedos); a esquerda tem pega própria
+  dagger: { rot: [125, 0, 20], pos: [0, 0.2, 0], other: { rot: [90, 0, 20], pos: [0, 0.2, 0] } },
   // Duas mãos: maiores que o normal (guia de arte, seção 2), na mão direita com a lâmina sobre o ombro.
   sword_2handed: { ...BLADE, scale: 1.3 }, sword_2handed_color: { ...BLADE, scale: 1.3 }, axe_2handed: { ...BLADE, scale: 1.3 },
   staff: { rot: [135, 0, 5], pos: [0, 0.35, 0], scale: 1.4 },
@@ -577,10 +582,12 @@ export class CharacterModels {
         if (grip) {
           const d = Math.PI / 180;
           // Rotação e deslocamento no eixo do osso da mão (o encaixe é desfeito antes).
-          const mirror = (grip.hand ?? "r") !== (slot === "handslot.l" ? "l" : "r") ? -1 : 1;
-          const q = Quaternion.FromEulerAngles(grip.rot[0] * d, grip.rot[1] * d * mirror, grip.rot[2] * d * mirror);
+          const swapped = (grip.hand ?? "r") !== (slot === "handslot.l" ? "l" : "r");
+          const mirror = swapped && !grip.other ? -1 : 1;
+          const use = swapped && grip.other ? grip.other : grip;
+          const q = Quaternion.FromEulerAngles(use.rot[0] * d, use.rot[1] * d * mirror, use.rot[2] * d * mirror);
           child.rotationQuaternion = SLOT_INV.multiply(q).multiply(child.rotationQuaternion ?? Quaternion.Identity());
-          new Vector3(grip.pos[0] * mirror, grip.pos[1], grip.pos[2]).rotateByQuaternionToRef(SLOT_INV, child.position);
+          new Vector3(use.pos[0] * mirror, use.pos[1], use.pos[2]).rotateByQuaternionToRef(SLOT_INV, child.position);
           if (grip.scale) child.scaling.scaleInPlace(grip.scale);
         }
         const ws = weaponScale.get(container);

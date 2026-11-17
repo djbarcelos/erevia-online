@@ -37,6 +37,7 @@ for (const [i, page] of pages.entries()) {
   await page.waitForFunction(() => window.__ereviaE2E?.me?.(), null, { timeout: 240000 });
   await page.waitForTimeout(2500);
   for (let k = 0; k < 4; k++) { const b = page.getByRole('button', { name: /^(Fechar|FECHAR)$/ }).first(); if (await b.isVisible().catch(() => false)) { await b.click({ timeout: 240000 }); await page.waitForTimeout(300); } }
+  if (await page.getByText('O que há de novo').isVisible().catch(() => false)) { await page.keyboard.press('Escape'); await page.waitForTimeout(500); }
   console.log('no mundo', classes[i]);
 }
 const say = async (page, t) => { await page.keyboard.press('Enter'); await page.keyboard.type(t); await page.keyboard.press('Enter'); };

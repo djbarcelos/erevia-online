@@ -51,10 +51,10 @@ Pontos fracos que vi: o golpe do bárbaro é o menos legível (o machado "carreg
 
 ## Esconder chapéu (elmo, chapéu e capuz)
 
-- **Cavaleiro: funciona.** Gerado sem elmo (cabelo castanho à mostra). O elmo vem do cavaleiro da v3: a cabeça dele é uma ilha de 454 triângulos; `client/scripts/make-remaster-hat.mjs` pega os triângulos de metal (cor da textura no centro de cada triângulo) mais tudo acima da testa e a nuca, troca a textura por **cor de vértice** (aço liso com borda dourada, sem atlas, material próprio), prende rigidamente no osso da cabeça do cavaleiro novo e ajusta tamanho (`--scale=1.13 --xs=1.14 --zback=1.4`). O nó se chama `Hat` (com `Hat_LOD1`; sem LOD2, que a 35 m já não se vê), então o `refreshVis` do adaptador esconde com o "esconder chapéu". A repintura não toca o elmo (`isHatMesh`). Limite: o cabelo do modelo novo é mais volumoso que o do antigo e aparece em tufos nas orelhas sob o elmo.
-- **Bárbaro:** nasce sem chapéu (cabeça nua, cabelo e barba); não há o que esconder.
-- **Mago:** o chapéu e a cabeça são a mesma ilha de 6.379 triângulos (a malha do Meshy não os separa), então **não dá para esconder o chapéu do mago**. Cortar a malha deixaria o topo da cabeça oco. O caminho certo é gerar um mago sem chapéu (conceito 9 + imagem para 3D 15 + rig 5 + 8 ações 24 = 53 créditos) e extrair o chapéu do atual como foi feito com o elmo; ficou fora do teto desta rodada (ver "O que ficou em aberto").
-- **Ladino:** o servidor não conta o ladino em `HatClasses` (não tem chapéu escondível), e o capuz é parte da capa; nada a fazer.
+- **Cavaleiro: funciona, com o elmo gerado à parte.** O primeiro elmo (extraído da cabeça do cavaleiro da v3) ficou flutuando, grande e torto (retorno do Daniel). Agora é um **elmo próprio do Meshy**: conceito só do elmo (`helm.json` em `prompts-herois.mjs`: elmo de balde de topo plano, abertura frontal larga, aço azulado com borda dourada e um grifo na crista; 9 créditos) + imagem para 3D (smart topology, 900 triângulos, 15 créditos). `client/scripts/make-remaster-helm.mjs` mede a cabeça do cavaleiro sem elmo (vértices do osso da cabeça), dimensiona o elmo (`--scale=0.49`), centra no meio da cabeça, simplifica a 600 triângulos (o corpo do Meshy já usa 7.310 dos 8.000), baixa a textura para 512 px e prende o nó `Hat` rígido no osso da cabeça. Conferido na tela de personagens, no mundo e no laboratório, de frente, de lado e de 3/4 (`cavaleiro-elmo.jpg`). O elmo é `Hat` + `Hat_LOD1` (sem LOD2) e o "esconder chapéu" o liga e desliga; a repintura não o toca (material próprio). O cabelo aparece só pela abertura do rosto.
+- **Mago: funciona.** Gerado sem chapéu (`mb` em `prompts-herois.mjs`: barba e cabelo cinza compridos, 53 créditos com rig e as 8 ações). O chapéu pontudo é do primeiro mago (tudo o que fica acima da aba, y > 1,41, 943 triângulos, cor da textura em cor de vértice, reduzido a 480 triângulos, escala 1,12 em torno do osso da cabeça): `make-remaster-hat.mjs --cuty=1.41`. O mago novo é um pouco mais alto que o primeiro porque o rig mede a cabeça nua.
+- **Bárbaro:** nasce de cabeça nua, não há o que esconder.
+- **Ladino:** o servidor não conta o ladino em `HatClasses`, e o capuz é parte da capa; nada a fazer.
 
 ## Repintura (máscara na GPU)
 
@@ -108,19 +108,34 @@ Só os heróis do remaster usam a tabela; o esqueleto (rig com repouso diferente
 - Conceitos: `conceitos-herois.jpg`.
 - Blender headless (ângulos): `cavaleiro-angulos.jpg`, `barbaro-angulos.jpg`, `mago-angulos.jpg`, `ladino-angulos.jpg`.
 - Tiras de animação: `*-locomocao-combate.jpg`, `*-emotes.jpg`.
-- Pega das armas: `pega-*.jpg`. Elmo: `cavaleiro-elmo.jpg`.
+- Pega das armas: `pega-*.jpg` e, de perto, `pega-ladino-perto.jpg`, `pega-cavaleiro-perto.jpg`. Elmo e chapéu: `cavaleiro-elmo.jpg`, `mago-chapeu.jpg`. Parados e pausas: `idle-*.jpg`. Golpes candidatos: `golpes-candidatos.jpg` (bárbaro: Axe Spin, Charged Slash, Reaping Swing; cavaleiro: Charged Slash, Charged Upward Slash).
 - Os 4 lado a lado no laboratório (o mesmo `CharacterModels` do jogo): `quatro-classes.jpg` (parado) e `quatro-classes-poses.jpg` (parado, correndo, acenando, sentado). Os prints dentro do jogo (`tools/art/remaster-herois/jogo.mjs`) não saíram: ver "O que ficou em aberto".
 
 O Blender aberto na tela não foi usado (headless, como na v3).
 
 ## O que ficou em aberto
 
-1. **Mago sem chapéu** (53 créditos) para o "esconder chapéu" do mago; o teto da rodada acabou.
-2. **Golpe do bárbaro e do cavaleiro:** trocar por ações melhores (candidatas: Reaping Swing 99, Axe Spin Attack 238, Charged Slash 242, Charged Upward Slash 221; 3 créditos cada).
 3. **Rosto e cabelo como forma:** só cor vale; formas dependem de novas gerações.
 4. **Tufos de cabelo sob o elmo** do cavaleiro; vale uma passada para esconder as orelhas.
 5. **FPS de GPU real** continua sem medida (SwiftShader).
 6. **Arco:** o jogo não tem arco como arma; nenhuma ação de tiro foi comprada.
-7. **Bárbaro de duas mãos:** a arma fica só na mão direita; falta um encaixe para as duas mãos no cabo.
-8. **Prints dentro do jogo e bench de contadores:** o servidor de teste subiu (Go no Docker, `?remaster=1`, 4 contas), mas o Docker Desktop caiu no meio e depois a máquina ficou saturada (CPU em 99%, SwiftShader estourando 30 s só no `page.screenshot`), então `tools/art/remaster-herois/jogo.mjs` (4 classes lado a lado, frente, lado, costas e emotes, também por classe com `CLASSES=mage TAG=mago`) e o `?bench=contadores` do `tools/art/remaster-v3/bench.mjs` não terminaram. As provas visuais saíram do laboratório, que usa o mesmo `CharacterModels`, os mesmos GLB e KTX2. Rodar os dois numa máquina livre.
-9. **Teto de créditos:** o aviso do coordenador subindo o teto para 400 novos (518 somados) chegou, mas o gasto extra (mago sem chapéu, trocas de ação) foi bloqueado pela permissão do ambiente por não vir do Daniel; nada além dos 245 foi gasto (363 somados). `MESHY_BUDGET=518` e as ações candidatas estão acima, prontas para rodar assim que ele confirmar.
+7. **Bárbaro de duas mãos:** a arma fica só na mão direita; ver "Duas mãos do bárbaro" acima (precisa de clipe próprio ou IK nos dois braços).
+8. **Prints dentro do jogo e bench de contadores:** só saiu 1 print no jogo (`jogo-cavaleiro-elmo.jpg`: o cavaleiro com o elmo novo na praça, de costas, `?remaster=1`). O servidor de teste sobe (Go no Docker, 4 contas), mas com 4 navegadores de SwiftShader em paralelo (e com os outros agentes usando a máquina) o carregamento e o `page.screenshot` estouram o tempo; a mesma conta rodou por classe (`CLASSES=mage TAG=mago node tools/art/remaster-herois/jogo.mjs ...`) ainda lenta. Além disso a main nova abre a janela "O que há de novo" ao entrar (o script agora a fecha com Esc). Os prints dos 4 lado a lado vêm do laboratório (mesmo `CharacterModels`, mesmos GLB e KTX2). O `?bench=contadores` (`tools/art/remaster-v3/bench.mjs`) não rodou: precisa de uma máquina livre.
+
+## Segunda rodada (retornos do Daniel)
+
+Créditos desta rodada: mago sem chapéu 53 (9 + 15 + 5 + 24), golpes novos 15 (bárbaro 9, cavaleiro 6), elmo 24 (9 + 15), parados e pausas 36 (12 ações). **Total: 128 novos, 373 no acumulado de 400 autorizados, 491 somados no `tasks.jsonl`.**
+
+- **Golpes:** o bárbaro usa Charged Slash (242: varredura larga, pico de mão de 13,4 m/s, impacto em 34/30 s); Axe Spin Attack (238, giro) e Reaping Swing (99, 4,7 s de preparação) foram vistos e descartados; Charged Axe Chop (237) saiu. O cavaleiro ganhou **corte em arco** (Charged Slash 242, tronco gira e varre, impacto em 33/30 s) no golpe; a estocada de antes (219) virou a habilidade; Charged Upward Slash (221) foi visto e descartado.
+- **Pega da adaga:** cabo na palma nas duas mãos (a mão do rig é aberta e não tem dedos: o Meshy "mixamo" tem só 28 ossos, sem dedos; não dá para fechar a mão). Os ossos das duas mãos não são espelhos exatos, então `Grip.other` guarda a pega da mão esquerda (rot 90, a direita 125). Espada de uma mão com escala 1,2. Prints de perto, de frente, de lado e de 3/4 (`pega-ladino-perto.jpg`, `pega-cavaleiro-perto.jpg`).
+- **Parado com variantes:** cada classe tem o seu `idle` e duas pausas (`break1`, `break2`), escolhidas por tiras (`idle-cavaleiro-barbaro.jpg`, `idle-mago-ladino.jpg`):
+
+| Classe | Parado | Pausa 1 | Pausa 2 |
+|---|---|---|---|
+| Cavaleiro | Short Breathe and Look Around (338, firme e ereto) | Combat Stance (89) | Lower Weapon Look Raise (334) |
+| Bárbaro | Long Breathe and Look Around (336, largo, respirando pesado) | Axe Breathe and Look Around (335) | Catching Breath (31) |
+| Mago | Idle 02 (11) | Talk with Hands Open (313, gesto) | Look Around Dumbfounded (333) |
+| Ladino | Idle 4 (244, 11 s, muda o peso) | Idle 03 (12, alonga) | Short Breathe and Look Around (338) |
+
+  O `AnimController` (`client/src/world/anim.ts`) toca uma pausa aleatória a cada 8 a 20 s com o corpo parado e sem ação (entra e sai suave e o clipe acaba antes do fim) e começa o parado numa **fase aleatória por entidade** (vale para todos os modelos, inclusive NPCs, guardas e a tela de personagens, que usa o mesmo controlador). `tools/art/remaster-herois/breaks.mjs` mostra no laboratório quando cada pausa começa (cavaleiro, 45 s: 8,9 s, 23,1 s e 39,7 s). O Idle genérico (0) saiu dos arquivos.
+- **Duas mãos do bárbaro (IK): testado e descartado.** Fiz um IK de dois ossos no braço esquerdo até o cabo e medi: no parado o cabo (com a mão direita ao lado do corpo) fica a 1,04 m do ombro esquerdo e o braço alcança 0,56 m, então a mão esquerda nunca chega (os clipes do Meshy mantêm a mão direita pendurada). Para uma pega de duas mãos de verdade seria preciso mover os dois braços (um clipe próprio de duas mãos, ou IK nos dois com o cabo à frente do peito). Ficou a arma na mão direita, com escala 1,3.
