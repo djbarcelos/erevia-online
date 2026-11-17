@@ -29,7 +29,11 @@ function mount(kind: string, ...nodes: Node[]): void {
   preview?.dispose();
   preview = null;
   overlay.hidden = false;
-  if (!stopBg) stopBg = animatedBackdrop(overlay, { castle: kind !== "chars", tint: kind === "chars" ? "#3a2a48" : undefined });
+  overlay.dataset.kind = kind;
+  if (kind === "login" || kind === "chars" || kind === "loading") {
+    stopBg?.();
+    stopBg = null;
+  } else if (!stopBg) stopBg = animatedBackdrop(overlay, { castle: true });
   content.className = `entry-content ${kind}`;
   content.replaceChildren(...nodes);
 }

@@ -38,6 +38,7 @@
 }
 
 .logo-crest {
+  display: none;
   width: 54px;
   height: 54px;
   transform: rotate(45deg);
@@ -62,22 +63,16 @@
   font-family: var(--font-title);
   font-weight: 700;
   font-size: clamp(3rem, 8vw, 5.6rem);
-  letter-spacing: 0.16em;
-  line-height: 1;
-  background: linear-gradient(180deg, #fff3cf 0%, #e8c87e 45%, #9c7630 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 30px rgba(214, 180, 110, 0.25));
+  letter-spacing: 0.1em;
+  line-height: 0.9;
+  color: #f2ead8;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.85);
 }
 
 .logo-tag {
   margin: 0;
-  font-family: var(--font-title);
-  font-size: clamp(0.8rem, 1.6vw, 1rem);
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-size: clamp(1rem, 1.6vw, 1.2rem);
+  color: #c4bcad;
 }
 
 .login-card {
@@ -1174,4 +1169,38 @@
 .login-error {
   margin: 0;
   min-height: 1.2em;
+}
+
+/* ======================= ARTE DE FUNDO (redesign "Vigília") ======================= */
+
+#overlay[data-kind="login"],
+#overlay[data-kind="chars"],
+#overlay[data-kind="loading"] {
+  background-color: #07080c;
+  background-size: cover;
+  background-position: 60% 50%;
+}
+#overlay[data-kind="login"] { background-image: url("/art/login.jpg"); }
+#overlay[data-kind="chars"] { background-image: url("/art/personagens.jpg"); background-position: center; }
+#overlay[data-kind="loading"] { background-image: url("/art/carregamento.jpg"); background-position: center; }
+
+#overlay[data-kind="login"]::before,
+#overlay[data-kind="loading"]::before,
+#overlay[data-kind="chars"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+#overlay[data-kind="login"]::before {
+  background:
+    linear-gradient(0deg, rgba(7, 8, 12, 0.9), rgba(7, 8, 12, 0) 36%),
+    linear-gradient(90deg, rgba(7, 8, 12, 0.9) 0%, rgba(7, 8, 12, 0.9) 26%, rgba(7, 8, 12, 0.42) 54%, rgba(7, 8, 12, 0.06) 78%);
+}
+#overlay[data-kind="loading"]::before {
+  background: linear-gradient(0deg, rgba(7, 8, 12, 0.96) 0%, rgba(7, 8, 12, 0.7) 28%, rgba(7, 8, 12, 0.1) 60%);
+}
+#overlay[data-kind="chars"]::before {
+  background: radial-gradient(42% 60% at 50% 58%, rgba(7, 8, 12, 0.05) 0%, rgba(7, 8, 12, 0.62) 70%, rgba(7, 8, 12, 0.9) 100%);
 }

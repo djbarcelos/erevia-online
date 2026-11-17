@@ -44,7 +44,7 @@ button {
   font-family: var(--font-title);
   color: var(--gold);
   letter-spacing: 0.06em;
-  font-weight: 500;
+  font-weight: 700;
   margin: 0;
 }
 
@@ -72,38 +72,15 @@ button {
 
 .frame {
   position: relative;
-  background:
-    radial-gradient(120% 60% at 50% 0%, rgba(214, 180, 110, 0.07), transparent 60%),
-    linear-gradient(180deg, rgba(34, 28, 46, 0.97), rgba(15, 12, 21, 0.97));
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 232, 180, 0.08),
-    inset 0 0 0 1px rgba(0, 0, 0, 0.55),
-    var(--shadow);
-}
-
-.frame::before {
-  content: "";
-  position: absolute;
-  inset: 4px;
-  border: 1px solid rgba(214, 180, 110, 0.1);
-  border-radius: calc(var(--radius) - 2px);
-  pointer-events: none;
-}
-
-.frame::after {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  background: var(--corners);
-  pointer-events: none;
-  opacity: 0.85;
+  background: var(--panel-soft);
+  border: 1px solid rgba(236, 230, 218, 0.11);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
 }
 
 .frame.glass {
-  background: linear-gradient(180deg, rgba(24, 20, 33, 0.78), rgba(12, 10, 18, 0.78));
-  backdrop-filter: blur(6px);
+  background: var(--glass);
 }
 
 /* Divisor com losango ao centro */

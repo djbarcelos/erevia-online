@@ -1,6 +1,12 @@
 /* Protótipo visual do Erevia: tokens de cor, tipografia e espaçamento. */
-@import "@fontsource/cinzel/latin-500.css";
-@import "@fontsource/cinzel/latin-700.css";
+@import "@fontsource/cormorant-garamond/latin-600.css";
+@import "@fontsource/cormorant-garamond/latin-700.css";
+@import "@fontsource/barlow/latin-400.css";
+@import "@fontsource/barlow/latin-500.css";
+@import "@fontsource/barlow/latin-600.css";
+@import "@fontsource/barlow-semi-condensed/latin-500.css";
+@import "@fontsource/barlow-semi-condensed/latin-600.css";
+@import "@fontsource/barlow-semi-condensed/latin-700.css";
 
 :root {
   /* Fundos (do mais escuro ao painel) */
@@ -8,9 +14,9 @@
   --bg-1: #13101b;
   --bg-2: #1c1827;
   --bg-3: #262134;
-  --panel: rgba(22, 18, 31, 0.94);
-  --panel-soft: rgba(22, 18, 31, 0.72);
-  --glass: rgba(12, 10, 18, 0.55);
+  --panel: rgba(9, 10, 16, 0.86);
+  --panel-soft: rgba(9, 10, 16, 0.74);
+  --glass: rgba(9, 10, 16, 0.6);
 
   /* Ouro: molduras, títulos, destaques */
   --gold: #d6b46e;
@@ -46,8 +52,9 @@
   --r-epic: #b46cff;
   --r-legend: #ff9a3c;
 
-  --font-title: "Cinzel", Georgia, "Times New Roman", serif;
-  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-title: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-ui: Barlow, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-cond: "Barlow Semi Condensed", Barlow, system-ui, sans-serif;
 
   --radius: 6px;
   --radius-lg: 10px;
