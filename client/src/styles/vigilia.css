@@ -185,3 +185,133 @@
     max-width: none;
   }
 }
+
+/* ======================= SELEÇÃO DE PERSONAGENS ======================= */
+
+.char-screen[data-mode="select"] .nameplate,
+.char-screen[data-mode="select"] .stage-hint {
+  display: none;
+}
+
+/* Painéis tinta-noite translúcidos, sem moldura ornamentada */
+.char-screen[data-mode="select"] .char-panel.frame {
+  background: rgba(9, 10, 16, 0.74);
+  border: 1px solid rgba(236, 230, 218, 0.11);
+  border-radius: 10px;
+  backdrop-filter: blur(14px);
+  box-shadow: none;
+}
+
+.char-screen[data-mode="select"] .char-panel.frame::before,
+.char-screen[data-mode="select"] .char-panel.frame::after {
+  display: none;
+}
+
+/* Lista de personagens: cartões soltos, o escolhido em ouro */
+.char-screen[data-mode="select"] .char-panel.left {
+  background: transparent;
+  border: 0;
+  backdrop-filter: none;
+  padding: 0;
+  width: 300px;
+}
+
+.char-screen[data-mode="select"] .roster-slot {
+  border-radius: 8px;
+  background: rgba(9, 10, 16, 0.66);
+  border-color: rgba(236, 230, 218, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.char-screen[data-mode="select"] .roster-slot[aria-pressed="true"] {
+  background: rgba(214, 180, 110, 0.14);
+  border-color: rgba(214, 180, 110, 0.6);
+  box-shadow: none;
+}
+
+.char-screen[data-mode="select"] .roster-info b {
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 1.15rem;
+}
+
+/* Ficha à direita: classe, nome grande, nível */
+.char-screen[data-mode="select"] .detail-panel {
+  padding: 22px;
+  width: 328px;
+  gap: 16px;
+}
+
+.char-screen[data-mode="select"] .detail-panel > .panel-title,
+.char-screen[data-mode="select"] .detail-panel > .hint-box {
+  display: none;
+}
+
+.char-screen[data-mode="select"] .dt-head {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+
+.char-screen[data-mode="select"] .dt-class {
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+}
+
+.char-screen[data-mode="select"] .dt-name {
+  font-size: 2.9rem;
+  line-height: 1;
+  letter-spacing: 0;
+  color: #f2ead8;
+}
+
+.char-screen[data-mode="select"] .dt-level {
+  border-block: 0;
+  padding: 0;
+}
+
+.char-screen[data-mode="select"] .dt-level b {
+  font-family: var(--font-cond);
+  font-weight: 600;
+  font-size: 1.2rem;
+  color: #f2ead8;
+  text-shadow: none;
+}
+
+.char-screen[data-mode="select"] .dt-cell {
+  border: 0;
+  border-radius: 6px;
+  background: rgba(236, 230, 218, 0.05);
+}
+
+/* Botão de entrar: largo, dourado, embaixo à direita */
+.char-foot.select-foot {
+  left: auto;
+  right: 24px;
+  bottom: 32px;
+  width: 340px;
+  transform: none;
+  filter: none;
+}
+
+.select-foot .btn-play {
+  width: 100%;
+  --h: 58px;
+  padding: 0;
+  font-family: var(--font-cond);
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+  clip-path: none;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(214, 180, 110, 0.22);
+}
+
+@media (max-width: 900px) {
+  .char-foot.select-foot {
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+}
