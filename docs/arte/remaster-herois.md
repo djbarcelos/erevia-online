@@ -141,3 +141,30 @@ Créditos desta rodada (mais 12 do conjunto de duas mãos, abaixo): mago sem cha
   - **Conjunto de duas mãos.** A biblioteca do Meshy não tem parado nem correr de duas mãos; só Walk Fight Forward (21), com as mãos juntas diante do peito (0,34 m entre os punhos, constante). Comprei 4 ações (85 Axe Stance, 560 Spear Walk, 511 Rifle Charge, 21 Walk Fight Forward, 12 créditos); Axe Stance (agachado), Spear Walk e Rifle Charge (um braço só) não serviram. `client/scripts/compose-2h-clips.mjs` monta `BB_2_Idle`, `BB_2_Walk` e `BB_2_Run`: o clipe normal com os ossos dos braços (ombro, braço, antebraço, mão) trocados pela pose do Walk Fight no tempo 0. Golpe e habilidade seguem BB_Attack e BB_Skill (martelo, que usa as duas mãos). Tiras dos clipes: `barbaro-duas-maos-clipes.jpg`.
   - **Troca de conjunto em jogo.** `RoleMap` (em `anim.ts`) avisa o `AnimController` quando o conjunto muda; `models.ts` troca para `REMASTER_2H` quando a arma da direita é de duas mãos (`sword_2handed`, `sword_2handed_color`, `axe_2handed`) e a mão esquerda está vazia, e volta ao conjunto normal com arma de uma mão ou escudo (conferido: `setWeapons` alterna `BB_Idle` e `BB_2_Idle`). Sem pausas do parado no conjunto de duas mãos.
   - **Cabo pelas duas mãos.** `aimTwoHand` gira a arma depois das animações para a linha que vai da mão esquerda à direita, com a esquerda perto do pé do cabo (a lâmina continua para o lado da pega calibrada). Conferido de frente e de lado no parado, andando, correndo e golpeando (`barbaro-duas-maos.jpg`). Limite: no golpe do martelo as mãos se afastam e o cabo, de comprimento fixo, não alcança as duas.
+
+## Deslize dos pés (retorno do Daniel: "os bots e personagem ficam deslizando")
+
+O deslize acontecia **com e sem `?remaster=1`**; havia duas causas, as duas no cliente.
+
+**1. O estado "andando" não seguia a posição desenhada (a causa principal).** `entities.ts` calculava `moving = destino do servidor != posição extrapolada`. No jogador que anda pelo teclado o cliente dirige a posição (o "andar fluido", b7dca49) e o destino é sempre igual à posição: `moving` ficava **falso o tempo todo** e o personagem deslizava tocando o parado. Nos outros (bots, monstros, jogadores remotos) `moving` caía assim que o servidor chegava ao destino, antes de a posição desenhada (suavizada) alcançá-lo: um deslize curto ao parar.
+Medi no jogo (KayKit, sem `?remaster=1`; `tools/art/remaster-herois/deslize.mjs`, registro por quadro de posição, velocidade desenhada, `moving` e pesos dos clipes; `deslize-analise.mjs`; `?e2e=1&legacymove=1` liga a regra antiga):
+
+| Regra | Quadros | Pico de velocidade | Desliza tocando o parado | Corre no lugar |
+|---|---|---|---|---|
+| antes (`legacymove=1`) | 12 | 2,1 m/s | **7,9 s de 9 s** (peso do parado 0,99 com a posição andando, `dist` = 0) | 0 s |
+| agora | 11 | 1,8 m/s | **0 s** | 0 s |
+
+(O SwiftShader roda esse jogo a ~1,5 quadro por segundo, então são poucos quadros; o que importa é o peso do parado a 0,99 enquanto a posição andava e que isso sumiu.) Agora o estado vem da **velocidade da posição desenhada** (`client/src/world/motion.ts`: suavizada em ~70 ms, com histerese de 0,3 m/s para ligar e 0,12 m/s para desligar, e salto de teleporte não conta): liga em até 4 quadros e só desliga quando a posição para. A mistura parado ↔ correr passou de 10 para 14 por segundo. Testes: `client/tests/motion.test.ts` (liga sem destino do servidor, continua andando enquanto a posição alcança o destino, histerese, teleporte).
+
+**2. A velocidade do clipe era uma constante.** O `RUN_ANIM_SPEED = 5` fazia o clipe tocar a `velocidade/5`, mas o correr do KayKit tem o pé de apoio a 2 m/s (boneco chibi) e o do Meshy a 4,1 a 4,9 m/s. Medi a velocidade do pé de apoio (o mais baixo, em relação ao quadril, com a escala do modelo) de cada clipe no laboratório (`tools/art/remaster-herois/foot-speeds.mjs` e `clip-speeds.mjs`; nenhum clipe tem root motion: o quadril anda 0 m no ciclo). Cada modelo agora tem a sua velocidade natural (`FOOT_SPEEDS_KAYKIT`, `FOOT_SPEEDS_REMASTER` em `models.ts`) e o clipe toca a `velocidade desenhada / natural` (limitada a 0,35x a 3x); com o clipe de andar, a troca andar ↔ correr fica na média geométrica das duas velocidades naturais. Razão entre a velocidade do pé no chão e a do corpo (1,00 = sem deslizar):
+
+| Modelo | Velocidade (m/s) | Antes | Agora |
+|---|---|---|---|
+| KayKit cavaleiro, bárbaro, mago | 5 | 0,40, 0,44, 0,38 | 1,00 |
+| KayKit ladino | 5,5 | 0,48 | 1,00 |
+| KayKit esqueleto lacaio, guerreiro (clipe de arrastar os pés a 0,4 m/s) | 3,5, 4 | 0,09, 0,08 | 1,00 (passaram a usar o correr do KayKit) |
+| Remaster cavaleiro, bárbaro, mago, ladino | 5 a 5,5 | 0,76 a 0,89 | 1,00 |
+| Remaster esqueletos, Senhor dos Ossos, Ozrhal | 3,5 a 4,2 | 0,48 a 0,95 | 1,00 |
+| Remaster golem de pedra | 2,8 | 0,29 | 1,00 |
+
+Efeito colateral aceito: o boneco chibi do KayKit passa a mexer as pernas a 2,5x (6 passos por segundo a 5 m/s) para o pé acompanhar o chão. Os esqueletos KayKit deixam de arrastar os pés e correm.

@@ -1632,6 +1632,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         return p ? { x: p.x, z: p.z } : null;
       },
       screenPos: (id: number) => entities.screenPos(id, world.scene),
+      motionProbe: (id: number) => entities.motionProbe(id),
+      localId: () => entities.localId,
       /** Entidades vivas que o cliente conhece: NPCs ou monstros (sem os chefes, salvo com bosses), com nome e posição. */
       entities: (kind: "npc" | "monster", bosses = false) => {
         const want = kind === "npc" ? EntityKind.NPC : EntityKind.MONSTER;
