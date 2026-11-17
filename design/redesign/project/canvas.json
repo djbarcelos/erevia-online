@@ -1,0 +1,77 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-17T18:30:00Z"
+  },
+  "title": "Erevia — Redesign das telas",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 720,
+      "title": "1 · Entrar",
+      "is_interactive": true
+    },
+    "Personagens.dc.html": {
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 720,
+      "title": "2 · Seus personagens",
+      "is_interactive": true
+    },
+    "Carregamento.dc.html": {
+      "x": 2720,
+      "y": 0,
+      "w": 1280,
+      "h": 720,
+      "title": "3 · Carregamento"
+    },
+    "Hud.dc.html": {
+      "x": 0,
+      "y": 840,
+      "w": 1280,
+      "h": 720,
+      "title": "4 · HUD no PC"
+    },
+    "HudCelular.dc.html": {
+      "x": 1360,
+      "y": 840,
+      "w": 844,
+      "h": 390,
+      "title": "5 · HUD no celular (deitado)"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Personagens.dc.html",
+    "Carregamento.dc.html",
+    "Hud.dc.html",
+    "HudCelular.dc.html"
+  ],
+  "notes": {
+    "direcao": {
+      "x": 2284,
+      "y": 840,
+      "w": 420,
+      "size": "m",
+      "fill": "orange",
+      "text": "Direção \"Vigília\": a arte do jogo é a estrela, a interface sai da frente.\nTodas as imagens são do próprio Erevia (motor do jogo, remaster): cidade à noite, Vale com golens, combate nos Campos dos Ossos e os heróis com armas e armadura por raridade.\nPainéis tinta-noite translúcidos, sem molduras chanfradas. Ouro #d6b46e só no que é ação principal ou estado ativo. Raridades e cores de classe do jogo.\nTítulos em Cormorant Garamond, interface em Barlow Semi Condensed, texto em Barlow.\nTokens, componentes e imagens no Design System \"Erevia\"."
+    }
+  },
+  "designSystems": [
+    {
+      "title": "Erevia",
+      "namespace": "erevia",
+      "artifact": "https://claude.ai/artifact/7yQgQph767G3zLj5qFf2tn",
+      "version": "1794940435-d800",
+      "copiedAt": "2026-11-17T18:36:00Z"
+    }
+  ]
+}
