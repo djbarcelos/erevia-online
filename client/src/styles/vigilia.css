@@ -47,7 +47,7 @@
 
 /* Marca no canto de cima */
 .entry-content.loading .load-mid .logo-word {
-  position: absolute;
+  position: fixed;
   left: 56px;
   top: 36px;
   font-size: 1.7rem;
