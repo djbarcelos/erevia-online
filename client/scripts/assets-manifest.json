@@ -64,6 +64,9 @@
     "bone_lord_b.glb": {
       "categoria": "chefe"
     },
+    "brejeiro_b.glb": {
+      "categoria": "monstro"
+    },
     "env-forest.glb": {
       "categoria": "cenario",
       "porPeca": true
@@ -96,6 +99,9 @@
         "^Head_"
       ]
     },
+    "nature_boat_b.glb": {
+      "categoria": "cenario"
+    },
     "nature_bush_leaf_b.glb": {
       "categoria": "cenario"
     },
@@ -105,10 +111,19 @@
     "nature_crystal_b.glb": {
       "categoria": "cenario"
     },
+    "nature_fallen_log_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_ferryman_hut_b.glb": {
+      "categoria": "cenario"
+    },
     "nature_grass_tuft_b.glb": {
       "categoria": "cenario"
     },
     "nature_grave_b.glb": {
+      "categoria": "cenario"
+    },
+    "nature_reeds_b.glb": {
       "categoria": "cenario"
     },
     "nature_rock_l_b.glb": {

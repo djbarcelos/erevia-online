@@ -11,7 +11,11 @@
   "rock_l",
   "cliff",
   "grave",
-  "crystal"
+  "crystal",
+  "fallen_log",
+  "ferryman_hut",
+  "boat",
+  "reeds"
  ],
  "kinds": {
   "tree_1_a": {
@@ -364,6 +368,38 @@
     1.424,
     0.555,
     1.376
+   ]
+  },
+  "fallen_log": {
+   "model": "fallen_log",
+   "s": [
+    1,
+    1,
+    1
+   ]
+  },
+  "ferryman_hut": {
+   "model": "ferryman_hut",
+   "s": [
+    1,
+    1,
+    1
+   ]
+  },
+  "boat": {
+   "model": "boat",
+   "s": [
+    1,
+    1,
+    1
+   ]
+  },
+  "reeds": {
+   "model": "reeds",
+   "s": [
+    1,
+    1,
+    1
    ]
   }
  }

@@ -1,10 +1,13 @@
 package zone
 
 import (
+	"io"
+	"log/slog"
 	"testing"
 
 	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
+	"erevia/server/internal/world"
 )
 
 // stoneAt devolve a pedra de índice i.
@@ -182,5 +185,65 @@ func TestReturnScroll(t *testing.T) {
 	z.handle(itemEvent{id: p.id, msg: &pb.UseItem{Place: placeBag, Slot: uint32(p.pl.inv.slotOf("scroll_return"))}})
 	if p.pl.channel != nil || !peer.systemContains("karma") {
 		t.Fatal("the scroll does not work with karma")
+	}
+}
+
+// O Brejo (tunnel#139): a pedra do Posto custa 180 e as pedras comuns a listam; o barco de Tomé só liga o cais e a ilha
+// (10 moedas), e nem a pedra do Posto nem as da cidade listam o barco.
+func TestBrejoStoneAndFerry(t *testing.T) {
+	cfg, err := MapConfig(testConfig(), world.StarterMap, []string{world.StarterMap, MapTest}) // o mapa de verdade (vai até x = 330)
+	if err != nil {
+		t.Fatal(err)
+	}
+	z := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+	posto, cais, ilha := 5, 6, 7
+	if teleportStones[posto].price != 180 || teleportStones[posto].ferry || !teleportStones[cais].ferry || !teleportStones[ilha].ferry {
+		t.Fatalf("pedras do Brejo: %+v", teleportStones[posto:])
+	}
+	town := z.stoneAt(0)
+	for _, d := range z.stoneDests(0) {
+		if d.Name == "Cais do Barqueiro" || d.Name == "Ilha dos Vaga-lumes" {
+			t.Errorf("a pedra da cidade lista o barco: %s", d.Name)
+		}
+	}
+	// O barco do cais lista só a ilha.
+	boat := z.stoneAt(cais)
+	if boat.npc.title != "Barco do Tomé" || boat.model != ferryModel {
+		t.Fatalf("o barco é %q (%s)", boat.npc.title, boat.model)
+	}
+	dests := z.stoneDests(cais)
+	if len(dests) != 1 || dests[0].Name != "Ilha dos Vaga-lumes" || dests[0].Price != 10 {
+		t.Fatalf("destinos do barco: %v", dests)
+	}
+	// Quem usa a pedra da cidade para ir à ilha é ignorado (o barco não é destino de pedra).
+	p, _ := named(z, 1, "Viajante", "knight", town.pos.X+1, town.pos.Z)
+	p.pl.inv.gold = 1000
+	teleportReq(z, p, town, ilha)
+	if p.pl.channel != nil {
+		t.Fatal("a pedra da cidade não leva à ilha")
+	}
+	// No cais: 10 moedas e a chegada é na ilha (dentro do fosso).
+	q, _ := named(z, 2, "Remador", "knight", boat.pos.X+1, boat.pos.Z)
+	q.pl.inv.gold = 100
+	teleportReq(z, q, boat, ilha)
+	if q.pl.channel == nil {
+		t.Fatalf("o barco devia começar a travessia (jogador em %+v, barco em %+v, ouro %d)", q.pos, boat.pos, q.pl.inv.gold)
+	}
+	z.tickFor(2.5)
+	if d := dist(q.pos, Vec2{X: game.IslandX, Z: game.IslandZ}); d > 5 || q.pl.inv.gold != 90 {
+		t.Fatalf("chegou a %.1f m da ilha com %d moedas (esperava 90)", d, q.pl.inv.gold)
+	}
+	// Posto: a pedra da cidade leva (180 moedas).
+	r, _ := named(z, 3, "Viajante2", "knight", town.pos.X+1, town.pos.Z)
+	r.pl.inv.gold = 100
+	teleportReq(z, r, town, posto)
+	if r.pl.channel != nil {
+		t.Fatal("100 moedas não pagam o Posto do Barqueiro")
+	}
+	r.pl.inv.gold = 200
+	teleportReq(z, r, town, posto)
+	z.tickFor(2.5)
+	if d := dist(r.pos, Vec2{X: teleportStones[posto].x, Z: teleportStones[posto].z}); d > 5 || r.pl.inv.gold != 20 {
+		t.Fatalf("Posto: a %.1f m, %d moedas (esperava 20)", d, r.pl.inv.gold)
 	}
 }

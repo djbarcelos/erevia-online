@@ -59,5 +59,15 @@ export const MODELS = {
       { src: 'animations-fdeee824/animation_glb_url-merged_animations.glb', pick: 'Zombie_Scream', as: 'Roar', hipscale: 1 },
       { src: 'animations-fdeee824/animation_glb_url-merged_animations.glb', pick: 'Angry_Ground_Stomp', as: 'Stomp', hipscale: 1 },
     ] }),
+  // Brejeiro (tunnel#139, Brejo de Lamagris): o homem-sapo do Lanceiro e do Xamã. Todas as ações são do próprio rig (pagas:
+  // Idle 0, Thrust Slash 240, Hit Reaction 1 179, Dead 8), sem religar as do esqueleto guerreiro (os arquivos dele não vêm no git).
+  brejeiro: mk('12626307', { prefix: 'BJ_', out: 'brejeiro_raw.glb', slotscale: 0.4, ownClips: true,
+    walkRef: 'rigging-12626307/walking_glb_url-Animation_Walking_withSkin.glb',
+    clips: [
+      { src: 'animations-cbd7d173/animation_glb_url-merged_animations.glb', pick: 'Idle', as: 'Idle', hipscale: 1 },
+      { src: 'animations-cbd7d173/animation_glb_url-merged_animations.glb', pick: 'Hit_Reaction_1', as: 'Hit', hipscale: 1 },
+      { src: 'animations-cbd7d173/animation_glb_url-merged_animations.glb', pick: 'Dead', as: 'Death', hipscale: 1 },
+      { src: 'animations-cbd7d173/animation_glb_url-merged_animations.glb', pick: 'Thrust_Slash', as: 'Attack', hipscale: 1, to: 1.5 },
+    ] }),
 };
 export const META = {};

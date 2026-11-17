@@ -408,7 +408,7 @@ export const REGION_SPLAT: Record<string, Splat> = {
   "Vale das Pedras Vivas": [0.18, 0.04, 0.5, 0.28],
   "Cripta Esquecida": [0, 0.04, 0.8, 0.16],
   // Brejo de Lamagris: lodo (terra) com musgo, sem pedra; as Terras Mortas (extensão): terra cinza e cascalho.
-  "Brejo de Lamagris": [0.34, 0.56, 0, 0.1],
+  "Brejo de Lamagris": [0.16, 0.64, 0, 0.2],
   "Terras Mortas": [0.06, 0.34, 0.2, 0.4],
 };
 

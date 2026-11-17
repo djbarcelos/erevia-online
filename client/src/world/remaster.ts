@@ -43,6 +43,8 @@ export const REMASTER_FILES: Record<string, string> = {
   // Chefes com silhueta própria: não são modelos do servidor, ver remasterModelOf.
   bone_lord: "bone_lord_b",
   ozrhal: "ozrhal_b",
+  // Brejo de Lamagris (tunnel#139): o homem-sapo, do Lanceiro e do Xamã (o Xamã é o mesmo corpo, com a cor da variante).
+  brejeiro: "brejeiro_b",
   // NPCs (REMASTER_NPC_BY_NAME): o arquivo é <modelo>_b; o servidor não conhece estes modelos.
   ...Object.fromEntries(Object.values(REMASTER_NPC_BY_NAME).map((m) => [m, `${m}_b`])),
 };
@@ -54,10 +56,19 @@ export const REMASTER_FILES: Record<string, string> = {
  */
 export const REMASTER_LAZY = [
   "stone_golem", "bone_lord", "ozrhal",
+  // O Brejeiro só aparece no Brejo (1,7 MB).
+  "brejeiro",
   // NPCs (REMASTER_NPC_BY_NAME): a praça primeiro (a entidade os pede ao aparecer; o prefetch cobre o resto).
   "npc_livia", "npc_bruno", "npc_teodoro", "npc_otto", "npc_ysolde", "npc_edrian", "npc_severino", "npc_iselda", "npc_cassio",
   "npc_guarda", "npc_anselmo", "npc_marga", "npc_darcio", "npc_maelis", "npc_gaspar", "npc_rovena",
 ];
+
+/**
+ * Modelos do servidor que ainda não têm arquivo (tunnel#139, Brejo de Lamagris): as famílias de monstro (tunnel#135)
+ * trazem `frog_b` (Sapo-Boi) e `slime_b` (Lodo Vivo, Lodinho e Mãe-Lodo). Até lá, o cliente usa o modelo de reserva
+ * (o lacaio esqueleto, que o servidor já tinge de verde ou de lodo com `Tint`). Quando o arquivo entrar, sai daqui.
+ */
+export const MODEL_FALLBACK: Record<string, string> = { frog_b: "skeleton_minion", slime_b: "skeleton_minion", brejeiro: "skeleton_rogue" /* só com ?remaster=0 */ };
 
 /** Modelos que só existem no remaster (sem arquivo do estilo antigo para cair de volta). */
 export const REMASTER_ONLY = ["bone_lord", "ozrhal"];
