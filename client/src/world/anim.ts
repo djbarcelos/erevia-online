@@ -1,6 +1,14 @@
 import type { AnimationGroup, Node } from "@babylonjs/core";
 import type { AnimRole } from "./models";
 
+/**
+ * Mapa papel -> clipe que avisa quando é trocado de conjunto (o bárbaro com arma de duas mãos passa a usar
+ * parado, andar e correr com as duas mãos juntas): o AnimController recomeça com os clipes novos.
+ */
+export class RoleMap extends Map<AnimRole, AnimationGroup> {
+  onChange: (() => void) | null = null;
+}
+
 /** Velocidade das transições de peso da locomoção (1/s). */
 const BLEND_RATE = 10;
 /** Entrada de uma ação (1/s): ~95% em 0,15 s. */
@@ -66,7 +74,7 @@ export class AnimController {
    */
   private active = true;
   /** Grupos distintos do personagem (ataque e skill podem ser o mesmo clipe). */
-  private groups: AnimationGroup[];
+  private groups!: AnimationGroup[];
   /** Grupos pausados ao sair de cena, retomados ao voltar. */
   private paused: AnimationGroup[] = [];
   /** Morte ou emote em loop pedidos fora de cena: tocam ao voltar (a morte já no fim). */
@@ -74,7 +82,8 @@ export class AnimController {
   /** Uma ação foi cortada fora de cena: volta à pose de descanso antes de retomar. */
   private resetOnWake = false;
   /** Pausas do parado ("idle breaks": olhar em volta, alongar, gesto): tocam de vez em quando, com tempo e fase próprios. */
-  private breaks: AnimationGroup[];
+  private breaks!: AnimationGroup[];
+  private resetHooked = false;
   private breakGroup: AnimationGroup | null = null;
   private breakW = 0;
   private breakTimer = 0;
@@ -88,6 +97,30 @@ export class AnimController {
     private resetPose: () => void = () => {},
     private impacts: Partial<Record<AnimRole, number>> = {},
   ) {
+    this.start();
+    if (anims instanceof RoleMap) anims.onChange = () => this.rebind();
+  }
+
+  /** O conjunto de clipes mudou: para tudo o que tocava e recomeça com os clipes novos (parado, andar e correr). */
+  private rebind(): void {
+    for (const g of this.groups) g.stop();
+    for (const f of this.fading) f.g.stop();
+    this.fading.length = 0;
+    this.action = null;
+    this.actionDone = true;
+    this.actionWeight = 0;
+    this.looping = false;
+    this.holding = false;
+    this.frozen = false;
+    this.breakGroup = null;
+    this.breakW = 0;
+    this.paused.length = 0;
+    this.queueReset();
+    this.start();
+  }
+
+  private start(): void {
+    const anims = this.anims;
     this.groups = [...new Set(anims.values())];
     this.breaks = (["break1", "break2", "break3"] as const).map((r) => anims.get(r)).filter((g): g is AnimationGroup => !!g);
     // Cada personagem começa numa fase e num tempo próprios (ninguém respira ou olha em volta junto com o vizinho).
@@ -110,7 +143,8 @@ export class AnimController {
     }
     const target = [...anims.values()][0]?.targetedAnimations[0]?.target as Node | undefined;
     const scene = target?.getScene?.();
-    if (scene && target) {
+    if (scene && target && !this.resetHooked) {
+      this.resetHooked = true;
       this.deferReset = true;
       const obs = scene.onBeforeAnimationsObservable.add(() => {
         if (target.isDisposed()) {
