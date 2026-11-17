@@ -43,8 +43,10 @@ uniform sampler2D baseSampler;
 uniform sampler2D maskSampler;
 uniform vec3 outfit;
 uniform vec3 skin;
+uniform vec3 hair;
 uniform float hasOutfit;
 uniform float hasSkin;
+uniform float hasHair;
 uniform float baseIsLinear;
 void main(void) {
   vec3 c = texture2D(baseSampler, vUV).rgb;
@@ -53,6 +55,7 @@ void main(void) {
   float luma = dot(c, vec3(0.299, 0.587, 0.114));
   c = mix(c, outfit * min(1.6, luma * 3.0), m.r * hasOutfit);
   c = mix(c, skin * clamp(luma / max(m.a, 0.05), 0.6, 1.25), m.g * hasSkin);
+  c = mix(c, hair * clamp(luma * 2.2, 0.25, 1.4), m.b * hasHair);
   gl_FragColor = vec4(c, 1.0);
 }`;
 /** Altura desejada do personagem em metros (o modelo é escalado para isso). */
@@ -171,9 +174,10 @@ const SLOT_INV = new Quaternion(-0.5, -0.5, -0.5, 0.5);
 const BLADE: Grip = { rot: [125, 0, 20], pos: [0, 0, 0] };
 const SHIELD: Grip = { rot: [0, 20, 0], pos: [-0.02, -0.45, 0.12], hand: "l" };
 export const WEAPON_GRIPS: Record<string, Grip> = {
-  sword_1handed: BLADE, sword_2handed: BLADE, sword_2handed_color: BLADE, axe_1handed: BLADE, axe_2handed: BLADE,
-  dagger: BLADE, wand: BLADE,
-  staff: { rot: [165, 0, 10], pos: [0, 0, 0], scale: 1.4 },
+  sword_1handed: BLADE, axe_1handed: BLADE, dagger: BLADE, wand: BLADE,
+  // Duas mãos: maiores que o normal (guia de arte, seção 2), na mão direita com a lâmina sobre o ombro.
+  sword_2handed: { ...BLADE, scale: 1.3 }, sword_2handed_color: { ...BLADE, scale: 1.3 }, axe_2handed: { ...BLADE, scale: 1.3 },
+  staff: { rot: [135, 0, 5], pos: [0, 0.35, 0], scale: 1.4 },
   shield_badge_color: SHIELD, shield_round_barbarian: SHIELD, shield_square: SHIELD, shield_spikes: SHIELD,
   shield_spikes_color: SHIELD,
 };
@@ -337,6 +341,9 @@ export class CharacterModels {
     tex.setTexture("maskSampler", mask);
     tex.setColor3("outfit", mid(outfit));
     tex.setColor3("skin", skin ? Color3.FromHexString(skin.top) : Color3.White());
+    const hair = look.hair > 0 ? pal.hairs[look.hair - 1] : undefined;
+    tex.setColor3("hair", hair ? Color3.FromHexString(hair.top) : Color3.White());
+    tex.setFloat("hasHair", hair ? 1 : 0);
     tex.setFloat("hasOutfit", outfit ? 1 : 0);
     tex.setFloat("hasSkin", skin ? 1 : 0);
     // A base em KTX2 sRGB já chega linear ao shader; sem o formato sRGB chega em gama.

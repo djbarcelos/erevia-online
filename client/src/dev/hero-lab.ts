@@ -9,12 +9,20 @@
 import { ArcRotateCamera, Color4, Engine, HemisphericLight, DirectionalLight, Scene, Vector3, type AnimationGroup, type TransformNode } from "@babylonjs/core";
 import { configureKtx2 } from "../world/assets";
 import { CharacterModels, WEAPON_GRIPS, type AnimRole, type CharacterInstance, type Grip } from "../world/models";
-import type { BodyLook } from "../world/body-look";
+import { setBodyPalettes, type BodyLook } from "../world/body-look";
 
 interface Item { model: string; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook }
 interface Spec { grips?: Record<string, Grip>; radius?: number; cam?: "front" | "side" | "back" | "three"; items: Item[]; gap?: number; height?: number }
 
 configureKtx2();
+// Paletas de mentira (o laboratório não tem servidor): 1-3 em cada eixo.
+const sh = (name: string, top: string) => ({ name, top, bottom: top });
+setBodyPalettes({
+  skins: [sh("Escura", "#7a4a2a"), sh("Pálida", "#f0d2b8"), sh("Verde", "#7da35a")],
+  hairs: [sh("Loiro", "#e8c85a"), sh("Preto", "#1c1814"), sh("Branco", "#e8e8ee")],
+  outfits: [sh("Azul", "#2a58c8"), sh("Roxo", "#7a3ac0"), sh("Preto", "#2a2a30")],
+  heads: [], hatClasses: ["knight", "barbarian", "mage"], barberPrice: 0,
+});
 const canvas = document.getElementById("c") as HTMLCanvasElement;
 const engine = new Engine(canvas, true, { preserveDrawingBuffer: true });
 const scene = new Scene(engine);
