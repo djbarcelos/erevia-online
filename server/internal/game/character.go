@@ -24,8 +24,8 @@ func CharacterStats(class, spec string, level int, spent Attrs, gear Stats, rank
 	s = s.AddBonus(gear)
 	s = ApplyPassives(s, ranks, weaponType)
 	s = FinishRegen(s, class, total)
-	if r := ranks[SkillClearMind]; r > 0 {
-		s.MPRegen *= 1 + Skills[SkillClearMind].PValue.At(r)
+	if v := PassiveTotals(ranks).Of(PassiveMPRegenPct); v > 0 { // Mente Clara
+		s.MPRegen *= 1 + v
 	}
 	return s
 }
