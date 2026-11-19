@@ -122,7 +122,7 @@ func (z *Zone) broadcastStatus(p *entity) {
 
 func (z *Zone) statusPB(p *entity) *pb.PlayerStatus {
 	return &pb.PlayerStatus{Id: p.id, PvpState: z.pvpState(p), ClanName: z.clanName(p), Title: p.pl.ach.titleText(), Spec: p.pl.spec,
-		ActiveClass: p.pl.class, Level: uint32(p.level)}
+		ActiveClass: p.pl.class, Level: uint32(p.level), ShopTitle: pshopTitleOf(p)}
 }
 
 func (z *Zone) selfPvpPB(p *entity) *pb.SelfPvp {
