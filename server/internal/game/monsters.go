@@ -86,16 +86,16 @@ var (
 		{"scroll_ench_armor_b", 0.003, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
 	// Mãe-Lodo (chefe de campo, nível 21): materiais do Brejo garantidos e os épicos do grau C.
 	lootMother = append([]LootEntry{{"black_mud", 1, 3, 5}, {"frog_gland", 1, 2, 3}, {"potion_hp_l", 1, 2, 3}, {"potion_mp_l", 1, 1, 2},
-		{"scroll_ench_weapon", 0.5, 1, 1}, {"scroll_ench_armor", 0.6, 1, 2},
-		{"scroll_ench_weapon_b", 0.15, 1, 1}, {"scroll_ench_armor_b", 0.2, 1, 1}}, tierLoot(TierC, GradeEpic, 0.015)...)
+		{"scroll_ench_weapon_tc", 0.2, 1, 1}, {"scroll_ench_armor_tc", 0.24, 1, 2},
+		{"scroll_ench_weapon_tc_bl", 0.06, 1, 1}, {"scroll_ench_armor_tc_bl", 0.08, 1, 1}}, tierLoot(TierC, GradeEpic, 0.015)...)
 
 	// Raid: tudo garantido, menos os pergaminhos (os equipamentos vêm de gearDrops).
 	lootRaid = []LootEntry{{"raid_fragment", 1, 1, 1}, {"shadow_essence", 1, 5, 8}, {"potion_hp_l", 1, 4, 6}, {"potion_mp_l", 1, 3, 4},
-		{"scroll_ench_weapon", 0.8, 1, 2}, {"scroll_ench_armor", 1, 2, 3},
-		{"scroll_ench_weapon_b", 0.35, 1, 1}, {"scroll_ench_armor_b", 0.45, 1, 1}}
+		{"scroll_ench_weapon_tb", 0.16, 1, 2}, {"scroll_ench_armor_tb", 0.2, 2, 3},
+		{"scroll_ench_weapon_tb_bl", 0.07, 1, 1}, {"scroll_ench_armor_tb_bl", 0.09, 1, 1}}
 	lootGolem = []LootEntry{{"rune_core", 0.3, 1, 1}, {"potion_hp_s", 0.12, 1, 2}, {"potion_hp_l", 0.03, 1, 1},
-		{"scroll_ench_armor", 0.02, 1, 1}, {"scroll_ench_weapon", 0.01, 1, 1},
-		{"scroll_ench_armor_b", 0.004, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+		{"scroll_ench_armor_tc", 0.008, 1, 1}, {"scroll_ench_weapon_tc", 0.004, 1, 1},
+		{"scroll_ench_armor_tc_bl", 0.0016, 1, 1}, {"scroll_ench_weapon_tc_bl", 0.0008, 1, 1}}
 
 	// Graus (tiers.go): os épicos de cada grau saem dos chefes. O Senhor dos Ossos (22) deixa os
 	// do C (e, menos, os do D); o Ozrhal, os do C e do B e as joias lendárias do B. A chance é
@@ -108,16 +108,16 @@ var (
 	// equipamento ponte (bridge.go). A chance é por peça: com 8 peças (4 classes × arma e
 	// armadura), cai ~1 peça a cada 30 a 40 abates.
 	lootAncient = append([]LootEntry{{"rune_core", 0.45, 1, 2}, {"potion_hp_l", 0.06, 1, 1},
-		{"scroll_ench_armor", 0.03, 1, 1}, {"scroll_ench_weapon", 0.015, 1, 1},
-		{"scroll_ench_armor_b", 0.006, 1, 1}, {"scroll_ench_weapon_b", 0.003, 1, 1}},
+		{"scroll_ench_armor_tb", 0.006, 1, 1}, {"scroll_ench_weapon_tb", 0.003, 1, 1},
+		{"scroll_ench_armor_tb_bl", 0.0012, 1, 1}, {"scroll_ench_weapon_tb_bl", 0.0006, 1, 1}},
 		bridgeLoot(30, 0.004, 0.0004)...)
 	lootOssuary = append(append([]LootEntry{{"skull_cracked", 0.3, 1, 2}, {"shadow_essence", 0.25, 1, 1}, {"potion_mp_l", 0.05, 1, 1},
-		{"scroll_ench_armor", 0.03, 1, 1}, {"scroll_ench_weapon", 0.015, 1, 1},
-		{"scroll_ench_armor_b", 0.006, 1, 1}, {"scroll_ench_weapon_b", 0.003, 1, 1}},
+		{"scroll_ench_armor_tb", 0.006, 1, 1}, {"scroll_ench_weapon_tb", 0.003, 1, 1},
+		{"scroll_ench_armor_tb_bl", 0.0012, 1, 1}, {"scroll_ench_weapon_tb_bl", 0.0006, 1, 1}},
 		bridgeLoot(30, 0.002, 0.0002)...), bridgeLoot(35, 0.002, 0.0002)...)
 	lootBroken = append([]LootEntry{{"shadow_essence", 0.2, 1, 2}, {"rune_core", 0.12, 1, 1}, {"potion_hp_l", 0.06, 1, 1},
-		{"potion_mp_l", 0.05, 1, 1}, {"scroll_ench_armor", 0.035, 1, 1}, {"scroll_ench_weapon", 0.018, 1, 1},
-		{"scroll_ench_armor_b", 0.007, 1, 1}, {"scroll_ench_weapon_b", 0.004, 1, 1}},
+		{"potion_mp_l", 0.05, 1, 1}, {"scroll_ench_armor_tb", 0.007, 1, 1}, {"scroll_ench_weapon_tb", 0.0036, 1, 1},
+		{"scroll_ench_armor_tb_bl", 0.0014, 1, 1}, {"scroll_ench_weapon_tb_bl", 0.0008, 1, 1}},
 		bridgeLoot(35, 0.004, 0.0004)...)
 )
 

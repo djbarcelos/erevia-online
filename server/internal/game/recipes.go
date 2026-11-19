@@ -65,7 +65,7 @@ var RecipeList = append(append([]*Recipe{
 	recipe("craft_ench_armor_b", "scroll_ench_armor_b", 1000, mat("rune_core", 2), mat("shadow_essence", 2)),
 	recipe("craft_ring_legend", "ring_legend", 8000, mat("rune_core", 5), mat("shadow_essence", 5)),
 	recipe("craft_neck_legend", "neck_legend", 9000, mat("rune_core", 6), mat("shadow_essence", 6)),
-}...)...), bosqueRecipes()...)
+}...)...), append(bosqueRecipes(), crystalRecipes()...)...)
 
 // antidoteRecipe: 3 Antídotos por 2 Glândulas de Sapo e 1 Junco-de-Prata (que só crescem no Brejo).
 func antidoteRecipe() *Recipe {

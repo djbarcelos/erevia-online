@@ -257,14 +257,14 @@ var storyQuests = concatLines(
 				"Traga Núcleos Rúnicos dos golens.",
 			Steps:  []QuestStep{deliver("rune_core", 5, TalkWeaver, "Entregar 5 Núcleos Rúnicos a Maelis")},
 			Done:   "Mornos ainda. Escute... é a voz do meu bisavô, tecendo. Com isto eu seguro os dois círculos por um tempo.",
-			Reward: QuestReward{Items: items("potion_hp_l", 5, "scroll_ench_armor", 2)}},
+			Reward: QuestReward{Items: items("potion_hp_l", 5, "scroll_ench_armor_tc", 2)}},
 		&QuestDef{ID: "val_ysolde", Title: "Aquilo que Ysolde sabe", Level: 27,
 			Text: "Maelis acha que a rede não afrouxou sozinha: alguém puxa do outro lado, de dentro da Cripta. " +
 				"A Mestra Ysolde, na praça de Vel'Aran, é a única Ilvarin da cidade. Leve a suspeita a ela e volte com a resposta.",
 			Steps: []QuestStep{talk(TalkMaster, "Falar com a Mestra Ysolde, na praça", "")},
 			Done: "Ysolde confirmou, então. O rei puxa a rede de dentro da Cripta, fio por fio. Se os veios do Vale acordaram, " +
 				"o selo está mais fraco do que a Ordem admite. Desça ao Fundo: o Irmão Gaspar vigia lá.",
-			Reward: QuestReward{Items: items("scroll_ench_armor_b", 1, "scroll_return", 3)}},
+			Reward: QuestReward{Items: items("scroll_ench_armor_tc_bl", 1, "scroll_return", 3)}},
 	),
 	// ---- Fundo do Vale (30–35): o Irmão Gaspar, da Ordem do Bastião ----
 	line("Fundo do Vale", TalkMonk, 35,
@@ -290,7 +290,7 @@ var storyQuests = concatLines(
 			Steps: []QuestStep{deliver("rune_core", 8, TalkMonk, "Entregar 8 Núcleos Rúnicos a Gaspar")},
 			Done: "A Ordem não esquece quem a ajuda. O tremor vem do norte, da Cripta. Sor Bertrand comanda a Vigília, " +
 				"no posto a sudoeste da Cripta. Diga que fui eu que mandei.",
-			Reward: QuestReward{Items: items("scroll_ench_weapon_b", 1), Faction: FactionBastion, Rep: storyRep}},
+			Reward: QuestReward{Items: items("scroll_ench_weapon_tb_bl", 1), Faction: FactionBastion, Rep: storyRep}},
 	),
 	// ---- Vigília Ossária (33–38): Sor Bertrand, do Bastião ----
 	line("Vigília Ossária", TalkKnight, 38,
@@ -314,13 +314,13 @@ var storyQuests = concatLines(
 			Steps: []QuestStep{visit(spotCrypt, "Chegar à borda da Cripta Esquecida"),
 				kill("ossuary_knight", 10, "Derrotar Cavaleiros Ossários")},
 			Done:   "A guarda do rei está na porta, então. Eles não esperam o rei sair: esperam para abrir.",
-			Reward: QuestReward{Items: items("potion_hp_l", 6, "scroll_ench_armor_b", 1), Faction: FactionBastion, Rep: storyRep}},
+			Reward: QuestReward{Items: items("potion_hp_l", 6, "scroll_ench_armor_tb_bl", 1), Faction: FactionBastion, Rep: storyRep}},
 		&QuestDef{ID: "vig_rei", Title: "O Rei Ossário", Level: 36,
 			Text: "De tempos em tempos Ozrhal acorda inteiro dentro da Cripta. Só um clã consegue fazê-lo dormir de novo, " +
 				"e cada queda dá ao selo um respiro. Junte-se a quem enfrentar o Rei Ossário.",
 			Steps:  []QuestStep{kill("ozrhal", 1, "Participar da queda de Ozrhal, na Cripta Esquecida")},
 			Done:   "Você esteve lá dentro e voltou. Poucos podem dizer isso. A Ordem do Bastião lhe deve um respiro do mundo.",
-			Reward: QuestReward{XP: boss, Items: items("scroll_ench_weapon_b", 1), Faction: FactionBastion, Rep: 2 * storyRep}},
+			Reward: QuestReward{XP: boss, Items: items("scroll_ench_weapon_tb_bl", 1), Faction: FactionBastion, Rep: 2 * storyRep}},
 	),
 	// ---- Confins Partidos (35–40): a Capitã Rovena, da Guarda ----
 	line("Confins Partidos", TalkCaptain, 40,
@@ -344,7 +344,7 @@ var storyQuests = concatLines(
 			Text:   "O gelo dos Arcanistas Partidos fecha os caminhos dos cantos. A Guarda quer os caminhos abertos para as próximas rondas.",
 			Steps:  []QuestStep{kill("broken_arcanist", 10, "Derrotar Arcanistas Partidos")},
 			Done:   "Caminhos abertos. Por um dia, pelo menos. É assim que a Guarda vive: um dia de cada vez.",
-			Reward: QuestReward{Items: items("potion_hp_l", 6, "scroll_ench_armor_b", 1), Faction: FactionGuard, Rep: storyRep}},
+			Reward: QuestReward{Items: items("potion_hp_l", 6, "scroll_ench_armor_tb_bl", 1), Faction: FactionGuard, Rep: storyRep}},
 		&QuestDef{ID: "con_pedras", Title: "O que a Partição guarda", Level: 38,
 			Text: "Rovena juntou os relatos de todas as regiões, mas falta ouvir quem conhece as pedras. " +
 				"Leve o relato dos Confins a Maelis, no Vale, e a Sor Bertrand, na Vigília, e volte com o que disserem.",
@@ -357,7 +357,7 @@ var storyQuests = concatLines(
 			},
 			Done: "Então é isso: o rei puxa a rede, a rede puxa a terra, e a terra racha. Cinco Pedras-Selo seguram tudo, e só sabemos onde está uma. " +
 				"As outras estão além das montanhas. Quando as estradas abrirem, Vel'Aran vai precisar de você outra vez.",
-			Reward: QuestReward{XP: boss, Items: items("scroll_ench_weapon_b", 1), Faction: FactionGuard, Rep: 2 * storyRep}},
+			Reward: QuestReward{XP: boss, Items: items("scroll_ench_weapon_tb_bl", 1), Faction: FactionGuard, Rep: 2 * storyRep}},
 	),
 	bosqueQuests, // Bosque Gris (bosque_story.go, tunnel#137)
 	terrasQuests, // Terras Mortas (bosque_story.go)

@@ -1121,6 +1121,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           return true;
         },
         enchant: (scroll, place, slot) => conn.enchant(scroll, place, slot),
+        crystallize: (slot) => conn.crystallize(slot),
+        gold: () => store.gold,
         storageOpen: () => storageWin.isOpen,
         tradeOpen: () => tradeWin.isOpen,
         offer: (bagSlot) => conn.tradeCmd(TradeCmdKind.TRADE_CMD_ADD_ITEM, { slot: bagSlot }),

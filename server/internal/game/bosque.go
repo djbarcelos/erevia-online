@@ -68,16 +68,16 @@ var (
 	// o ritmo dos golens do Vale (20–30).
 	lootDevout = []LootEntry{{"grave_ash", 0.4, 1, 2}, {"black_candle", 0.2, 1, 1}, {"profane_tome", 0.02, 1, 1},
 		{"potion_hp_l", 0.05, 1, 1}, {"potion_mp_l", 0.04, 1, 1},
-		{"scroll_ench_armor", 0.02, 1, 1}, {"scroll_ench_weapon", 0.01, 1, 1},
-		{"scroll_ench_armor_b", 0.004, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+		{"scroll_ench_armor_tc", 0.008, 1, 1}, {"scroll_ench_weapon_tc", 0.004, 1, 1},
+		{"scroll_ench_armor_tc_bl", 0.0016, 1, 1}, {"scroll_ench_weapon_tc_bl", 0.0008, 1, 1}}
 	lootDevoutElite = []LootEntry{{"grave_ash", 0.45, 1, 3}, {"black_candle", 0.25, 1, 2}, {"profane_tome", 0.035, 1, 1},
 		{"potion_hp_l", 0.06, 1, 1}, {"potion_mp_l", 0.05, 1, 1},
-		{"scroll_ench_armor", 0.025, 1, 1}, {"scroll_ench_weapon", 0.012, 1, 1},
-		{"scroll_ench_armor_b", 0.005, 1, 1}, {"scroll_ench_weapon_b", 0.003, 1, 1}}
+		{"scroll_ench_armor_tc", 0.01, 1, 1}, {"scroll_ench_weapon_tc", 0.0048, 1, 1},
+		{"scroll_ench_armor_tc_bl", 0.002, 1, 1}, {"scroll_ench_weapon_tc_bl", 0.0012, 1, 1}}
 	lootUndead = []LootEntry{{"grave_ash", 0.4, 1, 2}, {"black_candle", 0.15, 1, 1}, {"profane_tome", 0.015, 1, 1},
 		{"shadow_essence", 0.1, 1, 1}, {"potion_hp_l", 0.05, 1, 1},
-		{"scroll_ench_armor", 0.02, 1, 1}, {"scroll_ench_weapon", 0.01, 1, 1},
-		{"scroll_ench_armor_b", 0.004, 1, 1}, {"scroll_ench_weapon_b", 0.002, 1, 1}}
+		{"scroll_ench_armor_tc", 0.008, 1, 1}, {"scroll_ench_weapon_tc", 0.004, 1, 1},
+		{"scroll_ench_armor_tc_bl", 0.0016, 1, 1}, {"scroll_ench_weapon_tc_bl", 0.0008, 1, 1}}
 )
 
 // ---------------------------------------------------------------------------------------

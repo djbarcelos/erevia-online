@@ -100,9 +100,27 @@ export function setEnchantRules(r: EnchantRules | undefined): void {
   enchantRules = r;
 }
 
-/** Chance (0–1) de chegar a +target. */
-export function enchantChance(target: number): number {
-  return enchantRules?.chance[target] ?? 0;
+/** Chance (0–1) de chegar a +target, no grau da peça (0 sem grau, 1 D, 2 C, 3 B). */
+export function enchantChance(target: number, tier = 0): number {
+  return enchantRules?.tiers[tier]?.chance[target] ?? enchantRules?.chance[target] ?? 0;
+}
+
+/** Moedas para tentar levar uma peça do grau a +target (tunnel#154). */
+export function enchantFee(target: number, tier = 0): number {
+  return (enchantRules?.tiers[tier]?.feePerLevel ?? 0) * Math.max(0, target);
+}
+
+/** O pergaminho é do grau da peça (o do D também serve nas sem grau). */
+export function scrollFits(scroll: ItemInfo, target: ItemInfo): boolean {
+  return scroll.scrollTier === target.tier || (scroll.scrollTier === 1 && target.tier === 0);
+}
+
+/** Cristalizar: quantos cristais a peça +enchant rende (0 = não cristaliza). */
+export function crystalYield(info: ItemInfo, enchant: number): number {
+  const base = info.crystalCount;
+  if (!base || !info.crystalId) return 0;
+  const per = enchantRules?.crystalPerEnchant || 5;
+  return base + Math.floor((base * Math.max(0, enchant)) / per);
 }
 
 export const enchantSafe = (): number => enchantRules?.safe ?? 3;
@@ -112,7 +130,23 @@ export const enchantMax = (): number => enchantRules?.max ?? 10;
 export function enchantBonus(info: ItemInfo, level: number): { pAtk: number; mAtk: number; pDef: number; mDef: number } {
   const out = { pAtk: 0, mAtk: 0, pDef: 0, mDef: 0 };
   if (!enchantRules || level <= 0) return out;
-  const per = (enchantRules.weaponBonus[info.grade] ?? 0) * (level + Math.max(0, level - enchantRules.safe));
+  const steps = level + Math.max(0, level - enchantRules.safe);
+  if (info.graded) {
+    // Peças dos graus: uma fração da própria peça por degrau (graded_step).
+    const f = enchantRules.gradedStep * steps;
+    const b = info.bonus;
+    if (info.kind === ItemKind.WEAPON) {
+      out.pAtk = Math.round((b?.pAtk ?? 0) * f);
+      out.mAtk = Math.round((b?.mAtk ?? 0) * f);
+    } else if (info.kind === ItemKind.NECKLACE || info.kind === ItemKind.EARRING || info.kind === ItemKind.RING) {
+      out.mDef = Math.round((b?.mDef ?? 0) * f);
+    } else {
+      out.pDef = Math.round((b?.pDef ?? 0) * f);
+      out.mDef = Math.round((b?.mDef ?? 0) * f);
+    }
+    return out;
+  }
+  const per = (enchantRules.weaponBonus[info.grade] ?? 0) * steps;
   if (info.kind === ItemKind.WEAPON) {
     const b = info.bonus;
     if ((b?.mAtk ?? 0) > 0) out.mAtk = per;
@@ -126,7 +160,7 @@ export function enchantBonus(info: ItemInfo, level: number): { pAtk: number; mAt
   return out;
 }
 
-/** O pergaminho encanta este item? */
+/** O pergaminho encanta este item (o tipo; o grau é scrollFits)? */
 export function canEnchantWith(scroll: ItemInfo, target: ItemInfo): boolean {
   if (target.stack > 1 || !equippable(target)) return false;
   if (scroll.scroll === ScrollKind.ENCHANT_WEAPON) return target.kind === ItemKind.WEAPON;
@@ -213,6 +247,13 @@ export class ItemStore {
 const metal = "#d9dee8";
 const wood = "#8a5a32";
 
+/** Cristal da cristalização (tunnel#154): um prisma com a cor do grau. */
+function crystalGlyph(body: string, light: string): string {
+  return `<path d="M32 6 L48 24 L40 56 L24 56 L16 24 Z" fill="${body}"/>
+    <path d="M32 6 L40 24 L32 56 L24 24 Z" fill="${light}" opacity=".7"/>
+    <path d="M16 24 H48" stroke="${light}" stroke-width="2" ${STROKE}/>`;
+}
+
 const GLYPHS: Record<string, string> = {
   scroll: `<path d="M18 14 H44 C48 14 50 17 50 20 V46 C50 50 47 52 44 52 H22 C18 52 16 49 16 46 V20" fill="#e8d9b0"/>
     <path d="M16 20 C16 16 18 14 22 14 C26 14 27 17 27 20 V24 H16 Z" fill="#c9b07a"/>
@@ -248,6 +289,9 @@ const GLYPHS: Record<string, string> = {
     <path d="M38 14 L34 24 L40 28" stroke="#8a7a64" stroke-width="2" fill="none" ${STROKE}/>`,
   essence: `<path d="M24 22 H40 L44 50 C38 54 26 54 20 50 Z" fill="#f0e8dc" opacity=".3"/>
     <path d="M23 36 C28 30 26 26 32 22 C34 30 42 32 40 40 C38 48 26 48 23 36 Z" fill="#7a4ad0"/><path d="M24 18 H40" stroke="${wood}" stroke-width="4" ${STROKE}/>`,
+  crystal_d: crystalGlyph("#b8c4d0", "#e8f0f8"),
+  crystal_c: crystalGlyph("#5aa0e0", "#c8e4ff"),
+  crystal_b: crystalGlyph("#b070e0", "#ecd4ff"),
   rune_core: `<path d="M32 8 L50 20 L52 40 L36 56 L18 50 L12 28 Z" fill="#7d776e"/>
     <path d="M32 8 L50 20 L40 30 L24 26 Z" fill="#9a948a"/><path d="M12 28 L24 26 L26 44 L18 50 Z" fill="#5e5952"/>
     <circle cx="33" cy="36" r="9" fill="#ff8c2a"/><circle cx="33" cy="36" r="4.5" fill="#ffe0a0"/>
@@ -469,8 +513,15 @@ export function buildItemTip(info: ItemInfo, ctx: TipContext): HTMLElement {
       stat(`Encantamento +${ench}`, parts.join(" · "), "ench");
     }
     if (info.scroll === ScrollKind.ENCHANT_WEAPON || info.scroll === ScrollKind.ENCHANT_ARMOR) {
+      const t = info.scrollTier;
+      stat("Grau", t === 1 ? "D (e peças sem grau)" : TIER_LETTER[t] || "—");
       stat("Seguro até", `+${enchantSafe()}`);
-      stat(`Chance de +${enchantSafe() + 1}`, `${Math.round(enchantChance(enchantSafe() + 1) * 100)}%`);
+      stat(`Chance de +${enchantSafe() + 1}`, `${Math.round(enchantChance(enchantSafe() + 1, t) * 100)}%`);
+      stat("Taxa", `${formatGold(enchantFee(1, t))} moedas por nível de destino`, "gold");
+    }
+    if (info.crystalCount > 0) {
+      const n = crystalYield(info, ench);
+      stat("Cristaliza em", `${n}× Cristal ${tierLetter(info)}`);
     }
     if (info.healHp) stat("Cura", `${info.healHp} de vida`);
     if (info.healMp) stat("Restaura", `${info.healMp} de mana`, "mana");

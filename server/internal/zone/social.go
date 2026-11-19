@@ -287,5 +287,15 @@ func enchantRulesPB() *pb.EnchantRules {
 	for g := game.Grade(0); g <= game.GradeLegendary; g++ {
 		out.WeaponBonus = append(out.WeaponBonus, uint32(game.EnchantPerGrade(g)))
 	}
+	// Por grau (tunnel#154).
+	for _, t := range game.Tiers {
+		r := &pb.EnchantTierRule{FeePerLevel: uint32(game.EnchantFeePerLevel(t))}
+		for _, c := range game.EnchantChancesFor(t) {
+			r.Chance = append(r.Chance, float32(c))
+		}
+		out.Tiers = append(out.Tiers, r)
+	}
+	out.GradedStep = float32(game.GradedEnchantStep)
+	out.CrystalPerEnchant = game.CrystalPerEnchant
 	return out
 }
