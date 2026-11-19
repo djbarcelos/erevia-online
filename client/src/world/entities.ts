@@ -65,6 +65,8 @@ const PENDING_TIMEOUT_MS = 1000;
  */
 const LOCAL_DEADZONE = 0.4;
 const LOCAL_SNAP = 4;
+/** Loja pessoal: depois de sentar, o vendedor fica com a pose parada (sem recalcular os ossos). */
+const VENDOR_FREEZE_MS = 1500;
 /** Quão rápido uma correção da previsão some da tela (1/s): desliza em vez de pular. */
 const LOCAL_SMOOTH_RATE = 10;
 /** Quanto tempo de previsão guardar para comparar com snapshots atrasados (ms). */
@@ -159,6 +161,8 @@ export interface EntityInfo {
   clanName: string;
   /** Jogadores: especialização (id em Welcome.specs; "" = ainda não escolheu). */
   spec: string;
+  /** Jogadores: loja pessoal aberta, a placa ("" = nenhuma; tunnel#161). */
+  shopTitle: string;
   /** Jogadores: classe ativa (a subclasse em uso, ou a principal, que é a do modelo). */
   cls: string;
 }
@@ -254,6 +258,8 @@ interface View extends EntityInfo {
   walking: boolean;
   /** Tempo (s) desde a última vez que a animação rodou, para animar a 15 Hz quem anda longe (ANIM_FAR_DISTANCE). */
   animAcc: number;
+  /** Loja pessoal: quando a placa apareceu (ms; 0 = sem loja). Senta e congela a pose. */
+  shopSince: number;
   /** Posição do servidor, extrapolada localmente em direção ao destino. */
   server: { x: number; z: number };
   target: { x: number; z: number };
@@ -453,6 +459,11 @@ export class EntityManager {
     v.clanName = s.clanName;
     v.title = s.title;
     v.spec = s.spec;
+    if (s.shopTitle !== v.shopTitle) {
+      v.shopTitle = s.shopTitle;
+      v.shopSince = s.shopTitle ? performance.now() : 0;
+      if (!s.shopTitle) v.anim?.endEmote(); // a loja fechou: levanta
+    }
     // Trocou de classe (subclasse): a classe e o nível novos (o modelo continua o da principal).
     if (s.activeClass) v.cls = s.activeClass;
     if (s.level > 0 && s.level !== v.level) {
@@ -698,6 +709,7 @@ export class EntityManager {
       id: e.id, name: e.name, kind: e.kind, level: e.level, hp: e.hp, maxHp: e.maxHp, dead: e.dead, title: e.title,
       model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, armor: toArmorGrades(e.armor), emblem, look: toBodyLook(e.look),
       weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, cls: e.activeClass || e.model, baseColor, clanText, titleText, pkRing: null,
+      shopTitle: e.shopTitle, shopSince: e.shopTitle ? performance.now() : 0,
       px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
@@ -1731,10 +1743,12 @@ export class EntityManager {
     const planes = this.scene.frustumPlanes;
     for (const v of this.views.values()) {
       const always = v.id === this.localId || v.id === this.targetId;
+      // Vendedor da loja pessoal (tunnel#161): sem sombra e, depois de sentar, pose parada.
+      const vendor = v.shopSince > 0 && !always;
       if (me) {
         const d = Math.hypot(v.root.position.x - me.x, v.root.position.z - me.z);
         v.label.isVisible = d < LABEL_DISTANCE || always;
-        this.setShadow(v, d < SHADOW_DISTANCE || always);
+        this.setShadow(v, !vendor && (d < SHADOW_DISTANCE || always));
       }
       // Extrapola a posição do servidor (mesma regra de movimento do Go).
       const dx = v.target.x - v.server.x;
@@ -1809,6 +1823,10 @@ export class EntityManager {
         }
         // Andar acaba com o emote na hora (o aviso do servidor chega depois).
         if (moving && v.anim.emoting) v.anim.endEmote();
+        if (v.shopSince > 0 && !moving) {
+          if (!v.anim.emoting) v.anim.play("sit", { loop: true });
+          if (vendor && performance.now() - v.shopSince > VENDOR_FREEZE_MS) active = false;
+        }
         v.anim.update(dt, moving, Math.max(0.6, v.speed / RUN_ANIM_SPEED), active, this.legacyMove ? v.speed : v.vis);
       }
     }
@@ -2121,7 +2139,10 @@ export class EntityManager {
     // Os setters do TextBlock ignoram o mesmo valor: sem redesenho se nada mudou.
     // Linha de baixo: a especialização e o título (texto fixo, só muda num PlayerStatus).
     if (v.titleText) {
-      const line = [specInfo(v.spec)?.name ?? "", v.title ? `«${v.title}»` : ""].filter(Boolean).join(" · ");
+      // Com a loja pessoal aberta, a placa no lugar do título (tunnel#161).
+      const line = v.shopTitle
+        ? `Loja · ${v.shopTitle}`
+        : [specInfo(v.spec)?.name ?? "", v.title ? `«${v.title}»` : ""].filter(Boolean).join(" · ");
       v.titleText.text = line;
       v.titleText.isVisible = !!line;
     }

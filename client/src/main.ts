@@ -10,6 +10,7 @@ import {
   ChannelKind,
   ClanCmdKind,
   NpcRole,
+  PrivateShopCmdKind,
   TradeCmdKind,
   ClanRank,
   ClanStateSchema,
@@ -65,6 +66,7 @@ import { BarberWindow } from "./ui/barber";
 import { toBodyLook } from "./world/body-look";
 import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
 import { TradeWindow } from "./ui/trade";
+import { PrivateShopWindow } from "./ui/pshop";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
 import { BELL_TOWER, buildRegions, RAID_WARN_TITLE, regionAt } from "./ui/regions";
@@ -752,6 +754,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (action === "clan") inviteClan(info.name);
       else if (action === "trade") conn.tradeCmd(TradeCmdKind.TRADE_CMD_REQUEST, { targetId });
       else if (action === "friend") conn.friendCmd(FriendCmdKind.FRIEND_CMD_ADD, { targetId });
+      else if (action === "shop") conn.privateShop({ kind: PrivateShopCmdKind.PRIVATE_SHOP_CMD_VIEW, sellerId: targetId });
     },
     onPartyMember: (id) => selectTarget(id),
     onCancelChannel: () => conn.cancelChannel(),
@@ -868,6 +871,27 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         const left = Math.max(12, (innerWidth - w - 12 - invW) / 2);
         tradeWin.root.style.left = `${left}px`;
         void wm.show("inventory", { left: left + w + 12, top: tradeWin.root.offsetTop });
+      },
+    },
+    hud.element,
+  );
+  // Loja pessoal (tunnel#161): montar a própria, ver e comprar da de outro jogador.
+  const pshopWin = new PrivateShopWindow(
+    store,
+    {
+      open: (title, items) => conn.privateShop({ kind: PrivateShopCmdKind.PRIVATE_SHOP_CMD_OPEN, title, items: items.map((i) => ({ slot: i.slot, count: i.count, price: BigInt(i.price) })) }),
+      close: () => conn.privateShop({ kind: PrivateShopCmdKind.PRIVATE_SHOP_CMD_CLOSE }),
+      buy: (sellerId, slot, count, price) => conn.privateShop({ kind: PrivateShopCmdKind.PRIVATE_SHOP_CMD_BUY, sellerId, slot, count, price }),
+      me,
+      gold: () => store.gold,
+      onSetup: () => {
+        // Como a troca: a loja à esquerda e o inventário ao lado (os itens saem dele).
+        if (isCompact()) return;
+        const w = pshopWin.root.offsetWidth || 480;
+        const invW = wm.widthOf("inventory");
+        const left = Math.max(12, (innerWidth - w - 12 - invW) / 2);
+        pshopWin.root.style.left = `${left}px`;
+        void wm.show("inventory", { left: left + w + 12, top: pshopWin.root.offsetTop });
       },
     },
     hud.element,
@@ -1126,6 +1150,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         storageOpen: () => storageWin.isOpen,
         tradeOpen: () => tradeWin.isOpen,
         offer: (bagSlot) => conn.tradeCmd(TradeCmdKind.TRADE_CMD_ADD_ITEM, { slot: bagSlot }),
+        toPrivateShop: (bagSlot) => pshopWin.setup(bagSlot),
         deposit: (bagSlot, toSlot) => conn.storageMove(storageWin.npcId, PLACE_BAG, bagSlot, PLACE_STORAGE, toSlot, 0),
         shopOpen: () => shop.isOpen,
       }),
@@ -1408,6 +1433,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (subWin.isOpen) subWin.close();
       else if (storageWin.isOpen) storageWin.close();
       else if (tradeWin.isOpen) conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL);
+      else if (pshopWin.isOpen) pshopWin.hide();
       else if (barberWin.isOpen) barberWin.close();
       else if (shop.isOpen) shop.close();
       else if (wm.closeTop()) return;
@@ -1767,6 +1793,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       subWin.dispose();
       storageWin.dispose();
       tradeWin.dispose();
+      pshopWin.dispose();
       barberWin.dispose();
       window.clearInterval(channelFx);
       raid.dispose();
@@ -1905,6 +1932,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         }
         case "trade":
           tradeWin.set(msg.msg.value);
+          break;
+        case "privateShop":
+          pshopWin.set(msg.msg.value);
           break;
         case "npcDialog": {
           const d = msg.msg.value;

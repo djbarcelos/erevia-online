@@ -296,6 +296,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			z.Trade(ctx, id, m.TradeCmd)
 		case *pb.ClientMessage_AuctionCmd:
 			z.Social(ctx, id, m.AuctionCmd)
+		case *pb.ClientMessage_PrivateShop:
+			z.Social(ctx, id, m.PrivateShop)
 		case *pb.ClientMessage_UseGate:
 			z.UseGate(ctx, id, m.UseGate.NpcId)
 		case *pb.ClientMessage_Ping:

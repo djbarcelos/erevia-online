@@ -59,6 +59,8 @@ export interface InventoryDeps {
   /** Troca aberta: oferecer um item da bolsa. */
   tradeOpen(): boolean;
   offer(bagSlot: number): void;
+  /** Loja pessoal: pôr o item da bolsa na loja que está sendo montada (tunnel#161). */
+  toPrivateShop(bagSlot: number): void;
 }
 
 const isEnchantScroll = (i: ItemInfo) => i.scroll === ScrollKind.ENCHANT_WEAPON || i.scroll === ScrollKind.ENCHANT_ARMOR;
@@ -226,6 +228,7 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
       if (isPotion(s.info)) list.push({ label: "Pôr na barra de atalhos", run: () => d.toHotbar(s.info.id) });
       if (d.storageOpen()) list.push({ label: "Guardar no armazém", run: () => d.deposit(l.slot, 255) });
       if (d.tradeOpen()) list.push({ label: "Oferecer na troca", run: () => d.offer(l.slot) });
+      else if (s.info.kind !== ItemKind.GOLD) list.push({ label: "Vender na loja pessoal…", run: () => d.toPrivateShop(l.slot) });
       if (d.shopOpen() && s.info.sellPrice > 0) list.push({ label: `Vender (${fmt.format(s.info.sellPrice * s.count)} moedas)`, run: () => d.sell(l.slot) });
       if (crystalYield(s.info, s.enchant) > 0) list.push({ label: "Cristalizar…", danger: true, run: () => confirmCrystallize(l, s) });
       list.push({ label: "Destruir…", danger: true, run: () => confirmDestroy(l, s) });

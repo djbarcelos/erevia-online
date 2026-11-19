@@ -130,6 +130,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.Trade(ctx, id, m.TradeCmd)
 	case *pb.ClientMessage_AuctionCmd:
 		z.Social(ctx, id, m.AuctionCmd)
+	case *pb.ClientMessage_PrivateShop:
+		z.Social(ctx, id, m.PrivateShop)
 	case *pb.ClientMessage_UseGate:
 		z.UseGate(ctx, id, m.UseGate.NpcId)
 	default:
@@ -976,6 +978,11 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_ReputationCmd{ReputationCmd: &pb.ReputationCmd{Kind: pb.ReputationCmdKind_REPUTATION_CMD_BUY, NpcId: boardID, Offer: "guard_cape"}}},
 		// Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, meus anúncios e retirar.
 		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_OPEN, NpcId: fuzzAuctioneerID}}},
+		// Loja pessoal (tunnel#161): abrir com um item da bolsa, ver a do outro e comprar dela.
+		{Msg: &pb.ClientMessage_PrivateShop{PrivateShop: &pb.PrivateShopCmd{Kind: pb.PrivateShopCmdKind_PRIVATE_SHOP_CMD_OPEN, Title: "Barato",
+			Items: []*pb.PrivateShopItem{{Slot: 9, Count: 2, Price: 50}}}}},
+		{Msg: &pb.ClientMessage_PrivateShop{PrivateShop: &pb.PrivateShopCmd{Kind: pb.PrivateShopCmdKind_PRIVATE_SHOP_CMD_VIEW, SellerId: 2}}},
+		{Msg: &pb.ClientMessage_PrivateShop{PrivateShop: &pb.PrivateShopCmd{Kind: pb.PrivateShopCmdKind_PRIVATE_SHOP_CMD_BUY, SellerId: 2, Slot: 9, Count: 1, Price: 50}}},
 		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_SEARCH, NpcId: fuzzAuctioneerID, Query: &pb.AuctionQuery{Name: "poção", MyClass: true}}}},
 		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_LIST, NpcId: fuzzAuctioneerID, Slot: 9, Count: 3, Price: 100, Hours: 24}}},
 		{Msg: &pb.ClientMessage_AuctionCmd{AuctionCmd: &pb.AuctionCmd{Kind: pb.AuctionCmdKind_AUCTION_CMD_BUY, NpcId: fuzzAuctioneerID, AuctionId: 1, Price: 100}}},

@@ -572,6 +572,12 @@ export class WindowManager {
   async show(id: string, at?: { left: number; top: number }): Promise<void> {
     const existing = this.open.get(id);
     if (existing) {
+      // Já aberta: com `at`, leva para lá (ex.: o inventário ao lado da loja pessoal).
+      if (at) {
+        const r = existing.root;
+        r.style.left = `${clamp(at.left, 12, Math.max(12, innerWidth - r.offsetWidth - 12))}px`;
+        r.style.top = `${clamp(at.top, 12, Math.max(12, innerHeight - r.offsetHeight - 12))}px`;
+      }
       this.focus(existing.root);
       return;
     }

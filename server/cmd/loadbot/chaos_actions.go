@@ -58,6 +58,7 @@ var chaosActions = []chaosAction{
 	{"amigos", 1, actFriend},
 	{"correio", 2, actMail},
 	{"leilao", 8, actAuction},
+	{"loja_pessoal", 5, actPrivateShop},
 	{"ranking", 1, actRanking},
 	{"titulo", 1, actTitle},
 	{"chat", 2, actChat},
@@ -386,6 +387,62 @@ func (s *chaosSession) enchantMsg(r [6]uint64, target int) (*pb.ClientMessage, s
 func actEnchant(b *chaosBot, s *chaosSession, r [6]uint64) {
 	s.mu.Lock()
 	m, label := s.enchantMsg(r, -1)
+	s.mu.Unlock()
+	b.emit(s, label, m)
+}
+
+// ---------- Loja pessoal (tunnel#161) ----------
+
+// privateShopMsg: ir ao mercado, abrir a própria loja com itens da bolsa, fechar, ver a loja de
+// outro bot por perto e comprar dela (às vezes com preço, quantidade ou espaço errados).
+func (s *chaosSession) privateShopMsg(r [6]uint64) (*pb.ClientMessage, string) {
+	m := &pb.PrivateShopCmd{}
+	label := ""
+	switch p := pct(r[1]); {
+	case p < 20: // ir até a área do mercado
+		a, d := float64(pickN(r[2], 360))*math.Pi/180, float64(pickN(r[3], 60))/10
+		x, z := game.PrivateShopCenterX+d*math.Cos(a), game.PrivateShopCenterZ+d*math.Sin(a)
+		return &pb.ClientMessage{Msg: &pb.ClientMessage_MoveTo{MoveTo: &pb.MoveTo{X: float32(x), Z: float32(z)}}}, "loja:ir_ao_mercado"
+	case p < 40:
+		m.Kind, m.Title, label = pb.PrivateShopCmdKind_PRIVATE_SHOP_CMD_OPEN, "Bot vende", "loja:abrir"
+		for i := range 1 + pickN(r[2], 3) {
+			m.Items = append(m.Items, &pb.PrivateShopItem{Slot: s.someBag(r[3]+uint64(i), nil), Count: uint32(pickN(r[4], 3)), Price: 1 + uint64(pickN(r[5], 500))})
+		}
+		if pct(r[4]) < 15 {
+			m.Items[0].Price, label = []uint64{0, 1 << 40, math.MaxUint64}[pickN(r[5], 3)], "loja!preco"
+		} else if pct(r[4]) < 25 {
+			m.Items[0].Slot, label = badU32(badSlots, r[5]), "loja!espaco"
+		}
+	case p < 48:
+		m.Kind, label = pb.PrivateShopCmdKind_PRIVATE_SHOP_CMD_CLOSE, "loja:fechar"
+	case p < 65:
+		m.Kind, label = pb.PrivateShopCmdKind_PRIVATE_SHOP_CMD_VIEW, "loja:ver"
+		if l := s.nearby(pb.EntityKind_ENTITY_KIND_PLAYER, 8); len(l) > 0 {
+			m.SellerId = l[pickN(r[2], len(l))]
+		} else {
+			m.SellerId, label = badU32(badIDs, r[2]), "loja!ver_id"
+		}
+	default:
+		m.Kind, label = pb.PrivateShopCmdKind_PRIVATE_SHOP_CMD_BUY, "loja:comprar"
+		if v := s.shopSeen; v != nil && len(v.Items) > 0 {
+			it := v.Items[pickN(r[2], len(v.Items))]
+			m.SellerId, m.Slot, m.Count, m.Price = v.SellerId, it.Slot, 1+uint32(pickN(r[3], int(max(1, it.Count)))), it.Price
+			switch q := pct(r[4]); {
+			case q < 8:
+				m.Price, label = it.Price+1, "loja!preco_mudou"
+			case q < 14:
+				m.Count, label = badU32(badCounts, r[5]), "loja!quantidade"
+			}
+		} else {
+			m.SellerId, m.Slot, m.Count, label = badU32(badIDs, r[2]), badU32(badSlots, r[3]), 1, "loja!comprar_sem_loja"
+		}
+	}
+	return &pb.ClientMessage{Msg: &pb.ClientMessage_PrivateShop{PrivateShop: m}}, label
+}
+
+func actPrivateShop(b *chaosBot, s *chaosSession, r [6]uint64) {
+	s.mu.Lock()
+	m, label := s.privateShopMsg(r)
 	s.mu.Unlock()
 	b.emit(s, label, m)
 }

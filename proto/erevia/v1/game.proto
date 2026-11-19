@@ -50,7 +50,48 @@ message ClientMessage {
     SubclassCmd subclass_cmd = 67; // Subclasse: falar com o Guardião das Sendas, escolher e trocar de classe
     Crystallize crystallize = 70; // cristalizar uma peça da bolsa (tunnel#154)
     NpcTalk npc_talk = 45; // conversa com NPC: abrir, aceitar e entregar missão, perguntar
+    PrivateShopCmd private_shop = 72; // loja pessoal: abrir, fechar, ver a de outro e comprar (tunnel#161)
   }
+}
+
+// ---------- Loja pessoal (tunnel#161) ----------
+
+enum PrivateShopCmdKind {
+  PRIVATE_SHOP_CMD_UNSPECIFIED = 0;
+  PRIVATE_SHOP_CMD_OPEN = 1; // abre a própria loja (title + items: slot, count e price da bolsa)
+  PRIVATE_SHOP_CMD_CLOSE = 2; // fecha a própria loja
+  PRIVATE_SHOP_CMD_VIEW = 3; // pede a loja de seller_id
+  PRIVATE_SHOP_CMD_BUY = 4; // compra count do item no slot da loja de seller_id, ao preço price (o que o comprador viu)
+}
+
+message PrivateShopCmd {
+  PrivateShopCmdKind kind = 1;
+  string title = 2; // OPEN: a placa (até 24 letras)
+  repeated PrivateShopItem items = 3; // OPEN
+  uint32 seller_id = 4; // VIEW e BUY
+  uint32 slot = 5; // BUY: o espaço da bolsa do vendedor (PrivateShopItem.slot)
+  uint32 count = 6; // BUY
+  uint64 price = 7; // BUY: preço por unidade que o comprador viu (mudou = recusa)
+}
+
+// Um item à venda: o espaço da bolsa do vendedor, quantas unidades e o preço de cada uma.
+message PrivateShopItem {
+  uint32 slot = 1;
+  string item_id = 2;
+  uint32 count = 3;
+  uint32 enchant = 4;
+  uint64 price = 5;
+}
+
+// A loja de seller_id, para quem pediu (VIEW) e a cada mudança enquanto a janela está aberta;
+// para o dono, a própria (mine). open = false: a loja fechou.
+message PrivateShopView {
+  uint32 seller_id = 1;
+  string seller_name = 2;
+  string title = 3;
+  repeated PrivateShopItem items = 4;
+  bool mine = 5;
+  bool open = 6;
 }
 
 // ---------- Zonas (vários mapas no mesmo servidor) ----------
@@ -563,6 +604,7 @@ message ServerMessage {
     NpcDialog npc_dialog = 45; // a janela de conversa do NPC (resposta ao NpcTalk)
     StonesKnown stones_known = 48; // pedras de teleporte descobertas (ao entrar e quando descobre uma)
     AreaEventStatus area_event = 49; // evento de área em andamento e postos fechados (areaevent.go)
+    PrivateShopView private_shop = 72; // loja pessoal (tunnel#161)
   }
 }
 
@@ -896,6 +938,7 @@ message PlayerStatus {
   string spec = 5; // especialização (SpecInfo.id; "" = nenhuma)
   string active_class = 6; // classe ativa (subclasse; "" = a do modelo)
   uint32 level = 7; // nível da classe ativa (muda ao trocar de classe; 0 = não mudou)
+  string shop_title = 70; // loja pessoal aberta: a placa ("" = nenhuma; tunnel#161)
 }
 
 // PvP do próprio personagem.
@@ -1476,6 +1519,7 @@ message Entity {
   ArmorLook armor = 29; // jogadores: raridade das peças de armadura equipadas
   bool rare = 40; // monstro raro (named): nome dourado e selo no quadro do alvo
   MonsterRole role = 41; // monstros: papel na luta e se é neutro (ausente = bruto)
+  string shop_title = 70; // jogadores: loja pessoal aberta, a placa ("" = nenhuma; tunnel#161)
 }
 
 // Papel do monstro na luta (arquétipo de IA, tunnel#129): o quadro do alvo mostra o ícone e

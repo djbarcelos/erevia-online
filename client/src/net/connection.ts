@@ -7,6 +7,7 @@ import {
   ClanRank,
   ClientMessageSchema,
   PartyCmdKind,
+  type PrivateShopCmdSchema,
   ServerMessageSchema,
   type FriendCmdKind,
   type SpecCmdKind,
@@ -151,6 +152,11 @@ export class Connection {
   /** Troca entre jogadores: pedir, oferecer/tirar item da bolsa, moedas, travar, confirmar, cancelar. */
   tradeCmd(kind: TradeCmdKind, opts: { targetId?: number; slot?: number; count?: number; gold?: number } = {}): void {
     this.send({ case: "tradeCmd", value: { kind, targetId: opts.targetId ?? 0, slot: opts.slot ?? 0, count: opts.count ?? 0, gold: BigInt(opts.gold ?? 0) } });
+  }
+
+  /** Loja pessoal (tunnel#161): abrir, fechar, ver a de outro e comprar. */
+  privateShop(value: MessageInitShape<typeof PrivateShopCmdSchema>): void {
+    this.send({ case: "privateShop", value });
   }
 
   cancelChannel(): void {

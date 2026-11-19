@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"flag"
@@ -37,7 +38,9 @@ import (
 	"github.com/coder/websocket"
 	"google.golang.org/protobuf/proto"
 
+	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
+	"erevia/server/internal/world"
 )
 
 var classes = []string{"knight", "barbarian", "mage", "rogue"}
@@ -73,6 +76,7 @@ func main() {
 	prefix := flag.String("prefix", "Bot", "início do nome dos personagens (letras)")
 	plaza := flag.Float64("plaza", 0, "raio (m) de uma praça em volta do centro: os bots ficam passeando nela, sem caçar (medir FPS com muita gente à vista); 0 = caçam nos anéis")
 	chat := flag.Bool("chat", true, "bots falam no chat geral de vez em quando")
+	vendors := flag.Bool("vendedores", false, "loja pessoal (tunnel#161): cada bot anda até um lugar da área do mercado e abre a loja com as poções iniciais, e fica parado (medir o FPS com ?bench=aqui)")
 	chaos := flag.Bool("chaos", false, "teste de caos: ações válidas e inválidas de todo o protocolo, quedas e conferência da economia (ver chaos.go)")
 	seed := flag.String("seed", "", "caos: semente das escolhas (vazio = sorteada e impressa)")
 	dbURL := flag.String("db", os.Getenv("DATABASE_URL"), "caos: Postgres do servidor, para o preparo e a conferência (padrão: $DATABASE_URL)")
@@ -104,7 +108,7 @@ func main() {
 		go func(i int) {
 			defer wg.Done()
 			name := fmt.Sprintf("%s%03d", *prefix, i)
-			if err := runBot(ctx, *base, name, classes[i%len(classes)], *chat, *plaza, m); err != nil && ctx.Err() == nil {
+			if err := runBot(ctx, *base, name, classes[i%len(classes)], *chat, *plaza, *vendors, i, m); err != nil && ctx.Err() == nil {
 				m.errors.Add(1)
 				log.Printf("%s: %v", name, err)
 			}
@@ -204,7 +208,28 @@ func login(ctx context.Context, client *http.Client, base, name, class string) (
 
 type vec struct{ x, z float64 }
 
-func runBot(ctx context.Context, base, name, class string, chat bool, plaza float64, m *metrics) error {
+// vendorSpots: lugares da área do mercado numa grade hexagonal de 1,9 m (acima do
+// espaçamento mínimo das lojas), do centro para fora.
+var vendorSpots = func() []vec {
+	const s = 1.9
+	town, _ := world.Load() // o mapa da cidade: sem lugares dentro das casas e do Mercado
+	var out []vec
+	for j := -6; j <= 6; j++ {
+		for i := -6; i <= 6; i++ {
+			x := game.PrivateShopCenterX + float64(i)*s + float64(j&1)*s/2
+			z := game.PrivateShopCenterZ + float64(j)*s*math.Sqrt(3)/2
+			if game.InPrivateShopArea(x, z) && (town == nil || !town.Blocked(x, z)) {
+				out = append(out, vec{x, z})
+			}
+		}
+	}
+	slices.SortStableFunc(out, func(a, b vec) int {
+		return cmp.Compare(math.Hypot(a.x-game.PrivateShopCenterX, a.z-game.PrivateShopCenterZ), math.Hypot(b.x-game.PrivateShopCenterX, b.z-game.PrivateShopCenterZ))
+	})
+	return out
+}()
+
+func runBot(ctx context.Context, base, name, class string, chat bool, plaza float64, vendor bool, index int, m *metrics) error {
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar, Timeout: 10 * time.Second}
 	id, err := login(ctx, client, base, name, class)
@@ -240,6 +265,7 @@ func runBot(ctx context.Context, base, name, class string, chat bool, plaza floa
 	monsters := map[uint32]vec{}
 	me := vec{}
 	dead := false
+	shopOpen := false // modo -vendedores: a loja do bot abriu
 	joined := make(chan struct{})
 
 	go func() {
@@ -297,6 +323,10 @@ func runBot(ctx context.Context, base, name, class string, chat bool, plaza floa
 						dead = false
 					}
 				}
+			case *pb.ServerMessage_PrivateShop:
+				if v.PrivateShop.Mine {
+					shopOpen = v.PrivateShop.Open
+				}
 			case *pb.ServerMessage_Pong:
 				m.rtt(float64(time.Now().UnixNano())/1e6 - v.Pong.ClientTime)
 			case *pb.ServerMessage_Kicked:
@@ -321,6 +351,12 @@ func runBot(ctx context.Context, base, name, class string, chat bool, plaza floa
 	ping := time.NewTicker(2 * time.Second)
 	defer ping.Stop()
 	nextChat := time.Now().Add(time.Duration(10+rng.IntN(30)) * time.Second)
+	// -vendedores: o lugar do bot no mercado; sem conseguir abrir em 15 s (colado num prédio ou
+	// em outro vendedor), tenta o lugar seguinte da grade.
+	spot, spotSince := index, time.Now()
+	if vendor {
+		chat = false
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -329,7 +365,7 @@ func runBot(ctx context.Context, base, name, class string, chat bool, plaza floa
 			send(&pb.ClientMessage{Msg: &pb.ClientMessage_Ping{Ping: &pb.Ping{ClientTime: float64(time.Now().UnixNano()) / 1e6}}})
 		case <-act.C:
 			st.Lock()
-			isDead, pos := dead, me
+			isDead, pos, opened := dead, me, shopOpen
 			var target uint32
 			best := 40.0
 			for mid, mp := range monsters {
@@ -341,6 +377,19 @@ func runBot(ctx context.Context, base, name, class string, chat bool, plaza floa
 			switch {
 			case isDead:
 				send(&pb.ClientMessage{Msg: &pb.ClientMessage_Respawn{Respawn: &pb.Respawn{}}})
+			case vendor && opened: // loja aberta: fica parado
+			case vendor:
+				if time.Since(spotSince) > 15*time.Second {
+					spot, spotSince = spot+31, time.Now()
+				}
+				goal := vendorSpots[spot%len(vendorSpots)]
+				if math.Hypot(goal.x-pos.x, goal.z-pos.z) > 0.6 {
+					send(&pb.ClientMessage{Msg: &pb.ClientMessage_MoveTo{MoveTo: &pb.MoveTo{X: float32(goal.x), Z: float32(goal.z)}}})
+				} else {
+					send(&pb.ClientMessage{Msg: &pb.ClientMessage_PrivateShop{PrivateShop: &pb.PrivateShopCmd{
+						Kind: pb.PrivateShopCmdKind_PRIVATE_SHOP_CMD_OPEN, Title: "Poções do " + name,
+						Items: []*pb.PrivateShopItem{{Slot: 0, Count: 1, Price: uint64(10 + index)}}}}})
+				}
 			case plaza > 0:
 				// Passeia pela praça: um ponto qualquer dentro do raio, sem atacar ninguém.
 				a := rng.Float64() * 2 * math.Pi

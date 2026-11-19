@@ -116,6 +116,8 @@ func (z *Zone) tradeBlocked(p *entity) string {
 		return "já está trocando"
 	case p.pl.channel != nil:
 		return "viajando"
+	case p.pl.pshop != nil:
+		return "com a loja aberta"
 	}
 	return ""
 }

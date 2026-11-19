@@ -132,6 +132,7 @@ type playerState struct {
 
 	quests   questLog
 	trade    *trade    // troca aberta (nil = nenhuma)
+	pshop    *privateShop // loja pessoal aberta (pshop.go; nil = nenhuma)
 	joinedAt time.Time // telemetria: início da sessão
 
 	social socialState // amigos, emote e leitura do correio
