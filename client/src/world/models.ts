@@ -147,7 +147,9 @@ const FOOT_SPEEDS_KAYKIT: Record<string, { walk?: number; run: number }> = {
   skeleton_minion: { run: 2.41 }, skeleton_warrior: { run: 1.94 }, skeleton_rogue: { run: 2.27 }, skeleton_mage: { run: 1.91 },
 };
 const FOOT_SPEEDS_REMASTER: Record<string, { walk?: number; run: number }> = {
-  knight: { walk: 1.36, run: 4.13 }, barbarian: { walk: 1.39, run: 4.23 }, mage: { walk: 1.29, run: 3.79 }, rogue: { walk: 1.41, run: 4.44 },
+  // tunnel#181: andar e correr novos (Meshy, conta atual) medidos com lab.footSpeeds; o andar do bárbaro e do mago
+  // continua o do rig (os da biblioteca eram lentos demais, 0,4-0,6 m/s).
+  knight: { walk: 0.99, run: 4.18 }, barbarian: { walk: 1.39, run: 4.31 }, mage: { walk: 1.29, run: 3.96 }, rogue: { walk: 1.39, run: 7.66 },
   skeleton_warrior: { walk: 1.52, run: 4.77 }, skeleton_minion: { walk: 0.92, run: 2.42 }, skeleton_rogue: { walk: 1.42, run: 4.45 },
   skeleton_mage: { walk: 1.5, run: 4.91 },
   brejeiro: { walk: 1.4, run: 4.4 }, // o rig mixamo de 1,8 m, como o ladino (tunnel#139)
