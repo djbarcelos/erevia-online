@@ -865,6 +865,7 @@ func (z *Zone) removePlayer(id uint32) {
 	if p.pl.trade != nil {
 		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
 	}
+	z.pshopClose(p, "") // a loja pessoal só fica aberta com o dono online (pshop.go)
 	if !hop {
 		z.partyLeave(p, "")
 	}
@@ -932,6 +933,7 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysVisits, z.checkVisits) // lugares das missões (GoalVisit)
 		z.runSystem(sysInstance, z.updateInstance)
 		z.runSystem(sysTrades, z.checkTrades)
+		z.runSystem(sysTrades, z.checkPrivateShops)
 		z.runSystem(sysXP2, z.updateXP2)
 		z.runSystem(sysXPTally, z.flushXPTallies)
 		z.runSystem(sysAdminOps, z.updateAdminOps)
@@ -1189,6 +1191,7 @@ func (z *Zone) entityPB(e *entity) *pb.Entity {
 		out.PvpState = z.pvpState(e)
 		out.ClanName = z.clanName(e)
 		out.Title = e.pl.ach.titleText()
+		out.ShopTitle = pshopTitleOf(e)
 		out.Spec = e.pl.spec
 		if e.pl.class != e.model {
 			out.ActiveClass = e.pl.class

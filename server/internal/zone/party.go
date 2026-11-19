@@ -95,6 +95,8 @@ func (z *Zone) onSocial(e socialEvent) {
 		z.onAchievementCmd(p, m)
 	case *pb.AuctionCmd:
 		z.onAuctionCmd(p, m)
+	case *pb.PrivateShopCmd:
+		z.onPrivateShopCmd(p, m)
 	}
 }
 

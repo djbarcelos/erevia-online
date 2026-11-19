@@ -113,7 +113,8 @@ export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; ti
       }
       return { ...l, pts };
     });
-    city = opts.city ? paintCity(w, h, dpr) : null;
+    // Escondido (display: none) o host mede 0: sem cidade, que um canvas 0×0 quebra o drawImage.
+    city = opts.city && w > 0 && h > 0 ? paintCity(w, h, dpr) : null;
   };
 
   const spawnEmber = () => {
@@ -129,6 +130,7 @@ export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; ti
   };
 
   const draw = (dt: number) => {
+    if (w <= 0 || h <= 0) return; // escondido: nada para pintar
     t += dt;
     // Céu
     const sky = ctx.createLinearGradient(0, 0, 0, h);
@@ -252,7 +254,7 @@ export function animatedBackdrop(host: HTMLElement, opts: { castle?: boolean; ti
     }
 
     // Silhueta da cidade, com as janelas acesas (pintada uma vez, em resize)
-    if (city) ctx.drawImage(city, 0, h - city.height / dpr, w, city.height / dpr);
+    if (city && city.width > 0 && city.height > 0) ctx.drawImage(city, 0, h - city.height / dpr, w, city.height / dpr);
 
     // Vinheta
     const v = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.3, w / 2, h / 2, Math.max(w, h) * 0.75);

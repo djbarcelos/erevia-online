@@ -60,7 +60,7 @@ export type HotbarEntry = string | null;
 export type WindowId = "character" | "inventory" | "skills" | "quests" | "party" | "clan" | "social" | "glory" | "bestiary" | "map" | "settings";
 
 /** Ações sobre um jogador selecionado (quadro do alvo). */
-export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade" | "friend";
+export type TargetAction = "attack" | "party" | "clan" | "whisper" | "trade" | "friend" | "shop";
 
 /** O que o quadro do alvo precisa saber de um jogador além do EntityInfo. */
 export interface TargetExtras {
@@ -324,6 +324,7 @@ export class Hud {
       ["whisper", "Sussurrar", "Mandar uma mensagem particular"],
       ["trade", "Trocar", "Propor uma troca de itens e moedas (chegue perto)"],
       ["friend", "Amigo +", "Adicionar à sua lista de amigos (você vê quando ele está online)"],
+      ["shop", "Ver loja", "Ver a loja pessoal deste jogador (chegue perto)"],
     ] as const) {
       const b = button(label, "btn btn-sm t-act", () => cb.onTargetAction(action));
       b.title = title;
@@ -1036,6 +1037,7 @@ export class Hud {
       this.tActionBtns.get("party")!.hidden = !extras.canParty;
       this.tActionBtns.get("clan")!.hidden = !extras.canClan;
       this.tActionBtns.get("friend")!.hidden = !extras.canFriend;
+      this.tActionBtns.get("shop")!.hidden = !info.shopTitle;
     }
     this.target.classList.toggle("dead", info.dead);
     this.target.classList.toggle("boss", !!info.boss);

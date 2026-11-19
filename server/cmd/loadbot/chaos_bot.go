@@ -89,6 +89,8 @@ type chaosSession struct {
 	tradeOpen  bool
 	partner    uint32
 	mine, them *pb.TradeOffer
+	shopSeen   *pb.PrivateShopView // a última loja pessoal vista (de outro bot)
+	shopOpen   bool                // a própria loja pessoal está aberta
 	invites    []*pb.Invite
 	party      *pb.PartyState
 	clan       *pb.ClanState
@@ -380,6 +382,14 @@ func (b *chaosBot) read(s *chaosSession) {
 		case *pb.ServerMessage_Trade:
 			t := v.Trade
 			s.tradeOpen, s.partner, s.mine, s.them = t.Open, t.PartnerId, t.Mine, t.Theirs
+		case *pb.ServerMessage_PrivateShop:
+			if v.PrivateShop.Mine {
+				s.shopOpen = v.PrivateShop.Open
+			} else if v.PrivateShop.Open {
+				s.shopSeen = v.PrivateShop
+			} else if s.shopSeen != nil && s.shopSeen.SellerId == v.PrivateShop.SellerId {
+				s.shopSeen = nil
+			}
 		case *pb.ServerMessage_Invite:
 			s.invites = append(s.invites, v.Invite)
 			if len(s.invites) > 8 {
