@@ -151,10 +151,11 @@ func run(log *slog.Logger) error {
 			return err
 		}
 		if id == maps[0] {
-			cfg.Capacity, homeCfg = capacity, cfg
+			cfg.Capacity = capacity
 			if channels > 1 {
-				cfg.Channel, homeCfg.Channel = 1, 1
+				cfg.Channel = 1
 			}
+			homeCfg = cfg // a base dos canais 2… (zone.ChannelConfig)
 		}
 		z, done := wire(cfg, log.With("zone", id))
 		m.Add(z)
@@ -204,6 +205,13 @@ func run(log *slog.Logger) error {
 	// pelo canal, e as ações sobre um personagem vão para a zona dona dele (zone.Manager).
 	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: m})
 	httpAPI.SetBugZone(m)
+	httpAPI.SetChannels(func() []api.ChannelInfo { // a tela de personagens escolhe o canal
+		var out []api.ChannelInfo
+		for _, c := range m.ChannelStatuses() {
+			out = append(out, api.ChannelInfo{Number: c.Number, Players: c.Players, Capacity: c.Capacity, Full: c.Full})
+		}
+		return out
+	})
 	mux := http.NewServeMux()
 	httpAPI.Register(mux)
 	mux.Handle("/ws", gamenet.NewServer(m, &wsBackend{api: httpAPI, store: st}, log, origins))

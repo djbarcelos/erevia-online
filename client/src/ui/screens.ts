@@ -7,7 +7,7 @@ import "../styles/tokens.css";
 import "../styles/kit.css";
 import "../styles/screens.css";
 import "../styles/vigilia.css";
-import { api, ApiError, type CharacterInfo, type ClassId, type CreationOption, type CreationOptions, type LookChoice, type Providers } from "../api";
+import { api, ApiError, chosenChannel, setChosenChannel, type CharacterInfo, type ClassId, type CreationOption, type CreationOptions, type LookChoice, type Providers } from "../api";
 import { CLASSES, classInfo } from "../classes";
 import { ui, uniqueIds } from "./art";
 import { animatedBackdrop } from "./backdrop";
@@ -449,7 +449,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
     const subs = classesLine(c);
     setPlate(c.name, classLine(c, "Nível") + (subs ? ` (${subs})` : ""), look.emblem);
     const play = button("Entrar no mundo", "btn btn-gold btn-play", () => onPlay(c));
-    selectFoot.replaceChildren(play);
+    selectFoot.replaceChildren(channelPicker(), play);
     const cls0 = classInfo(c.activeClass ?? c.class);
     const cell = (k: string, ...v: (Node | string)[]) => el("div", "dt-cell", el("span", "label", k), el("b", null, ...v));
     const sw = el("i", "dt-swatch");
@@ -805,4 +805,35 @@ function forgetLocalData(): void {
   } catch {
     // Navegador sem localStorage (modo privado restrito): nada a apagar.
   }
+}
+
+/**
+ * Canal do mapa principal (tunnel#86): só aparece quando o servidor tem canais. "Automático"
+ * deixa o servidor escolher o menos cheio; um canal cheio aparece desabilitado.
+ */
+function channelPicker(): HTMLElement {
+  const sel = el("select", "input channel-pick");
+  sel.setAttribute("aria-label", "Canal");
+  const wrap = el("label", "channel-field", el("span", "label", "Canal"), sel);
+  wrap.hidden = true;
+  sel.onchange = () => setChosenChannel(Number(sel.value) || 0);
+  void api
+    .channels()
+    .then(({ channels }) => {
+      if (!channels.length) return;
+      const want = chosenChannel();
+      const auto = el("option", null, "Automático");
+      auto.value = "0";
+      sel.append(auto);
+      for (const c of channels) {
+        const o = el("option", null, `Canal ${c.number} · ${c.capacity ? `${c.players}/${c.capacity}` : `${c.players} online`}${c.full ? " (cheio)" : ""}`);
+        o.value = String(c.number);
+        o.disabled = c.full;
+        sel.append(o);
+      }
+      sel.value = channels.some((c) => c.number === want && !c.full) ? String(want) : "0";
+      wrap.hidden = false;
+    })
+    .catch(() => undefined); // sem a lista, o servidor escolhe
+  return wrap;
 }

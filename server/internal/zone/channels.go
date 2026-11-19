@@ -176,3 +176,22 @@ func (z *Zone) changeChannel(id uint32, n int) {
 func (z *Zone) isChannel() bool {
 	return z.mgr != nil && slices.Contains(z.mgr.channels, z)
 }
+
+// ChannelStatus é um canal para quem está fora do jogo (a tela de personagens).
+type ChannelStatus struct {
+	Number, Players, Capacity int
+	Full                      bool
+}
+
+// ChannelStatuses: os canais do mapa principal (vazio = o processo não tem canais). Lê só o
+// barramento (pode ser chamado de qualquer goroutine).
+func (m *Manager) ChannelStatuses() []ChannelStatus {
+	if len(m.channels) < 2 {
+		return nil
+	}
+	out := make([]ChannelStatus, len(m.channels))
+	for i, c := range m.channels {
+		out[i] = ChannelStatus{Number: i + 1, Players: m.channelLoad(c), Capacity: max(0, c.cfg.Capacity), Full: m.channelFull(c)}
+	}
+	return out
+}

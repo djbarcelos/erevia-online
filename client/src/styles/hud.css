@@ -2974,3 +2974,22 @@ section.party {
   color: #ffb4a8;
   font-size: 0.68rem;
 }
+
+/* Canal do mapa principal (tunnel#86): embaixo da plaqueta do minimapa. */
+.mm-channel {
+  display: block;
+  margin: 2px auto 0;
+  padding: 1px 8px;
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--gold-hi, #f3d58a);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(214, 180, 110, 0.35);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.mm-channel:hover {
+  border-color: var(--gold, #d6b46e);
+}

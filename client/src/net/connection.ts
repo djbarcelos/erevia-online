@@ -36,12 +36,12 @@ export class Connection {
   private ws: WebSocket;
   private pingTimer: number | undefined;
 
-  constructor(url: string, characterId: number) {
+  constructor(url: string, characterId: number, channel = 0) {
     this.ws = new WebSocket(url);
     this.ws.binaryType = "arraybuffer";
 
     this.ws.onopen = () => {
-      this.send({ case: "join", value: { characterId } });
+      this.send({ case: "join", value: { characterId, channel } });
       this.pingTimer = window.setInterval(() => this.sendPing(), PING_INTERVAL_MS);
       this.sendPing();
     };
@@ -131,6 +131,11 @@ export class Connection {
   /** Pergaminho de encantar (na bolsa) num item da bolsa (place 0) ou equipado (1). */
   enchant(scrollSlot: number, place: number, slot: number): void {
     this.send({ case: "enchant", value: { scrollSlot, place, slot } });
+  }
+
+  /** Canais (tunnel#86): trocar para o canal n (0 = só pedir a lista). */
+  changeChannel(channel: number): void {
+    this.send({ case: "changeChannel", value: { channel } });
   }
 
   /** Cristaliza a peça da bolsa (tunnel#154). */

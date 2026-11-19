@@ -1,6 +1,6 @@
 // Primeiro import: o relatório de erros se instala antes de qualquer outro módulo rodar.
 import { reportClientError, setErrorContext, watchEngine } from "./net/errors";
-import { api, ApiError, type CharacterInfo } from "./api";
+import { api, ApiError, chosenChannel, type CharacterInfo } from "./api";
 import { gameAudio } from "./audio";
 import { type AbstractEngine, Color3, Matrix, Vector3 } from "@babylonjs/core";
 import { create } from "@bufbuild/protobuf";
@@ -165,7 +165,7 @@ async function openCharacters(): Promise<void> {
 /** Entra no mundo com o personagem escolhido (resume: voltando de uma queda de conexão). */
 function play(character: CharacterInfo, resume?: Resume): void {
   showScreen("screen-loading", resume ? "Reconectando…" : undefined);
-  const conn = new Connection(Connection.defaultUrl(), character.id);
+  const conn = new Connection(Connection.defaultUrl(), character.id, chosenChannel());
   let started = false;
   let kickedReason = "";
   let game: Game | undefined;
@@ -756,6 +756,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     onPartyMember: (id) => selectTarget(id),
     onCancelChannel: () => conn.cancelChannel(),
     onCycleTarget: cycleTarget,
+    onChangeChannel: (n) => conn.changeChannel(n),
     onQuestGo: (id) => goToQuest(id),
     onStick: (v) => {
       stick = v;
@@ -2044,6 +2045,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           } else subWin.update(s);
           break;
         }
+        case "channels":
+          hud.setChannels(msg.msg.value);
+          break;
         case "playerStatus":
           entities.setStatus(msg.msg.value);
           if (msg.msg.value.id === targetId || msg.msg.value.id === welcome.yourId) refreshTarget();
