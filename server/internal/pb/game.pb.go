@@ -14951,6 +14951,7 @@ type CombatEvent struct {
 	Dot           Effect                 `protobuf:"varint,8,opt,name=dot,proto3,enum=erevia.v1.Effect" json:"dot,omitempty"` // dano de veneno/queimadura/praga (sem animação de golpe)
 	Absorbed      uint32                 `protobuf:"varint,9,opt,name=absorbed,proto3" json:"absorbed,omitempty"`             // quanto um escudo segurou
 	Heal          uint32                 `protobuf:"varint,10,opt,name=heal,proto3" json:"heal,omitempty"`                    // vida que quem bateu recuperou (roubo de vida)
+	Blocked       bool                   `protobuf:"varint,11,opt,name=blocked,proto3" json:"blocked,omitempty"`              // o escudo bloqueou parte do golpe (tunnel#180, Fase 4)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -15053,6 +15054,13 @@ func (x *CombatEvent) GetHeal() uint32 {
 		return x.Heal
 	}
 	return 0
+}
+
+func (x *CombatEvent) GetBlocked() bool {
+	if x != nil {
+		return x.Blocked
+	}
+	return false
 }
 
 type EffectEvent struct {
@@ -18987,7 +18995,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\bHpUpdate\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x0e\n" +
 	"\x02hp\x18\x02 \x01(\rR\x02hp\x12\x15\n" +
-	"\x06max_hp\x18\x03 \x01(\rR\x05maxHp\"\x8b\x02\n" +
+	"\x06max_hp\x18\x03 \x01(\rR\x05maxHp\"\xa5\x02\n" +
 	"\vCombatEvent\x12\x1b\n" +
 	"\tsource_id\x18\x01 \x01(\rR\bsourceId\x12\x1b\n" +
 	"\ttarget_id\x18\x02 \x01(\rR\btargetId\x12\x19\n" +
@@ -18999,7 +19007,8 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x03dot\x18\b \x01(\x0e2\x11.erevia.v1.EffectR\x03dot\x12\x1a\n" +
 	"\babsorbed\x18\t \x01(\rR\babsorbed\x12\x12\n" +
 	"\x04heal\x18\n" +
-	" \x01(\rR\x04heal\"\xa9\x01\n" +
+	" \x01(\rR\x04heal\x12\x18\n" +
+	"\ablocked\x18\v \x01(\bR\ablocked\"\xa9\x01\n" +
 	"\vEffectEvent\x12\x1b\n" +
 	"\ttarget_id\x18\x01 \x01(\rR\btargetId\x12)\n" +
 	"\x06effect\x18\x02 \x01(\x0e2\x11.erevia.v1.EffectR\x06effect\x12\x1f\n" +

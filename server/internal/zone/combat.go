@@ -410,6 +410,14 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 		ev.Damage = uint32(dmg)
 		ev.Absorbed += uint32(b)
 	}
+	// Bloqueio do jogador com escudo (Fase 4): golpe físico de qualquer direção (o servidor não
+	// guarda para onde o jogador olha). O sorteio só acontece com chance > 0.
+	if !magic && dst.pl != nil && src != dst && dst.stats.Block > 0 && z.rng.Float64() < dst.stats.Block {
+		b := math.Round(dmg * game.BlockCut(dst.stats))
+		dmg -= b
+		ev.Damage = uint32(dmg)
+		ev.Blocked = true
+	}
 	taken := z.damage(src, dst, dmg, ev)
 
 	if src.pl != nil && taken > 0 && !src.dead {

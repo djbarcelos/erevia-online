@@ -26,6 +26,9 @@ type Stats struct {
 	CritDamage        float64 // multiplicador do crítico (2 = dobro)
 	// AtkSpeed só existe em bônus (equipamento): +0,05 = 5% mais ataques por segundo.
 	AtkSpeed float64
+	// Bloqueio (escudo, tunnel#180 Fase 4): chance de um golpe físico ser bloqueado e quanto
+	// do dano o bloqueio corta (0 = BlockReduceBase). Magia nunca é bloqueada.
+	Block, BlockReduce float64
 }
 
 // ClassDef descreve uma classe jogável.
@@ -108,6 +111,8 @@ func (s Stats) AddBonus(b Stats) Stats {
 	s.MPRegen += b.MPRegen
 	s.CritDamage += b.CritDamage
 	s.AtkSpeed += b.AtkSpeed
+	s.Block += b.Block
+	s.BlockReduce += b.BlockReduce
 	// Ataques por segundo crescem com o bônus (só quando há um intervalo: somar bônus
 	// entre si não mexe nele).
 	if s.AtkInterval > 0 && b.AtkSpeed != 0 {

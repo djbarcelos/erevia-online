@@ -407,6 +407,10 @@ func (f *fight) monsterHit() {
 	}
 	dmg := game.ExpectedHit(game.HitInput{Atk: f.mAtk(), Def: f.pDef(f.m.Magic), Mult: 1,
 		Crit: f.m.Crit, CritMult: f.m.CritDamage, Accuracy: acc, Evasion: f.p.Evasion})
+	// Bloqueio do escudo (Fase 4), pelo valor esperado: só golpe físico.
+	if !f.m.Magic && f.p.Block > 0 {
+		dmg *= 1 - math.Min(1, f.p.Block)*game.BlockCut(f.p)
+	}
 	if sh := &f.pfx[game.EffectShield]; sh.until > f.now && sh.value > 0 {
 		a := math.Min(sh.value, dmg)
 		sh.value -= a

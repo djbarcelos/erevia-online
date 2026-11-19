@@ -1674,6 +1674,7 @@ message CombatEvent {
   Effect dot = 8; // dano de veneno/queimadura/praga (sem animação de golpe)
   uint32 absorbed = 9; // quanto um escudo segurou
   uint32 heal = 10; // vida que quem bateu recuperou (roubo de vida)
+  bool blocked = 11; // o escudo bloqueou parte do golpe (tunnel#180, Fase 4)
 }
 
 enum Effect {

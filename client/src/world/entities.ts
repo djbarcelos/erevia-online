@@ -1342,6 +1342,7 @@ export class EntityManager {
     }
     // O escudo segurou: tudo ("Bloqueado") ou parte (o número sai também, logo abaixo).
     if (ev.absorbed && numbers) this.fx.number(dst.head, "block", ev.damage === 0 ? "Bloqueado" : `(${ev.absorbed} absorvido)`);
+    if (ev.blocked && numbers) this.fx.number(dst.head, "block", "Bloqueio"); // escudo do jogador (tunnel#180, Fase 4)
     if (!quiet) gameAudio.hit(sk?.fx, ev.crit, !sk && !!src && isCaster(src.model), dst.root.position, mine || onMe);
     if (!quiet) this.feel(ev, src, dst, sk, mine, onMe);
     // Impacto (a Bola de Fogo e a magia básica já explodiram ao chegar).
