@@ -13,6 +13,7 @@ import {
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Rectangle, StackPanel, TextBlock } from "@babylonjs/gui";
 import { classInfo } from "../classes";
+import { noteCorrection, noteDespawn, noteResync, noteSpawn } from "../net/sync-stats";
 import {
   Effect,
   EmoteKind,
@@ -578,6 +579,7 @@ export class EntityManager {
   /** fade: monstro que acabou de nascer aparece aos poucos. */
   add(e: Entity, fade = false): void {
     if (this.views.has(e.id)) return;
+    noteSpawn(e.id); // dessincronia: sumiu e voltou em menos de 1 s (tunnel#122)
     const isLocal = e.id === this.localId;
     if (isLocal) this.resetLocalPrediction();
     const scale = e.scale > 0 ? e.scale : 1;
@@ -876,6 +878,7 @@ export class EntityManager {
   remove(id: number): void {
     const v = this.views.get(id);
     if (!v) return;
+    noteDespawn(id);
     this.setShadow(v, false);
     if (this.targetId === id) this.setTarget(0);
     if (this.selectRing.parent === v.root) this.selectRing.parent = null;
@@ -1001,7 +1004,9 @@ export class EntityManager {
     const ex = s.x - past.x;
     const ez = s.z - past.z;
     const err = Math.hypot(ex, ez);
+    noteCorrection(err); // dessincronia (tunnel#122): só conta acima de 0,5 m
     if (err > LOCAL_SNAP) {
+      noteResync();
       this.localDriven = false;
       return false;
     }
