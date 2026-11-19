@@ -22,7 +22,9 @@ func TestChannelsList(t *testing.T) {
 	if l := get(); len(l) != 0 {
 		t.Fatalf("sem canais, lista vazia: %+v", l)
 	}
-	a.SetChannels(func() []ChannelInfo { return []ChannelInfo{{Number: 1, Players: 3, Capacity: 3, Full: true}, {Number: 2}} })
+	a.SetChannels(func() []ChannelInfo {
+		return []ChannelInfo{{Number: 1, Players: 3, Capacity: 3, Full: true}, {Number: 2}}
+	})
 	if l := get(); len(l) != 2 || !l[0].Full || l[1].Number != 2 {
 		t.Fatalf("lista: %+v", l)
 	}
