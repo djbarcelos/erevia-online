@@ -270,7 +270,7 @@ Em `e2e/` (pacote próprio, fora do build do cliente), com **Playwright** no Chr
 - **Qualquer `pageerror`, `console.error` ou relatório para `POST /api/client-errors` reprova o teste.** A única exceção é o 401 de `/api/me` antes do login (lista em `e2e/tests/fixtures.ts`); um teste pode deixar passar mais algum com `problems.allow` (só a medição de FPS usa: o `low_fps` que o cliente relata ao rodar minutos a 2–3 FPS no SwiftShader). Os avisos "modelos 3D indisponíveis" e "cenário indisponível" também reprovam. `e2e/tests/guarda.spec.ts` confere o próprio guarda (um `throw` e um `console.error` de propósito precisam ser pegos).
 - **WebGL por software:** o Chromium roda com SwiftShader e com o canvas 2D na CPU (`--disable-accelerated-2d-canvas`: acelerado, as texturas que o cliente pinta travavam a página por mais de 30 s e o servidor derrubava a conexão). O teste entra com a qualidade gráfica salva como **Baixa**; a Alta (SSAO, FXAA) fica de fora. Se a página ainda travar e o cliente reconectar sozinho ao carregar o mundo, o teste espera uma vez e deixa um aviso no relatório.
 - **`?e2e=1`** liga no cliente (também no build de produção) o `window.__ereviaE2E`, **só de leitura**: posição do jogador, NPCs e monstros que o cliente conhece e onde cada um aparece na tela, para o teste saber onde clicar. Nada nele manda mensagem ao servidor; as ações são cliques e teclas de verdade.
-- **No CI**, o job **Navegador (Playwright)** sobe o Postgres, compila cliente e servidor, roda o servidor com `DEV_LOGIN=true` e `STATIC_DIR=client/dist` e joga o roteiro e a [medição de FPS](#medição-de-fps-no-ci). Se falhar, o artefato `e2e-falha` tem screenshot, vídeo, trace (`npx playwright show-trace trace.zip`) e o log do servidor.
+- **Fora do CI:** o job de navegador saiu do `.github/workflows/ci.yml` (levava 10–20 min por PR). Os testes rodam localmente, como abaixo, antes de mexer em cena, entrada no mundo ou interface.
 
 Para rodar localmente, suba o servidor com `DEV_LOGIN=true` servindo o cliente compilado (o teste usa o build de produção, não o Vite de desenvolvimento). O jeito mais simples é a imagem Docker, com o Postgres do `make db-up`:
 ```bash
@@ -287,6 +287,8 @@ npx playwright show-report             # relatório, com o trace de uma falha
 Sem `E2E_BASE_URL`, o teste usa `http://localhost:8080`. Cada execução cria uma conta e um personagem novos (`e2e…` / `Heroi…`, `bench…` / `Bench…`) no banco.
 
 ### Medição de FPS no CI
+> Não roda mais no CI (o job de navegador saiu): rode localmente com `npx playwright test tests/bench.spec.ts`.
+
 `e2e/tests/bench.spec.ts` roda no mesmo job, no mesmo servidor e no mesmo navegador do roteiro: entra com `?bench=contadores` e a qualidade **Baixa**, espera `window.__ereviaBench.done` e compara com a linha de base versionada **`e2e/bench-baseline.json`**. **Nunca FPS nem ms** (WebGL por software, máquina compartilhada): só contadores que não mudam de uma rodada para outra no headless. O que entra e a tolerância de cada um (em `e2e/tests/bench-compare.ts`):
 
 | O quê | Tolerância |
