@@ -266,6 +266,8 @@ interface View extends EntityInfo {
   anim: AnimController | null;
   /** Malhas do modelo (para sombra e teste de visibilidade). */
   meshes: AbstractMesh[];
+  /** Para as invariantes: sem malha porque o modelo ainda baixa (atualizado em forEachProbe). */
+  awaitingModel: boolean;
   castsShadow: boolean;
   label: Rectangle;
   nameText: TextBlock;
@@ -697,7 +699,7 @@ export class EntityManager {
       px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
-      root, visual, head, ferryBoat, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
+      root, visual, head, ferryBoat, capsule: null, model3d: null, anim: null, meshes: [], awaitingModel: false, castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
       impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, greetUntil: 0, fightAt: 0, hand: undefined,
       bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
@@ -1869,7 +1871,10 @@ export class EntityManager {
 
   /** Todas as entidades, para as invariantes do cliente (net/invariants.ts, 1×/s). */
   forEachProbe(cb: (e: EntityProbe) => void): void {
-    for (const v of this.views.values()) cb(v);
+    for (const v of this.views.values()) {
+      v.awaitingModel = !v.model3d && !v.capsule && (this.capsulesHeld || this.lazyWaits.has(v.id));
+      cb(v);
+    }
   }
 
   /** Nó raiz de cada entidade (medição de FPS, ?bench=1: separa o que é cenário do que é entidade). */
