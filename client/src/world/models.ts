@@ -78,7 +78,9 @@ const ANIM_FILES = [
 /** Emotes (/acenar, /sentar, /dancar): só os heróis têm. */
 export type EmoteRole = "wave" | "sit" | "dance";
 /** Papéis que só alguns modelos têm: os emotes e o andar (o remaster; os outros só correm). */
-export type OptionalRole = EmoteRole | "walk" | "break1" | "break2" | "break3";
+/** Variantes (heróis do remaster): o golpe alterna attack → attack2 → attack3; dano e morte sorteiam. */
+export type VariantRole = "attack2" | "attack3" | "hit2" | "death2";
+export type OptionalRole = EmoteRole | "walk" | "break1" | "break2" | "break3" | VariantRole;
 export type AnimRole = "idle" | "run" | "attack" | "skill" | "buff" | "hit" | "death" | OptionalRole;
 type AnimSet = Record<Exclude<AnimRole, OptionalRole>, string> & Partial<Record<OptionalRole, string>>;
 
@@ -158,7 +160,9 @@ const FOOT_SPEEDS_REMASTER: Record<string, { walk?: number; run: number }> = {
 function heroSet(p: string, over: Partial<Record<AnimRole, string>> = {}): AnimSet {
   return {
     idle: `${p}Idle`, walk: `${p}Walk`, run: `${p}Run`, attack: `${p}Attack`, skill: `${p}Attack`, buff: `${p}Raise`, hit: `${p}Hit`, death: `${p}Death`,
-    wave: `${p}Wave`, dance: `${p}Dance`, sit: `${p}Sit`, break1: `${p}Break1`, break2: `${p}Break2`, ...over,
+    wave: `${p}Wave`, dance: `${p}Dance`, sit: `${p}Sit`, break1: `${p}Break1`, break2: `${p}Break2`,
+    // variantes (tunnel#181): só entram as que existem no arquivo
+    attack2: `${p}Attack2`, attack3: `${p}Attack3`, hit2: `${p}Hit2`, death2: `${p}Death2`, ...over,
   };
 }
 const REMASTER_SETS: Record<string, AnimSet> = {
@@ -243,6 +247,16 @@ CLIP_IMPACT.MB_Attack = 18 / 30;
 CLIP_IMPACT.MB_Skill = 17 / 30;
 CLIP_IMPACT.RB_Attack = 20 / 30;
 CLIP_IMPACT.RB_Skill = 22 / 30;
+// Variantes do golpe (tunnel#181): trechos de combos do Meshy (rig da conta nova, add-remaster-clips.mjs), impacto no
+// pico da mão direita menos o início do trecho (scripts/clip-peaks.mjs).
+CLIP_IMPACT.KB_Attack2 = 0.57; // combo triplo, 1º corte
+CLIP_IMPACT.KB_Attack3 = 0.38; // combo triplo, 3º corte
+CLIP_IMPACT.BB_Attack2 = 0.63; // Weapon Combo 2, 1º golpe
+CLIP_IMPACT.BB_Attack3 = 0.55; // Weapon Combo 2, 3º golpe
+CLIP_IMPACT.MB_Attack2 = 0.73;
+CLIP_IMPACT.MB_Attack3 = 0.63;
+CLIP_IMPACT.RB_Attack2 = 0.57; // combo triplo, 1º corte
+CLIP_IMPACT.RB_Attack3 = 0.53; // giro das lâminas
 
 export type Slot = "handslot.r" | "handslot.l";
 

@@ -80,11 +80,27 @@ for (const spec of maps) {
     const cSelf = C(name);
     const cPar = pB && pA && B.get(pA.getName()) ? C(pA.getName()) : qmul(qinv(parentWorld(src, bn).r), parentWorld(game, an).r);
     const pwB = parentWorld(src, bn), pwA = parentWorld(game, an);
-    for (let i = 0; i < inT.length; i++) {
-      const t = inT[i];
-      if (t < t0 - 1e-6 || t > t1 + 1e-6) continue;
-      times.push(t - t0);
-      const v = Array.from(inV.slice(i * n, i * n + n));
+    // Chaves do trecho, mais as bordas interpoladas (um canal constante, com uma chave só antes do
+    // corte, não pode sumir: o osso ficaria sem animação no golpe).
+    const at = (t) => {
+      let i = 0;
+      while (i < inT.length - 1 && inT[i + 1] <= t) i++;
+      const j = Math.min(i + 1, inT.length - 1);
+      const a = inT[j] > inT[i] ? Math.min(1, Math.max(0, (t - inT[i]) / (inT[j] - inT[i]))) : 0;
+      const va = Array.from(inV.slice(i * n, i * n + n)), vb = Array.from(inV.slice(j * n, j * n + n));
+      const sb = n === 4 && va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2] + va[3] * vb[3] < 0 ? -1 : 1;
+      const v = va.map((x, k) => x * (1 - a) + vb[k] * sb * a);
+      return n === 4 ? qnorm(v) : v;
+    };
+    const end = Math.min(t1, inT[inT.length - 1]);
+    const keys = [];
+    if (t0 > inT[0] + 1e-6 || t0s) keys.push([t0, at(t0)]);
+    for (let i = 0; i < inT.length; i++) if (inT[i] > t0 + 1e-6 && inT[i] < end - 1e-6) keys.push([inT[i], Array.from(inV.slice(i * n, i * n + n))]);
+    if (!t0s) keys.unshift([inT[0], Array.from(inV.slice(0, n))]);
+    if (end > keys[keys.length - 1][0] + 1e-6) keys.push([end, at(end)]);
+    for (const [t, raw] of keys) {
+      times.push(t - (t0s ? t0 : 0));
+      const v = raw;
       if (path === 'rotation') {
         vals.push(...qnorm(qmul(qmul(qinv(cPar), v), cSelf)));
       } else {
