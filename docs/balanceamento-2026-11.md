@@ -629,3 +629,34 @@ Cinco peças (peito, cabeça, pernas, mãos e pés), comum e Exaltada (épica); 
 - **O mago** continua o mais rápido de todos, e o tempo dele anda em degraus (1 ou 2 feitiços por abate): pequenas mudanças de ataque movem muito o número dele.
 - **Raras dos graus**: não existem (os graus têm comum, Exaltada e, no B, lendária). Os chefes ainda deixam cair as raras e épicas de antes pelo sorteio por raridade.
 - **Receitas do C e do B**: só o D sai do Ferreiro. As do C (com Núcleos Rúnicos) ficam para quando a economia do Vale for revista.
+
+## Cristalização e encantamento por grau (tunnel#154)
+
+### O que mudou
+
+- **Cristalizar:** no menu da bolsa, uma peça de grau D, C ou B vira cristais do grau (Cristal D, C ou B). A peça +0 rende 25% do preço de loja dela em cristais (pelo preço de loja do cristal), e cada nível de encantamento soma 1/5 disso. Vender os cristais sempre dá menos moedas que vender a peça (no máximo 75%, num +10): eles valem pelo que criam.
+- **Pergaminhos por grau:** cada grau tem os seus (arma, armadura e os abençoados). Os antigos são os do D: os ids não mudaram, então os que os jogadores já têm (bolsa, armazém, correio e leilão) viraram os do D sem migração. O do D também encanta as peças sem grau. O Ferreiro vende os comuns dos três graus; os abençoados do C e do B saem de receita, de chefe e das missões.
+- **Chance por grau:** até +3 continua seguro; acima, o C fica 5 pontos abaixo do D e o B, 10.
+- **Encantamento das peças dos graus:** cada degrau soma 2,8% do ataque (armas) ou da defesa (as outras) da própria peça, no lugar do bônus fixo da raridade. Com isso, todo +7 fica abaixo da mesma raridade +0 do grau seguinte (o pior caso é a espada épica do C contra a do B, −2%). O TestPowerBudget cobra isso sem tolerância (`tier-enchant:*`). As peças sem grau próprio (a loja e as antigas) continuam no bônus da raridade.
+- **Receitas:** as peças comuns do C e do B saem do Ferreiro com cristais do grau (4× o que a peça rende +0; um +10 rende 3×, então criar e cristalizar de novo sempre perde cristais), materiais da área (Núcleo Rúnico e Cinza Sepulcral no C; Núcleo Rúnico e Essência Sombria no B) e moedas acima do que a loja paga pela peça.
+- **Saque:** do 20 em diante (golens do Vale, Terras Mortas e Mãe-Lodo) caem os pergaminhos do C, e do 30 em diante (elites e Ozrhal), os do B. A chance foi dividida pela razão de preço (×0,4 no C, ×0,2 no B), para o valor do saque por abate não subir.
+- **Saída de ouro:** encantar cobra uma taxa por nível de destino, dê certo ou não: 10 moedas sem grau, 40 no D, 650 no C e 6.500 no B (encantar a +n custa n × a taxa).
+
+### O ouro que entra e sai
+
+Caçando sozinho no ritmo do simulador (equipamento típico +3), média das classes. Entra: as moedas que caem e a venda do saque (menos os pergaminhos de encantar, que o caçador usa). Sai: poções, um Pergaminho de Retorno por hora, as peças novas de cada troca (receita ou loja) e o encantamento delas: a arma a +7 e as outras peças a +5, com as tentativas, a taxa e as quebras esperadas (refazer a peça). Os pergaminhos que caíram são usados primeiro; o resto sai da loja. Meta: sai de 60% a 100% do que entra.
+
+| Grau | Níveis | Horas | Moedas que caem | Venda do saque | Poções e retorno | Peças | Encantar | Pergaminhos (usados / caíram) | Entra | Sai | Sai/entra |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| D | 10–19 | 5,1 | 112.303 | 207.084 | 819 | 14.900 | 232.808 | 227 / 72 | 319.387 | 248.527 | 78% |
+| C | 20–29 | 28,3 | 739.063 | 787.318 | 9.109 | 22.400 | 1.067.345 | 284 / 140 | 1.526.381 | 1.098.854 | 72% |
+| B | 30–39 | 65,6 | 2.913.185 | 7.846.539 | 12.154 | 23.450 | 7.732.689 | 353 / 227 | 10.759.724 | 7.768.293 | 72% |
+
+Taxa de encantar por nível de destino: Sem grau 10, Grau D 40, Grau C 650, Grau B 6500 moedas.
+
+O TestGoldSinkPerTier trava a meta (60% a 100% em cada grau). A taxa do B é alta porque, do 30 ao 40, a venda do saque é o triplo da do C por hora, quase toda do equipamento ponte (provisório, da tunnel#149). Quando a tunnel#146 trocar esse conteúdo, rode `go run ./cmd/balance -ouro` de novo e reveja a taxa.
+
+### Em aberto
+
+- O modelo vende todo o saque (menos os pergaminhos). Quem cristaliza ou guarda material vende menos, então o ouro que sai, medido no v_gold_daily, deve ficar acima do simulado.
+- Não há raras nos graus (como na tunnel#153). As receitas do C e do B fazem só as comuns.

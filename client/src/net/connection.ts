@@ -131,6 +131,11 @@ export class Connection {
     this.send({ case: "enchant", value: { scrollSlot, place, slot } });
   }
 
+  /** Cristaliza a peça da bolsa (tunnel#154). */
+  crystallize(slot: number): void {
+    this.send({ case: "crystallize", value: { slot } });
+  }
+
   /** Armazém: mover entre bolsa (0) e armazém (2); count 0 = a pilha toda. */
   storageMove(npcId: number, fromPlace: number, fromSlot: number, toPlace: number, toSlot: number, count: number): void {
     this.send({ case: "storageMove", value: { npcId, fromPlace, fromSlot, toPlace, toSlot, count } });
