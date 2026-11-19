@@ -1,6 +1,6 @@
 # Paladino (Cavaleiro): Fé
 
-> **Rascunho para revisão do DIogo.** O ID continua `herald`, e só o nome exibido muda (antes: Arauto). Os números são propostas ancoradas nas skills de hoje. A calibragem no simulador vem na fase de conteúdo do Cavaleiro. As regras gerais estão no [README](README.md).
+> **Aprovado pelo DIogo em 19/11.** O ID continua `herald`, e só o nome exibido muda (antes: Arauto). Os números são propostas ancoradas nas skills de hoje. A calibragem no simulador vem na fase de conteúdo do Cavaleiro. As regras gerais estão no [README](README.md).
 
 ## Papel e identidade
 
@@ -108,7 +108,7 @@ Os IDs de 100 em diante são **provisórios**. ★ marca as 2 iniciais. "(evol.)
 - **Iniciais:** Golpe Radiante e Bênção da Luz, ambas com rank 1.
 - **Hotbar:** Golpe de Escudo (1) vira Golpe Radiante (100). Fortaleza (2) vira Bênção da Luz (106). Os IDs 50 e 64–66 ficam onde estavam.
 - **Equipamento:** nada muda (espada e escudo).
-- **Bônus de atributo:** hoje é +12 Sabedoria (velocidade de conjuração e recarga). **Proposta:** trocar para **+6 Força e +6 Sabedoria**, porque o dano sagrado usa o ataque físico.
+- **Bônus de atributo:** **+6 Força e +6 Sabedoria**, no lugar dos +12 Sabedoria de hoje, porque o dano sagrado usa o ataque físico.
 
 ## Simulador: linha de base e metas
 
@@ -131,9 +131,9 @@ Os IDs de 100 em diante são **provisórios**. ★ marca as 2 iniciais. "(evol.)
 - **Piso de vida em aliados** (Sacrifício): uma variante do Imortal (`EffectUndying`) com piso de 25% e o excedente redirecionado ao Paladino. Usa o mesmo redirecionamento do Bastião.
 - **Novos `PassiveKind`:** `PassiveHolyDamagePct`, `PassiveHolyCrit` e `PassiveHealPower`.
 
-## Perguntas para o DIogo
+## Decisões do DIogo (19/11)
 
-1. A **cura limitada** (Renovação 8→12% em 6 s, recarga de 40 s, mais Aura e Purificar) está no tamanho certo, ou o Paladino não deve curar nada além da Aura?
-2. Pode renomear **"Bênção do Arauto" para "Bênção da Prontidão"**, já que o nome antigo cita a spec que sai?
-3. O bônus de atributo passa de +12 Sabedoria para **+6 Força e +6 Sabedoria**?
-4. O **Sol Nascente** (hoje 1 rank no nível 28) passa a ter 3 ranks no marco 20. Isso o deixa forte cedo demais? A alternativa é colocá-lo no marco 30, mas quem tem o Sol Nascente entre o 20 e o 29 perde o rank.
+1. **Cura limitada:** fica como está acima (Renovação, Aura de Coragem e Purificar). O Paladino não é curandeiro.
+2. **Bênção do Arauto** passa a se chamar **Bênção da Prontidão**. O ID continua o 65.
+3. **Bônus de atributo:** +6 Força e +6 Sabedoria, no lugar de +12 Sabedoria.
+4. **Sol Nascente:** fica no marco 20, com 3 ranks. Quem já tem a skill não perde o rank.

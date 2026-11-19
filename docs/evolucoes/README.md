@@ -1,15 +1,15 @@
 # Evoluções de classe: regras gerais
 
-Este é o rascunho das regras que valem para as 8 evoluções. Ele vem do documento de design (*Erevia: Documento de Design de Classes, Evolução e Progressão*) e do [plano de implementação](../plano-classes.md), e segue o estado do código na main de 19/11. A frente é a tunnel#180.
+Este é o rascunho das regras que valem para as 8 evoluções. Ele vem do [documento de design](design.md) e do [plano de implementação](../plano-classes.md), e segue o estado do código na main de 19/11. A frente é a tunnel#180.
 
 Cada evolução tem um doc próprio nesta pasta. **O DIogo revisa cada doc antes de a evolução virar código.** Os números são propostas: ficam calibrados no simulador (`server/cmd/balance`) quando a evolução existir no código, e o resultado da calibragem volta para o doc.
 
 | Classe | Evolução (ID) | Recurso | Doc | Situação |
 |---|---|---|---|---|
-| Cavaleiro | Bastião (`bastion`) | Determinação | [bastion.md](bastion.md) | rascunho para revisar |
-| Cavaleiro | Paladino (`herald`) | Fé | [herald.md](herald.md) | rascunho para revisar |
-| Bárbaro | Berserker (`bloodrager`) | Fúria | `bloodrager.md` | depois da revisão do Cavaleiro |
-| Bárbaro | Senhor da Guerra (`warlord`) | Ímpeto | `warlord.md` | depois da revisão do Cavaleiro |
+| Cavaleiro | Bastião (`bastion`) | Determinação | [bastion.md](bastion.md) | aprovado (19/11) |
+| Cavaleiro | Paladino (`herald`) | Fé | [herald.md](herald.md) | aprovado (19/11) |
+| Bárbaro | Berserker (`bloodrager`) | Fúria | [bloodrager.md](bloodrager.md) | rascunho para revisar |
+| Bárbaro | Senhor da Guerra (`warlord`) | Ímpeto | [warlord.md](warlord.md) | rascunho para revisar |
 | Mago | Elementalista (`elementalist`) | Concentração | `elementalist.md` | a fazer |
 | Mago | Arcanista (`occultist`) | Carga Arcana | `occultist.md` | a fazer |
 | Ladino | Assassino (`cutthroat`) | Combo | `cutthroat.md` | a fazer |
@@ -143,7 +143,7 @@ Ela roda no load, por classe (incluindo a subclasse), e só uma vez, controlada 
 |---|---|
 | < 20 | Nada muda. |
 | ≥ 20 sem spec | Perde o nó do degrau 20 (os pontos voltam). A Encruzilhada aparece no diário. |
-| ≥ 20 com spec | Mantém a evolução e os ranks dos IDs 49–84 que ficaram na árvore dela. Descarta a base, recebe as iniciais e a hotbar troca base → evoluída. Ganha a redistribuição grátis e uma mensagem única: "Você tem N pontos para distribuir na árvore da sua evolução". |
+| ≥ 20 com spec | Mantém a evolução e os ranks dos IDs 49–84 que ficaram na árvore dela, desde que o marco do nó seja ≤ o nível do personagem. Se uma skill de spec subiu de marco (por exemplo, a Carnificina do 28 para o 35), ela sai até o personagem chegar lá, e os pontos voltam. Descarta a base, recebe as iniciais e a hotbar troca base → evoluída. Ganha a redistribuição grátis e uma mensagem única: "Você tem N pontos para distribuir na árvore da sua evolução". |
 
 ---
 
@@ -164,7 +164,7 @@ O degrau 20 e as skills de especialização mudam de dono assim:
 | 57 | Rajada Arcana | Arcanista (Arcano) |
 | 58 | Golpe Fatal | Assassino (Lâminas) |
 | 59 | Golpe das Sombras | Assassino (Sombras) |
-| 60 | Miasma | Arcanista (Pragas)? Ou Patrulheiro (Armadilhas)? **A decidir no doc do Ladino.** |
+| 60 | Miasma | Patrulheiro (Armadilhas) |
 | 61–63 | Desafio, Vigor e Último Bastião | Bastião |
 | 64–66 | Martelo da Aurora, Bênção do Arauto, Sol Nascente | Paladino |
 | 67–69 | Golpe Rubro, Fúria Cega, Carnificina | Berserker |
@@ -174,7 +174,7 @@ O degrau 20 e as skills de especialização mudam de dono assim:
 | 79–81 | Lâmina Oculta, Instinto Assassino, Sentença | Assassino |
 | 82–84 | Faca de Arremesso, Rede de Caça, Chuva de Lâminas | Patrulheiro |
 
-O Miasma (60) é do Ladino. O Arcanista é do Mago e não pode recebê-lo sem mudar de classe. Sobram duas opções: ir para o Patrulheiro (Armadilhas) ou ficar com o Assassino. **Proposta:** Patrulheiro.
+O Miasma (60) é do Ladino e vai para o **Patrulheiro** (decisão do DIogo em 19/11). O Arcanista não pode recebê-lo, porque é do Mago.
 
 IDs novos entram no fim do iota, a partir do **85**.
 

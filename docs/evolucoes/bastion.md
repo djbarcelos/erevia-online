@@ -1,6 +1,6 @@
 # Bastião (Cavaleiro): Determinação
 
-> **Rascunho para revisão do DIogo.** Os números são propostas ancoradas nas skills de hoje. A calibragem no simulador vem na fase de conteúdo do Cavaleiro, e o resultado volta para este doc. As regras gerais estão no [README](README.md).
+> **Aprovado pelo DIogo em 19/11.** Os números são propostas ancoradas nas skills de hoje. A calibragem no simulador vem na fase de conteúdo do Cavaleiro, e o resultado volta para este doc. As regras gerais estão no [README](README.md).
 
 ## Papel e identidade
 
@@ -126,9 +126,9 @@ Os IDs de 85 em diante são **provisórios** e só são fechados no código. ★
 - **Modificadores** (Postura de Ferro, Égide Compartilhada, Desafio Reforçado, Eco do Escudo): vêm do framework (`EffectiveSkill`).
 - **Novos `PassiveKind`:** `PassiveBlockPct`, `PassiveAllyDamageReduce` (aura) e `PassiveBlockReduce`.
 
-## Perguntas para o DIogo
+## Decisões do DIogo (19/11)
 
-1. O **escudo comum de presente** ao evoluir é necessário? Todo Cavaleiro já começa com escudo.
-2. O **Vigor do Bastião** passa de 3 para 5 ranks com o mesmo máximo (15%). Quem tinha rank 3 cai para 9% até redistribuir, o que é coberto pela redistribuição grátis. Tudo bem?
-3. **Interceptar** (redirecionar 30% do dano de um aliado) entra no 30. Ou é complexo demais e fica para depois do lançamento? Nesse caso, outra ativa simples entra no lugar.
-4. **Meta de tempo para matar:** +50% a +70% da média no 40 está bom para um tanque?
+1. **Escudo de presente:** só para quem evolui sem escudo, nem equipado nem na bolsa. Recebe um escudo comum, uma vez.
+2. **Vigor do Bastião:** passa a ter 5 ranks, com o mesmo máximo de 15%. A redistribuição grátis cobre quem perder valor.
+3. **Interceptar:** entra no marco 30, como está acima.
+4. **Meta de tempo para matar:** de +50% a +70% acima da média no 40.
