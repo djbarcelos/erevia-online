@@ -65,6 +65,7 @@ func (z *Zone) spawnNPCs() {
 	z.spawnGuardian(guardianID) // o Guardião das Sendas (subclass.go)
 	z.spawnTalkers()            // o Arauto e os contadores de história (talk.go), depois do Guardião
 	z.spawnPostNPCs()           // o mercador dos postos (areaevent.go), numa faixa de ids própria
+	z.spawnArenaMaster()        // o Mestre da Arena (arena.go), o último id fixo
 }
 
 // storageKeeper: o Guarda do Armazém, na praça, do lado oeste do poço.

@@ -131,6 +131,7 @@ func run(log *slog.Logger) error {
 		z.SetEventSink(eventStore{st})
 		z.SetRankingBackend(rankingStore{st})
 		z.SetAuctionBackend(auctionStore{st})
+		z.SetArenaBackend(arenaStore{st})
 		done := make(chan struct{})
 		go func() {
 			defer close(done)

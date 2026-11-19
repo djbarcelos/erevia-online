@@ -38,6 +38,7 @@ var chaosActions = []chaosAction{
 	{"encantar", 5, actEnchant},
 	{"cristalizar", 2, actCrystallize},
 	{"canal", 1, actChannel},
+	{"arena", 2, actArena},
 	{"armazem_item", 5, actStorageMove},
 	{"armazem_moedas", 3, actStorageGold},
 	{"troca", 16, actTrade},
@@ -390,6 +391,27 @@ func actEnchant(b *chaosBot, s *chaosSession, r [6]uint64) {
 	m, label := s.enchantMsg(r, -1)
 	s.mu.Unlock()
 	b.emit(s, label, m)
+}
+
+// actArena: abre a janela do Mestre da Arena, entra na fila de um modo ou sai dela (às vezes
+// longe do Mestre, com modo que não existe).
+func actArena(b *chaosBot, s *chaosSession, r [6]uint64) {
+	s.mu.Lock()
+	npc := s.nearestNPC(func(n *npcSeen) bool { return n.role == pb.NpcRole_NPC_ROLE_ARENA })
+	s.mu.Unlock()
+	m := &pb.ArenaCmd{NpcId: npc, Mode: []uint32{1, 3}[pickN(r[2], 2)]}
+	label := ""
+	switch p := pct(r[1]); {
+	case p < 30:
+		m.Kind, label = pb.ArenaCmdKind_ARENA_CMD_OPEN, "arena:abrir"
+	case p < 75:
+		m.Kind, label = pb.ArenaCmdKind_ARENA_CMD_QUEUE, "arena:fila"
+	case p < 92:
+		m.Kind, label = pb.ArenaCmdKind_ARENA_CMD_LEAVE, "arena:sair"
+	default:
+		m.Kind, m.Mode, label = pb.ArenaCmdKind_ARENA_CMD_QUEUE, badU32(badCounts, r[3]), "arena!modo"
+	}
+	b.emit(s, label, &pb.ClientMessage{Msg: &pb.ClientMessage_ArenaCmd{ArenaCmd: m}})
 }
 
 // actChannel: pede a lista de canais ou troca para um (às vezes um que não existe).

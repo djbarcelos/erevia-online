@@ -48,6 +48,9 @@ func (z *Zone) allies(a, b *entity) bool {
 	if a.pl == nil || b.pl == nil {
 		return false
 	}
+	if z.arena != nil { // na arena, só o time (arena.go)
+		return z.arenaAllies(a, b)
+	}
 	if a.pl.party != nil && a.pl.party == b.pl.party {
 		return true
 	}
@@ -65,6 +68,9 @@ func (z *Zone) canHit(a, b *entity, force bool) (ok bool, why string, waitSafe b
 		return !b.mon.unseen(), "", false
 	case b.pl == nil || a.pl == nil:
 		return false, "", false
+	case z.arena != nil: // na arena: só na luta, só no outro time (arena.go)
+		ok, why := z.arenaCanHit(a, b)
+		return ok, why, false
 	case z.allies(a, b):
 		return false, "Você não pode atacar um aliado.", false
 	case a.level < pvpMinLevel:
@@ -96,7 +102,7 @@ func (z *Zone) hostile(a, b *entity, force bool) bool {
 // onPvPHit: um jogador acertou (ou mirou um efeito em) outro. Quem ataca fica em combate,
 // a não ser que o alvo tenha karma (caçar PK é livre).
 func (z *Zone) onPvPHit(src, dst *entity) {
-	if src.pl == nil || dst.pl == nil || src == dst || dst.pl.karma > 0 {
+	if src.pl == nil || dst.pl == nil || src == dst || dst.pl.karma > 0 || z.arena != nil {
 		return
 	}
 	was := z.pvpState(src)

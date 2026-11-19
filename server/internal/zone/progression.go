@@ -65,6 +65,10 @@ func (z *Zone) kill(dead, killer *entity) {
 	}
 
 	z.cancelChannel(dead, "")
+	if z.arena != nil { // na arena não há karma, perda de XP nem itens caídos (arena.go)
+		z.arenaDeath(dead, killer)
+		return
+	}
 
 	// Jogador. Para outro jogador: karma/vitória para quem matou e nenhuma XP perdida
 	// (a não ser por quem tem karma, que perde o dobro e pode deixar itens caírem).

@@ -346,6 +346,11 @@ type Zone struct {
 
 	dg     *dungeonRun // vida da cópia de uma masmorra (nil = zona comum; instance.go)
 	closed atomic.Bool // a cópia fechou: o login não pode mais ir para ela
+
+	// Arena (arena.go): a partida desta cópia (nil = não é a arena) e o banco da pontuação.
+	arena        *arenaRun
+	arenaBackend ArenaBackend
+	arenaJobs    chan arenaJob
 }
 
 // New cria a zona e seus monstros. saves pode ser nil (sem persistência, ex.: testes).
@@ -476,6 +481,7 @@ func (z *Zone) Run(ctx context.Context) {
 	z.goWorker(ctx, "ranking", z.runRankingWorker)
 	z.goWorker(ctx, "event", z.runEventWorker)
 	z.goWorker(ctx, "auction", z.runAuctionWorker)
+	z.goWorker(ctx, "arena", z.runArenaWorker)
 
 	for {
 		select {
@@ -529,6 +535,10 @@ func (z *Zone) handle(e event) {
 		}
 	case respawnEvent:
 		if p := z.players[e.id]; p != nil {
+			if z.arena != nil { // na arena, quem cai volta no fim da partida (arena.go)
+				z.system(p, "Você volta quando a partida acabar.")
+				return
+			}
 			z.respawnPlayer(p)
 		}
 	case itemEvent:
@@ -746,6 +756,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		z.track(p, "session", "start", 0, nil)
 	}
 	z.zonesOnJoin(p) // barramento e grupo entre zonas (gate.go)
+	z.arenaOnJoin(p) // a partida da arena, se esta cópia é uma (arena.go)
 	z.sendChannels(p) // canais do mapa principal (channels.go), já contando com ele
 	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
@@ -866,6 +877,10 @@ func (z *Zone) removePlayer(id uint32) {
 		z.closeTrade(p.pl.trade, p.name+" saiu do jogo: troca cancelada.")
 	}
 	z.pshopClose(p, "") // a loja pessoal só fica aberta com o dono online (pshop.go)
+	z.arenaOnLeave(p)   // saiu no meio da partida: fora (arena.go)
+	if !hop && z.mgr != nil {
+		z.mgr.arena.remove(p.id) // saiu do jogo: o time sai da fila da arena
+	}
 	if !hop {
 		z.partyLeave(p, "")
 	}
@@ -932,6 +947,8 @@ func (z *Zone) update(dt float64) {
 		z.runSystem(sysLeaveTown, z.checkLeaveTown)
 		z.runSystem(sysVisits, z.checkVisits) // lugares das missões (GoalVisit)
 		z.runSystem(sysInstance, z.updateInstance)
+		z.runSystem(sysInstance, z.updateArena)     // a partida da arena (arena.go)
+		z.runSystem(sysInstance, z.arenaMatchmake) // a fila da arena forma partidas (só o mapa principal)
 		z.runSystem(sysTrades, z.checkTrades)
 		z.runSystem(sysTrades, z.checkPrivateShops)
 		z.runSystem(sysXP2, z.updateXP2)

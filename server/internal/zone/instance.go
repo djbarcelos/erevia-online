@@ -1,6 +1,7 @@
 package zone
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
@@ -327,6 +328,14 @@ func (m *Manager) newInstanceLocked(d dungeonDef, key string, leader uint32, now
 	if err != nil {
 		return nil, err
 	}
+	return m.startInstanceLocked(cfg, d.id, key, leader, now)
+}
+
+// startInstanceLocked liga uma cópia já configurada (cfg.Instance = o id; h.mu preso): a
+// masmorra e a arena (arena.go).
+func (m *Manager) startInstanceLocked(cfg Config, dungeon, key string, leader uint32, now time.Time) (*Instance, error) {
+	h := &m.inst
+	id := cfg.Instance
 	cfg.Seed = h.base.Seed + uint64(h.seq)*7919 // cada cópia sorteia o seu
 	log := m.log.With("zone", id)
 	var z *Zone
@@ -336,7 +345,7 @@ func (m *Manager) newInstanceLocked(d dungeonDef, key string, leader uint32, now
 	} else {
 		z = New(cfg, log, nil)
 	}
-	in := &Instance{id: id, dungeon: d.id, zone: z, key: key, leader: leader, created: now, entered: map[uint32]bool{}}
+	in := &Instance{id: id, dungeon: dungeon, zone: z, key: key, leader: leader, created: now, entered: map[uint32]bool{}}
 	z.mgr = m
 	z.dg = &dungeonRun{inst: in, created: now, emptySince: now}
 	h.live[id] = in
@@ -402,6 +411,7 @@ type dungeonRun struct {
 	emptySince time.Time // zero = tem gente
 	warned     bool
 	closing    bool
+	emptyTTL   time.Duration // vazia por esse tempo, fecha (0 = instanceEmptyTTL; a arena fecha logo)
 	closeAt    time.Time
 	reason     string
 	deaths     int
@@ -488,9 +498,9 @@ func (z *Zone) updateInstance() {
 		switch {
 		case age >= instanceMaxAge:
 			z.closeInstance("tempo")
-		case !r.emptySince.IsZero() && now.Sub(r.emptySince) >= instanceEmptyTTL:
+		case !r.emptySince.IsZero() && now.Sub(r.emptySince) >= cmp.Or(r.emptyTTL, instanceEmptyTTL):
 			z.closeInstance("vazia")
-		case !r.warned && age >= instanceMaxAge-instanceWarnBefore && len(z.players) > 0:
+		case !r.warned && age >= instanceMaxAge-instanceWarnBefore && len(z.players) > 0 && z.arena == nil:
 			r.warned = true
 			z.announceAll("As paredes tremem: as Catacumbas desmoronam em 5 minutos. Terminem e saiam.")
 		}
@@ -515,7 +525,7 @@ func (z *Zone) closeInstance(reason string) {
 	z.closed.Store(true) // quem entra de novo (login) já não vem para cá: o Join cai no estado do banco
 	r.closeAt = z.cfg.Clock().Add(instanceCloseGrace)
 	z.mgr.markClosing(r.inst)
-	if len(z.players) > 0 {
+	if len(z.players) > 0 && z.arena == nil {
 		z.announceAll("As Catacumbas desmoronam. Vocês são levados de volta à igreja.")
 	}
 	z.evacuate()
@@ -526,6 +536,14 @@ func (z *Zone) evacuate() {
 	home := z.mgr.Home()
 	exit := dungeonDefs[z.mapID()].exit
 	ids := z.sortedPlayerIDs()
+	if z.arena != nil { // a arena devolve ao lado do Mestre, com vida cheia (arena.go)
+		z.afterFlush(func() {
+			for _, id := range ids {
+				z.arenaSendHome(z.players[id])
+			}
+		})
+		return
+	}
 	z.afterFlush(func() {
 		for _, id := range ids {
 			p := z.players[id]
@@ -548,7 +566,9 @@ func (z *Zone) finishInstance() {
 	if r.bossDown {
 		extra["boss_seconds"] = int64(r.bossAfter.Seconds())
 	}
-	z.track(nil, "dungeon", z.mapID(), int64(now.Sub(r.created).Seconds()), extra)
+	if z.arena == nil { // a arena anota a partida (arena_match) em arena.go
+		z.track(nil, "dungeon", z.mapID(), int64(now.Sub(r.created).Seconds()), extra)
+	}
 	r.closing = false // chamada única
 	z.dg = nil
 	if r.inst.cancel != nil {
