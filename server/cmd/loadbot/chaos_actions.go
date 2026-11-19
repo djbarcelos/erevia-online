@@ -36,6 +36,7 @@ var chaosActions = []chaosAction{
 	{"comprar", 6, actBuy},
 	{"vender", 5, actSell},
 	{"encantar", 5, actEnchant},
+	{"cristalizar", 2, actCrystallize},
 	{"armazem_item", 5, actStorageMove},
 	{"armazem_moedas", 3, actStorageGold},
 	{"troca", 16, actTrade},
@@ -442,6 +443,27 @@ func (s *chaosSession) privateShopMsg(r [6]uint64) (*pb.ClientMessage, string) {
 func actPrivateShop(b *chaosBot, s *chaosSession, r [6]uint64) {
 	s.mu.Lock()
 	m, label := s.privateShopMsg(r)
+	s.mu.Unlock()
+	b.emit(s, label, m)
+}
+
+// crystallizeMsg: cristaliza uma peça da bolsa (às vezes o que não se cristaliza, ou fora da bolsa).
+func (s *chaosSession) crystallizeMsg(r [6]uint64) (*pb.ClientMessage, string) {
+	m := &pb.Crystallize{Slot: s.someBag(r[2], isGear)}
+	label := "cristalizar"
+	switch p := pct(r[1]); {
+	case p < 80:
+	case p < 90:
+		m.Slot, label = s.someBag(r[3], nil), "cristalizar!qualquer"
+	default:
+		m.Slot, label = badU32(badSlots, r[5]), "cristalizar!fora"
+	}
+	return &pb.ClientMessage{Msg: &pb.ClientMessage_Crystallize{Crystallize: m}}, label
+}
+
+func actCrystallize(b *chaosBot, s *chaosSession, r [6]uint64) {
+	s.mu.Lock()
+	m, label := s.crystallizeMsg(r)
 	s.mu.Unlock()
 	b.emit(s, label, m)
 }

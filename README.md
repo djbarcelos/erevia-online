@@ -579,6 +579,9 @@ O servidor anota acontecimentos na tabela `game_events` (gravada em lote, sem tr
 | `v_gold_per_hour` | Ouro ganho e gasto por hora de jogo, por faixa |
 | `v_level_reached` | Funil: quantos chegaram a cada nível e quantos pararam nele |
 | `v_contracts_daily` | Contratos do quadro aceitos e concluídos por dia (Brasília), com as moedas pagas |
+| `v_client_sync` | Dessincronia cliente × servidor por região e faixa de ping (p95): correções da posição prevista do personagem por minuto (> 0,5 m e > 2 m), retomadas pelo servidor, entidades que piscaram (sumiram e voltaram em menos de 1 s) e o ping médio |
+
+**Dessincronia** (`kind = 'client_sync'`, tunnel#122): vem na mesma amostra do FPS (`ClientStats`, a cada ~60 s; `amount` = segundos). O cliente conta em `client/src/net/sync-stats.ts`: as correções saem de `reconcileLocal` (`client/src/world/entities.ts`), as piscadas de `add`/`remove` e o ping do `pong`. Para conferir que a métrica responde, simule latência com um proxy TCP que atrase cada sentido. Num teste andando 80 s pela cidade, a amostra foi de 0 correções/min com ping de 3 ms e de 13 correções/min com 300 ms.
 
 **Masmorras** (`kind = 'dungeon'`, uma linha por cópia ao fechar): `ref` = a masmorra, `amount` = a duração em segundos e `extra` = mortes (`deaths`), jogadores que entraram (`players`), se o chefe caiu (`boss_down`) e em quantos segundos (`boss_seconds`), baús abertos (`chests`) e o motivo do fim (`reason`: `vazia` ou `tempo`). Por jogador: `dungeon_chest` (o baú do dia, `amount` = moedas) e `dungeon_stairs`. Exemplo: `SELECT date_trunc('day', at) AS dia, count(*) AS copias, avg(amount)::int AS seg, sum((extra->>'deaths')::int) AS mortes FROM game_events WHERE kind = 'dungeon' GROUP BY 1 ORDER BY 1 DESC;`
 

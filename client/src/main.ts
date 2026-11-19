@@ -600,7 +600,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     }
   };
   const stickTimer = window.setInterval(stepStick, 150);
-  const stopPerf = startPerfSampler(() => world.engine.getFps(), (avg, low, device, secs) => conn.clientStats(avg, low, device, secs));
+  const stopPerf = startPerfSampler(() => world.engine.getFps(), (avg, low, device, secs, sync) => conn.clientStats(avg, low, device, secs, sync));
   const keysHeld = new Set<string>();
   const keyStick = () => {
     const x = (keysHeld.has("KeyD") ? 1 : 0) - (keysHeld.has("KeyA") ? 1 : 0);
@@ -1145,6 +1145,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
           return true;
         },
         enchant: (scroll, place, slot) => conn.enchant(scroll, place, slot),
+        crystallize: (slot) => conn.crystallize(slot),
+        gold: () => store.gold,
         storageOpen: () => storageWin.isOpen,
         tradeOpen: () => tradeWin.isOpen,
         offer: (bagSlot) => conn.tradeCmd(TradeCmdKind.TRADE_CMD_ADD_ITEM, { slot: bagSlot }),

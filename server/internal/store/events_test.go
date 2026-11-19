@@ -21,6 +21,8 @@ func TestInsertEventsAndDashboardViews(t *testing.T) {
 		{At: now, Kind: "death", CharacterID: 1, X: 60, Z: 0, Ref: "monster:skeleton_minion", Level: 3},
 		{At: now, Kind: "fps", CharacterID: 1, X: 0, Z: 0, Amount: 58, Extra: map[string]any{"fps_low": 41, "device": "desktop mac"}},
 		{At: now, Kind: "item_in", CharacterID: 1, Ref: "ring_rare", Amount: 1, Extra: map[string]any{"how": "craft"}},
+		{At: now, Kind: "client_sync", CharacterID: 1, X: 60, Z: 0, Amount: 60, Extra: map[string]any{
+			"corrections": 6, "corrections_big": 1, "resyncs": 0, "flickers": 2, "ping_avg": 150, "ping_p95": 250}},
 	}
 	if err := s.InsertEvents(ctx, evs); err != nil {
 		t.Fatal(err)
@@ -32,6 +34,7 @@ func TestInsertEventsAndDashboardViews(t *testing.T) {
 		"v_fps":              "SELECT count(*) FROM v_fps WHERE regiao = 'Cidade' AND fps_medio = 58",
 		"v_items_daily":      "SELECT count(*) FROM v_items_daily WHERE item = 'ring_rare' AND como = 'craft'",
 		"v_quit_level":       "SELECT count(*) + 1 FROM v_quit_level",
+		"v_client_sync":      "SELECT count(*) FROM v_client_sync WHERE regiao = 'Arredores' AND ping = '200–399 ms' AND correcoes_min = 6 AND piscadas_min = 2",
 	}
 	for name, q := range checks {
 		var n int

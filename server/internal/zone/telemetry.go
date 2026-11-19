@@ -151,6 +151,27 @@ func (z *Zone) onClientStats(p *entity, m *pb.ClientStats) {
 	}
 	dev := cleanText(m.Device, 40)
 	z.track(p, "fps", "", int64(m.FpsAvg+0.5), map[string]any{"fps_low": m.FpsLow, "device": dev, "seconds": m.Seconds})
+	z.trackClientSync(p, m, dev)
+}
+
+// maxSyncPerSample: teto de cada contador numa amostra (um cliente bugado ou malicioso não
+// infla a média da região).
+const maxSyncPerSample = 10_000
+
+// trackClientSync: kind "client_sync" (tunnel#122), a dessincronia da mesma amostra do FPS:
+// amount = segundos; extra = correções da posição prevista do jogador local (> 0,5 m e
+// > 2 m), retomadas pelo servidor, entidades que piscaram e o ping médio e p95 (ms). A view
+// v_client_sync (migração 00060) junta por região e faixa de ping.
+func (z *Zone) trackClientSync(p *entity, m *pb.ClientStats, dev string) {
+	// Sem ping medido (cliente antigo ou amostra vazia), não há dessincronia para gravar.
+	if m.Seconds == 0 || !(m.PingAvg > 0 && m.PingAvg < 60_000) || !(m.PingP95 >= 0 && m.PingP95 < 60_000) {
+		return
+	}
+	c := func(v uint32) uint32 { return min(v, maxSyncPerSample) }
+	z.track(p, "client_sync", "", int64(m.Seconds), map[string]any{
+		"corrections": c(m.Corrections), "corrections_big": c(m.CorrectionsBig), "resyncs": c(m.Resyncs),
+		"flickers": c(m.Flickers), "ping_avg": m.PingAvg, "ping_p95": m.PingP95, "device": dev,
+	})
 }
 
 // trackClassSwitch: kind "class_switch", troca da classe ativa (ref = a classe nova,

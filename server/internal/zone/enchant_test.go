@@ -14,6 +14,7 @@ func enchantSetup(t *testing.T) (*Zone, *entity, *fakePeer) {
 	p.pl.inv.add(item("scroll_ench_weapon"), 200)
 	p.pl.inv.add(item("scroll_ench_armor"), 5)
 	p.pl.inv.add(item("scroll_ench_weapon_b"), 50)
+	p.pl.inv.gold = 10_000_000 // a taxa de encantar (game.EnchantFee)
 	if p.pl.inv.equip[game.SlotWeapon].empty() {
 		t.Fatal("the starter kit should have a weapon equipped")
 	}

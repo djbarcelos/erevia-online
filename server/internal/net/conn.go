@@ -256,6 +256,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			z.ItemAction(ctx, id, m.StorageGold)
 		case *pb.ClientMessage_Enchant:
 			z.ItemAction(ctx, id, m.Enchant)
+		case *pb.ClientMessage_Crystallize:
+			z.ItemAction(ctx, id, m.Crystallize)
 		case *pb.ClientMessage_ChangeLook:
 			z.ItemAction(ctx, id, m.ChangeLook)
 		case *pb.ClientMessage_PartyCmd:

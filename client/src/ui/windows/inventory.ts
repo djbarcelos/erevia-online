@@ -12,8 +12,10 @@ import { beginDrag } from "../dragdrop";
 import {
   buildItemTip,
   canEnchantWith,
+  crystalYield,
   enchantChance,
   enchantedName,
+  enchantFee,
   enchantMax,
   enchantSafe,
   EQUIP_SLOTS,
@@ -22,7 +24,9 @@ import {
   itemIcon,
   PLACE_BAG,
   PLACE_EQUIP,
+  scrollFits,
   SLOT,
+  TIER_LETTER,
   type ItemStore,
   type Stack,
 } from "../items";
@@ -45,6 +49,10 @@ export interface InventoryDeps {
   shopOpen(): boolean;
   /** Usa o pergaminho de encantar (na bolsa) num item. */
   enchant(scrollSlot: number, place: number, slot: number): void;
+  /** Cristaliza a peça da bolsa (grau D ou maior vira cristais do grau). */
+  crystallize(slot: number): void;
+  /** Moedas do personagem (a taxa de encantar). */
+  gold(): number;
   /** Armazém aberto: guardar um item da bolsa (toSlot 255 = onde couber). */
   storageOpen(): boolean;
   deposit(bagSlot: number, toSlot: number): void;
@@ -177,18 +185,29 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
       toast(scroll.info.scroll === ScrollKind.ENCHANT_WEAPON ? "Este pergaminho só encanta armas." : "Este pergaminho não encanta armas nem itens que empilham.", "warn");
       return;
     }
+    if (!scrollFits(scroll.info, s.info)) {
+      const t = TIER_LETTER[s.info.tier];
+      toast(`Este pergaminho é do grau ${TIER_LETTER[scroll.info.scrollTier] ?? "?"}; ${s.info.name} ${t ? `é do grau ${t}` : "não tem grau"}.`, "warn");
+      return;
+    }
     if (s.enchant >= enchantMax()) {
       toast(`${s.info.name} já está no máximo (+${enchantMax()}).`, "warn");
       return stopPicking();
     }
     const next = s.enchant + 1;
-    const chance = Math.round(enchantChance(next) * 100);
+    const chance = Math.round(enchantChance(next, s.info.tier) * 100);
+    const fee = enchantFee(next, s.info.tier);
+    if (fee > d.gold()) {
+      toast(`Encantar a +${next} custa ${fmt.format(fee)} moedas.`, "warn");
+      return stopPicking();
+    }
     const risk = next <= enchantSafe() ? "seguro" : scroll.info.blessed ? "se falhar, volta a +0" : "se falhar, o item quebra";
     const scrollSlot = picking;
     stopPicking();
+    const cost = fee > 0 ? ` · ${fmt.format(fee)} moedas` : "";
     contextMenu(
       [
-        { label: `Encantar ${enchantedName(s.info, s.enchant)} → +${next} (${chance}% · ${risk})`, danger: next > enchantSafe() && !scroll.info.blessed, run: () => d.enchant(scrollSlot, l.place, l.slot) },
+        { label: `Encantar ${enchantedName(s.info, s.enchant)} → +${next} (${chance}% · ${risk}${cost})`, danger: next > enchantSafe() && !scroll.info.blessed, run: () => d.enchant(scrollSlot, l.place, l.slot) },
         { label: "Cancelar", run: () => undefined },
       ],
       x + 12,
@@ -211,9 +230,23 @@ export function buildInventory(d: InventoryDeps): HTMLElement {
       if (d.tradeOpen()) list.push({ label: "Oferecer na troca", run: () => d.offer(l.slot) });
       else if (s.info.kind !== ItemKind.GOLD) list.push({ label: "Vender na loja pessoal…", run: () => d.toPrivateShop(l.slot) });
       if (d.shopOpen() && s.info.sellPrice > 0) list.push({ label: `Vender (${fmt.format(s.info.sellPrice * s.count)} moedas)`, run: () => d.sell(l.slot) });
+      if (crystalYield(s.info, s.enchant) > 0) list.push({ label: "Cristalizar…", danger: true, run: () => confirmCrystallize(l, s) });
       list.push({ label: "Destruir…", danger: true, run: () => confirmDestroy(l, s) });
     }
     return list;
+  };
+
+  const confirmCrystallize = (l: Loc, s: Stack) => {
+    const r = bagEls[l.slot]?.getBoundingClientRect();
+    const n = crystalYield(s.info, s.enchant);
+    contextMenu(
+      [
+        { label: `Cristalizar ${enchantedName(s.info, s.enchant)} em ${n}× Cristal ${TIER_LETTER[s.info.tier] ?? ""}`, danger: true, run: () => d.crystallize(l.slot) },
+        { label: "Cancelar", run: () => undefined },
+      ],
+      (r?.left ?? innerWidth / 2) + 20,
+      (r?.top ?? innerHeight / 2) + 20,
+    );
   };
 
   const confirmDestroy = (l: Loc, s: Stack) => {

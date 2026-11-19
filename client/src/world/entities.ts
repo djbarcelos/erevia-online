@@ -13,6 +13,7 @@ import {
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Rectangle, StackPanel, TextBlock } from "@babylonjs/gui";
 import { classInfo } from "../classes";
+import { noteCorrection, noteDespawn, noteResync, noteSpawn } from "../net/sync-stats";
 import {
   Effect,
   EmoteKind,
@@ -272,6 +273,8 @@ interface View extends EntityInfo {
   anim: AnimController | null;
   /** Malhas do modelo (para sombra e teste de visibilidade). */
   meshes: AbstractMesh[];
+  /** Para as invariantes: sem malha porque o modelo ainda baixa (atualizado em forEachProbe). */
+  awaitingModel: boolean;
   castsShadow: boolean;
   label: Rectangle;
   nameText: TextBlock;
@@ -587,6 +590,7 @@ export class EntityManager {
   /** fade: monstro que acabou de nascer aparece aos poucos. */
   add(e: Entity, fade = false): void {
     if (this.views.has(e.id)) return;
+    noteSpawn(e.id); // dessincronia: sumiu e voltou em menos de 1 s (tunnel#122)
     const isLocal = e.id === this.localId;
     if (isLocal) this.resetLocalPrediction();
     const scale = e.scale > 0 ? e.scale : 1;
@@ -709,7 +713,7 @@ export class EntityManager {
       px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
-      root, visual, head, ferryBoat, capsule: null, model3d: null, anim: null, meshes: [], castsShadow: false,
+      root, visual, head, ferryBoat, capsule: null, model3d: null, anim: null, meshes: [], awaitingModel: false, castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
       impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, greetUntil: 0, fightAt: 0, hand: undefined,
       bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
@@ -886,6 +890,7 @@ export class EntityManager {
   remove(id: number): void {
     const v = this.views.get(id);
     if (!v) return;
+    noteDespawn(id);
     this.setShadow(v, false);
     if (this.targetId === id) this.setTarget(0);
     if (this.selectRing.parent === v.root) this.selectRing.parent = null;
@@ -1011,7 +1016,9 @@ export class EntityManager {
     const ex = s.x - past.x;
     const ez = s.z - past.z;
     const err = Math.hypot(ex, ez);
+    noteCorrection(err); // dessincronia (tunnel#122): só conta acima de 0,5 m
     if (err > LOCAL_SNAP) {
+      noteResync();
       this.localDriven = false;
       return false;
     }
@@ -1887,7 +1894,10 @@ export class EntityManager {
 
   /** Todas as entidades, para as invariantes do cliente (net/invariants.ts, 1×/s). */
   forEachProbe(cb: (e: EntityProbe) => void): void {
-    for (const v of this.views.values()) cb(v);
+    for (const v of this.views.values()) {
+      v.awaitingModel = !v.model3d && !v.capsule && (this.capsulesHeld || this.lazyWaits.has(v.id));
+      cb(v);
+    }
   }
 
   /** Nó raiz de cada entidade (medição de FPS, ?bench=1: separa o que é cenário do que é entidade). */

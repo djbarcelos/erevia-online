@@ -1,4 +1,5 @@
 import { create, fromBinary, toBinary, type MessageInitShape } from "@bufbuild/protobuf";
+import { notePing, type SyncSample } from "./sync-stats";
 import {
   AchievementCmdKind,
   ChatChannel,
@@ -61,6 +62,7 @@ export class Connection {
       }
       if (msg.msg.case === "pong") {
         this.ping = Math.round(performance.now() - msg.msg.value.clientTime);
+        notePing(this.ping);
         return;
       }
       this.onMessage(msg);
@@ -132,6 +134,11 @@ export class Connection {
     this.send({ case: "enchant", value: { scrollSlot, place, slot } });
   }
 
+  /** Cristaliza a peça da bolsa (tunnel#154). */
+  crystallize(slot: number): void {
+    this.send({ case: "crystallize", value: { slot } });
+  }
+
   /** Armazém: mover entre bolsa (0) e armazém (2); count 0 = a pilha toda. */
   storageMove(npcId: number, fromPlace: number, fromSlot: number, toPlace: number, toSlot: number, count: number): void {
     this.send({ case: "storageMove", value: { npcId, fromPlace, fromSlot, toPlace, toSlot, count } });
@@ -194,8 +201,8 @@ export class Connection {
   }
 
   /** Telemetria: amostra de FPS (a cada ~60 s). */
-  clientStats(fpsAvg: number, fpsLow: number, device: string, seconds: number): void {
-    this.send({ case: "clientStats", value: { fpsAvg, fpsLow, device, seconds } });
+  clientStats(fpsAvg: number, fpsLow: number, device: string, seconds: number, sync?: SyncSample): void {
+    this.send({ case: "clientStats", value: { fpsAvg, fpsLow, device, seconds, ...sync } });
   }
 
   /** Pede o ranking (a janela Glória, quando abre e o que tem guardado está velho). */
