@@ -1,3 +1,4 @@
+import { HERO_FISTS, type FistFrame } from "./hero-fists";
 import "@babylonjs/loaders/glTF";
 import {
   AbstractMesh,
@@ -261,19 +262,27 @@ export interface Grip {
   /** Mão em que os números foram calibrados (padrão: direita). Na outra mão a pega é espelhada. */
   hand?: "r" | "l";
   /** Pega calibrada na outra mão (os ossos das duas mãos do Meshy não são espelhos exatos); sem ela, espelha. */
-  other?: { rot: [number, number, number]; pos: [number, number, number] };
+  other?: { rot: [number, number, number]; pos: [number, number, number]; q?: [number, number, number, number] };
+  /** Rotação como quatérnio (x, y, z, w), no lugar de `rot`. */
+  q?: [number, number, number, number];
+  /**
+   * Cabo dentro do punho fechado dos heróis (HERO_FISTS, medido por scripts/make-remaster-fists.mjs): a pega
+   * vem do punho de cada modelo e de cada mão, sem calibrar. `slide` corre a arma ao longo do cabo (positivo
+   * = a mão mais perto da ponta, para cajados), e `rot`/`pos`/`q` ficam só para os modelos sem punho.
+   */
+  fist?: { slide?: number; /** Inclina o cabo para o lado do braço (graus): o cajado sai em diagonal para cima. */ tilt?: number };
 }
 /** Inverso da rotação dos encaixes (0,5 0,5 0,5 0,5): com ele a arma fica no eixo do osso da mão (X lateral, Y ao longo do braço, Z para a frente). */
 const SLOT_INV = new Quaternion(-0.5, -0.5, -0.5, 0.5);
-const BLADE: Grip = { rot: [125, 0, 20], pos: [0, 0, 0], scale: 1.2 };
+const BLADE: Grip = { rot: [125, 0, 20], pos: [0, 0, 0], scale: 1.2, fist: {} };
 const SHIELD: Grip = { rot: [0, 20, 0], pos: [-0.02, -0.45, 0.12], hand: "l" };
 export const WEAPON_GRIPS: Record<string, Grip> = {
   sword_1handed: BLADE, axe_1handed: BLADE, wand: BLADE,
   // adaga: o cabo na palma (a mão do rig fica aberta, sem dedos); a esquerda tem pega própria
-  dagger: { rot: [125, 0, 20], pos: [0, 0.2, 0], other: { rot: [90, 0, 20], pos: [0, 0.2, 0] } },
+  dagger: { rot: [125, 0, 20], pos: [0, 0.2, 0], other: { rot: [90, 0, 20], pos: [0, 0.2, 0] }, fist: {} },
   // Duas mãos: maiores que o normal (guia de arte, seção 2), na mão direita com a lâmina sobre o ombro.
   sword_2handed: { ...BLADE, scale: 1.3 }, sword_2handed_color: { ...BLADE, scale: 1.3 }, axe_2handed: { ...BLADE, scale: 1.3 },
-  staff: { rot: [135, 0, 5], pos: [0, 0.35, 0], scale: 1.4 },
+  staff: { rot: [135, 0, 5], pos: [0, 0.35, 0], scale: 1.4, fist: { slide: 0.2, tilt: 60 } },
   shield_badge_color: SHIELD, shield_round_barbarian: SHIELD, shield_square: SHIELD, shield_spikes: SHIELD,
   shield_spikes_color: SHIELD,
 };
@@ -835,13 +844,27 @@ export class CharacterModels {
         child.parent = hand as TransformNode;
         child.position = Vector3.Zero();
         const grip = assets.remaster ? WEAPON_GRIPS[this.weaponFileOf.get(container) ?? ""] : undefined;
-        if (grip) {
+        const fist = grip?.fist ? HERO_FISTS[model]?.[slot === "handslot.l" ? "l" : "r"] : undefined;
+        if (grip && fist) {
+          // Punho fechado: o cabo (Y da arma) segue o eixo do punho e o fio (X) acompanha os dedos.
+          const a0 = Vector3.FromArray(fist.axis), f0 = Vector3.FromArray(fist.fingers).scale(-1);
+          const tl = ((grip.fist?.tilt ?? 0) * Math.PI) / 180;
+          const ax = a0.scale(Math.cos(tl)).addInPlace(f0.scale(Math.sin(tl)));
+          const fx = f0.scale(Math.cos(tl)).subtractInPlace(a0.scale(Math.sin(tl)));
+          const z = Vector3.Cross(fx, ax);
+          const q = Quaternion.FromRotationMatrix(Matrix.FromValues(fx.x, fx.y, fx.z, 0, ax.x, ax.y, ax.z, 0, z.x, z.y, z.z, 0, 0, 0, 0, 1));
+          child.rotationQuaternion = SLOT_INV.multiply(q).multiply(child.rotationQuaternion ?? Quaternion.Identity());
+          Vector3.FromArray(fist.pos).addInPlace(ax.scale(grip.fist?.slide ?? 0)).rotateByQuaternionToRef(SLOT_INV, child.position);
+          if (grip.scale) child.scaling.scaleInPlace(grip.scale);
+        } else if (grip) {
           const d = Math.PI / 180;
           // Rotação e deslocamento no eixo do osso da mão (o encaixe é desfeito antes).
           const swapped = (grip.hand ?? "r") !== (slot === "handslot.l" ? "l" : "r");
           const mirror = swapped && !grip.other ? -1 : 1;
           const use = swapped && grip.other ? grip.other : grip;
-          const q = Quaternion.FromEulerAngles(use.rot[0] * d, use.rot[1] * d * mirror, use.rot[2] * d * mirror);
+          const q = use.q
+            ? new Quaternion(use.q[0], use.q[1] * mirror, use.q[2] * mirror, use.q[3])
+            : Quaternion.FromEulerAngles(use.rot[0] * d, use.rot[1] * d * mirror, use.rot[2] * d * mirror);
           child.rotationQuaternion = SLOT_INV.multiply(q).multiply(child.rotationQuaternion ?? Quaternion.Identity());
           new Vector3(use.pos[0] * mirror, use.pos[1], use.pos[2]).rotateByQuaternionToRef(SLOT_INV, child.position);
           if (grip.scale) child.scaling.scaleInPlace(grip.scale);
@@ -995,7 +1018,7 @@ export class CharacterModels {
     const aimObs =
       assets.remaster && handR && handL
         ? gltfRoot.getScene().onAfterAnimationsObservable.add(() => {
-            if (!disposed && twoWeapon) aimTwoHand(handR, handL, twoWeapon);
+            if (!disposed && twoWeapon) aimTwoHand(handR, handL, twoWeapon, HERO_FISTS[model]);
           })
         : null;
 
@@ -1119,15 +1142,18 @@ export class CharacterModels {
  * para ficar na linha que vai da mão esquerda à direita, com a esquerda perto do pé do cabo; o giro em torno
  * do cabo vem da pega calibrada (WEAPON_GRIPS), então só a direção do cabo muda.
  */
-function aimTwoHand(handR: TransformNode, handL: TransformNode, weapon: TransformNode): void {
+function aimTwoHand(handR: TransformNode, handL: TransformNode, weapon: TransformNode, fists?: { r?: FistFrame; l?: FistFrame }): void {
   const chain = (n: TransformNode): TransformNode[] => {
     const out: TransformNode[] = [];
     for (let p: Node | null = n; p; p = p.parent) if (p instanceof TransformNode) out.unshift(p);
     return out;
   };
   for (const n of [...chain(handR), ...chain(handL), ...chain(weapon)]) n.computeWorldMatrix(true);
-  const pr = handR.getAbsolutePosition();
-  const pl = handL.getAbsolutePosition();
+  // Com as mãos fechadas, o cabo passa pelo centro de cada punho (não pela palma).
+  const grab = (hand: TransformNode, f?: FistFrame) =>
+    f ? Vector3.TransformCoordinates(Vector3.FromArray(f.pos).rotateByQuaternionToRef(SLOT_INV, new Vector3()), hand.getWorldMatrix()) : hand.getAbsolutePosition();
+  const pr = grab(handR, fists?.r);
+  const pl = grab(handL, fists?.l);
   const along = pr.subtract(pl);
   const dist = along.length();
   if (dist < 0.04) return;
