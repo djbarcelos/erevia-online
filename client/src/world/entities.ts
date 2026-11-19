@@ -83,6 +83,8 @@ const ANIM_FAR_DISTANCE = 90;
 const ANIM_FAR_STEP = 1 / 15;
 /** Só personagens até esta distância do jogador projetam sombra. */
 const SHADOW_DISTANCE = 35;
+/** Folga (m) em volta da distância de visão: quem está na borda não pisca ao andar. */
+const VIEW_SLACK = 3;
 const BONE_COLOR = "#d9d2c0";
 /** Ids dos golpes de área do raid boss nos CombatEvent (zone/raid.go: RaidHitWave…). */
 export const RAID_HIT_BASE = 9001;
@@ -258,6 +260,8 @@ interface View extends EntityInfo {
   walking: boolean;
   /** Tempo (s) desde a última vez que a animação rodou, para animar a 15 Hz quem anda longe (ANIM_FAR_DISTANCE). */
   animAcc: number;
+  /** Além da distância de visão (Configurações → Gráficos): nó desligado, sem desenho, nome nem animação. */
+  culled: boolean;
   /** Loja pessoal: quando a placa apareceu (ms; 0 = sem loja). Senta e congela a pose. */
   shopSince: number;
   /** Posição do servidor, extrapolada localmente em direção ao destino. */
@@ -723,7 +727,7 @@ export class EntityManager {
       model: e.model, boss: e.boss, rare: e.rare, role: e.role?.archetype, neutral: e.role?.neutral, neutralByDay: e.role?.neutralByDay, scale, speed: e.speed, weapon: e.weapon, offhand: e.offhand, grade: e.weaponGrade, armor: toArmorGrades(e.armor), emblem, look: toBodyLook(e.look),
       weaponEnchant: e.weaponEnchant, pvpState: e.pvpState, clanName: e.clanName, spec: e.spec, cls: e.activeClass || e.model, baseColor, clanText, titleText, pkRing: null,
       shopTitle: e.shopTitle, shopSince: e.shopTitle ? performance.now() : 0,
-      px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0,
+      px: e.x, pz: e.z, vis: 0, walking: false, animAcc: 0, culled: false,
       server: { x: e.x, z: e.z },
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, ferryBoat, capsule: null, model3d: null, anim: null, meshes: [], awaitingModel: false, castsShadow: false,
@@ -1754,14 +1758,24 @@ export class EntityManager {
     const me = this.local?.root.position;
     const cam = this.scene.activeCamera?.position;
     const planes = this.scene.frustumPlanes;
+    const view = settings.get().viewDistance;
     for (const v of this.views.values()) {
       const always = v.id === this.localId || v.id === this.targetId;
       // Vendedor da loja pessoal (tunnel#161): sem sombra e, depois de sentar, pose parada.
       const vendor = v.shopSince > 0 && !always;
       if (me) {
         const d = Math.hypot(v.root.position.x - me.x, v.root.position.z - me.z);
-        v.label.isVisible = d < LABEL_DISTANCE || always;
-        this.setShadow(v, !vendor && (d < SHADOW_DISTANCE || always));
+        // Distância de visão: jogadores e monstros além dela somem (a névoa de render.ts
+        // esconde a borda). Ficam sempre: você, o alvo, o grupo e os chefes; NPCs e objetos
+        // (pedras, barco) são do cenário e ficam também.
+        const cullable = !always && !v.boss && (v.kind === EntityKind.PLAYER || v.kind === EntityKind.MONSTER) && !this.partyIds.has(v.id);
+        const culled = cullable && d > view + (v.culled ? -VIEW_SLACK : VIEW_SLACK);
+        if (culled !== v.culled) {
+          v.culled = culled;
+          v.root.setEnabled(!culled);
+        }
+        v.label.isVisible = !culled && (d < LABEL_DISTANCE || always);
+        this.setShadow(v, !culled && !vendor && (d < SHADOW_DISTANCE || always));
       }
       // Extrapola a posição do servidor (mesma regra de movimento do Go).
       const dx = v.target.x - v.server.x;
@@ -1822,7 +1836,7 @@ export class EntityManager {
       if (v.anim) {
         // LOD de animação: quem está fora da tela ou longe não tem os ossos recalculados.
         let active = always;
-        if (!active) {
+        if (!active && !v.culled) {
           const d2 = cam ? Vector3.DistanceSquared(cam, pos) : 0;
           const near = d2 < ANIM_DISTANCE * ANIM_DISTANCE;
           const far = !near && v.walking && d2 < ANIM_FAR_DISTANCE * ANIM_FAR_DISTANCE;

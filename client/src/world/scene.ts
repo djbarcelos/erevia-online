@@ -17,6 +17,7 @@ import {
   WebGPUEngine,
 } from "@babylonjs/core";
 import { AdvancedDynamicTexture } from "@babylonjs/gui";
+import { settings, type Settings } from "../ui/kit";
 import { addGroundDetail } from "./ground";
 import { paintTerrain, projection } from "./map-painter";
 import { registerPaletteMaterial } from "./palette-material";
@@ -257,12 +258,34 @@ export async function createWorldScene(canvas: HTMLCanvasElement, world: WorldDa
 
 async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractEngine> {
   const wantWebGPU = new URLSearchParams(location.search).has("webgpu");
+  let engine: AbstractEngine;
   if (wantWebGPU && (await WebGPUEngine.IsSupportedAsync)) {
     const gpu = new WebGPUEngine(canvas, { antialias: true });
     await gpu.initAsync();
-    return gpu;
+    engine = gpu;
+  } else {
+    engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
   }
-  return new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
+  applyFpsLimit(engine);
+  return engine;
+}
+
+/**
+ * Limite de FPS (Configurações → Gráficos). O próprio Babylon pula o quadro inteiro
+ * (beginFrame/endFrame) quando ainda não deu o tempo, então o getFps e o delta das
+ * animações contam só os quadros desenhados. "0" = sem limite (a taxa da tela).
+ * No ?bench=1 fica sem limite: a medição compara o máximo de cada variante.
+ */
+function applyFpsLimit(engine: AbstractEngine): void {
+  if (new URLSearchParams(location.search).has("bench")) return;
+  const apply = (s: Settings) => {
+    const n = Number(s.fpsLimit);
+    const want = n > 0 ? n : undefined;
+    if (engine.maxFPS !== want) engine.maxFPS = want;
+  };
+  apply(settings.get());
+  // Um engine só por página (troca de mapa reusa): a inscrição dura a página toda.
+  settings.on(apply);
 }
 
 /**

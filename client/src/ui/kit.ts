@@ -107,6 +107,8 @@ export interface Settings {
   /** Auto-caça: atacar também os monstros neutros (os que só atacam quem bate neles). */
   autoNeutral: boolean;
   keys: Record<string, string>;
+  /** Versão dos gráficos salvos (ver loadSettings: a distância e o FPS só passaram a valer na 2). */
+  gfx?: number;
 }
 
 export const DEFAULT_KEYS: Record<string, string> = {
@@ -129,29 +131,62 @@ export const DEFAULT_KEYS: Record<string, string> = {
 export type Quality = "baixa" | "media" | "alta";
 export const QUALITIES: readonly Quality[] = ["baixa", "media", "alta"];
 
+/** Celular ou tablet (pelo navegador), para os padrões de qualidade e de FPS. */
+export function isMobileDevice(): boolean {
+  const nav = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  return (
+    nav.userAgentData?.mobile === true ||
+    /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent) ||
+    (coarse.matches && nav.maxTouchPoints > 0)
+  );
+}
+
+/** O que o preset sugere para Sombras, Distância de visão e Limite de FPS (o jogador muda depois). */
+export type PresetDefaults = Pick<Settings, "shadows" | "viewDistance" | "fpsLimit">;
+
+/**
+ * Valores que cada preset coloca ao ser escolhido. No celular o FPS fica limitado (bateria e
+ * calor); no computador o médio e o alto vão até a taxa da tela, como antes do limite existir.
+ */
+export function presetDefaults(q: Quality): PresetDefaults {
+  const mobile = isMobileDevice();
+  switch (q) {
+    case "baixa":
+      return { shadows: false, viewDistance: 50, fpsLimit: mobile ? "30" : "60" };
+    case "media":
+      return { shadows: true, viewDistance: 70, fpsLimit: mobile ? "60" : "0" };
+    default:
+      return { shadows: true, viewDistance: 100, fpsLimit: mobile ? "60" : "0" };
+  }
+}
+
+/** Sombras, distância e FPS diferentes do que o preset sugere ("personalizada"). */
+export function isCustomized(s: Settings): boolean {
+  const d = presetDefaults(s.quality);
+  return s.shadows !== d.shadows || s.viewDistance !== d.viewDistance || s.fpsLimit !== d.fpsLimit;
+}
+
 /**
  * Preset da primeira vez, pelo aparelho: computador → alta; celular e tablet → média só
  * nos aparelhos com bastante memória e núcleos (o navegador informa), senão baixa. A meta
  * é 30 FPS estáveis num celular médio; o jogador pode subir em Configurações → Gráficos.
  */
 export function detectQuality(): Quality {
-  const nav = navigator as Navigator & { deviceMemory?: number; userAgentData?: { mobile?: boolean } };
-  const mobile =
-    nav.userAgentData?.mobile === true ||
-    /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent) ||
-    (coarse.matches && nav.maxTouchPoints > 0);
-  if (!mobile) return "alta";
+  if (!isMobileDevice()) return "alta";
+  const nav = navigator as Navigator & { deviceMemory?: number };
   const mem = nav.deviceMemory ?? 4;
   const cores = nav.hardwareConcurrency ?? 4;
   return mem >= 6 && cores >= 8 ? "media" : "baixa";
 }
 
+/** Versão dos gráficos salvos (loadSettings). */
+const GFX_VERSION = 2;
+const DETECTED_QUALITY = detectQuality();
+
 const DEFAULT_SETTINGS: Settings = {
-  quality: detectQuality(),
+  quality: DETECTED_QUALITY,
   qualityPicked: false,
-  shadows: true,
-  viewDistance: 70,
-  fpsLimit: "60",
+  ...presetDefaults(DETECTED_QUALITY),
   uiScale: 100,
   vMaster: 80,
   vMusic: 55,
@@ -176,6 +211,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoLoot: true,
   autoNeutral: false,
   keys: { ...DEFAULT_KEYS },
+  gfx: GFX_VERSION,
 };
 
 const SETTINGS_KEY = "erevia.settings";
@@ -190,6 +226,14 @@ function loadSettings(): Settings {
       // escolheu segue o aparelho; um preset que não existe mais vira o mais alto.
       if (!v.qualityPicked) v.quality = DEFAULT_SETTINGS.quality;
       else if (!QUALITIES.includes(v.quality)) v.quality = "alta";
+      // Antes da versão 2 a distância de visão e o limite de FPS não faziam nada: o que está
+      // salvo é o padrão antigo (70 m, "60"), não uma escolha. Passam a seguir o preset.
+      if ((s.gfx ?? 1) < GFX_VERSION) {
+        const d = presetDefaults(v.quality);
+        v.viewDistance = d.viewDistance;
+        v.fpsLimit = d.fpsLimit;
+      }
+      v.gfx = GFX_VERSION;
       return v;
     }
   } catch {

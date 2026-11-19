@@ -119,6 +119,7 @@ export function buildBugContext(d: BugDeps): Record<string, unknown> {
       quality: s.quality,
       shadows: s.shadows,
       viewDistance: s.viewDistance,
+      fpsLimit: s.fpsLimit,
     },
     players: d.players(),
     invariants: brokenInvariants(),

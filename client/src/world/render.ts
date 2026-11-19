@@ -145,6 +145,28 @@ const NIGHT_SHADE = Color3.FromHexString("#262a4a");
 const MOON_LIGHT = Color3.FromHexString("#a6baff");
 const GOLDEN_LIGHT = Color3.FromHexString("#ff9a5a");
 
+/**
+ * Distância de visão de referência (m): o padrão do médio e o raio em que o servidor manda
+ * jogadores e monstros (aoiRadius). Nela a névoa fica como a da hora e da região.
+ */
+const VIEW_REF = 70;
+/**
+ * Névoa mínima abaixo da referência: densidade × distância. Com 0,6 a névoa EXP2 cobre ~30%
+ * na borda (exp(-0,6²) ≈ 0,70), o mesmo que a névoa do fim de tarde cobre a 70 m hoje.
+ */
+const FOG_EDGE = 0.6;
+
+/**
+ * Névoa conforme a distância de visão (Configurações → Gráficos). Mais perto que 70 m, a
+ * névoa engrossa para esconder onde jogadores e monstros somem (entities.ts); mais longe,
+ * afina (vê-se mais longe o cenário, que é desenhado inteiro). Só números: não recompila.
+ */
+export function fogForDistance(density: number, viewDistance: number): number {
+  const d = Math.max(10, viewDistance);
+  if (d >= VIEW_REF) return (density * VIEW_REF) / d;
+  return Math.max(density, FOG_EDGE / d);
+}
+
 /** Tempo (s) da transição ao trocar de região (constante da exponencial). */
 const TRANSITION_S = 1.2;
 /** Intervalo entre as consultas de região (ms): regionAt não precisa rodar todo quadro. */
@@ -387,7 +409,7 @@ export class RenderQuality {
     const fog = this.fogOut;
     Color3.LerpToRef(t.fog, tintKeepingValue(t.fog, shade, cur[12], this.tmp), cur[11], fog);
     scene.fogColor = fog;
-    scene.fogDensity = t.fogDensity * cur[10];
+    scene.fogDensity = fogForDistance(t.fogDensity * cur[10], settings.get().viewDistance);
     scene.clearColor.set(fog.r, fog.g, fog.b, 1);
     // Luz de baixo (o que pinta as sombras) puxada para a sombra da região; o céu, de leve.
     Color3.LerpToRef(t.hemiGround, tintKeepingValue(t.hemiGround, shade, 1.1, this.tmp), 0.5, this.groundOut);

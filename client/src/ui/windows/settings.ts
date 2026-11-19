@@ -5,8 +5,10 @@ import {
   button,
   DEFAULT_KEYS,
   el,
+  isCustomized,
   isTouch,
   keyLabel,
+  presetDefaults,
   segmented,
   select,
   settings,
@@ -41,15 +43,16 @@ function group(title: string, ...rows: HTMLElement[]): HTMLElement {
   return el("section", "set-group", el("h3", "set-group-title", title), ...rows);
 }
 
-/** O que cada preset liga (o mesmo de world/render.ts: PRESETS). */
+/** O que cada preset liga (o mesmo de world/render.ts: PRESETS) e o que ele sugere (kit.ts: presetDefaults). */
 const QUALITY_HINTS: Record<Quality, string> = {
-  baixa: "Render a 80%, sombras simples, sem brilho (bloom) nem SSAO. Para celulares.",
-  media: "Brilho nas chamas e efeitos, vinheta e sombras boas.",
-  alta: "Tudo da média, mais oclusão de ambiente (SSAO), FXAA e sombras suaves.",
+  baixa: "Render a 80%, sem sombras, sem brilho (bloom) nem SSAO, visão de 50 m. Para celulares.",
+  media: "Brilho nas chamas e efeitos, vinheta, sombras e visão de 70 m.",
+  alta: "Tudo da média, mais oclusão de ambiente (SSAO), FXAA, sombras suaves e visão de 100 m.",
 };
 
-function qualityHint(q: Quality, picked: boolean): string {
-  return `${QUALITY_HINTS[q]}${picked ? "" : " (escolhida pelo aparelho)"} Aplica na hora.`;
+function qualityHint(s: Settings): string {
+  const custom = isCustomized(s) ? " Você mudou sombras, distância ou FPS: personalizada." : "";
+  return `${QUALITY_HINTS[s.quality]}${s.qualityPicked ? "" : " (escolhida pelo aparelho)"}${custom} Aplica na hora.`;
 }
 
 const set = <K extends keyof Settings>(k: K) => (v: Settings[K]) => settings.set(k, v);
@@ -90,36 +93,51 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
   );
 
   const pages: Record<string, () => HTMLElement> = {
-    graphics: () =>
-      el(
+    graphics: () => {
+      const cur = settings.get();
+      const hint = el("small", null, qualityHint(cur));
+      // Sombras, distância e FPS: grava e atualiza o aviso de "personalizada".
+      const gfx =
+        <K extends "shadows" | "viewDistance" | "fpsLimit">(k: K) =>
+        (v: Settings[K]) => {
+          settings.set(k, v);
+          hint.textContent = qualityHint(settings.get());
+        };
+      const preset = row(
+        "Predefinição",
+        segmented(
+          [
+            { id: "baixa", label: "Baixa" },
+            { id: "media", label: "Média" },
+            { id: "alta", label: "Alta" },
+          ],
+          cur.quality,
+          (v: Quality) => {
+            // Escolha do jogador: deixa de seguir o aparelho e põe o que o preset sugere em
+            // sombras, distância e FPS (dá para mexer depois). Aplica na hora (world/render.ts).
+            settings.set("qualityPicked", true);
+            const d = presetDefaults(v);
+            settings.set("shadows", d.shadows);
+            settings.set("viewDistance", d.viewDistance);
+            settings.set("fpsLimit", d.fpsLimit);
+            settings.set("quality", v);
+            show("graphics"); // os controles mostram os valores novos
+          },
+        ),
+      );
+      preset.querySelector(".set-label")?.append(hint);
+      return el(
         "div",
         "set-page",
         group(
           "Qualidade",
-          (() => {
-            const hint = el("small", null, qualityHint(s.quality, s.qualityPicked));
-            const r = row(
-              "Predefinição",
-              segmented(
-                [
-                  { id: "baixa", label: "Baixa" },
-                  { id: "media", label: "Média" },
-                  { id: "alta", label: "Alta" },
-                ],
-                s.quality,
-                (v: Quality) => {
-                  // Escolha do jogador: deixa de seguir o aparelho. Aplica na hora (world/render.ts).
-                  settings.set("qualityPicked", true);
-                  settings.set("quality", v);
-                  hint.textContent = qualityHint(v, true);
-                },
-              ),
-            );
-            r.querySelector(".set-label")?.append(hint);
-            return r;
-          })(),
-          row("Sombras", toggle(s.shadows, set("shadows"), "Sombras"), "Desligar economiza bastante no celular."),
-          row("Distância de visão", slider(s.viewDistance, 30, 150, 10, set("viewDistance"), (v) => `${v} m`)),
+          preset,
+          row("Sombras", toggle(cur.shadows, gfx("shadows"), "Sombras"), "Desligar economiza bastante no celular."),
+          row(
+            "Distância de visão",
+            slider(cur.viewDistance, 30, 150, 10, gfx("viewDistance"), (v) => `${v} m`),
+            "Jogadores e monstros além dela somem na névoa. Menos = mais FPS em lugares cheios.",
+          ),
           row(
             "Limite de FPS",
             select(
@@ -129,13 +147,15 @@ export function buildSettings(opts: SettingsOpts): HTMLElement {
                 { id: "120", label: "120 FPS" },
                 { id: "0", label: "Sem limite" },
               ],
-              s.fpsLimit,
-              set("fpsLimit"),
+              cur.fpsLimit,
+              gfx("fpsLimit"),
             ),
+            "Nunca passa da taxa da tela (120 só em telas de 120 Hz). Menos FPS = menos calor e bateria.",
           ),
         ),
-        group("Interface", row("Escala da interface", slider(s.uiScale, 80, 130, 5, set("uiScale"), pct), "Aumente em telas pequenas ou TVs.")),
-      ),
+        group("Interface", row("Escala da interface", slider(cur.uiScale, 80, 130, 5, set("uiScale"), pct), "Aumente em telas pequenas ou TVs.")),
+      );
+    },
     audio: () =>
       el(
         "div",
