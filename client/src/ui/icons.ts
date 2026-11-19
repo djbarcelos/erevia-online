@@ -1,3 +1,4 @@
+import { SKILL_IMAGES } from "./skill-images";
 import { Effect } from "../gen/erevia/v1/game_pb";
 import { skillArt, type SkillTheme } from "./art";
 import { SKILL_THEMES } from "./skill-themes";
@@ -167,6 +168,10 @@ export function render(t: Theme, id: string): string {
 
 /** SVG do ícone da skill (id do fx). Skills desconhecidas usam um ícone neutro. */
 export function skillIcon(fx: string): string {
+  // Ícone pintado (folhas do Meshy): a imagem dentro de um SVG, para os chamadores continuarem iguais.
+  if (SKILL_IMAGES.has(fx)) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><image href="${import.meta.env.BASE_URL}icons/skills/${fx}.webp" width="64" height="64" preserveAspectRatio="xMidYMid slice"/></svg>`;
+  }
   const own = SKILL_ICONS[fx];
   if (own) return render(own, `sk-${fx || "x"}`);
   const theme = SKILL_THEMES[fx];
