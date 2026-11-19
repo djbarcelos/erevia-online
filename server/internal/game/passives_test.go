@@ -30,7 +30,8 @@ func TestSkillAvailable(t *testing.T) {
 	if !SkillAvailable(s, "knight", "x") || SkillAvailable(s, "knight", "y") || SkillAvailable(s, "mage", "x") {
 		t.Error("classe e spec")
 	}
-	if !SkillAvailable(&SkillDef{Class: "knight"}, "knight", "qualquer") {
-		t.Error("skill sem spec vale para toda spec")
+	// A árvore base só vale sem evolução; depois de evoluir, só a da evolução.
+	if !SkillAvailable(&SkillDef{Class: "knight"}, "knight", "") || SkillAvailable(&SkillDef{Class: "knight"}, "knight", "x") {
+		t.Error("skill da base só vale sem evolução")
 	}
 }

@@ -28,19 +28,23 @@ export interface SkillsDeps {
 
 export function buildSkills(d: SkillsDeps): HTMLElement {
   const byId = new Map(d.skills.map((s) => [s.id, s]));
-  // Árvore da classe (3 ramos) e skills dos dois caminhos da especialização (spec preenchido).
+  // Árvore base da classe (3 ramos, sem spec) e as árvores das duas evoluções (spec
+  // preenchido). Evoluído, a janela mostra só a árvore da evolução, com os ramos dela.
   const classTree = d.skills.filter((s) => !s.spec);
   const specIds = [...new Set(d.skills.filter((s) => s.spec).map((s) => s.spec))];
-  const tiers = classTree.reduce((n, s) => Math.max(n, s.tier + 1), 0);
-  // Nível que libera cada degrau (o mesmo para as 3 skills dele).
-  const tierLevels = Array.from({ length: tiers }, (_, t) => classTree.find((s) => s.tier === t)?.levelReq ?? 1);
+  const evolution = () => specInfo(d.progress()?.spec);
+  const treeNow = (): SkillInfo[] => {
+    const e = evolution();
+    return e ? d.skills.filter((s) => s.spec === e.id) : classTree;
+  };
+  const branchesNow = (): SkillBranch[] => evolution()?.branches ?? d.branches;
   const saved = (): Map<number, number> => new Map((d.progress()?.ranks ?? []).map((r) => [r.skillId, r.rank]));
-  /** "Cada nível até o 30 dá 1 ponto de skill." (o último nível com ponto vem do servidor). */
+  /** "Cada nível até o 19 dá 1 ponto de skill." (o último nível com ponto vem do servidor). */
   const pointRule = (): string => {
     const p = d.progress();
     const last = p?.skillPointMaxLevel ?? 0;
     if (!last || last >= (p?.maxLevel ?? 0)) return "Cada nível dá 1 ponto de skill.";
-    return `Cada nível até o ${last} dá 1 ponto de skill; depois, só pontos de atributo.`;
+    return `Cada nível até o ${last} dá 1 ponto de skill; os outros vêm com a evolução.`;
   };
   let pending = saved();
   let selected: SkillInfo | null = null;
@@ -75,11 +79,29 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
   const child = (s: SkillInfo) => d.skills.find((x) => x.parentId === s.id);
   const rankInfo = (s: SkillInfo, r: number) => s.ranks[Math.max(1, Math.min(r, s.ranks.length)) - 1];
 
-  function blocker(s: SkillInfo): string | null {
-    if (rank(s) >= s.maxRank) return "Rank máximo.";
+  /** Pontos no ramo da evolução, sem contar a própria skill. */
+  const branchSpent = (s: SkillInfo) => treeNow().filter((x) => x.branch === s.branch && x.id !== s.id).reduce((a, x) => a + rank(x), 0);
+
+  /** O que falta para a skill poder subir (null = pode); só a árvore em uso vale. */
+  function requirement(s: SkillInfo): string | null {
     if (d.level() < s.levelReq) return `Requer nível ${s.levelReq}.`;
     const p = parent(s);
     if (p && rank(p) < 1) return `Requer ${p.name}.`;
+    if (s.branchPoints && branchSpent(s) < s.branchPoints) return `Requer ${s.branchPoints} pontos no ramo.`;
+    for (const r of s.requires) {
+      const o = byId.get(r.skillId);
+      if (o && rank(o) < r.rank) return `Requer ${o.name} ${r.rank}.`;
+    }
+    const m = s.modifies ? byId.get(s.modifies) : undefined;
+    if (m && rank(m) < 1) return `Requer ${m.name}.`;
+    return null;
+  }
+
+  function blocker(s: SkillInfo): string | null {
+    if (rank(s) >= s.maxRank) return "Rank máximo.";
+    if ((s.spec || "") !== (evolution()?.id ?? "")) return s.spec ? "Só depois de evoluir." : "Não é da sua evolução.";
+    const req = requirement(s);
+    if (req) return req;
     if (free() <= 0) return "Sem pontos de skill.";
     return null;
   }
@@ -88,7 +110,12 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
     const r = rank(s);
     if (r <= (saved().get(s.id) ?? 0)) return false; // só desfaz o que está pendente
     const c = child(s);
-    return !(r === 1 && c && rank(c) > 0);
+    if (r === 1 && c && rank(c) > 0) return false;
+    // Na evolução: baixar não pode deixar outra skill aprendida sem o requisito.
+    pending.set(s.id, r - 1);
+    const ok = treeNow().every((x) => x.id === s.id || rank(x) === 0 || requirement(x) === null);
+    pending.set(s.id, r);
+    return ok;
   }
 
   function raise(s: SkillInfo) {
@@ -197,7 +224,13 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
           "how small muted",
           el("li", null, pointRule()),
           el("li", null, "Clique numa skill para gastar 1 ponto; botão direito desfaz um ponto ainda não confirmado."),
-          el("li", null, `Os degraus liberam nos níveis ${listPt(tierLevels)}, e cada um exige a skill de cima no mesmo ramo.`),
+          el(
+            "li",
+            null,
+            evolution()
+              ? "Os marcos liberam nos níveis 20, 25, 30, 35 e 40; os de cima exigem pontos no ramo."
+              : `Os degraus liberam nos níveis ${listPt([...new Set(classTree.map((x) => x.levelReq))].sort((a, b) => a - b))}, e cada um exige a skill de cima no mesmo ramo.`,
+          ),
           el("li", null, "Arraste skills ativas para a barra de atalhos."),
         ),
       );
@@ -234,21 +267,25 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
   }
 
   function render() {
+    const skills = treeNow();
+    const tiers = skills.reduce((n, s) => Math.max(n, s.tier + 1), 0);
     tree.replaceChildren(el("div", "tg-corner"));
-    d.branches.forEach((b, i) => {
-      const spent = classTree.filter((s) => s.branch === i).reduce((a, s) => a + rank(s), 0);
+    branchesNow().forEach((b, i) => {
+      const spent = skills.filter((s) => s.branch === i).reduce((a, s) => a + rank(s), 0);
       const col = el("div", "tg-branch", el("b", null, b.name), el("small", null, b.description), el("span", "tg-spent", `${spent} pts`));
       col.style.setProperty("--bc", b.color);
       tree.append(col);
     });
     for (let tier = 0; tier < tiers; tier++) {
-      const lvl = tierLevels[tier];
+      const row = skills.filter((x) => x.tier === tier);
+      if (!row.length) continue; // marco sem skills ainda
+      const lvl = row[0].levelReq;
       tree.append(el("div", `tg-level${d.level() < lvl ? " locked" : ""}`, el("span", null, `Nv ${lvl}`)));
       for (let br = 0; br < 3; br++) {
-        const s = classTree.find((x) => x.branch === br && x.tier === tier);
-        const cell = el("div", "tg-cell");
-        if (s) {
-          const color = d.branches[br]?.color ?? "#d6b46e";
+        const cellSkills = row.filter((x) => x.branch === br);
+        const cell = el("div", `tg-cell${cellSkills.length > 1 ? " multi" : ""}`);
+        const color = branchesNow()[br]?.color ?? "#d6b46e";
+        for (const s of cellSkills) {
           const p = parent(s);
           if (p) {
             const line = el("span", `tg-line${rank(p) > 0 ? " lit" : ""}`);
@@ -271,34 +308,21 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
     renderDetail();
   }
 
-  /** Ramo da especialização: as 3 skills do caminho escolhido, lado a lado. */
+  /** Faixa da evolução: sem evoluir, o convite para A Encruzilhada; evoluído, o nome e o bônus. */
   function specRow(): HTMLElement {
-    const mine = specInfo(d.progress()?.spec);
+    const mine = evolution();
     const row = el("div", "tg-spec");
     if (!mine) {
       const names = specIds.map((id) => specInfo(id)?.name).filter(Boolean);
       row.classList.add("locked");
       row.append(
-        el("b", null, "Especialização"),
-        el("small", null, `No nível 20, a missão A Encruzilhada (Mestra Ysolde, na praça) libera um destes caminhos: ${names.join(" ou ")}. Cada um traz um bônus de atributos e 3 skills novas.`),
+        el("b", null, "Evolução"),
+        el("small", null, `No nível 20, a missão A Encruzilhada (Mestra Ysolde, na praça) libera uma destas evoluções: ${names.join(" ou ")}. A árvore passa a ser a da evolução, com pontos até o nível máximo.`),
       );
       return row;
     }
     row.style.setProperty("--bc", mine.color);
-    const nodes = el("div", "tg-spec-nodes");
-    d.skills
-      .filter((s) => s.spec === mine.id)
-      .sort((a, b) => a.tier - b.tier)
-      .forEach((s, i) => {
-        const cell = el("div", "tg-spec-cell", el("span", `tg-spec-lvl${d.level() < s.levelReq ? " locked" : ""}`, `Nv ${s.levelReq}`), nodeEl(s, mine.color));
-        if (i > 0) {
-          const p = parent(s);
-          nodes.append(el("span", `tg-spec-link${p && rank(p) > 0 ? " lit" : ""}`));
-        }
-        nodes.append(cell);
-      });
-    const spent = d.skills.filter((s) => s.spec === mine.id).reduce((a, s) => a + rank(s), 0);
-    row.append(el("div", "tg-spec-head", el("b", null, mine.name), el("small", null, `${mine.bonusText} · ${mine.description}`), el("span", "tg-spent", `${spent} pts`)), nodes);
+    row.append(el("div", "tg-spec-head", el("b", null, mine.name), el("small", null, `${mine.bonusText} · ${mine.description}`)));
     return row;
   }
 

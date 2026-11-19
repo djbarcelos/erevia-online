@@ -1,6 +1,7 @@
 package zone
 
 import (
+	"maps"
 	"slices"
 	"strconv"
 	"testing"
@@ -103,7 +104,7 @@ func TestChooseSpecThroughCrossroads(t *testing.T) {
 	// Falar com ela anda a missão e abre a janela.
 	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_TALK, "")
 	c := peer.lastSpecChoice()
-	if c == nil || c.Current != "" || c.NpcId != masterOf(z).id || c.ChangeCost != uint64(game.SpecChangeCost) {
+	if c == nil || c.Current != "" || c.NpcId != masterOf(z).id || c.ChangeCost != uint64(game.EvolutionChangeCost(p.level)) {
 		t.Fatalf("janela da Mestra: %+v", c)
 	}
 	if q := questOf(p, game.SpecQuest); q == nil || q.progress[0] != 1 || q.progress[1] != 0 {
@@ -163,13 +164,13 @@ func TestSpecSkillsOnlyForChosenPath(t *testing.T) {
 		t.Fatalf("specs: %q %q", b.pl.spec, h.pl.spec)
 	}
 
-	bastion := []*pb.SkillRank{{SkillId: game.SkillBastionDefy, Rank: 1}, {SkillId: game.SkillBastionVigor, Rank: 1}, {SkillId: game.SkillBastionLast, Rank: 1}}
+	bastion := []*pb.SkillRank{{SkillId: game.SkillBastionDefy, Rank: 1}, {SkillId: game.SkillBastionVigor, Rank: 1}, {SkillId: game.SkillBulwark, Rank: 1}}
 	for _, p := range []*entity{b, h, none} {
 		p.pl.moveTokens = z.cfg.MaxMovesPerSec
 		z.handle(progressEvent{id: p.id, msg: &pb.LearnSkills{Ranks: bastion}})
 	}
-	if b.pl.rank(game.SkillBastionLast) != 1 {
-		t.Fatalf("o Bastião não aprendeu o próprio caminho: %v", b.pl.ranks)
+	if b.pl.rank(game.SkillBulwark) != 1 || b.pl.rank(game.SkillBastionVigor) != 1 {
+		t.Fatalf("o Bastião não aprendeu a própria árvore: %v", b.pl.ranks)
 	}
 	if h.pl.rank(game.SkillBastionDefy) != 0 || none.pl.rank(game.SkillBastionDefy) != 0 {
 		t.Fatal("skill do Bastião aprendida por quem não é Bastião")
@@ -266,13 +267,13 @@ func TestChangeSpecCostsGoldAndRefundsPoints(t *testing.T) {
 	p.pl.hotbar[4] = slot
 	free := freeSkillPoints(p)
 
-	p.pl.inv.gold = game.SpecChangeCost - 1
+	p.pl.inv.gold = game.EvolutionChangeCost(p.level) - 1
 	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_CHOOSE, "hunter")
-	if p.pl.spec != "cutthroat" || p.pl.inv.gold != game.SpecChangeCost-1 {
+	if p.pl.spec != "cutthroat" || p.pl.inv.gold != game.EvolutionChangeCost(p.level)-1 {
 		t.Fatal("trocou de caminho sem moedas")
 	}
 
-	p.pl.inv.gold = game.SpecChangeCost + 10
+	p.pl.inv.gold = game.EvolutionChangeCost(p.level) + 10
 	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_CHOOSE, "hunter")
 	if p.pl.spec != "hunter" || p.pl.inv.gold != 10 {
 		t.Fatalf("troca: spec %q, moedas %d", p.pl.spec, p.pl.inv.gold)
@@ -293,7 +294,7 @@ func TestChangeSpecCostsGoldAndRefundsPoints(t *testing.T) {
 // Cada skill ativa dos caminhos faz o que diz (golpe ou efeito) com as mecânicas de sempre.
 func TestSpecActiveSkillsWork(t *testing.T) {
 	for _, sp := range game.SpecList {
-		for _, s := range game.SpecTree(sp.ID) {
+		for _, s := range game.EvolutionTree(sp.ID) {
 			if s.IsPassive() {
 				continue
 			}
@@ -373,5 +374,103 @@ func TestChooseSpecRefusedWhenBagCannotHoldGear(t *testing.T) {
 	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_CHOOSE, "herald")
 	if p.pl.spec != "" || p.pl.inv.equip[game.SlotOffhand].empty() || !peer.systemContains("bolsa está cheia") {
 		t.Fatalf("escolheu sem espaço para o escudo: spec %q", p.pl.spec)
+	}
+}
+
+// Evoluir: a árvore base some (os pontos voltam), entram as 2 iniciais da evolução nas
+// teclas das iniciais da base, e as outras skills da base saem da barra. Trocar de
+// evolução cobra pelo nível e passa as teclas para as iniciais da nova.
+func TestEvolveReplacesTheBaseTree(t *testing.T) {
+	z := newCombatZone()
+	p, peer := nearMaster(z, 1, "rogue", 25)
+	p.pl.quests.done[game.SpecQuest] = true
+	learn(z, p, map[uint32]int{game.SkillWeakSpot: 1, game.SkillTwinBlades: 1})
+	p.pl.hotbar[0] = skillEntry(game.SkillShadowStep)
+	p.pl.hotbar[1] = skillEntry(game.SkillBackstab)
+	p.pl.hotbar[2] = skillEntry(game.SkillTwinBlades)
+	p.pl.cooldowns[game.SkillBackstab] = z.now + 5
+
+	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_CHOOSE, "cutthroat")
+	if p.pl.spec != "cutthroat" || !maps.Equal(p.pl.ranks, game.StarterRanks("rogue", "cutthroat")) {
+		t.Fatalf("evoluir: spec %q ranks %v", p.pl.spec, p.pl.ranks)
+	}
+	if p.pl.hotbar[0] != skillEntry(game.SkillCutStep) || p.pl.hotbar[1] != skillEntry(game.SkillCutBackstab) || p.pl.hotbar[2] != "" {
+		t.Errorf("barra depois de evoluir: %v", p.pl.hotbar)
+	}
+	if _, ok := p.pl.cooldowns[game.SkillBackstab]; ok {
+		t.Error("recarga da base ficou")
+	}
+	if freeSkillPoints(p) != game.SkillPointsTotal(25, true)-2 || !peer.systemContains("para distribuir") {
+		t.Errorf("pontos livres %d", freeSkillPoints(p))
+	}
+
+	// Trocar: 2.500 × nível, e as iniciais trocam de tecla.
+	cost := game.EvolutionChangeCost(25)
+	p.pl.inv.gold = cost
+	learn(z, p, map[uint32]int{game.SkillCutBlades: 2})
+	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_CHOOSE, "hunter")
+	if p.pl.spec != "hunter" || p.pl.inv.gold != 0 || !maps.Equal(p.pl.ranks, game.StarterRanks("rogue", "hunter")) {
+		t.Fatalf("trocar: spec %q ouro %d ranks %v", p.pl.spec, p.pl.inv.gold, p.pl.ranks)
+	}
+	if p.pl.hotbar[0] != skillEntry(game.SkillHuntKnife) || p.pl.hotbar[1] != skillEntry(game.SkillHuntShot) {
+		t.Errorf("barra depois de trocar: %v", p.pl.hotbar)
+	}
+	if c := peer.lastSpecChoice(); c == nil || c.ChangeCost != uint64(cost) || c.RespecCost != uint64(game.RespecCost(25)) {
+		t.Errorf("janela da Ysolde: %+v", c)
+	}
+}
+
+// Redistribuir: paga 500 × nível e volta às iniciais da evolução; sem evolução, nada.
+func TestRespecTree(t *testing.T) {
+	z := newCombatZone()
+	p, peer := nearMaster(z, 1, "mage", 22)
+	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_RESPEC, "")
+	if !peer.systemContains("Primeiro escolha") {
+		t.Error("redistribuiu sem evolução")
+	}
+	p.pl.spec = "elementalist"
+	p.pl.ranks = game.StarterRanks("mage", "elementalist")
+	learn(z, p, map[uint32]int{game.SkillInferno: 3, game.SkillElemLance: 2})
+	if p.pl.rank(game.SkillInferno) != 3 {
+		t.Fatalf("não aprendeu: %v", p.pl.ranks)
+	}
+	cost := game.RespecCost(22)
+	p.pl.inv.gold = cost - 1
+	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_RESPEC, "")
+	if p.pl.rank(game.SkillInferno) != 3 || !peer.systemContains("custa") {
+		t.Fatal("redistribuiu sem ouro")
+	}
+	p.pl.inv.gold = cost
+	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_RESPEC, "")
+	if p.pl.inv.gold != 0 || !maps.Equal(p.pl.ranks, game.StarterRanks("mage", "elementalist")) || p.pl.spec != "elementalist" {
+		t.Fatalf("redistribuir: ouro %d ranks %v", p.pl.inv.gold, p.pl.ranks)
+	}
+}
+
+// Save de antes das evoluções: um Sicário nível 25 com a árvore base, o degrau 20 e as skills
+// do caminho. Fica só o que é da árvore do Assassino, entram as iniciais dela e as teclas das
+// iniciais da base passam para as evoluídas.
+func TestLoadOldSaveIntoEvolutionTree(t *testing.T) {
+	old := map[uint32]int{
+		game.SkillBackstab: 3, game.SkillShadowStep: 1, game.SkillWeakSpot: 5, game.SkillTwinBlades: 3,
+		game.SkillFatalBlow: 2, game.SkillCutBlades: 3, game.SkillCutInstinct: 2,
+	}
+	bar := []string{skillEntry(game.SkillBackstab), skillEntry(game.SkillShadowStep), skillEntry(game.SkillTwinBlades), skillEntry(game.SkillFatalBlow), "item:potion_hp_s"}
+	_, ranks, hotbar := loadProgress("rogue", "cutthroat", 25, game.Attrs{}, old, bar)
+	want := map[uint32]int{game.SkillCutBackstab: 1, game.SkillCutStep: 1, game.SkillFatalBlow: 2, game.SkillCutBlades: 3, game.SkillCutInstinct: 2}
+	if !maps.Equal(ranks, want) {
+		t.Errorf("ranks: %v, want %v", ranks, want)
+	}
+	if hotbar[0] != skillEntry(game.SkillCutBackstab) || hotbar[1] != skillEntry(game.SkillCutStep) || hotbar[2] != "" || hotbar[3] != skillEntry(game.SkillFatalBlow) || hotbar[4] != "item:potion_hp_s" {
+		t.Errorf("barra: %v", hotbar)
+	}
+	// Sem evolução no 25: o degrau 20 de antes sai e fica a árvore base.
+	_, ranks, _ = loadProgress("rogue", "", 25, game.Attrs{}, old, bar)
+	if ranks[game.SkillFatalBlow] != 0 || ranks[game.SkillCutBlades] != 0 || ranks[game.SkillWeakSpot] != 5 {
+		t.Errorf("sem evolução: %v", ranks)
+	}
+	// Evolução vinda do banco abaixo do 20 não vale.
+	if game.ActiveSpec("rogue", "cutthroat", 19) != "" || game.ActiveSpec("rogue", "bastion", 30) != "" || game.ActiveSpec("rogue", "hunter", 20) != "hunter" {
+		t.Error("ActiveSpec")
 	}
 }

@@ -22,12 +22,22 @@ func skillInfoPB(s *game.SkillDef) *pb.SkillInfo {
 	if s.IsPassive() {
 		info.Target = pb.SkillTarget_SKILL_TARGET_UNSPECIFIED
 	}
+	if s.Spec != "" {
+		info.Node = pb.SkillNode(s.Node + 1)
+		info.BranchPoints = uint32(s.BranchPoints)
+		info.Modifies = s.Modifies
+		info.EvolvedFrom = s.EvolvedFrom
+		info.Weapon = s.Weapon
+		for _, r := range s.Requires {
+			info.Requires = append(info.Requires, &pb.SkillReq{SkillId: r.ID, Rank: uint32(r.Rank)})
+		}
+	}
 	if p := s.Parent(); p != nil {
 		info.ParentId = p.ID
 	}
 	// Tecla padrão (só as duas iniciais; a barra de atalhos é do jogador).
-	for i, st := range game.ClassSkills(s.Class) {
-		if st.ID == s.ID {
+	for i, id := range starterIDs(s.Class, s.Spec) {
+		if id == s.ID {
 			info.Key = uint32(i + 1)
 		}
 	}

@@ -137,10 +137,17 @@ Os valores devem ser conferidos com o painel de economia (ouro por hora em cada 
 
 ## 7. Migração de quem já jogou
 
-Ela roda no load, por classe (incluindo a subclasse), e só uma vez, controlada pela marca `tree` no `ClassProgress` e pela migração 00062.
+Ela roda no load (`loadProgress`), por classe (no login e na troca de subclasse), e é idempotente: não precisa de coluna nova no banco nem de marca. Também não há redistribuição grátis: o DIogo autorizou apagar os personagens se fosse preciso (19/11), então a migração só precisa deixar todo save válido.
 
 | Personagem | O que acontece |
 |---|---|
+| < 20 | Nada muda. Uma evolução salva abaixo do 20 é ignorada (`ActiveSpec`). |
+| ≥ 20 sem spec | Os ranks do degrau 20 de antes saem. Se ele tinha mais pontos que os 20 da base, sai só o excesso, do degrau mais alto para o mais baixo (`trimRanks`). |
+| ≥ 20 com spec | Ficam só os ranks dos IDs 49–84 que estão na árvore da evolução e cabem nas regras (marco, pontos no ramo); o resto sai e os pontos voltam. Entram as 2 iniciais da evolução, e as teclas das 2 iniciais da base passam para elas. |
+
+Os itens iniciais saem uma vez por evolução, controlados pela marca `evo_itens:<evolução>` em `quests.done`.
+
+---|---|
 | < 20 | Nada muda. |
 | ≥ 20 sem spec | Perde o nó do degrau 20 (os pontos voltam). A Encruzilhada aparece no diário. |
 | ≥ 20 com spec | Mantém a evolução e os ranks dos IDs 49–84 que ficaram na árvore dela, desde que o marco do nó seja ≤ o nível do personagem. Se uma skill de spec subiu de marco (por exemplo, a Carnificina do 28 para o 35), ela sai até o personagem chegar lá, e os pontos voltam. Descarta a base, recebe as iniciais e a hotbar troca base → evoluída. Ganha a redistribuição grátis e uma mensagem única: "Você tem N pontos para distribuir na árvore da sua evolução". |

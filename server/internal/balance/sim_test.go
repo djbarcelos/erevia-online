@@ -15,8 +15,10 @@ func TestTypicalBuildsFollowTheRules(t *testing.T) {
 			if b.Attrs.Sum() != game.AttrPointsTotal(l) {
 				t.Errorf("%s nv %d: %d pontos de atributo, want %d", p.Name(), l, b.Attrs.Sum(), game.AttrPointsTotal(l))
 			}
-			if used := game.RanksUsed(b.Ranks); used != game.SkillPointsTotal(l) {
-				t.Errorf("%s nv %d: %d pontos de skill gastos de %d", p.Name(), l, used, game.SkillPointsTotal(l))
+			// Todos os pontos gastos, a menos que a árvore já esteja cheia (as árvores das
+			// evoluções só ganham todos os nós na fase de conteúdo de cada classe).
+			if used, total := game.RanksUsed(b.Ranks), game.SkillPointsTotal(l, b.Path.Spec != ""); used != total && !treeFull(b) {
+				t.Errorf("%s nv %d: %d pontos de skill gastos de %d", p.Name(), l, used, total)
 			}
 			if (l < game.SpecLevel) != (b.Path.Spec == "") {
 				t.Errorf("%s nv %d: caminho %q", p.Name(), l, b.Path.Spec)
@@ -26,15 +28,48 @@ func TestTypicalBuildsFollowTheRules(t *testing.T) {
 			}
 		}
 	}
-	// No máximo todas as skills do caminho estão aprendidas.
+	// No máximo todas as ativas da evolução estão aprendidas.
 	for _, p := range Paths() {
 		b := NewBuild(p, game.MaxLevel, 0)
-		for _, s := range game.SpecTree(p.Spec) {
+		for _, s := range game.EvolutionTree(p.Spec) {
+			if s.IsPassive() || !reachable(s) {
+				continue
+			}
 			if b.rank(s.ID) < 1 {
 				t.Errorf("%s: não aprendeu %s no %d", p.Name(), s.Name, game.MaxLevel)
 			}
 		}
 	}
+}
+
+// reachable: o ramo tem ranks suficientes, sem contar o nó, para os pontos que ele exige
+// (enquanto a árvore da evolução não ganha todos os nós, os marcos altos ficam fora).
+func reachable(s *game.SkillDef) bool {
+	n := 0
+	for _, o := range game.EvolutionTree(s.Spec) {
+		if o.Branch == s.Branch && o.ID != s.ID {
+			n += o.MaxRank
+		}
+	}
+	return n >= s.BranchPoints
+}
+
+// treeFull: nada mais pode ser aprendido no nível (todas as skills no máximo ou bloqueadas).
+func treeFull(b *Build) bool {
+	for id, s := range game.Skills {
+		if !game.SkillAvailable(s, b.Path.Class, b.Path.Spec) || b.Ranks[id] >= s.MaxRank {
+			continue
+		}
+		next := map[uint32]int{}
+		for k, v := range b.Ranks {
+			next[k] = v
+		}
+		next[id]++
+		if game.RanksUsed(next) <= game.SkillPointsTotal(b.Level, b.Path.Spec != "") && game.ValidateRanks(b.Path.Class, b.Path.Spec, b.Level, next) == nil {
+			return false
+		}
+	}
+	return true
 }
 
 func TestTypicalGear(t *testing.T) {

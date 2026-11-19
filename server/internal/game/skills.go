@@ -131,9 +131,10 @@ func PassiveTotals(ranks map[uint32]int) Passives {
 	return t
 }
 
-// SkillAvailable: a skill existe e vale para a classe (e, se for de caminho, para a spec).
+// SkillAvailable: a skill existe e vale para a classe na árvore em uso: a base sem
+// evolução (spec ""), ou só a da evolução depois de evoluir.
 func SkillAvailable(s *SkillDef, class, spec string) bool {
-	return s != nil && s.Class == class && (s.Spec == "" || s.Spec == spec)
+	return s != nil && s.Class == class && s.Spec == spec
 }
 
 // Constantes das passivas e mecânicas especiais.
@@ -161,19 +162,33 @@ type BannerDef struct {
 	Value    float64
 }
 
-// TierLevels: nível do personagem que libera cada degrau da árvore.
-var TierLevels = [5]int{1, 5, 10, 15, 20}
+// TierLevels: nível do personagem que libera cada degrau da árvore base (o degrau 20 de
+// antes foi para as evoluções).
+var TierLevels = [4]int{1, 5, 10, 15}
 
 type SkillDef struct {
 	ID      uint32
 	Class   string
 	Name    string
-	Branch  int // 0–2 (SpecBranch nas skills de especialização)
-	Tier    int // 0–4 (0–2 nas de especialização)
+	Branch  int // 0–2 (da classe ou, nas da evolução, da evolução)
+	Tier    int // 0–3 na base; nas da evolução, (Level-20)/5
 	MaxRank int
-	// Spec: id da especialização dona da skill ("" = árvore comum da classe). Só quem
-	// escolheu esse caminho aprende e usa.
+	// Spec: id da evolução dona da skill ("" = árvore base da classe). Só quem evoluiu
+	// para ela aprende e usa.
 	Spec string
+	// Árvore da evolução (docs/evolucoes): marco (nível), tipo de nó, pontos no ramo e
+	// skills exigidos.
+	Level        int
+	Node         NodeKind
+	BranchPoints int
+	Requires     []SkillReq
+	// Modificador: a skill que ele altera e quanto soma por rank (EffectiveSkill).
+	Modifies uint32
+	Mod      *SkillMod
+	// EvolvedFrom: a skill da base de que esta é a versão evoluída (a tecla passa para ela).
+	EvolvedFrom uint32
+	// Weapon: tipos de arma exigidos para lançar (vazio = qualquer).
+	Weapon []string
 
 	Passive PassiveKind // != 0: skill passiva (não se usa)
 	PValue  Scale
@@ -206,10 +221,10 @@ type SkillDef struct {
 
 func (s *SkillDef) IsPassive() bool { return s.Passive != PassiveNone }
 
-// LevelReq: nível mínimo para aprender (o do degrau).
+// LevelReq: nível mínimo para aprender (o do degrau, ou o marco na evolução).
 func (s *SkillDef) LevelReq() int {
 	if s.Spec != "" {
-		return SpecTierLevels[s.Tier]
+		return s.Level
 	}
 	return TierLevels[s.Tier]
 }
@@ -217,9 +232,10 @@ func (s *SkillDef) LevelReq() int {
 func (s *SkillDef) MPCost(rank int) float64   { return s.MP.At(rank) }
 func (s *SkillDef) Cooldown(rank int) float64 { return s.CD.At(rank) }
 
-// Parent é o nó de cima no mesmo ramo (nil = raiz).
+// Parent é o nó de cima no mesmo ramo da árvore base (nil = raiz; a árvore da evolução
+// usa BranchPoints, Requires e Modifies).
 func (s *SkillDef) Parent() *SkillDef {
-	if s.Tier == 0 {
+	if s.Tier == 0 || s.Spec != "" {
 		return nil
 	}
 	for _, o := range Skills {
@@ -357,14 +373,19 @@ func atkName(magic bool) string {
 // ---------------------------------------------------------------------------------------
 
 func init() {
-	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees()} {
+	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees(), evoSkills()} {
 		for _, s := range list {
 			if s.Hits == 0 {
 				s.Hits = 1
 			}
+			if Skills[s.ID] != nil {
+				panic(fmt.Sprintf("skill %d repetida", s.ID))
+			}
 			Skills[s.ID] = s
 		}
 	}
+	placeEvolutionSkills()
+	indexModifiers()
 	Classes["knight"].Branches = [3]Branch{
 		{"Guardião", "Defesa e controle da linha de frente.", "#6f93d6"},
 		{"Lâmina", "Esgrima e dano corpo a corpo.", "#d6b46e"},
@@ -817,19 +838,28 @@ func ClassSkills(class string) []*SkillDef {
 	return []*SkillDef{Skills[c.Skills[0]], Skills[c.Skills[1]]}
 }
 
-// SkillPointMaxLevel: o último nível que dá ponto de skill. Do 31 ao 40 só os atributos
-// sobem (3 pontos por nível): com 1 ponto por nível até o 40, a árvore da classe (43 a 45
-// ranks) ficaria quase cheia, e escolher deixaria de valer. Skills novas depois do 30 ficam
-// para os graus de equipamento e as áreas novas (tunnel#153 e docs/roadmap-areas.md).
-const SkillPointMaxLevel = 30
+// BaseSkillMaxLevel: o último nível que dá ponto na árvore base (sem evolução).
+const BaseSkillMaxLevel = SpecLevel - 1
 
-// SkillPointsTotal: 1 por nível até o SkillPointMaxLevel + 1 (as 2 skills iniciais já usam
-// 2 no nível 1).
-func SkillPointsTotal(level int) int { return min(level, SkillPointMaxLevel) + 1 }
+// SkillPointsTotal: 1 por nível + 1 (as 2 skills iniciais já usam 2 no nível 1). Sem
+// evolução, para no 19 (20 pontos); evoluído, vai até o teto (tunnel#180, decisão 33).
+func SkillPointsTotal(level int, evolved bool) int {
+	if !evolved {
+		level = min(level, BaseSkillMaxLevel)
+	}
+	return min(level, MaxLevel) + 1
+}
 
-// StarterRanks: o que um personagem novo (ou antigo, sem árvore salva) já sabe.
-func StarterRanks(class string) map[uint32]int {
+// StarterRanks: o que o personagem sabe de graça: as 2 iniciais da classe ou, evoluído,
+// as 2 iniciais da evolução.
+func StarterRanks(class, spec string) map[uint32]int {
 	out := map[uint32]int{}
+	if d := SpecFor(class, spec); d != nil {
+		for _, id := range d.StarterSkills {
+			out[id] = 1
+		}
+		return out
+	}
 	for _, s := range ClassSkills(class) {
 		out[s.ID] = 1
 	}
@@ -845,10 +875,11 @@ func RanksUsed(ranks map[uint32]int) int {
 	return n
 }
 
-// ValidateRanks confere uma árvore inteira (a atual mais o que se quer aprender):
-// skills da classe, ranks dentro do máximo, nível do degrau, nó de cima aprendido, a
-// especialização (spec: a do personagem, "" = nenhuma) e pontos.
+// ValidateRanks confere uma árvore inteira (a atual mais o que se quer aprender): sem
+// evolução só vale a árvore base; evoluído, só a da evolução (spec). Confere ranks, nível,
+// nó de cima (base) ou marco, pontos no ramo e pré-requisitos (evolução), e os pontos.
 func ValidateRanks(class, spec string, level int, ranks map[uint32]int) error {
+	branch := BranchRanks(spec, ranks)
 	for id, r := range ranks {
 		s := Skills[id]
 		if s == nil || s.Class != class {
@@ -860,17 +891,24 @@ func ValidateRanks(class, spec string, level int, ranks map[uint32]int) error {
 		if r == 0 {
 			continue
 		}
-		if s.Spec != "" && s.Spec != spec {
-			return fmt.Errorf("%s é do caminho %s", s.Name, SpecName(s.Spec))
+		if s.Spec != spec {
+			if spec == "" {
+				return fmt.Errorf("%s é da evolução %s", s.Name, SpecName(s.Spec))
+			}
+			return fmt.Errorf("%s não é da sua evolução", s.Name)
 		}
 		if level < s.LevelReq() {
 			return fmt.Errorf("%s exige nível %d", s.Name, s.LevelReq())
 		}
-		if p := s.Parent(); p != nil && ranks[p.ID] < 1 {
+		if spec != "" {
+			if err := validateEvolution(s, ranks, branch); err != nil {
+				return err
+			}
+		} else if p := s.Parent(); p != nil && ranks[p.ID] < 1 {
 			return fmt.Errorf("%s exige %s", s.Name, p.Name)
 		}
 	}
-	if RanksUsed(ranks) > SkillPointsTotal(level) {
+	if RanksUsed(ranks) > SkillPointsTotal(level, spec != "") {
 		return fmt.Errorf("pontos de skill insuficientes")
 	}
 	return nil

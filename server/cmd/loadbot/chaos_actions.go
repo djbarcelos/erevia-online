@@ -933,8 +933,11 @@ func actSpec(b *chaosBot, s *chaosSession, r [6]uint64) {
 	npc := s.nearestNPC(func(n *npcSeen) bool { return n.role == pb.NpcRole_NPC_ROLE_MASTER })
 	m := &pb.SpecCmd{Kind: pb.SpecCmdKind_SPEC_CMD_TALK, NpcId: npc}
 	label := "especializacao:falar"
-	if pct(r[1]) < 50 && len(s.specs) > 0 {
+	switch p := pct(r[1]); {
+	case p < 45 && len(s.specs) > 0:
 		m.Kind, m.Spec, label = pb.SpecCmdKind_SPEC_CMD_CHOOSE, s.specs[pickN(r[2], len(s.specs))], "especializacao:escolher"
+	case p < 60:
+		m.Kind, label = pb.SpecCmdKind_SPEC_CMD_RESPEC, "especializacao:redistribuir"
 	}
 	if bad(r[3], 15) {
 		m.Kind, m.Spec, m.NpcId, label = pb.SpecCmdKind(pickN(r[4], 5)), "nao_existe", badU32(badIDs, r[5]), "especializacao!lixo"

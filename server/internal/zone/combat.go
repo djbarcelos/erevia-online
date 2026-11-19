@@ -2,6 +2,7 @@ package zone
 
 import (
 	"math"
+	"slices"
 
 	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
@@ -144,6 +145,11 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 		z.system(p, "Você ainda não aprendeu "+s.Name+".")
 		return
 	}
+	if len(s.Weapon) > 0 && !slices.Contains(s.Weapon, p.pl.inv.weaponType()) {
+		z.system(p, s.Name+" exige outra arma.")
+		return
+	}
+	s = game.EffectiveSkill(s, p.pl.ranks) // com os modificadores aprendidos
 	if ready := p.pl.cooldowns[s.ID]; z.now < ready {
 		z.sendCooldown(p, s.ID, ready-z.now)
 		return
@@ -409,6 +415,14 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 		dmg -= b
 		ev.Damage = uint32(dmg)
 		ev.Absorbed += uint32(b)
+	}
+	// Bloqueio do jogador com escudo (Fase 4): golpe físico de qualquer direção (o servidor não
+	// guarda para onde o jogador olha). O sorteio só acontece com chance > 0.
+	if !magic && dst.pl != nil && src != dst && dst.stats.Block > 0 && z.rng.Float64() < dst.stats.Block {
+		b := math.Round(dmg * game.BlockCut(dst.stats))
+		dmg -= b
+		ev.Damage = uint32(dmg)
+		ev.Blocked = true
 	}
 	taken := z.damage(src, dst, dmg, ev)
 

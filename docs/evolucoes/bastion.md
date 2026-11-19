@@ -16,7 +16,7 @@ Na caça solo ele mata mais devagar que a média, como hoje, mas morre muito men
 | Secundária | **escudo** (é a identidade: sem escudo, não há bloqueio e quase não há Determinação) |
 
 **Bloqueio** (Fase 4, pré-requisito desta evolução):
-- Um golpe físico de frente contra quem usa escudo pode ser bloqueado. O bloqueado causa 50% do dano.
+- Um golpe físico contra quem usa escudo pode ser bloqueado. O bloqueado causa 50% do dano. **Hoje vale de qualquer direção**, porque o servidor não guarda para onde o jogador olha; "só de frente" fica para quando houver essa informação.
 - A chance vem do escudo (`Bonus.Block`): comum 10%, raro 15%, épico 20%. As passivas abaixo somam a isso.
 - Magia nunca é bloqueada.
 - O cliente mostra "Bloqueio".

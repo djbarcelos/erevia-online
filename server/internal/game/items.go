@@ -257,6 +257,27 @@ func potion(id, name string, group int, hp, mp float64, price int64, icon, desc 
 }
 
 // Items é o catálogo do jogo, por id.
+// Bloqueio dos escudos (tunnel#180, Fase 4): chance por grau e o corte padrão do dano bloqueado.
+const BlockReduceBase = 0.5
+
+// ShieldBlock: a chance de bloqueio que o escudo dá, pelo grau (comum 10% ... lendário 22%).
+func ShieldBlock(g Grade) float64 {
+	switch g {
+	case GradeGood:
+		return 0.12
+	case GradeRare:
+		return 0.15
+	case GradeEpic:
+		return 0.20
+	case GradeLegendary:
+		return 0.22
+	}
+	return 0.10
+}
+
+// BlockCut: quanto do dano um bloqueio corta (BlockReduceBase mais o bônus, até 90%).
+func BlockCut(s Stats) float64 { return math.Min(0.9, BlockReduceBase+s.BlockReduce) }
+
 var Items = func() map[string]*ItemDef {
 	list := []*ItemDef{
 		// Cavaleiro: espadas.
@@ -464,6 +485,9 @@ var Items = func() map[string]*ItemDef {
 	for _, d := range list {
 		if d.Equippable() {
 			d.Tier = TierFor(d.ReqLevel)
+		}
+		if d.Kind == KindShield && d.Bonus.Block == 0 {
+			d.Bonus.Block = ShieldBlock(d.Grade)
 		}
 		m[d.ID] = d
 	}

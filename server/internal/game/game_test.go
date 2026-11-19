@@ -33,8 +33,8 @@ func TestEveryClassHasTwoStarterSkills(t *testing.T) {
 func TestSkillTreeShape(t *testing.T) {
 	for id, c := range Classes {
 		tree := ClassTree(id)
-		if len(tree) != 15 {
-			t.Fatalf("%s: %d skills in the tree, want 15 (3 ramos × 5 degraus)", id, len(tree))
+		if len(tree) != 12 {
+			t.Fatalf("%s: %d skills in the tree, want 12 (3 ramos × 4 degraus)", id, len(tree))
 		}
 		seen := map[[2]int]bool{}
 		for _, s := range tree {
@@ -75,7 +75,7 @@ func TestRankScaling(t *testing.T) {
 }
 
 func TestValidateRanks(t *testing.T) {
-	start := StarterRanks("knight")
+	start := StarterRanks("knight", "")
 	if err := ValidateRanks("knight", "", 1, start); err != nil {
 		t.Fatalf("starter ranks invalid: %v", err)
 	}
@@ -103,68 +103,31 @@ func TestValidateRanks(t *testing.T) {
 	if ValidateRanks("knight", "", 20, map[uint32]int{SkillJudgment: 2}) == nil {
 		t.Error("rank above max accepted")
 	}
-	// 5º degrau: nível 20 e o degrau de cima (Muralha Viva, que pede Provocar, que pede…).
-	chain := map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1, SkillLivingWall: 1, SkillBulwark: 1}
-	if ValidateRanks("knight", "", 19, chain) == nil {
-		t.Error("tier 5 needs level 20")
-	}
-	if err := ValidateRanks("knight", "", 20, chain); err != nil {
-		t.Errorf("tier 5 at level 20 with the branch learned should work: %v", err)
-	}
-	if ValidateRanks("knight", "", 30, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1, SkillBulwark: 1}) == nil {
-		t.Error("tier 5 needs the tier 4 skill of the branch")
-	}
-	chain[SkillBulwark] = 3
-	if ValidateRanks("knight", "", 20, chain) != nil {
-		t.Error("rank 3 of the tier 5 should work")
-	}
-	chain[SkillBulwark] = 4
-	if ValidateRanks("knight", "", 30, chain) == nil {
-		t.Error("tier 5 above rank 3 accepted")
+	// O degrau 20 de antes saiu da base: o Baluarte é do Bastião.
+	if ValidateRanks("knight", "", 20, map[uint32]int{SkillShieldBash: 1, SkillIronSkin: 1, SkillTaunt: 1, SkillLivingWall: 1, SkillBulwark: 1}) == nil {
+		t.Error("Baluarte aceito na árvore base")
 	}
 }
 
-func TestFifthTierSkills(t *testing.T) {
-	if TierLevels[4] != 20 {
-		t.Fatalf("5º degrau no nível %d, want 20", TierLevels[4])
+func TestSkillPoints(t *testing.T) {
+	if len(TierLevels) != 4 || TierLevels[3] != 15 {
+		t.Fatalf("degraus da base: %v", TierLevels)
+	}
+	// Sem evolução, os pontos param no 19 (20 pontos); evoluído, 1 por nível até o teto.
+	if SkillPointsTotal(19, false) != 20 || SkillPointsTotal(MaxLevel, false) != 20 {
+		t.Errorf("base: %d no 19, %d no teto", SkillPointsTotal(19, false), SkillPointsTotal(MaxLevel, false))
+	}
+	if SkillPointsTotal(20, true) != 21 || SkillPointsTotal(40, true) != 41 || SkillPointsTotal(MaxLevel, true) != MaxLevel+1 {
+		t.Errorf("evolução: %d no 20, %d no 40", SkillPointsTotal(20, true), SkillPointsTotal(40, true))
 	}
 	for id := range Classes {
-		var fifth []*SkillDef
 		total := 0
 		for _, s := range ClassTree(id) {
 			total += s.MaxRank
-			if s.Tier == 4 {
-				fifth = append(fifth, s)
-			}
 		}
-		if len(fifth) != 3 {
-			t.Fatalf("%s: %d skills no 5º degrau, want 3", id, len(fifth))
-		}
-		for _, s := range fifth {
-			if s.LevelReq() != 20 || s.IsPassive() || s.MaxRank != 3 {
-				t.Errorf("%s: nível %d, passiva %v, rank máx %d", s.Name, s.LevelReq(), s.IsPassive(), s.MaxRank)
-			}
-			if p := s.Parent(); p == nil || p.Tier != 3 || p.Branch != s.Branch {
-				t.Errorf("%s: o pai deveria ser o 4º degrau do mesmo ramo", s.Name)
-			}
-			// Cada skill nova faz alguma coisa (dano ou efeito) e cresce com o rank.
-			if s.Mult.At(1) <= 0 && s.OnTarget == nil && s.OnSelf == nil {
-				t.Errorf("%s: não faz nada", s.Name)
-			}
-			if s.Text(1) == s.Text(3) {
-				t.Errorf("%s: o texto do rank 3 deveria mudar", s.Name)
-			}
-			if s.MP.At(1) <= 0 || s.CD.At(1) <= 0 {
-				t.Errorf("%s: sem custo ou recarga", s.Name)
-			}
-		}
-		// No nível máximo ainda não dá para aprender tudo: escolher continua valendo. Os
-		// pontos de skill param no 30 (do 31 ao 40 só os de atributo sobem).
-		if SkillPointsTotal(MaxLevel) >= total || SkillPointsTotal(MaxLevel) != SkillPointsTotal(SkillPointMaxLevel) {
-			t.Errorf("%s: %d pontos no nível máximo para %d ranks", id, SkillPointsTotal(MaxLevel), total)
-		}
-		if AttrPointsTotal(MaxLevel) <= AttrPointsTotal(SkillPointMaxLevel) {
-			t.Errorf("os pontos de atributo continuam por nível depois do %d", SkillPointMaxLevel)
+		// No 19 ainda não dá para aprender toda a base: escolher continua valendo.
+		if SkillPointsTotal(19, false) >= total {
+			t.Errorf("%s: %d pontos no 19 para %d ranks na base", id, SkillPointsTotal(19, false), total)
 		}
 	}
 }

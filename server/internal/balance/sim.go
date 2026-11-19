@@ -90,7 +90,7 @@ func rotation(b *Build) []rotSkill {
 	var out []rotSkill
 	overload := game.PassiveTotals(b.Ranks).Has(game.PassiveOverload)
 	for id, r := range b.Ranks {
-		s := game.Skills[id]
+		s := game.EffectiveSkill(game.Skills[id], b.Ranks) // com os modificadores, como no servidor
 		if s == nil || r < 1 || s.IsPassive() || s.Blink.Base > 0 {
 			continue
 		}
@@ -156,7 +156,7 @@ type fight struct {
 	hp, mp, mhp        float64
 	pNext, mNext       float64
 	nextSkill          float64
-	cds                [128]float64 // skill → instante em que fica pronta (ids < 128)
+	cds                [1000]float64 // skill → instante em que fica pronta (ids < 1000)
 	pfx, mfx           effects
 	hpPotAt, mpPotAt   float64
 	lastStandAt        float64
@@ -407,6 +407,10 @@ func (f *fight) monsterHit() {
 	}
 	dmg := game.ExpectedHit(game.HitInput{Atk: f.mAtk(), Def: f.pDef(f.m.Magic), Mult: 1,
 		Crit: f.m.Crit, CritMult: f.m.CritDamage, Accuracy: acc, Evasion: f.p.Evasion})
+	// Bloqueio do escudo (Fase 4), pelo valor esperado: só golpe físico.
+	if !f.m.Magic && f.p.Block > 0 {
+		dmg *= 1 - math.Min(1, f.p.Block)*game.BlockCut(f.p)
+	}
 	if sh := &f.pfx[game.EffectShield]; sh.until > f.now && sh.value > 0 {
 		a := math.Min(sh.value, dmg)
 		sh.value -= a
