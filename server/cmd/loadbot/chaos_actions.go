@@ -37,6 +37,7 @@ var chaosActions = []chaosAction{
 	{"vender", 5, actSell},
 	{"encantar", 5, actEnchant},
 	{"cristalizar", 2, actCrystallize},
+	{"canal", 1, actChannel},
 	{"armazem_item", 5, actStorageMove},
 	{"armazem_moedas", 3, actStorageGold},
 	{"troca", 16, actTrade},
@@ -389,6 +390,19 @@ func actEnchant(b *chaosBot, s *chaosSession, r [6]uint64) {
 	m, label := s.enchantMsg(r, -1)
 	s.mu.Unlock()
 	b.emit(s, label, m)
+}
+
+// actChannel: pede a lista de canais ou troca para um (às vezes um que não existe).
+func actChannel(b *chaosBot, s *chaosSession, r [6]uint64) {
+	n := uint32(pickN(r[2], 4)) // 0 = só a lista
+	label := "canal:trocar"
+	switch {
+	case n == 0:
+		label = "canal:lista"
+	case pct(r[1]) < 10:
+		n, label = badU32(badIDs, r[3]), "canal!numero"
+	}
+	b.emit(s, label, &pb.ClientMessage{Msg: &pb.ClientMessage_ChangeChannel{ChangeChannel: &pb.ChangeChannel{Channel: n}}})
 }
 
 // ---------- Loja pessoal (tunnel#161) ----------

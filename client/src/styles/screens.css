@@ -1657,3 +1657,24 @@
   flex: none;
   color: var(--gold);
 }
+
+/* Canal na tela de personagens (tunnel#86): acima do botão de entrar, sem mudar a largura do rodapé. */
+.channel-field {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.channel-field .label {
+  font-size: 0.78rem;
+  color: var(--muted, #b7a98f);
+}
+
+.channel-pick {
+  min-width: 170px;
+}

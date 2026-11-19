@@ -145,7 +145,7 @@ func (z *Zone) useGate(id, npcID uint32) {
 	}
 	var dest *Zone
 	if z.mgr != nil {
-		dest = z.mgr.Zone(g.To)
+		dest = z.mgr.Arrival(g.To) // mapa principal com canais: o menos cheio (channels.go)
 	}
 	switch {
 	case dest == nil || dest == z:

@@ -113,7 +113,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
-	characterID, err := readJoin(ctx, c)
+	characterID, channel, err := readJoin(ctx, c)
 	if err != nil {
 		s.log.Info("join rejected", "err", err, "account", accountID)
 		c.Close(websocket.StatusPolicyViolation, err.Error())
@@ -138,7 +138,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		report: func(where string, v any, stack []byte) { s.zones.ReportPanic(where, char.ID, "", v, stack) },
 	}
 	go sess.writePump(ctx)
-	s.zones.Join(ctx, zone.JoinInfo{
+	joined := s.zones.Join(ctx, zone.JoinInfo{
 		ID: char.ID, Name: char.Name, Class: char.Class, X: char.X, Z: char.Z,
 		XP: char.XP, HP: char.HP, MP: char.MP, Gold: char.Gold, Items: char.Items,
 		Attrs: char.Attrs, Ranks: char.Ranks, Hotbar: char.Hotbar, Emblem: char.Emblem, Look: char.Look,
@@ -150,7 +150,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Bestiary: char.Bestiary, Discovered: char.Discovered,
 		Zone:     char.Zone,
 		Vitality: char.Vitality, Classes: char.Classes,
+		Channel: channel,
 	})
+	if joined == nil { // canais (zone/channels.go): todos cheios
+		cancel()
+		c.Close(websocket.StatusTryAgainLater, "Todos os canais estão cheios. Tente de novo em alguns minutos.")
+		return
+	}
 
 	s.readPump(ctx, sess, char.ID)
 
@@ -166,26 +172,27 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c.Close(websocket.StatusNormalClosure, "")
 }
 
-func readJoin(ctx context.Context, c *websocket.Conn) (uint32, error) {
+// readJoin lê a primeira mensagem: o personagem e o canal pedido (0 = o servidor escolhe).
+func readJoin(ctx context.Context, c *websocket.Conn) (uint32, int, error) {
 	rctx, cancel := context.WithTimeout(ctx, joinTimeout)
 	defer cancel()
 
 	typ, data, err := c.Read(rctx)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if typ != websocket.MessageBinary {
-		return 0, errors.New("expected binary message")
+		return 0, 0, errors.New("expected binary message")
 	}
 	var msg pb.ClientMessage
 	if err := proto.Unmarshal(data, &msg); err != nil {
-		return 0, errors.New("invalid message")
+		return 0, 0, errors.New("invalid message")
 	}
 	join := msg.GetJoin()
 	if join == nil || join.CharacterId == 0 {
-		return 0, errors.New("first message must be Join")
+		return 0, 0, errors.New("first message must be Join")
 	}
-	return join.CharacterId, nil
+	return join.CharacterId, int(min(join.Channel, 99)), nil
 }
 
 func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
@@ -300,6 +307,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			z.Social(ctx, id, m.PrivateShop)
 		case *pb.ClientMessage_UseGate:
 			z.UseGate(ctx, id, m.UseGate.NpcId)
+		case *pb.ClientMessage_ChangeChannel:
+			z.ChangeChannel(ctx, id, int(min(m.ChangeChannel.Channel, 99)))
 		case *pb.ClientMessage_Ping:
 			// Respondido aqui mesmo, sem passar pela zona, para medir só a rede.
 			pong, _ := proto.Marshal(&pb.ServerMessage{Msg: &pb.ServerMessage_Pong{

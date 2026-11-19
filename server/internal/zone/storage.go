@@ -154,7 +154,7 @@ func (z *Zone) storageOnJoin(p *entity, d *StorageData) {
 	if p.pl.accountID == 0 {
 		return
 	}
-	if z.cfg.NoTown { // mapa sem armazém: só guarda como veio, para levar de volta à cidade
+	if z.cfg.NoTown || !z.mainChannel() { // mapa ou canal sem armazém: só guarda como veio, para levar de volta à cidade
 		p.pl.hop.storage = d
 		return
 	}
@@ -230,6 +230,10 @@ func (z *Zone) storageChanged(p *entity, st *storage, npcID uint32) {
 func (z *Zone) storageGold(p *entity, npcID uint32, amount int64) {
 	n := z.storageNPC(p, npcID)
 	st := z.storageOf(p)
+	if n != nil && !z.mainChannel() { // o armazém da conta só muda numa zona (channels.go)
+		z.system(p, "O armazém da conta fica no Canal 1. Troque de canal para usá-lo.")
+		return
+	}
 	if n == nil || st == nil || p.dead {
 		return
 	}

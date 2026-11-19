@@ -52,6 +52,8 @@ type API struct {
 	admin *adminState
 	// bug: /bug completo (bug_reports.go).
 	bug *bugState
+	// channels: os canais do mapa principal (channels.go; nil = o servidor não tem canais).
+	channels func() []ChannelInfo
 }
 
 // OnAccountDeleted registra quem é avisado depois que uma conta é apagada (antes de servir).
@@ -80,6 +82,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/characters", a.handleListCharacters)
 	mux.HandleFunc("POST /api/characters", a.handleCreateCharacter)
 	mux.HandleFunc("GET /api/creation", a.handleCreation)
+	mux.HandleFunc("GET /api/channels", a.handleChannels)
 	mux.HandleFunc("POST /api/client-errors", a.handleClientErrors)
 	a.registerBugReports(mux)
 	a.registerAdmin(mux)

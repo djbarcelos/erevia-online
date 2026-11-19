@@ -134,6 +134,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.Social(ctx, id, m.PrivateShop)
 	case *pb.ClientMessage_UseGate:
 		z.UseGate(ctx, id, m.UseGate.NpcId)
+	case *pb.ClientMessage_ChangeChannel:
+		z.ChangeChannel(ctx, id, int(min(m.ChangeChannel.Channel, 99)))
 	default:
 		// Join (só vale como primeira mensagem), Ping (respondido na conexão) e vazio.
 		return false
@@ -949,6 +951,7 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_CancelChannel{CancelChannel: &pb.CancelChannel{}}},
 		{Msg: &pb.ClientMessage_Enchant{Enchant: &pb.Enchant{ScrollSlot: 8, Place: 1, Slot: game.SlotWeapon}}},
 		{Msg: &pb.ClientMessage_Crystallize{Crystallize: &pb.Crystallize{Slot: 9}}},
+		{Msg: &pb.ClientMessage_ChangeChannel{ChangeChannel: &pb.ChangeChannel{Channel: 2}}},
 		{Msg: &pb.ClientMessage_StorageMove{StorageMove: &pb.StorageMove{NpcId: npc + uint32(len(townNPCs)+legacyStones), FromPlace: 0, FromSlot: 10, ToPlace: 2, ToSlot: 0}}},
 		{Msg: &pb.ClientMessage_StorageGold{StorageGold: &pb.StorageGold{NpcId: npc + uint32(len(townNPCs)+legacyStones), Amount: 10}}},
 		// Retiradas do armazém (o outro sentido).

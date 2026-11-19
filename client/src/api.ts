@@ -86,4 +86,31 @@ export const api = {
   createCharacter: (name: string, cls: ClassId, look: LookChoice) =>
     request<CharacterInfo>("POST", "/api/characters", { name, class: cls, look }),
   creation: () => request<CreationOptions>("GET", "/api/creation"),
+  /** Canais do mapa principal (vazio = o servidor não tem canais; tunnel#86). */
+  channels: () => request<{ channels: ChannelStatus[] }>("GET", "/api/channels"),
 };
+
+export interface ChannelStatus {
+  number: number;
+  players: number;
+  /** 0 = sem limite. */
+  capacity: number;
+  full: boolean;
+}
+
+// Canal escolhido na tela de personagens (0 = o servidor escolhe). Fica no navegador.
+const CHANNEL_KEY = "erevia:channel";
+export function chosenChannel(): number {
+  try {
+    return Math.max(0, Math.floor(Number(localStorage.getItem(CHANNEL_KEY)) || 0));
+  } catch {
+    return 0;
+  }
+}
+export function setChosenChannel(n: number): void {
+  try {
+    localStorage.setItem(CHANNEL_KEY, String(n));
+  } catch {
+    // navegação privada: vale só nesta sessão
+  }
+}

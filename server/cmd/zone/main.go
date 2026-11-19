@@ -140,17 +140,34 @@ func run(log *slog.Logger) error {
 		}()
 		return z, done
 	}
+	// Canais do mapa principal (zone/channels.go): CHANNELS cópias (1 = sem canais) com até
+	// CHANNEL_CAPACITY jogadores cada (0 = sem limite).
+	channels := envInt(log, "CHANNELS", 1, 1, 9)
+	capacity := envInt(log, "CHANNEL_CAPACITY", 0, 0, 10000)
+	var homeCfg zone.Config
 	for _, id := range maps {
 		cfg, err := zone.MapConfig(zcfg, id, maps)
 		if err != nil {
 			return err
 		}
+		if id == maps[0] {
+			cfg.Capacity = capacity
+			if channels > 1 {
+				cfg.Channel = 1
+			}
+			homeCfg = cfg // a base dos canais 2… (zone.ChannelConfig)
+		}
 		z, done := wire(cfg, log.With("zone", id))
 		m.Add(z)
 		persistDone = append(persistDone, done)
 	}
+	for n := 2; n <= channels; n++ {
+		z, done := wire(zone.ChannelConfig(homeCfg, n), log.With("zone", maps[0], "channel", n))
+		m.AddChannel(z)
+		persistDone = append(persistDone, done)
+	}
 	m.EnableDungeons(zcfg, func(cfg zone.Config, zlog *slog.Logger) (*zone.Zone, <-chan struct{}) { return wire(cfg, zlog) })
-	log.Info("zones", "maps", strings.Join(maps, ","))
+	log.Info("zones", "maps", strings.Join(maps, ","), "channels", channels, "channel_capacity", capacity)
 	// Anúncios agendados pelo portal que ainda não saíram (sobrevivem ao reinício): cada
 	// zona avisa os seus jogadores na hora.
 	lctx, lcancel = context.WithTimeout(ctx, 30*time.Second)
@@ -188,6 +205,13 @@ func run(log *slog.Logger) error {
 	// pelo canal, e as ações sobre um personagem vão para a zona dona dele (zone.Manager).
 	httpAPI.SetAdmin(api.AdminConfig{Version: zcfg.Version, StartedAt: startedAt, Zone: m})
 	httpAPI.SetBugZone(m)
+	httpAPI.SetChannels(func() []api.ChannelInfo { // a tela de personagens escolhe o canal
+		var out []api.ChannelInfo
+		for _, c := range m.ChannelStatuses() {
+			out = append(out, api.ChannelInfo{Number: c.Number, Players: c.Players, Capacity: c.Capacity, Full: c.Full})
+		}
+		return out
+	})
 	mux := http.NewServeMux()
 	httpAPI.Register(mux)
 	mux.Handle("/ws", gamenet.NewServer(m, &wsBackend{api: httpAPI, store: st}, log, origins))
@@ -547,4 +571,18 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// envInt lê um inteiro da variável name, entre lo e hi (vazia ou inválida = def, com aviso).
+func envInt(log *slog.Logger, name string, def, lo, hi int) int {
+	v := os.Getenv(name)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < lo || n > hi {
+		log.Error(name+" inválida, usando o padrão", "value", v, "min", lo, "max", hi, "default", def)
+		return def
+	}
+	return n
 }

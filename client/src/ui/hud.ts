@@ -19,6 +19,7 @@ import {
   PvpState,
   SkillTarget,
   type AreaEventStatus,
+  type ChannelList,
   type EventStatus,
   type MasteryState,
   type ItemInfo,
@@ -33,7 +34,7 @@ import type { ActiveEffect, EntityInfo } from "../world/entities";
 import { ui, uniqueIds } from "./art";
 import { effectIcon, effectName, effectText, formatSeconds, isDebuff, skillIcon } from "./icons";
 import { buildItemTip, itemIcon, type ItemStore } from "./items";
-import { art, bar, button, closeSheet, el, hideTip, isTouch, keyLabel, openSheet, settings, showTip, toast, tooltip } from "./kit";
+import { art, bar, button, closeSheet, contextMenu, el, hideTip, isTouch, keyLabel, openSheet, settings, showTip, toast, tooltip } from "./kit";
 import { drawBossMarker, drawDot, drawPlayerArrow, MARKER_COLORS, type MapSource } from "./minimap";
 import { drawQuestTarget, QuestArrow, questStepTarget, QuestTracker, type Project } from "./quest-nav";
 import { levelText, regionAt, type Region } from "./regions";
@@ -92,6 +93,8 @@ export interface HudCallbacks {
   /** Botão de cancelar a canalização (teleporte, pergaminho). */
   onCancelChannel(): void;
   onCycleTarget(): void;
+  /** Canais (tunnel#86): trocar para o canal n (0 = só atualizar a lista). */
+  onChangeChannel(n: number): void;
   /** Botão "Ir" de uma missão do painel (o personagem anda até o lugar do passo). */
   onQuestGo(questId: string): void;
   /** Joystick (direção relativa à câmera) ou null ao soltar. */
@@ -224,6 +227,9 @@ export class Hud {
   private miniCtx = this.miniCanvas.getContext("2d")!;
   private miniRadius = 45;
   private zoneName = el("div", "mm-zone");
+  /** Canal do mapa principal (tunnel#86): "Canal 2 ▾"; escondido sem canais. */
+  private chanEl = el("button", "mm-channel");
+  private chanList: ChannelList | null = null;
   private clock = el("span", "mm-clock");
   private coordX = el("b", "mm-cv", "0");
   private coordY = el("b", "mm-cv", "0");
@@ -351,7 +357,11 @@ export class Hud {
     this.xpBar.root.onclick = () => this.mastery?.active && cb.openMastery();
     tooltip(this.invEl, () => "<h4>Invasão da cidade</h4>Esqueletos entram pelos 4 portões. Enquanto durar, as estradas e a praça deixam de ser zona segura (o PvP continua proibido). A recompensa sai no fim, pelo dano e pelos abates.");
     // Aro dourado no alto e, embaixo, a plaqueta com a região e a hora.
-    const plaque = el("div", "mm-plaque", this.zoneName, this.clock);
+    const plaque = el("div", "mm-plaque", this.zoneName, this.clock, this.chanEl);
+    this.chanEl.type = "button";
+    this.chanEl.hidden = true;
+    this.chanEl.onclick = () => this.openChannels(cb);
+    tooltip(this.chanEl, () => "<b>Canal</b><br>Cópias do mapa para caber mais gente. Troque dentro da cidade, fora de combate.");
     const mini = el("div", "hud-minimap", frame, plaque, el("div", "mm-zoom", zoomOut, zoomIn), coords, statsEl, this.eventsEl);
 
     // ---------- Menu ☰ (toque) ----------
@@ -704,7 +714,33 @@ export class Hud {
   }
 
   /** Nome e cor do emblema no quadro do personagem. */
-  setIdentity(name: string, initial: string, emblem: string): void {
+/** Canais do mapa principal (vazio = o servidor não tem canais ou é outro mapa). */
+  setChannels(l: ChannelList): void {
+    this.chanList = l.channels.length ? l : null;
+    this.chanEl.hidden = !this.chanList || !l.current;
+    if (this.chanList && l.current) this.chanEl.textContent = `Canal ${l.current} ▾`;
+  }
+
+  private openChannels(cb: HudCallbacks): void {
+    const l = this.chanList;
+    if (!l) return;
+    cb.onChangeChannel(0); // a lista volta atualizada para a próxima vez
+    const r = this.chanEl.getBoundingClientRect();
+    contextMenu(
+      l.channels.map((c) => ({
+        label: `Canal ${c.number} · ${c.capacity ? `${c.players}/${c.capacity}` : `${c.players} online`}${c.number === l.current ? " (você)" : c.full ? " (cheio)" : ""}`,
+        run: () => {
+          if (c.number === l.current) return;
+          if (c.full) return toast(`O Canal ${c.number} está cheio.`, "warn");
+          cb.onChangeChannel(c.number);
+        },
+      })),
+      r.left,
+      r.bottom + 4,
+    );
+  }
+
+    setIdentity(name: string, initial: string, emblem: string): void {
     this.meName.textContent = name;
     this.meEl.querySelector(".me-initial")!.textContent = initial;
     this.meEl.style.setProperty("--emblem", emblem);
