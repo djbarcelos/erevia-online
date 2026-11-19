@@ -1,6 +1,6 @@
 # Senhor da Guerra (Bárbaro): Ímpeto
 
-> **Rascunho para revisão do DIogo.** O ID continua `warlord`, e só o nome exibido muda (antes: Caudilho). Os números são propostas ancoradas nas skills de hoje. A calibragem no simulador vem na fase de conteúdo do Bárbaro. As regras gerais estão no [README](README.md).
+> **Aprovado pelo DIogo em 19/11.** O ID continua `warlord`, e só o nome exibido muda (antes: Caudilho). Os números são propostas ancoradas nas skills de hoje. A calibragem no simulador vem na fase de conteúdo do Bárbaro. As regras gerais estão no [README](README.md).
 
 ## Papel e identidade
 
@@ -121,9 +121,9 @@ Os IDs de 133 em diante são **provisórios**. ★ marca as 2 iniciais. "(evol.)
 - **Saltos encadeados** (Investida Implacável): reaproveita o `Charge` da Investida, em sequência.
 - **Novos `PassiveKind`:** `PassiveAllyDamagePct` (aura), `PassivePostChargeDamage` e `PassiveCCDurationBonus`.
 
-## Perguntas para o DIogo
+## Decisões do DIogo (19/11)
 
-1. **Interromper** (atordoar durante o aviso no chão cancela o ataque do monstro) pode entrar para todas as classes, ou só o Senhor da Guerra deve conseguir?
-2. Os nomes **"Brado do Caudilho" → "Brado de Guerra"** e **"Avanço do Caudilho" → "Avanço de Guerra"** estão bons?
-3. O **Desafio** (provocar) no Senhor da Guerra está bom, ou provocar deve ser só do Bastião?
-4. O **bloqueio não gera Ímpeto**, para o Senhor da Guerra com escudo não competir com o Bastião. Concorda?
+1. **Interromper** vale para todas as classes (qualquer atordoamento durante o aviso cancela o ataque), mas só o Senhor da Guerra ganha recurso com isso.
+2. Os nomes passam a ser **Brado de Guerra** (70) e **Avanço de Guerra** (71).
+3. O **Desafio** (provocar) fica no Senhor da Guerra, mas com raio e duração menores que os do Bastião.
+4. O **bloqueio não gera Ímpeto**.

@@ -1,6 +1,6 @@
 # Berserker (Bárbaro): Fúria
 
-> **Rascunho para revisão do DIogo.** O ID continua `bloodrager`, e só o nome exibido muda (antes: Sanguinário). Os números são propostas ancoradas nas skills de hoje. A calibragem no simulador vem na fase de conteúdo do Bárbaro. As regras gerais estão no [README](README.md).
+> **Aprovado pelo DIogo em 19/11.** O ID continua `bloodrager`, e só o nome exibido muda (antes: Sanguinário). Os números são propostas ancoradas nas skills de hoje. A calibragem no simulador vem na fase de conteúdo do Bárbaro. As regras gerais estão no [README](README.md).
 
 ## Papel e identidade
 
@@ -130,9 +130,9 @@ Os IDs de 117 em diante são **provisórios**. ★ marca as 2 iniciais. "(evol.)
 - **Teto de execução em chefe:** regra global de +50% em chefes. Vale também para o Golpe Fatal e a Sentença.
 - **Novos `PassiveKind`:** `PassiveAttackSpeedStack` e `PassiveResCostCut`.
 
-## Perguntas para o DIogo
+## Decisões do DIogo (19/11)
 
-1. **+25% de ataque** no machado de duas mãos em relação ao de uma mão está bom como ponto de partida?
-2. Pode renomear a skill **"Fúria" (base) para "Cólera"** na evolução, para não confundir com o recurso?
-3. A **Fúria Incontrolável** (o dobro de Fúria, mas recebe +10% de dano) é o tipo de risco que você quer, ou prefere que o risco seja outro (por exemplo, gastar vida)?
-4. A **Carnificina** pode ir para o marco 35, mesmo que quem a tem entre o 28 e o 34 fique sem ela até o 35, com os pontos de volta?
+1. **Machado de duas mãos:** +25% de ataque em relação ao de uma mão do mesmo grau, como ponto de partida para a calibragem.
+2. A skill-base "Fúria" passa a se chamar **Cólera** na evolução.
+3. **Fúria Incontrolável:** o risco é receber +10% de dano.
+4. **Carnificina** no marco 35. Quem a tem entre o 28 e o 34 recebe os pontos de volta até chegar ao 35.

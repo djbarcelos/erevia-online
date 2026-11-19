@@ -8,8 +8,8 @@ Cada evolução tem um doc próprio nesta pasta. **O DIogo revisa cada doc antes
 |---|---|---|---|---|
 | Cavaleiro | Bastião (`bastion`) | Determinação | [bastion.md](bastion.md) | aprovado (19/11) |
 | Cavaleiro | Paladino (`herald`) | Fé | [herald.md](herald.md) | aprovado (19/11) |
-| Bárbaro | Berserker (`bloodrager`) | Fúria | [bloodrager.md](bloodrager.md) | rascunho para revisar |
-| Bárbaro | Senhor da Guerra (`warlord`) | Ímpeto | [warlord.md](warlord.md) | rascunho para revisar |
+| Bárbaro | Berserker (`bloodrager`) | Fúria | [bloodrager.md](bloodrager.md) | aprovado (19/11) |
+| Bárbaro | Senhor da Guerra (`warlord`) | Ímpeto | [warlord.md](warlord.md) | aprovado (19/11) |
 | Mago | Elementalista (`elementalist`) | Concentração | `elementalist.md` | a fazer |
 | Mago | Arcanista (`occultist`) | Carga Arcana | `occultist.md` | a fazer |
 | Ladino | Assassino (`cutthroat`) | Combo | `cutthroat.md` | a fazer |
