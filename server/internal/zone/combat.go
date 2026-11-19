@@ -2,6 +2,7 @@ package zone
 
 import (
 	"math"
+	"slices"
 
 	"erevia/server/internal/game"
 	"erevia/server/internal/pb"
@@ -144,6 +145,11 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 		z.system(p, "Você ainda não aprendeu "+s.Name+".")
 		return
 	}
+	if len(s.Weapon) > 0 && !slices.Contains(s.Weapon, p.pl.inv.weaponType()) {
+		z.system(p, s.Name+" exige outra arma.")
+		return
+	}
+	s = game.EffectiveSkill(s, p.pl.ranks) // com os modificadores aprendidos
 	if ready := p.pl.cooldowns[s.ID]; z.now < ready {
 		z.sendCooldown(p, s.ID, ready-z.now)
 		return

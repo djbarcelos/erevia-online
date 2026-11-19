@@ -97,15 +97,7 @@ var classOrder = map[string][]uint32{
 	},
 }
 
-// fifthTier: a skill do 5º degrau (nível 20) que o jogador típico pega primeiro.
-var fifthTier = map[string]uint32{
-	"knight":    game.SkillHorizon,
-	"barbarian": game.SkillSeismicAxe,
-	"mage":      game.SkillInferno,
-	"rogue":     game.SkillFatalBlow,
-}
-
-// fillers: para onde vão os pontos que sobram (defesa e sustento).
+// fillers: para onde vão os pontos que sobram na árvore base (defesa e sustento).
 var fillers = map[string][]uint32{
 	"knight":    {game.SkillIronSkin, game.SkillIronSkin, game.SkillIronSkin, game.SkillIronSkin, game.SkillIronSkin, game.SkillFortress, game.SkillFortress, game.SkillWarCry},
 	"barbarian": {game.SkillThickHide, game.SkillThickHide, game.SkillThickHide, game.SkillThickHide, game.SkillThickHide},
@@ -113,39 +105,58 @@ var fillers = map[string][]uint32{
 	"rogue":     {game.SkillToxicFlask, game.SkillPoisonedBlade, game.SkillPoisonedBlade, game.SkillDodge, game.SkillDodge, game.SkillDodge},
 }
 
-// skillPlan: a ordem completa de uma classe com o caminho. Do 20 em diante: 5º degrau,
-// as 3 do caminho no rank 1 (cada uma quando o degrau libera) e depois os ranks 2 e 3.
-func skillPlan(class, spec string) []uint32 {
-	plan := slices.Clone(classOrder[class])
-	f := fifthTier[class]
-	tree := game.SpecTree(spec)
-	plan = append(plan, f)
+// evolutionPlan: a ordem na árvore da evolução. Primeiro cada ativa no rank 1 (dano antes,
+// na ordem da árvore), depois os ranks das ativas, e por fim passivas, modificadores e chaves.
+func evolutionPlan(spec string) []uint32 {
+	tree := game.EvolutionTree(spec)
+	var actives, others []*game.SkillDef
 	for _, s := range tree {
+		if s.Node == game.NodeActive && !s.IsPassive() {
+			actives = append(actives, s)
+		} else {
+			others = append(others, s)
+		}
+	}
+	slices.SortStableFunc(actives, func(a, b *game.SkillDef) int { return a.Level - b.Level })
+	var plan []uint32
+	for _, s := range actives {
 		plan = append(plan, s.ID)
 	}
-	plan = append(plan, f, f)
-	for _, s := range tree {
-		plan = append(plan, s.ID, s.ID)
+	for r := 2; r <= 3; r++ {
+		for _, s := range actives {
+			plan = append(plan, s.ID)
+		}
 	}
-	return append(plan, fillers[class]...)
+	for r := 1; r <= 5; r++ {
+		for _, s := range others {
+			plan = append(plan, s.ID)
+		}
+	}
+	return plan
 }
 
-// Ranks: a árvore do jogador típico no nível (o caminho só vale do 20 em diante).
+// Ranks: a árvore do jogador típico no nível. Antes do 20 (ou sem caminho), a árvore base;
+// do 20 em diante, só a da evolução.
 func Ranks(class, spec string, level int) map[uint32]int {
 	if level < game.SpecLevel {
 		spec = ""
 	}
-	ranks := game.StarterRanks(class)
-	points := game.SkillPointsTotal(level) - game.RanksUsed(ranks)
+	plan := slices.Clone(classOrder[class])
+	plan = append(plan, fillers[class]...)
+	if spec != "" {
+		plan = evolutionPlan(spec)
+	}
+	ranks := game.StarterRanks(class, spec)
 	// Cada ocorrência no plano vira um rank alvo (a 2ª ocorrência de uma skill inicial é o
-	// rank 3, por exemplo).
+	// rank 3, por exemplo). Quem ainda não pode ser aprendida (nível, nó de cima, pontos no
+	// ramo) fica para depois e o ponto vai para a próxima da lista.
 	type step struct {
 		id     uint32
 		target int
 	}
 	var steps []step
 	count := map[uint32]int{}
-	for _, id := range skillPlan(class, spec) {
+	for _, id := range plan {
 		if count[id] == 0 {
 			count[id] = ranks[id]
 		}
@@ -154,26 +165,25 @@ func Ranks(class, spec string, level int) map[uint32]int {
 			steps = append(steps, step{id, count[id]})
 		}
 	}
-	for points > 0 {
+	for {
 		learned := false
 		for _, st := range steps {
-			s := game.Skills[st.id]
-			if ranks[st.id] != st.target-1 || level < s.LevelReq() || (s.Spec != "" && s.Spec != spec) {
-				continue
-			}
-			if p := s.Parent(); p != nil && ranks[p.ID] < 1 {
+			if ranks[st.id] != st.target-1 {
 				continue
 			}
 			ranks[st.id] = st.target
-			points--
-			learned = true
-			break
+			if game.ValidateRanks(class, spec, level, ranks) == nil {
+				learned = true
+				break
+			}
+			if ranks[st.id] = st.target - 1; ranks[st.id] == 0 {
+				delete(ranks, st.id)
+			}
 		}
 		if !learned {
-			break
+			return ranks
 		}
 	}
-	return ranks
 }
 
 // ---------------------------------------------------------------------------------------

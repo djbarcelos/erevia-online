@@ -7,16 +7,18 @@ import { classSpecs } from "./specs";
 
 export interface SpecActions {
   choose(npcId: number, spec: string): void;
+  /** Redistribuir a árvore da evolução (paga SpecChoice.respecCost). */
+  respec(npcId: number): void;
   myClass(): string;
   /** Skills da classe (Welcome.skills): as de cada caminho têm spec preenchido. */
   skills(): SkillInfo[];
 }
 
 /**
- * Mestra dos Caminhos (missão A Encruzilhada): os dois caminhos da classe lado a lado, com
- * o bônus de atributos e as 3 skills de cada um. Escolher pede um segundo clique (é
- * definitivo); quem já escolheu pode trocar pagando. O servidor confere tudo de novo.
- * Desenhada só ao abrir e quando chega um SpecChoice (nada por quadro).
+ * Mestra dos Caminhos (missão A Encruzilhada): as duas evoluções da classe lado a lado, com
+ * o bônus de atributos e a árvore de cada uma (as 2 iniciais primeiro). Evoluir pede um
+ * segundo clique; quem já evoluiu pode trocar ou redistribuir a árvore pagando. O servidor
+ * confere tudo de novo. Desenhada só ao abrir e quando chega um SpecChoice (nada por quadro).
  */
 export class SpecWindow {
   readonly root = el("div", "shop-panel spec-panel frame");
@@ -44,7 +46,7 @@ export class SpecWindow {
       el("div", "panel-head", this.title, close),
       this.cards,
       this.note,
-      el("div", "shop-foot", el("div", "shop-gold", gi, this.goldEl), el("span", "shop-hint", "Skills novas nos níveis 20, 24 e 28 (tecla K)")),
+      el("div", "shop-foot", el("div", "shop-gold", gi, this.goldEl), el("span", "shop-hint", "A árvore da evolução tem marcos nos níveis 20 a 40 (tecla K)")),
     );
     parent.append(this.root);
     this.unsubscribe = store.onChange(() => this.isOpen && this.render());
@@ -80,24 +82,29 @@ export class SpecWindow {
     this.goldEl.textContent = fmt.format(this.store.gold);
     const cost = Number(c.changeCost);
     this.note.textContent = c.current
-      ? `Trocar de caminho custa ${fmt.format(cost)} moedas; os pontos das skills do caminho atual voltam para você.`
-      : "Escolha com calma: o caminho é para sempre (trocar depois custa caro).";
+      ? `Trocar de evolução custa ${fmt.format(cost)} moedas e redistribuir a árvore, ${fmt.format(Number(c.respecCost))}; em ambos os casos os pontos voltam para você.`
+      : "Ao evoluir, a árvore base dá lugar à da evolução e todos os pontos voltam para você. Trocar depois custa caro.";
     this.cards.replaceChildren(...classSpecs(this.actions.myClass()).map((s) => this.card(s, c, cost)));
   }
 
   private card(s: SpecInfo, c: SpecChoice, cost: number): HTMLElement {
     const mine = c.current === s.id;
-    const skills = this.actions.skills().filter((k) => k.spec === s.id).sort((a, b) => a.tier - b.tier);
+    const starter = (k: SkillInfo) => (s.starterSkills.includes(k.id) ? 0 : 1);
+    const skills = this.actions
+      .skills()
+      .filter((k) => k.spec === s.id)
+      .sort((a, b) => starter(a) - starter(b) || a.levelReq - b.levelReq || a.branch - b.branch);
     const list = el("ul", "spec-skills");
     for (const k of skills) {
-      const li = el("li", null, art(uniqueIds(skillIcon(k.fx)), `spec-icon ${k.passive ? "passive" : "active"}`), el("div", null, el("b", null, k.name), el("small", "muted", `Nv ${k.levelReq} · ${k.passive ? "passiva" : "ativa"}`)));
+      const tag = starter(k) === 0 ? "inicial" : `Nv ${k.levelReq}`;
+      const li = el("li", null, art(uniqueIds(skillIcon(k.fx)), `spec-icon ${k.passive ? "passive" : "active"}`), el("div", null, el("b", null, k.name), el("small", "muted", `${tag} · ${k.passive ? "passiva" : "ativa"}`)));
       tooltip(li, () => `<h4>${k.name}</h4><div class="sub">${k.passive ? "Passiva" : "Ativa"} · Nível ${k.levelReq}</div><div>${k.ranks[0]?.text ?? ""}</div><div class="desc">${k.description}</div>`);
       list.append(li);
     }
-    let label = "Escolher este caminho";
-    if (mine) label = "Seu caminho";
+    let label = "Evoluir";
+    if (mine) label = "Sua evolução";
     else if (c.current) label = `Trocar por ${fmt.format(cost)} moedas`;
-    if (this.arming === s.id) label = c.current ? "Confirmar a troca" : "Confirmar (é definitivo)";
+    if (this.arming === s.id) label = c.current ? "Confirmar a troca" : "Confirmar a evolução";
     const go = button(label, `btn ${this.arming === s.id ? "btn-gold" : ""} spec-go`, () => {
       if (this.arming !== s.id) {
         this.arming = s.id;
@@ -108,6 +115,19 @@ export class SpecWindow {
       this.actions.choose(this.npcId, s.id);
     });
     go.disabled = mine || (!!c.current && this.store.gold < cost);
+    const respecCost = Number(c.respecCost);
+    const respec = mine
+      ? button(this.arming === "respec" ? "Confirmar: árvore volta às iniciais" : `Redistribuir a árvore (${fmt.format(respecCost)})`, `btn btn-sm ${this.arming === "respec" ? "btn-gold" : ""}`, () => {
+          if (this.arming !== "respec") {
+            this.arming = "respec";
+            this.render();
+            return;
+          }
+          this.arming = "";
+          this.actions.respec(this.npcId);
+        })
+      : null;
+    if (respec) respec.disabled = this.store.gold < respecCost;
     const card = el(
       "section",
       `spec-card${mine ? " mine" : ""}`,
@@ -117,6 +137,7 @@ export class SpecWindow {
       list,
       go,
     );
+    if (respec) card.append(respec);
     card.style.setProperty("--sc", s.color);
     return card;
   }

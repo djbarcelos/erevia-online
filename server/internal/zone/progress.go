@@ -98,8 +98,16 @@ func freeAttrPoints(p *entity) int {
 	return max(0, game.AttrPointsTotal(p.level)-p.pl.attrs.Sum())
 }
 
+// skillPointMaxLevel: o último nível que dá ponto de skill na árvore em uso.
+func skillPointMaxLevel(spec string) int {
+	if spec == "" {
+		return game.BaseSkillMaxLevel
+	}
+	return game.MaxLevel
+}
+
 func freeSkillPoints(p *entity) int {
-	return max(0, game.SkillPointsTotal(p.level)-game.RanksUsed(p.pl.ranks))
+	return max(0, game.SkillPointsTotal(p.level, p.pl.spec != "")-game.RanksUsed(p.pl.ranks))
 }
 
 // progressPB: atributos, ranks e o efeito de +1 ponto em cada atributo (para a prévia).
@@ -111,8 +119,8 @@ func (z *Zone) progressPB(p *entity) *pb.Progress {
 		FreeSkillPoints: uint32(freeSkillPoints(p)),
 		Spec:            p.pl.spec,
 		MaxLevel:        game.MaxLevel,
-		// Do 31 ao 40 só sobem os atributos (game.SkillPointMaxLevel).
-		SkillPointMaxLevel: game.SkillPointMaxLevel,
+		// Sem evolução, os pontos de skill param no 19; evoluído, vão até o teto.
+		SkillPointMaxLevel: uint32(skillPointMaxLevel(p.pl.spec)),
 	}
 	ids := make([]uint32, 0, len(p.pl.ranks))
 	for id := range p.pl.ranks {
@@ -239,20 +247,80 @@ func (z *Zone) sendHotbar(p *entity) {
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_Hotbar{Hotbar: &pb.Hotbar{Slots: p.pl.hotbar}}})
 }
 
-// DefaultHotbar: skills iniciais nas teclas 1–2 e poções nas 3–6 (como era antes).
-func DefaultHotbar(class string) []string {
+// DefaultHotbar: skills iniciais (da classe ou da evolução) nas teclas 1–2 e poções nas 3–6.
+func DefaultHotbar(class, spec string) []string {
 	bar := make([]string, HotbarSize)
-	for i, s := range game.ClassSkills(class) {
-		bar[i] = "skill:" + strconv.FormatUint(uint64(s.ID), 10)
+	ids := []uint32{}
+	if d := game.SpecFor(class, spec); d != nil {
+		ids = d.StarterSkills[:]
+	} else {
+		for _, s := range game.ClassSkills(class) {
+			ids = append(ids, s.ID)
+		}
+	}
+	for i, id := range ids {
+		bar[i] = skillEntry(id)
 	}
 	copy(bar[2:], []string{"item:potion_hp_s", "item:potion_mp_s", "item:potion_hp_l", "item:potion_mp_l"})
 	return bar
 }
 
-// loadProgress normaliza o que veio do banco: árvore vazia (personagem antigo) ganha as
-// skills iniciais; ranks inválidos (ou de outro caminho que não spec) são descartados;
-// barra vazia ganha o padrão; atalhos que não valem mais (skill que saiu da árvore, de outro
-// caminho ou item que deixou de existir) ficam vazios.
+func skillEntry(id uint32) string { return "skill:" + strconv.FormatUint(uint64(id), 10) }
+
+// evolveHotbar: depois de evoluir, a tecla de cada skill da base passa para a versão da
+// evolução (as 2 iniciais da classe viram as 2 iniciais da evolução); as outras da base
+// ficam vazias (o filtro de atalhos válidos limpa).
+func evolveHotbar(class, spec string, bar []string) {
+	for i, e := range bar {
+		if !strings.HasPrefix(e, "skill:") {
+			continue
+		}
+		id, err := strconv.ParseUint(e[6:], 10, 32)
+		if err != nil {
+			continue
+		}
+		if s := game.Skills[uint32(id)]; s != nil && s.Spec == "" {
+			if to := game.EvolvedHotbarID(class, spec, s.ID); to != 0 {
+				bar[i] = skillEntry(to)
+			}
+		}
+	}
+}
+
+// trimRanks tira ranks, do degrau (marco) mais alto para o mais baixo, até a árvore valer:
+// quem tinha pontos a mais (a base para no 19; no 20 de antes dava 21) perde só o excesso.
+// Se nem assim fechar, volta às iniciais.
+func trimRanks(class, spec string, level int, ranks map[uint32]int) map[uint32]int {
+	starters := game.StarterRanks(class, spec)
+	for range 200 {
+		if game.ValidateRanks(class, spec, level, ranks) == nil {
+			return ranks
+		}
+		var pick *game.SkillDef
+		for id, r := range ranks {
+			s := game.Skills[id]
+			if r <= starters[id] {
+				continue
+			}
+			if pick == nil || s.LevelReq() > pick.LevelReq() || s.LevelReq() == pick.LevelReq() && s.ID > pick.ID {
+				pick = s
+			}
+		}
+		if pick == nil {
+			break
+		}
+		if ranks[pick.ID]--; ranks[pick.ID] == 0 {
+			delete(ranks, pick.ID)
+		}
+	}
+	return game.StarterRanks(class, spec)
+}
+
+// loadProgress normaliza o que veio do banco: só valem os ranks da árvore em uso (a base
+// sem evolução, a da evolução depois de evoluir), mais as iniciais; uma árvore inválida volta
+// às iniciais; barra vazia ganha o padrão; as teclas das skills da base passam para as
+// evoluídas e os atalhos que não valem mais (skill fora da árvore, item que deixou de
+// existir) ficam vazios. Personagens de antes das evoluções caem aqui (tunnel#180).
 func loadProgress(class, spec string, level int, attrs game.Attrs, ranks map[uint32]int, hotbar []string) (game.Attrs, map[uint32]int, []string) {
 	if !attrs.Valid() || attrs.Sum() > game.AttrPointsTotal(level) {
 		attrs = game.Attrs{}
@@ -263,19 +331,22 @@ func loadProgress(class, spec string, level int, attrs game.Attrs, ranks map[uin
 			clean[id] = min(r, s.MaxRank)
 		}
 	}
-	for id, r := range game.StarterRanks(class) {
+	for id, r := range game.StarterRanks(class, spec) {
 		if clean[id] < r {
 			clean[id] = r
 		}
 	}
 	if game.ValidateRanks(class, spec, level, clean) != nil {
-		clean = game.StarterRanks(class)
+		clean = trimRanks(class, spec, level, clean)
 	}
 	if len(hotbar) == 0 {
-		hotbar = DefaultHotbar(class)
+		hotbar = DefaultHotbar(class, spec)
 	}
 	bar := make([]string, HotbarSize)
 	copy(bar, hotbar)
+	if spec != "" {
+		evolveHotbar(class, spec, bar)
+	}
 	for i, e := range bar {
 		if len(e) > 40 || !hotbarEntryOK(class, spec, clean, e) {
 			bar[i] = ""

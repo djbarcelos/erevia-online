@@ -68,7 +68,7 @@ func TestNewCharacterStartsWithStarterSkillsAndDefaultHotbar(t *testing.T) {
 			w = m.GetWelcome()
 		}
 	}
-	if w == nil || len(w.Skills) != 15+6 || len(w.Branches) != 3 || len(w.Specs) != len(game.SpecList) || w.Progress.FreeSkillPoints != 0 || w.Progress.FreeAttrPoints != 0 {
+	if w == nil || len(w.Skills) != len(game.ClassTree("mage"))+len(game.EvolutionTree("elementalist"))+len(game.EvolutionTree("occultist")) || len(w.Branches) != 3 || len(w.Specs) != len(game.SpecList) || w.Progress.FreeSkillPoints != 0 || w.Progress.FreeAttrPoints != 0 {
 		t.Fatalf("welcome progression wrong")
 	}
 	for _, s := range w.Skills {
@@ -684,5 +684,19 @@ func TestLoadProgressClearsStaleHotbarEntries(t *testing.T) {
 	}
 	if len(got) != HotbarSize {
 		t.Errorf("len %d", len(got))
+	}
+}
+
+// Save de antes: cavaleiro nível 20 sem evolução com 21 pontos na base (o 20 dava ponto).
+// A base agora para no 19: sai só 1 rank, do degrau mais alto.
+func TestLoadProgressTrimsExtraBasePoints(t *testing.T) {
+	old := map[uint32]int{game.SkillShieldBash: 3, game.SkillFortress: 3, game.SkillIronSkin: 5, game.SkillTaunt: 3,
+		game.SkillLivingWall: 1, game.SkillWarCry: 3, game.SkillCourage: 3}
+	_, ranks, _ := loadProgress("knight", "", 20, game.Attrs{}, old, nil)
+	if game.RanksUsed(ranks) != game.SkillPointsTotal(20, false) || game.ValidateRanks("knight", "", 20, ranks) != nil {
+		t.Fatalf("ranks %v (%d pontos)", ranks, game.RanksUsed(ranks))
+	}
+	if ranks[game.SkillLivingWall] != 0 || ranks[game.SkillIronSkin] != 5 || ranks[game.SkillShieldBash] != 3 {
+		t.Errorf("deveria sair só a Muralha Viva (degrau mais alto): %v", ranks)
 	}
 }

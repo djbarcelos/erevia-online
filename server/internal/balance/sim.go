@@ -90,7 +90,7 @@ func rotation(b *Build) []rotSkill {
 	var out []rotSkill
 	overload := game.PassiveTotals(b.Ranks).Has(game.PassiveOverload)
 	for id, r := range b.Ranks {
-		s := game.Skills[id]
+		s := game.EffectiveSkill(game.Skills[id], b.Ranks) // com os modificadores, como no servidor
 		if s == nil || r < 1 || s.IsPassive() || s.Blink.Base > 0 {
 			continue
 		}
@@ -156,7 +156,7 @@ type fight struct {
 	hp, mp, mhp        float64
 	pNext, mNext       float64
 	nextSkill          float64
-	cds                [128]float64 // skill → instante em que fica pronta (ids < 128)
+	cds                [1000]float64 // skill → instante em que fica pronta (ids < 1000)
 	pfx, mfx           effects
 	hpPotAt, mpPotAt   float64
 	lastStandAt        float64

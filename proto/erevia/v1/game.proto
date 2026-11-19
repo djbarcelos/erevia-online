@@ -243,7 +243,8 @@ message SubclassState {
 enum SpecCmdKind {
   SPEC_CMD_UNSPECIFIED = 0;
   SPEC_CMD_TALK = 1; // falar com a Mestra dos Caminhos (npc_id): anda a missão e abre a escolha
-  SPEC_CMD_CHOOSE = 2; // escolher o caminho spec (quem já tem um troca, pagando)
+  SPEC_CMD_CHOOSE = 2; // evoluir para spec (quem já evoluiu troca, pagando change_cost)
+  SPEC_CMD_RESPEC = 3; // redistribuir a árvore da evolução (paga respec_cost)
 }
 
 message SpecCmd {
@@ -256,7 +257,8 @@ message SpecCmd {
 message SpecChoice {
   uint32 npc_id = 1;
   string current = 2; // caminho atual ("" = ainda não escolheu: a escolha é de graça)
-  uint64 change_cost = 3; // moedas para trocar de caminho depois de escolher
+  uint64 change_cost = 3; // moedas para trocar de evolução depois de escolher (2.500 × nível)
+  uint64 respec_cost = 4; // moedas para redistribuir a árvore da evolução (500 × nível)
 }
 
 // Uma especialização (segunda classe).
@@ -268,6 +270,8 @@ message SpecInfo {
   string color = 5; // "#rrggbb"
   Attrs bonus = 6; // bônus passivo de atributos
   string bonus_text = 7; // "+12 Constituição"
+  repeated SkillBranch branches = 10; // os 3 ramos da árvore da evolução
+  repeated uint32 starter_skills = 11; // as 2 iniciais
   // Armas e mãos secundárias que a especialização usa; vazio = as da classe (Welcome.weapons
   // descreve cada tipo de arma).
   repeated string weapons = 8;
@@ -1764,15 +1768,37 @@ message SkillInfo {
   bool effect_on_self = 15;
   float extra_crit = 16;
   // Árvore de skills
-  uint32 branch = 17; // 0–2 (Welcome.branches); 3 = ramo da especialização
-  uint32 tier = 18; // 0–3
+  uint32 branch = 17; // 0–2 (Welcome.branches, ou SpecInfo.branches nas skills da evolução)
+  uint32 tier = 18; // 0–3 na base; na evolução, (level_req-20)/5
   uint32 max_rank = 19;
   bool passive = 20;
   uint32 level_req = 21;
   uint32 parent_id = 22; // nó de cima no ramo (0 = raiz)
   repeated SkillRankInfo ranks = 23; // valores em cada rank (índice 0 = rank 1)
   float splash = 24; // raio em volta do alvo (0 = só o alvo)
-  string spec = 25; // especialização dona da skill ("" = árvore da classe); branch = 3
+  string spec = 25; // evolução dona da skill ("" = árvore base da classe); branch = ramo da evolução
+  // Árvore da evolução (docs/evolucoes)
+  SkillNode node = 26;
+  uint32 branch_points = 27; // pontos no ramo exigidos
+  repeated SkillReq requires = 28;
+  uint32 modifies = 29; // modificador: a skill que ele altera
+  uint32 evolved_from = 30; // versão evoluída desta skill da base
+  repeated string weapon = 31; // tipos de arma exigidos para lançar (vazio = qualquer)
+}
+
+enum SkillNode {
+  SKILL_NODE_UNSPECIFIED = 0;
+  SKILL_NODE_ACTIVE = 1;
+  SKILL_NODE_PASSIVE = 2;
+  SKILL_NODE_MODIFIER = 3;
+  SKILL_NODE_KEY = 4;
+  SKILL_NODE_SUPREME = 5;
+}
+
+// Pré-requisito de uma skill: rank mínimo noutra.
+message SkillReq {
+  uint32 skill_id = 1;
+  uint32 rank = 2;
 }
 
 // Valores de uma skill num rank.

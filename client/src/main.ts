@@ -923,7 +923,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   const teleportWin = new TeleportWindow(store, { travel: (npc, dest) => conn.teleport(npc, dest), karma: () => pvp.karma, discount: () => mastery?.teleportDiscount ?? 0 }, hud.element);
   const specWin = new SpecWindow(
     store,
-    { choose: (npc, spec) => conn.specCmd(SpecCmdKind.SPEC_CMD_CHOOSE, npc, spec), myClass: () => activeClass, skills: () => welcome.skills },
+    { choose: (npc, spec) => conn.specCmd(SpecCmdKind.SPEC_CMD_CHOOSE, npc, spec), respec: (npc) => conn.specCmd(SpecCmdKind.SPEC_CMD_RESPEC, npc), myClass: () => activeClass, skills: () => welcome.skills },
     hud.element,
   );
   // Arena PvP ranqueada (tunnel#81): a janela do Mestre e o painel da partida.

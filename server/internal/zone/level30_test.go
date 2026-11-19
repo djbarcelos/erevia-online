@@ -75,10 +75,16 @@ func TestProgressionToMaxLevel(t *testing.T) {
 	if ups != game.MaxLevel-1 {
 		t.Errorf("avisos de nível: %d, want %d", ups, game.MaxLevel-1)
 	}
-	// No 40: 31 pontos de skill (2 nas iniciais; eles param no 30) e 3 de atributo por nível.
+	// No 40 sem evoluir: 20 pontos de skill (2 nas iniciais; sem evolução eles param no 19)
+	// e 3 de atributo por nível. Evoluído, os pontos vão até o teto: 41 no 40.
 	prog := z.progressPB(p)
-	if prog.FreeSkillPoints != 29 || prog.FreeAttrPoints != 117 || prog.MaxLevel != 40 || prog.SkillPointMaxLevel != 30 {
-		t.Errorf("pontos no 40: skill %d (want 29), atributo %d (want 117), %+v", prog.FreeSkillPoints, prog.FreeAttrPoints, prog)
+	if prog.FreeSkillPoints != 18 || prog.FreeAttrPoints != 117 || prog.MaxLevel != 40 || prog.SkillPointMaxLevel != 19 {
+		t.Errorf("pontos no 40: skill %d (want 18), atributo %d (want 117), %+v", prog.FreeSkillPoints, prog.FreeAttrPoints, prog)
+	}
+	p.pl.spec = game.ClassSpecs(p.pl.class)[0].ID
+	p.pl.ranks = game.StarterRanks(p.pl.class, p.pl.spec)
+	if prog := z.progressPB(p); prog.FreeSkillPoints != 39 || prog.SkillPointMaxLevel != 40 {
+		t.Errorf("evoluído no 40: skill %d (want 39), último nível %d", prog.FreeSkillPoints, prog.SkillPointMaxLevel)
 	}
 	if s := z.selfStats(p); s.Level != game.MaxLevel || s.XpNextLevel != 0 {
 		t.Errorf("barra de XP no 40: nível %d, próximo %d", s.Level, s.XpNextLevel)
@@ -120,23 +126,25 @@ func TestProgressionToMaxLevel(t *testing.T) {
 	}
 }
 
+// O Inferno (degrau 20 de antes) é do Elementalista: sem evoluir não se aprende, nem no 20.
 func TestLearnFifthTierAtLevel20(t *testing.T) {
 	z := newCombatZone()
 	p, _ := joinAt(z, 1, "mage", 30, 0, 0)
-	atLevel(z, p, 19)
+	atLevel(z, p, 20)
 	branch := []*pb.SkillRank{
 		{SkillId: game.SkillEmber, Rank: 1}, {SkillId: game.SkillEmberRain, Rank: 1},
 		{SkillId: game.SkillMeteor, Rank: 1}, {SkillId: game.SkillInferno, Rank: 1},
 	}
 	z.handle(progressEvent{id: p.id, msg: &pb.LearnSkills{Ranks: branch}})
 	if p.pl.rank(game.SkillInferno) != 0 {
-		t.Fatal("5º degrau aprendido no nível 19")
+		t.Fatal("Inferno aprendido sem evoluir")
 	}
-	atLevel(z, p, 20)
+	p.pl.spec = "elementalist"
+	p.pl.ranks = game.StarterRanks("mage", "elementalist")
 	z.tickFor(1)
-	z.handle(progressEvent{id: p.id, msg: &pb.LearnSkills{Ranks: branch}})
-	if p.pl.rank(game.SkillInferno) != 1 || p.pl.rank(game.SkillMeteor) != 1 {
-		t.Fatalf("5º degrau não aprendido no 20: %v", p.pl.ranks)
+	z.handle(progressEvent{id: p.id, msg: &pb.LearnSkills{Ranks: []*pb.SkillRank{{SkillId: game.SkillInferno, Rank: 1}}}})
+	if p.pl.rank(game.SkillInferno) != 1 {
+		t.Fatalf("Inferno não aprendido pelo Elementalista no 20: %v", p.pl.ranks)
 	}
 	// Aprendida, a skill entra na barra de atalhos.
 	slot := "skill:" + strconv.Itoa(int(game.SkillInferno))

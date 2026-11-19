@@ -677,6 +677,13 @@
   padding: 18px 0 4px;
 }
 
+.tg-cell.multi {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
 .tg-line {
   --bc: var(--gold);
   position: absolute;

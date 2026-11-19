@@ -2,10 +2,8 @@ package game
 
 import "fmt"
 
-// Ramos das especializações: 3 skills por caminho (níveis 20, 24 e 28), todas com
-// mecânicas que já existiam na árvore (provocar, escudos, área, execução, golpes seguidos,
-// investida, estandarte, praga, marca, prender, cegar, buffs de grupo e passivas genéricas).
-// Branch = SpecBranch; Tier 0–2 dentro do caminho; o nó de cima é o do mesmo caminho.
+// Skills das especializações de antes (61–84), 3 por evolução. O ramo e o marco de cada uma
+// na árvore da evolução ficam em evoPlaces (evolutions.go).
 
 func specTrees() []*SkillDef {
 	var out []*SkillDef
@@ -19,7 +17,7 @@ func specTrees() []*SkillDef {
 func specSkill(spec string, list []*SkillDef) []*SkillDef {
 	class := Specs[spec].Class
 	for _, s := range list {
-		s.Class, s.Spec, s.Branch = class, spec, SpecBranch
+		s.Class, s.Spec = class, spec
 	}
 	return list
 }

@@ -56,7 +56,7 @@ func classTreePB(class string) ([]*pb.SkillInfo, []*pb.SkillBranch) {
 		skills = append(skills, skillInfoPB(s))
 	}
 	for _, sp := range game.ClassSpecs(class) {
-		for _, s := range game.SpecTree(sp.ID) {
+		for _, s := range game.EvolutionTree(sp.ID) {
 			skills = append(skills, skillInfoPB(s))
 		}
 	}
@@ -235,10 +235,7 @@ func (z *Zone) switchClass(p *entity, n *entity, class string) {
 		return
 	}
 	level := game.LevelForXP(target.XP)
-	newSpec := ""
-	if game.SpecFor(class, target.Spec) != nil {
-		newSpec = target.Spec
-	}
+	newSpec := game.ActiveSpec(class, target.Spec, level)
 	inv := &pl.inv
 	off := inv.invalidGear(class, newSpec, level) // encaixes com o que a classe nova não usa
 	free := inv.freeSlots()
@@ -254,12 +251,8 @@ func (z *Zone) switchClass(p *entity, n *entity, class string) {
 	storeActive(p, set)
 	inv.dropInvalidGear(class, newSpec, level)
 	hpFrac, mpFrac := barFrac(p.hp, p.stats.MaxHP), barFrac(p.mp, p.stats.MaxMP)
-	spec := ""
-	if game.SpecFor(class, target.Spec) != nil {
-		spec = target.Spec
-	}
-	pl.class, pl.xp, p.level, pl.spec = class, target.XP, level, spec
-	pl.attrs, pl.ranks, pl.hotbar = loadProgress(class, spec, level, target.Attrs, target.Ranks, target.Hotbar)
+	pl.class, pl.xp, p.level, pl.spec = class, target.XP, level, newSpec
+	pl.attrs, pl.ranks, pl.hotbar = loadProgress(class, newSpec, level, target.Attrs, target.Ranks, target.Hotbar)
 	set.Active = class
 	set.SwitchedAt = z.cfg.Clock().Unix()
 	for id := range pl.cooldowns { // as recargas das skills da classe de antes saem

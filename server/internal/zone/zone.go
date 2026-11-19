@@ -628,10 +628,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 	// info.Class é a principal (corpo e visual); a progressão que veio é da classe ativa.
 	classes := game.NormalClassSet(info.Class, info.Classes)
 	class := classes.Active
-	spec := ""
-	if game.SpecFor(class, info.Spec) != nil {
-		spec = info.Spec
-	}
+	spec := game.ActiveSpec(class, info.Spec, level)
 	attrs, ranks, hotbar := loadProgress(class, spec, level, info.Attrs, info.Ranks, info.Hotbar)
 	inv, skipped := loadInventory(info.Gold, info.Items)
 	if skipped > 0 {

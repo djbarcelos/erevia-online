@@ -171,9 +171,11 @@ func TestSwitchClassBothWays(t *testing.T) {
 	// A progressão do cavaleiro: atributos, uma skill, a barra e o caminho.
 	z.allocateAttrs(p, &pb.Attrs{Str: 3, Con: 2})
 	p.pl.spec = "bastion"
+	p.pl.ranks = game.StarterRanks("knight", "bastion")
+	p.pl.hotbar = DefaultHotbar("knight", "bastion")
 	var learn uint32
-	for _, s := range game.ClassTree("knight") {
-		if s.LevelReq() <= 30 && p.pl.ranks[s.ID] < s.MaxRank && !s.IsPassive() && s.Spec == "" {
+	for _, s := range game.EvolutionTree("bastion") {
+		if s.LevelReq() <= 30 && p.pl.ranks[s.ID] < s.MaxRank && !s.IsPassive() {
 			next := maps.Clone(p.pl.ranks)
 			next[s.ID]++
 			if game.ValidateRanks("knight", "bastion", 30, next) == nil {
@@ -197,13 +199,13 @@ func TestSwitchClassBothWays(t *testing.T) {
 	if p.pl.class != "mage" || p.level != 20 || p.pl.xp != game.XPLevelStart(20) || p.pl.spec != "" || p.pl.attrs != (game.Attrs{}) {
 		t.Fatalf("mago: classe %s nível %d XP %d spec %q attrs %+v", p.pl.class, p.level, p.pl.xp, p.pl.spec, p.pl.attrs)
 	}
-	if !maps.Equal(p.pl.ranks, game.StarterRanks("mage")) || !slices.Equal(p.pl.hotbar, DefaultHotbar("mage")) {
+	if !maps.Equal(p.pl.ranks, game.StarterRanks("mage", "")) || !slices.Equal(p.pl.hotbar, DefaultHotbar("mage", "")) {
 		t.Fatalf("mago: ranks %v barra %v", p.pl.ranks, p.pl.hotbar)
 	}
 	if p.model != "knight" || p.pl.mainClass != "knight" || z.entityPB(p).ActiveClass != "mage" {
 		t.Fatal("o corpo continua o da principal; a classe ativa vai no Entity")
 	}
-	if freeAttrPoints(p) != game.AttrPointsTotal(20) || freeSkillPoints(p) != game.SkillPointsTotal(20)-game.RanksUsed(game.StarterRanks("mage")) {
+	if freeAttrPoints(p) != game.AttrPointsTotal(20) || freeSkillPoints(p) != game.SkillPointsTotal(20, false)-game.RanksUsed(game.StarterRanks("mage", "")) {
 		t.Fatalf("pontos livres do mago: atributo %d, skill %d", freeAttrPoints(p), freeSkillPoints(p))
 	}
 	st := peer.lastSubclass()
