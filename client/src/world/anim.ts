@@ -16,6 +16,13 @@ export class RoleMap extends Map<AnimRole, AnimationGroup> {
   footSpeeds: { walk?: number; run: number } | undefined;
 }
 
+/** Variantes de cada papel (o que existir no conjunto): o golpe alterna em sequência, dano e morte sorteiam. */
+const VARIANTS: Partial<Record<AnimRole, AnimRole[]>> = {
+  attack: ["attack", "attack2", "attack3"],
+  hit: ["hit", "hit2"],
+  death: ["death", "death2"],
+};
+
 /** Velocidade das transições de peso da locomoção (1/s). */
 const BLEND_RATE = 14;
 /** Entrada de uma ação (1/s): ~95% em 0,15 s. */
@@ -98,6 +105,8 @@ export class AnimController {
   /** Só para medir o "antes" (?legacymove=1): velocidade do clipe pela constante antiga e mistura mais lenta. */
   legacy = false;
   private breakGroup: AnimationGroup | null = null;
+  /** Próxima variante do golpe (índice em VARIANTS.attack, entre as que existem). */
+  private comboStep = 0;
   private breakW = 0;
   private breakTimer = 0;
 
@@ -205,7 +214,23 @@ export class AnimController {
    * Sem instante de impacto conhecido, o clipe toca inteiro.
    */
   remaining(role: AnimRole, lead?: number): number {
-    return this.length(role) - this.startAt(role, lead);
+    const r = this.variant(role, false);
+    return this.length(r) - this.startAt(r, lead);
+  }
+
+  /**
+   * O papel que toca de fato: o golpe segue a sequência (combo) e só avança quando toca (`advance`); dano e
+   * morte sorteiam entre as variantes. Sem variantes no conjunto, o próprio papel.
+   */
+  private variant(role: AnimRole, advance: boolean): AnimRole {
+    const all = VARIANTS[role]?.filter((r) => this.anims.has(r));
+    if (!all || all.length < 2) return role;
+    if (role === "attack") {
+      const r = all[this.comboStep % all.length];
+      if (advance) this.comboStep = (this.comboStep + 1) % all.length;
+      return r;
+    }
+    return advance ? all[Math.floor(Math.random() * all.length)] : role;
   }
 
   private startAt(role: AnimRole, lead?: number): number {
@@ -218,12 +243,15 @@ export class AnimController {
    * Toca uma ação uma vez. Devolve em quantos segundos o golpe encosta (com `lead`), ou 0
    * se a ação não tocou.
    */
-  play(role: AnimRole, opts: PlayOpts = {}): number {
+  play(asked: AnimRole, opts: PlayOpts = {}): number {
+    const role = this.variant(asked, true);
     const g = this.anims.get(role);
     if (!g) return 0;
     if (this.holding && !opts.hold) return 0; // morto não reage
     // Apanhar não interrompe um ataque em andamento.
-    if (role === "hit" && this.action && !this.actionDone && this.action !== g) return 0;
+    // (Um "apanhar" em andamento pode recomeçar, mesmo que a variante sorteada agora seja outra.)
+    const hitting = this.action === this.anims.get("hit") || this.action === this.anims.get("hit2");
+    if (asked === "hit" && this.action && !this.actionDone && !hitting) return 0;
 
     const speed = opts.speed ?? 1;
     const start = this.startAt(role, opts.lead);
