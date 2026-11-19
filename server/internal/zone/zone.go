@@ -68,6 +68,10 @@ type Config struct {
 	// na cópia de uma delas, o id da cópia ("catacumbas#3"; "" = não é cópia).
 	Dungeons []string
 	Instance string
+	// Canais (channels.go): o número deste canal do mapa principal (0 = o processo não tem
+	// canais) e quantos jogadores cabem nele (0 = sem limite).
+	Channel  int
+	Capacity int
 }
 
 func DefaultConfig() Config {
@@ -140,7 +144,10 @@ type JoinInfo struct {
 	Peer     Peer
 	// Zone: o mapa gravado no banco (o gerente escolhe a zona; "" = starter).
 	Zone string
-	hop  *hopIn // só na entrega do portão (gate.go)
+	// Channel: o canal pedido no login (Join.channel; 0 = o servidor escolhe; channels.go).
+	Channel int
+	hop     *hopIn // só na entrega do portão (gate.go)
+	notice  string // aviso do gerente ao entrar ("o canal pedido estava cheio")
 }
 
 // SavedState é enviado ao canal de persistência.
@@ -704,6 +711,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		Specs:        specCatalog(),
 		Map:          z.mapID(),
 		MapTitle:     z.mapTitle(),
+		Channel:      uint32(max(0, z.cfg.Channel)),
 	}}})
 	z.sendSelfStats(p)
 	z.dailyRefresh(p) // as diárias de ontem saem antes do primeiro QuestLog
@@ -720,6 +728,9 @@ func (z *Zone) onJoin(info JoinInfo) {
 	z.eventsOnJoin(p)
 	z.areaEventsOnJoin(p)
 	z.adminOpsOnJoin(p)
+	if info.notice != "" {
+		z.systemAfterFlush(p, info.notice)
+	}
 	for id, ready := range p.pl.cooldowns {
 		if ready > z.now {
 			z.sendAnyCooldown(p, id, ready-z.now)
@@ -735,6 +746,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		z.track(p, "session", "start", 0, nil)
 	}
 	z.zonesOnJoin(p) // barramento e grupo entre zonas (gate.go)
+	z.sendChannels(p) // canais do mapa principal (channels.go), já contando com ele
 	z.log.Info("player joined", "id", p.id, "name", p.name, "level", p.level, "online", len(z.players))
 }
 

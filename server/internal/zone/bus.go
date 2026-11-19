@@ -228,6 +228,19 @@ func (b *Bus) accountOnline(acc int64) bool {
 	return b.accounts[acc] > 0
 }
 
+// countZone: personagens online na zona z (inclui quem está chegando nela pelo portão).
+func (b *Bus) countZone(z *Zone) int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	n := 0
+	for _, e := range b.players {
+		if e.zone == z {
+			n++
+		}
+	}
+	return n
+}
+
 // count: personagens online em todas as zonas (inclui quem atravessa um portão).
 func (b *Bus) count() int {
 	b.mu.RLock()

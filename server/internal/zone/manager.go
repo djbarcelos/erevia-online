@@ -3,7 +3,9 @@ package zone
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,6 +41,9 @@ type Manager struct {
 	bus   *Bus
 	zones []*Zone // zones[0] = o mapa principal (para onde vai quem não tem zona conhecida)
 	byMap map[string]*Zone
+	// channels: os canais do mapa principal (channels.go); channels[0] é o próprio mapa
+	// principal. Vazio = o processo não tem canais.
+	channels []*Zone
 
 	mu  sync.Mutex
 	ctx context.Context // o do Run: as entregas do portão desistem quando o processo para
@@ -152,15 +157,27 @@ func (m *Manager) Join(ctx context.Context, info JoinInfo) *Zone {
 	if z != nil && z.isClosed() && !m.bus.online(info.ID) {
 		z = nil // a cópia da masmorra fechou (ou está fechando) enquanto ele estava fora
 	}
+	notice := ""
 	if z == nil {
 		if z = m.Zone(info.Zone); z == nil {
 			z = m.Home()
 			info.X, info.Z = m.homeSpot(info.Zone) // a posição gravada era de outro mapa (ou de uma cópia)
 		}
+		if len(m.channels) > 1 && slices.Contains(m.channels, z) { // mapa principal com canais (channels.go)
+			c, moved := m.pickChannel(info.Channel)
+			if c == nil {
+				return nil // todos cheios: quem chama recusa a entrada
+			}
+			if moved {
+				notice = fmt.Sprintf("O Canal %d está cheio: você entrou no %s.", info.Channel, c.channelName())
+			}
+			z = c
+		}
 	}
 	if rp, ok := info.Peer.(routedPeer); ok {
 		rp.SetZone(z)
 	}
+	info.notice = notice
 	z.Join(ctx, info)
 	return z
 }

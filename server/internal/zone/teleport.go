@@ -281,7 +281,7 @@ func (z *Zone) updateChannel(p *entity) {
 	var destZone *Zone
 	if other {
 		if z.mgr != nil {
-			destZone = z.mgr.Zone(ch.mapID)
+			destZone = z.mgr.Arrival(ch.mapID)
 		}
 		if destZone == nil || destZone == z {
 			z.system(p, "O caminho está fechado.")

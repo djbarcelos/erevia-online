@@ -80,6 +80,10 @@ func (z *Zone) onSocial(e socialEvent) {
 			z.system(p, "O clã só pode ser gerenciado no Vale de Vel'Aran, por enquanto.")
 			return
 		}
+		if !z.mainChannel() { // e no Canal 1 (channels.go)
+			z.system(p, "O clã só pode ser gerenciado no Canal 1, por enquanto.")
+			return
+		}
 		z.onClanCmd(p, m)
 	case *pb.FriendCmd:
 		z.onFriendCmd(p, m)

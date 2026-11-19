@@ -49,6 +49,7 @@ message ClientMessage {
     UseGate use_gate = 60; // zonas: atravessar o portão para outro mapa
     SubclassCmd subclass_cmd = 67; // Subclasse: falar com o Guardião das Sendas, escolher e trocar de classe
     Crystallize crystallize = 70; // cristalizar uma peça da bolsa (tunnel#154)
+    ChangeChannel change_channel = 73; // canais: trocar de canal na cidade (0 = só pedir a lista; tunnel#86)
     NpcTalk npc_talk = 45; // conversa com NPC: abrir, aceitar e entregar missão, perguntar
   }
 }
@@ -380,6 +381,26 @@ message Enchant {
   uint32 slot = 3;
 }
 
+// ---------- Canais (tunnel#86) ----------
+
+// Trocar de canal: só na cidade, fora de combate. channel = 0 só pede a lista (ChannelList).
+message ChangeChannel {
+  uint32 channel = 1;
+}
+
+message ChannelInfo {
+  uint32 number = 1;
+  uint32 players = 2;
+  uint32 capacity = 3; // 0 = sem limite
+  bool full = 4;
+}
+
+// Os canais do mapa principal e o de agora (0 = fora dele; vazio = o servidor não tem canais).
+message ChannelList {
+  uint32 current = 1;
+  repeated ChannelInfo channels = 2;
+}
+
 // Cristaliza a peça da bolsa (slot): grau D ou maior vira cristais do grau (tunnel#154).
 message Crystallize {
   uint32 slot = 1;
@@ -435,6 +456,9 @@ message SkillRank {
 // o servidor confere se o personagem pertence a ela.
 message Join {
   uint32 character_id = 1;
+  // Canal do mapa principal (tunnel#86): 0 = o servidor escolhe (o menos cheio). Cheio, o
+  // servidor põe em outro e avisa; todos cheios, recusa a entrada.
+  uint32 channel = 2;
 }
 
 // Pedido para andar até um ponto do chão. Cancela o ataque atual.
@@ -563,6 +587,7 @@ message ServerMessage {
     NpcDialog npc_dialog = 45; // a janela de conversa do NPC (resposta ao NpcTalk)
     StonesKnown stones_known = 48; // pedras de teleporte descobertas (ao entrar e quando descobre uma)
     AreaEventStatus area_event = 49; // evento de área em andamento e postos fechados (areaevent.go)
+    ChannelList channels = 73; // canais do mapa principal (ao entrar e quando pedidos; tunnel#86)
   }
 }
 
@@ -1122,6 +1147,7 @@ message Welcome {
   string map = 23; // id do mapa desta zona ("" ou "starter" = o mapa de sempre, /world.json)
   string map_title = 24; // nome do mapa (minimapa e mapa do mundo)
   repeated WeaponInfo weapons = 25; // os tipos de arma: alcance, intervalo, empunhadura
+  uint32 channel = 70; // canal do mapa principal (0 = o servidor não tem canais ou é outro mapa; tunnel#86)
 }
 
 // Um tipo de arma (sword, axe, axe2h, staff, wand, daggers, bow, crossbow, crossbow2h). Alcance
