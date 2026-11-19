@@ -22,7 +22,8 @@ const BASE = 'https://api.meshy.ai/openapi';
 const ROOT = resolve(import.meta.dirname, '../..');
 const OUT = resolve(ROOT, 'assets-src/meshy');
 const LOG = resolve(OUT, 'tasks.jsonl');
-const DEFAULT_ENV = 'C:/Users/DanielTeofilo/OneDrive - Info Tecnologia/Documentos/GitHub/erevia-online/.env';
+// .env da raiz do checkout (ou --env); o caminho do Windows do Daniel fica como reserva.
+const DEFAULT_ENV = existsSync(resolve(ROOT, '.env')) ? resolve(ROOT, '.env') : 'C:/Users/DanielTeofilo/OneDrive - Info Tecnologia/Documentos/GitHub/erevia-online/.env';
 const BUDGET = Number(process.env.MESHY_BUDGET ?? 250);
 
 const argv = process.argv.slice(2);
@@ -83,7 +84,8 @@ function inline(v) {
   if (typeof v === 'string' && v.startsWith('@')) {
     const f = resolve(v.slice(1));
     const ext = extname(f).slice(1).toLowerCase().replace('jpg', 'jpeg');
-    return `data:image/${ext};base64,${readFileSync(f).toString('base64')}`;
+    const mime = ext === 'glb' ? 'model/gltf-binary' : ext === 'gltf' ? 'model/gltf+json' : `image/${ext}`;
+    return `data:${mime};base64,${readFileSync(f).toString('base64')}`;
   }
   if (Array.isArray(v)) return v.map(inline);
   if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, inline(x)]));
