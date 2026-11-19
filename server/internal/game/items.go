@@ -140,6 +140,11 @@ type ItemDef struct {
 	Scroll      ScrollKind // pergaminhos: o que faz
 	Blessed     bool       // encantar: falhar não quebra (volta a +0)
 	RepOnly     bool       // só na loja de reputação (reputation.go): não cai de monstro
+	// ScrollTier: o grau que o pergaminho de encantar encanta (crystal.go); o do D também
+	// serve nas peças sem grau. Os pergaminhos antigos, sem grau no nome, são os do D.
+	ScrollTier Tier
+	// Cristais (crystal.go): CrystalOf é o grau do cristal (só nos cristais).
+	CrystalOf Tier
 	// Bridge: equipamento ponte do 30 ao 40 (bridge.go). Só cai de quem o tem na lista de
 	// saque, fora do sorteio por raridade.
 	Bridge bool
@@ -427,14 +432,7 @@ var Items = func() map[string]*ItemDef {
 		// Pergaminhos.
 		scroll("scroll_return", "Pergaminho de Retorno", ScrollReturn, 120,
 			"Lido por 5 s, leva você de volta à cidade. Levar dano ou andar interrompe. Não funciona com karma."),
-		scroll("scroll_ench_weapon", "Pergaminho de Encantar Arma", ScrollEnchantWeapon, 1500,
-			"Sobe a arma em +1. Até +3 é seguro; acima disso pode falhar, e a arma quebra."),
-		scroll("scroll_ench_armor", "Pergaminho de Encantar Armadura", ScrollEnchantArmor, 600,
-			"Sobe armadura, elmo, escudo, roupa ou joia em +1. Até +3 é seguro; acima disso pode falhar, e o item quebra."),
-		blessed(scroll("scroll_ench_weapon_b", "Pergaminho Abençoado de Arma", ScrollEnchantWeapon, 6000,
-			"Sobe a arma em +1. Se falhar, a arma não quebra: volta a +0.")),
-		blessed(scroll("scroll_ench_armor_b", "Pergaminho Abençoado de Armadura", ScrollEnchantArmor, 2500,
-			"Sobe a peça em +1. Se falhar, ela não quebra: volta a +0.")),
+		// Os pergaminhos de encantar (de cada grau) estão em crystal.go (tunnel#154).
 
 		// Materiais (só para vender).
 		stackable("bone_old", "Osso Velho", KindMaterial, 10, "bone", "Um osso qualquer. Alguém na cidade compra."),
@@ -461,6 +459,7 @@ var Items = func() map[string]*ItemDef {
 	list = append(list, bosqueItems()...)   // o Bosque Gris e as Terras Mortas (bosque.go)
 	list = append(list, bastionMedalItem()) // a medalha dos eventos de área (events.go)
 	list = append(list, tierGear.items...)  // os graus D, C e B (tiers.go)
+	list = append(list, crystalItems()...)  // cristais e pergaminhos do C e do B (crystal.go)
 	m := make(map[string]*ItemDef, len(list))
 	for _, d := range list {
 		if d.Equippable() {
@@ -521,15 +520,14 @@ var (
 		"potion_hp_s", "potion_hp_l", "potion_mp_s", "potion_mp_l", "scroll_return",
 		"neck_common", "neck_good", "ear_common", "ear_good", "ring_common", "ring_good",
 	}
-	SmithStock = []string{
+	SmithStock = append([]string{
 		"sword_common", "blade_common", "sword_good", "axe_common", "axe_jagged_common", "axe_good",
 		"staff_common", "wand_common", "staff_dark_common", "staff_good",
 		"daggers_common", "blades_common", "daggers_mixed_common", "daggers_good",
 		"shield_badge", "shield_buckler", "shield_tower", "shield_good",
 		"armor_common", "armor_good", "helm_common", "helm_good", "legs_common", "legs_good",
 		"gloves_common", "gloves_good", "boots_common", "boots_good", "cape_common", "cape_good",
-		"scroll_ench_weapon", "scroll_ench_armor",
-	}
+	}, EnchantScrollShop()...) // os pergaminhos comuns de cada grau (crystal.go)
 )
 
 // ---------- Drops ----------

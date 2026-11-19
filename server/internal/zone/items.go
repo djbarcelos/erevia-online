@@ -54,6 +54,8 @@ func (z *Zone) onItem(e itemEvent) {
 		z.storageGold(p, m.NpcId, m.Amount)
 	case *pb.Enchant:
 		z.enchant(p, int(m.ScrollSlot), int(m.Place), int(m.Slot))
+	case *pb.Crystallize:
+		z.crystallize(p, int(m.Slot))
 	case *pb.ChangeLook:
 		z.changeLook(p, m.NpcId, m.Look)
 	case *pb.Craft:
@@ -298,7 +300,11 @@ func itemInfoPB(d *game.ItemDef) *pb.ItemInfo {
 		Stack:      uint32(min(d.Stack, game.MaxStack)), Price: uint32(d.Price), SellPrice: uint32(d.SellPrice()),
 		Icon: d.Icon, Description: d.Description, CooldownGroup: uint32(d.Cooldown),
 		HealHp: uint32(d.HealHP), HealMp: uint32(d.HealMP), Model: d.Model, OffModel: d.OffModel,
-		Scroll: pb.ScrollKind(d.Scroll), Blessed: d.Blessed,
+		Scroll: pb.ScrollKind(d.Scroll), Blessed: d.Blessed, ScrollTier: uint32(d.ScrollTier),
+		Graded: d.Graded,
+	}
+	if id, n := game.CrystalYield(d, 0); n > 0 { // tunnel#154
+		info.CrystalId, info.CrystalCount = id, uint32(n)
 	}
 	for _, sl := range d.Slots() {
 		info.Slots = append(info.Slots, uint32(sl))

@@ -70,6 +70,8 @@ export interface EntityProbe {
   readonly dead: boolean;
   readonly root: { readonly position: { readonly x: number; readonly y: number; readonly z: number }; isDisposed(): boolean };
   readonly meshes: readonly { isDisposed(): boolean }[];
+  /** Sem malha de propósito: o modelo ainda baixa (sob demanda ou na tela de entrada) e a cápsula está segurada. */
+  readonly awaitingModel?: boolean;
 }
 
 export interface InvariantDeps {
@@ -325,7 +327,8 @@ export class ClientInvariants {
     }
     // Sem malha viva: o modelo sumiu e a cápsula também. Duas checagens seguidas (a troca
     // de modelo descarta o velho antes de pôr o novo).
-    const alive = !e.root.isDisposed() && e.meshes.some((m) => !m.isDisposed());
+    // Quem espera o modelo (invisível de propósito, sem cápsula) não conta.
+    const alive = e.awaitingModel || (!e.root.isDisposed() && e.meshes.some((m) => !m.isDisposed()));
     if (!alive) {
       if (this.meshless.has(id)) invariantBroken(RULES.noMesh, { id, kind, meshes: e.meshes.length, rootDisposed: e.root.isDisposed() });
       else this.meshless.add(id);

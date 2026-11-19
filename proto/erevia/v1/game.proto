@@ -48,6 +48,7 @@ message ClientMessage {
     AuctionCmd auction_cmd = 44; // Casa de leilões: abrir, buscar, anunciar, comprar, cancelar, retirar do correio
     UseGate use_gate = 60; // zonas: atravessar o portão para outro mapa
     SubclassCmd subclass_cmd = 67; // Subclasse: falar com o Guardião das Sendas, escolher e trocar de classe
+    Crystallize crystallize = 70; // cristalizar uma peça da bolsa (tunnel#154)
     NpcTalk npc_talk = 45; // conversa com NPC: abrir, aceitar e entregar missão, perguntar
   }
 }
@@ -377,6 +378,11 @@ message Enchant {
   uint32 scroll_slot = 1;
   uint32 place = 2; // 0 = bolsa, 1 = equipado
   uint32 slot = 3;
+}
+
+// Cristaliza a peça da bolsa (slot): grau D ou maior vira cristais do grau (tunnel#154).
+message Crystallize {
+  uint32 slot = 1;
 }
 
 // Move itens entre a bolsa (place 0) e o armazém (place 2).
@@ -1002,6 +1008,19 @@ message EnchantRules {
   // Ataque por nível, por raridade (índice 1–4). Cada nível acima de `safe` vale o dobro;
   // armaduras somam metade disso (arredondado) em P.Def e M.Def, joias só em M.Def.
   repeated uint32 weapon_bonus = 4;
+  // Por grau (índice = tier: 0 sem grau, 1 D, 2 C, 3 B), tunnel#154: a chance de cada nível e
+  // as moedas por nível de destino (encantar a +n custa n × fee_per_level).
+  repeated EnchantTierRule tiers = 5;
+  // Peças dos graus (ItemInfo.graded): cada degrau soma graded_step × o ataque (armas) ou a
+  // defesa (as outras; joias só M.Def) da peça; o total de cada atributo é arredondado.
+  float graded_step = 6;
+  // Cristalizar: cada nível de encantamento soma floor(crystal_count × n / crystal_per_enchant).
+  uint32 crystal_per_enchant = 7;
+}
+
+message EnchantTierRule {
+  repeated float chance = 1; // chance[n] = de chegar a +n
+  uint32 fee_per_level = 2;
 }
 
 message TeleportDest {
@@ -1395,6 +1414,11 @@ message ItemInfo {
   ItemSetInfo set = 27;
   ItemBonus under_level = 28; // o que vestir antes de req_level tira (uma vez, com uma ou mais peças); vazio = não se aplica
   uint32 hands = 29; // armas: 1 ou 2 mãos (0 = não é arma)
+  // Cristalização e encantamento por grau (tunnel#154).
+  bool graded = 30; // peça feita para o grau: o encantamento é uma fração dela (EnchantRules.graded_step)
+  uint32 scroll_tier = 31; // pergaminhos de encantar: o grau que encantam (o D também serve nas sem grau)
+  string crystal_id = 32; // equipamento que se cristaliza: o cristal ("" = não se cristaliza)
+  uint32 crystal_count = 33; // e quantos a peça +0 rende
 }
 
 // Conjunto de armadura (tunnel#153): as peças comuns, na ordem do corpo (a versão épica de
