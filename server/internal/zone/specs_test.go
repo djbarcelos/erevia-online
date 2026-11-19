@@ -304,6 +304,7 @@ func TestSpecActiveSkillsWork(t *testing.T) {
 				p, _ := joinAt(z, 1, sp.Class, 30, 0, game.XPLevelStart(28))
 				p.pl.spec = sp.ID
 				learn(z, p, map[uint32]int{s.ID: 1})
+				p.pl.res.Value = 100 // as de impacto gastam o recurso da evolução
 				var target *entity
 				if s.Target == game.TargetEnemy {
 					target = ms[0]

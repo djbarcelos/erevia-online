@@ -28,6 +28,7 @@ func skillInfoPB(s *game.SkillDef) *pb.SkillInfo {
 		info.Modifies = s.Modifies
 		info.EvolvedFrom = s.EvolvedFrom
 		info.Weapon = s.Weapon
+		info.ResCost, info.ResOnCast, info.ResOnHit, info.ResSpendAll = float32(s.ResCost), float32(s.ResOnCast), float32(s.ResOnHit), s.ResSpendAll
 		for _, r := range s.Requires {
 			info.Requires = append(info.Requires, &pb.SkillReq{SkillId: r.ID, Rank: uint32(r.Rank)})
 		}

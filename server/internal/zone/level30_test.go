@@ -215,6 +215,8 @@ func TestFifthTierBarbarian(t *testing.T) {
 	b, _ := joinAt(z, 1, "barbarian", 31, 0, 0)
 	atLevel(z, b, 20)
 	learn(z, b, map[uint32]int{game.SkillSeismicAxe: 1, game.SkillBloodWhirl: 1, game.SkillStoneSkin: 2})
+	b.pl.spec = "bloodrager" // a Machadada e o Redemoinho gastam Fúria
+	b.pl.res.Value = 100
 
 	// Machadada Sísmica: acerta em volta do alvo e bate 50% a mais abaixo de 30% de vida.
 	n := len(z.frame.combat)

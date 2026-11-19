@@ -188,6 +188,19 @@ func (z *Zone) checkVitals(p *entity) {
 			p.mp = math.Min(math.Max(p.mp, 0), p.stats.MaxMP)
 		})
 	}
+	// Recurso de classe: entre 0 e o máximo da evolução (0 sem evolução).
+	top = 0
+	if d := resDef(p); d != nil {
+		top = d.Max
+	}
+	if v := p.pl.res.Value; !(v >= 0 && v <= top) {
+		z.invariantBroken(p, "res", fmt.Sprintf("%v / %v", v, top), func() {
+			if math.IsNaN(v) {
+				v = 0
+			}
+			p.pl.res.Value = math.Min(math.Max(v, 0), top)
+		})
+	}
 }
 
 // checkGold: moedas da bolsa e do armazém entre 0 e o teto.

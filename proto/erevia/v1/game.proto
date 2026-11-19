@@ -272,6 +272,7 @@ message SpecInfo {
   string bonus_text = 7; // "+12 Constituição"
   repeated SkillBranch branches = 10; // os 3 ramos da árvore da evolução
   repeated uint32 starter_skills = 11; // as 2 iniciais
+  ResourceInfo resource = 12; // recurso de classe (barra abaixo da mana)
   // Armas e mãos secundárias que a especialização usa; vazio = as da classe (Welcome.weapons
   // descreve cada tipo de arma).
   repeated string weapons = 8;
@@ -1387,6 +1388,7 @@ message SelfStats {
   float mp_regen = 21;
   float crit_damage = 22;
   string killed_by = 23; // morto: quem matou (jogador)
+  uint32 res = 24; // recurso de classe (SpecInfo.resource da evolução; 0 sem evolução)
 }
 
 // Recarga de skill (só para o dono).
@@ -1784,6 +1786,18 @@ message SkillInfo {
   uint32 modifies = 29; // modificador: a skill que ele altera
   uint32 evolved_from = 30; // versão evoluída desta skill da base
   repeated string weapon = 31; // tipos de arma exigidos para lançar (vazio = qualquer)
+  // Recurso de classe: custo, ganho ao lançar e ao acertar (por alvo); gastar tudo.
+  float res_cost = 32;
+  float res_on_cast = 33;
+  float res_on_hit = 34;
+  bool res_spend_all = 35;
+}
+
+// Recurso de classe de uma evolução (Determinação, Fé, Fúria…).
+message ResourceInfo {
+  string name = 1;
+  string color = 2; // "#rrggbb"
+  uint32 max = 3;
 }
 
 enum SkillNode {

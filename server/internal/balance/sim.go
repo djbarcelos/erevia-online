@@ -167,13 +167,18 @@ type fight struct {
 	bodyRadius, mRange float64
 	// Em grupo (group.go): a vida do monstro é de todos; nil = só deste caçador (mhp).
 	shared *float64
+	// Recurso de classe da evolução (nil = sem): ganhos pelo valor esperado, como a zona.
+	rd      *game.ResourceDef
+	res     game.ResourceState
+	engaged bool // o primeiro golpe neste monstro já saiu (Ímpeto)
 }
 
 // newFight prepara o caçador (vida e mana cheias, nada em recarga). O mesmo caçador luta
 // uma vez depois da outra (engage): recargas, buffs, poções e a Muralha Viva seguem de uma
 // luta para a próxima, como na zona.
 func newFight(b *Build, night, potions bool) *fight {
-	f := &fight{b: b, pv: game.PassiveTotals(b.Ranks), p: b.Stats, night: night, rot: rotation(b), potion: potions}
+	f := &fight{b: b, pv: game.PassiveTotals(b.Ranks), p: b.Stats, night: night, rot: rotation(b), potion: potions,
+		rd: game.ResourceOf(b.Path.Class, b.Path.Spec)}
 	f.potHP, f.potMP = game.Items["potion_hp_s"], game.Items["potion_mp_s"]
 	if b.Level >= largePotionFrom {
 		f.potHP, f.potMP = game.Items["potion_hp_l"], game.Items["potion_mp_l"]
@@ -189,6 +194,14 @@ func (f *fight) engage(def *game.MonsterDef, level int) {
 	f.bodyRadius, f.mRange = def.BodyRadius, f.m.Range
 	f.dist = f.p.Range*approachFactor + f.bodyRadius
 	f.out = Fight{}
+	f.engaged = false
+}
+
+// gain soma no recurso (o teto por segundo e o máximo valem como na zona).
+func (f *fight) gain(n float64) {
+	if f.rd != nil && n > 0 {
+		f.res.Gain(f.rd, n, f.now)
+	}
 }
 
 // rest: o tempo passa sem luta (andar ou descansar), com a regeneração de fora de combate
@@ -197,6 +210,9 @@ func (f *fight) rest(t float64) {
 	courage := f.pv.Of(game.PassiveCourage)
 	f.hp = regenFor(f.hp, f.p.MaxHP, t, f.p.HPRegen, courage, game.CalmHPRegenMult)
 	f.mp = regenFor(f.mp, f.p.MaxMP, t, f.p.MPRegen, 0, game.CalmMPRegenMult)
+	if t > game.OutOfCombatAfter { // o recurso cai fora de combate
+		f.res.Tick(f.rd, f.now+t, f.now, t-game.OutOfCombatAfter)
+	}
 	f.now += t
 }
 
@@ -284,10 +300,23 @@ func (f *fight) monHP() float64 {
 
 // hit: o golpe do jogador no monstro (dano médio), com a Marca, o roubo de vida e o veneno
 // da Lâmina Envenenada.
-func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) {
+// hit: o golpe pelo valor esperado; devolve a chance de acertar (para os ganhos de recurso).
+func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) float64 {
 	in := game.HitInput{Atk: f.pAtk(magic), Def: f.mDef(magic), Mult: mult * (1 + f.b.Bestiary), // como zone.hitInput
 		Crit: f.p.Crit + extraCrit, CritMult: f.p.CritDamage, Accuracy: f.p.Accuracy, Evasion: f.m.Evasion, NoMiss: noMiss}
 	dmg := game.ExpectedHit(in)
+	chance := 1.0
+	if !noMiss {
+		chance = game.HitChance(in.Accuracy, in.Evasion)
+	}
+	if f.rd != nil {
+		n := f.rd.Gen(game.GenCrit) * math.Min(1, in.Crit)
+		if !f.engaged {
+			n += f.rd.Gen(game.GenEngage)
+			f.engaged = true
+		}
+		f.gain(chance * (n + f.rd.RangedGen(f.dist)))
+	}
 	if v, ok := f.mfx.active(game.EffectMark, f.now); ok {
 		dmg *= 1 + v
 	}
@@ -296,10 +325,6 @@ func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) {
 		f.hp = math.Min(f.p.MaxHP, f.hp+dmg*pv)
 	}
 	if pv := f.pv.Of(game.PassivePoisonProc); pv > 0 && !f.mDead() {
-		chance := 1.0
-		if !noMiss {
-			chance = game.HitChance(in.Accuracy, in.Evasion)
-		}
 		f.poisonAcc += chance * pv
 		if f.poisonAcc >= 1 {
 			f.poisonAcc--
@@ -307,6 +332,7 @@ func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) {
 			f.mfx.add(game.EffectPoison, v, game.PoisonProcSecs, f.now)
 		}
 	}
+	return chance
 }
 
 func (f *fight) damageMonster(dmg float64) {
@@ -325,6 +351,20 @@ func (f *fight) cast(rs rotSkill) {
 	s, r := rs.s, rs.rank
 	f.mp -= rs.mp
 	f.cds[s.ID] = f.now + rs.cd
+	spent := 0.0
+	if f.rd != nil {
+		if s.ResSpendAll {
+			spent = f.res.SpendAll()
+		} else if f.res.Spend(s.ResCost) {
+			spent = s.ResCost
+		}
+		n := s.ResOnCast
+		if f.res.LastCast != s.ID {
+			n += f.rd.Gen(game.GenDistinctCast)
+		}
+		f.res.LastCast = s.ID
+		f.gain(n)
+	}
 	if def := s.OnSelf.At(r); def != nil && modeledOnSelf(def.Kind) {
 		f.pfx.add(def.Kind, def.Value, def.Duration, f.now)
 	}
@@ -339,10 +379,20 @@ func (f *fight) cast(rs rotSkill) {
 		if s.ExecuteBelow > 0 && !f.immortal && f.monHP() < f.m.MaxHP*s.ExecuteBelow {
 			mult *= s.ExecuteMult
 		}
+		if s.ResSpendAll {
+			mult *= game.SpendAllMult(s, spent)
+		}
+		chance := 0.0
 		for i := 0; i < max(1, s.Hits) && !f.mDead(); i++ {
-			f.hit(s.Magic, mult, s.ExtraCrit, s.NoMiss)
+			chance = math.Max(chance, f.hit(s.Magic, mult, s.ExtraCrit, s.NoMiss))
+		}
+		if f.rd != nil {
+			f.gain(chance * f.rd.Gen(game.GenSkillHit))
 		}
 		landed = true // o efeito pega na média (a chance de errar já entrou no dano)
+	}
+	if f.rd != nil && s.ResOnHit > 0 {
+		f.gain(s.ResOnHit) // uma vez por alvo (o simulador luta contra um)
 	}
 	if f.mDead() || !landed {
 		return
@@ -352,6 +402,9 @@ func (f *fight) cast(rs rotSkill) {
 		def := spec.At(r)
 		if spec.AtkFrac {
 			def.Value = math.Round(f.pAtk(s.Magic) * def.Value)
+		}
+		if f.rd != nil && !f.mfxActive(def.Kind) {
+			f.gain(f.rd.Gen(game.GenNewEffect))
 		}
 		f.mfx.add(def.Kind, def.Value, def.Duration, f.now)
 	}
@@ -374,6 +427,9 @@ func (f *fight) inRange(rng float64) bool { return f.dist-f.bodyRadius <= rng }
 func (f *fight) wants(rs rotSkill) bool {
 	s := rs.s
 	if f.now+timeEps < f.cds[s.ID] || f.mp < rs.mp {
+		return false
+	}
+	if c := game.SkillResCost(s); c > 0 && (f.rd == nil || f.res.Value+1e-9 < c) {
 		return false
 	}
 	if s.Target != game.TargetSelf && !f.inRange(s.Range) {
@@ -411,6 +467,16 @@ func (f *fight) monsterHit() {
 	if !f.m.Magic && f.p.Block > 0 {
 		dmg *= 1 - math.Min(1, f.p.Block)*game.BlockCut(f.p)
 	}
+	if f.rd != nil { // recurso de quem apanha (Determinação, Fúria)
+		n := f.rd.Gen(game.GenDamageTaken)
+		if f.dist <= game.MeleeTakenRange {
+			n += f.rd.Gen(game.GenMeleeTaken)
+		}
+		if !f.m.Magic {
+			n += f.rd.Gen(game.GenBlock) * math.Min(1, f.p.Block)
+		}
+		f.gain(game.HitChance(acc, f.p.Evasion) * n)
+	}
 	if sh := &f.pfx[game.EffectShield]; sh.until > f.now && sh.value > 0 {
 		a := math.Min(sh.value, dmg)
 		sh.value -= a
@@ -446,6 +512,7 @@ func (f *fight) regen() {
 	}
 	f.hp = math.Min(f.p.MaxHP, f.hp+hp*tickDT)
 	f.mp = math.Min(f.p.MaxMP, f.mp+mp*tickDT)
+	f.res.Tick(f.rd, f.now, f.now, tickDT) // em combate: só a queda do Combo parado
 }
 
 func (f *fight) potions() {
@@ -497,10 +564,12 @@ func (f *fight) run() Fight {
 		}
 		f.tickDoTs()
 		if f.mDead() {
+			f.gain(f.rd.Gen(game.GenKill))
 			break
 		}
 		f.playerActs()
 		if f.mDead() {
+			f.gain(f.rd.Gen(game.GenKill))
 			break
 		}
 		if f.monsterActs(); f.hp <= 0 {
@@ -526,7 +595,9 @@ func (f *fight) playerActs() {
 		}
 	}
 	if !f.mDead() && f.now+timeEps >= f.pNext && f.inRange(f.p.Range) {
-		f.hit(f.p.Magic, 1, 0, false)
+		if chance := f.hit(f.p.Magic, 1, 0, false); f.rd != nil {
+			f.gain(chance * f.rd.Gen(game.GenBasicHit))
+		}
 		f.pNext = f.now + f.pInterval()
 	}
 }

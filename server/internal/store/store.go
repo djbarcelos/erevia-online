@@ -93,8 +93,10 @@ type Character struct {
 	// Conquistas e o título em uso (id da conquista; "" = nenhum).
 	Achievements game.AchievementState `json:"-"`
 	Title        string                `json:"-"`
-	// Especialização (segunda classe, nível 20; "" = nenhuma).
-	Spec string `json:"spec"`
+	// Evolução (nível 20; "" = nenhuma) e o nome dela para a tela de personagens (só em
+	// ListCharacters).
+	Spec     string `json:"spec"`
+	SpecName string `json:"specName,omitempty"`
 	// Bestiário: abates por monstro e famílias completas (migração 00031).
 	Bestiary game.BestiaryState `json:"-"`
 	// Pedras de Teleporte descobertas e a última cidade visitada (migração 00036).
@@ -317,6 +319,10 @@ func (s *Store) ListCharacters(ctx context.Context, accountID int64) ([]Characte
 	chars, err := pgx.CollectRows(rows, scanCharacter)
 	if err != nil || len(chars) == 0 {
 		return chars, err
+	}
+	for i := range chars {
+		c := &chars[i]
+		c.SpecName = game.SpecName(game.ActiveSpec(c.ActiveClass, c.Spec, c.Level))
 	}
 	// Armas nas mãos (encaixes 0 e 1) de cada um, para a tela de seleção.
 	ids := make([]int64, len(chars))

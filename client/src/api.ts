@@ -15,6 +15,8 @@ export interface CharacterInfo {
   activeClass?: ClassId;
   /** Com subclasse: cada classe e o nível dela (a principal primeiro). */
   classes?: { class: ClassId; level: number; main?: boolean }[];
+  /** Evolução da classe ativa: o nome ("" ou ausente = classe base). */
+  specName?: string;
   /** Cor do emblema (#rrggbb; o servidor manda a padrão da classe se não houver). */
   emblem?: string;
   /** Modelos 3D das armas que estão nas mãos agora e a raridade da principal. */

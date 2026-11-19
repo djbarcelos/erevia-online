@@ -86,7 +86,7 @@ func TestSpecDataIsConsistent(t *testing.T) {
 				if s.IsPassive() {
 					continue
 				}
-				if s.Target == 0 || s.MP.At(1) <= 0 || s.CD.At(1) <= 0 {
+				if s.Target == 0 || s.MP.At(1)+SkillResCost(s) <= 0 || s.CD.At(1) <= 0 {
 					t.Errorf("%s: ativa sem alvo, custo ou recarga", s.Name)
 				}
 				if s.Mult.At(1) <= 0 && s.OnTarget == nil && s.OnSelf == nil && s.Banner == nil {

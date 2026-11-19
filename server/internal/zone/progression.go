@@ -18,6 +18,7 @@ func (z *Zone) kill(dead, killer *entity) {
 	}
 	dead.dead = true
 	dead.hp = 0
+	z.killGains(dead)
 	z.spreadPlague(dead)
 	for _, ef := range dead.effects {
 		z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: dead.id, Effect: pb.Effect(ef.kind)})
@@ -223,5 +224,6 @@ func (z *Zone) selfStats(p *entity) *pb.SelfStats {
 		AtkSpeed: float32(1 / p.attackInterval(z.now)), CastSpeed: float32(p.stats.CastSpeed),
 		HpRegen: float32(p.stats.HPRegen), MpRegen: float32(p.stats.MPRegen), CritDamage: float32(p.stats.CritDamage),
 		KilledBy: p.pl.killedBy,
+		Res:      uint32(resInt(p)),
 	}
 }

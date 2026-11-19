@@ -408,7 +408,7 @@ export function select<T extends string>(
   return s;
 }
 
-export function bar(kind: "hp" | "mp" | "xp", cls = ""): { root: HTMLDivElement; set(v: number, max: number, label?: string): void } {
+export function bar(kind: "hp" | "mp" | "xp" | "res", cls = ""): { root: HTMLDivElement; set(v: number, max: number, label?: string): void } {
   const root = el("div", `pbar ${kind} ${cls}`);
   const fill = el("i");
   const text = el("b");

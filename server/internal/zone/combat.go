@@ -158,6 +158,10 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 		z.system(p, "Mana insuficiente.")
 		return
 	}
+	if msg := resShort(p, s); msg != "" {
+		z.system(p, msg)
+		return
+	}
 	switch s.Target {
 	case game.TargetSelf:
 		z.castSkill(p, s, nil)
@@ -230,6 +234,17 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 				z.sendCooldown(src, s.ID, 0)
 				return
 			}
+		}
+		if msg := resShort(src, s); msg != "" {
+			z.system(src, msg)
+			return
+		}
+		spent, _ := z.castResource(src, s)
+		if s.ResSpendAll && spent > 0 { // gasta tudo: o dano cresce com o que foi gasto
+			c := *s
+			m := game.SpendAllMult(s, spent)
+			c.Mult = game.Scale{Base: s.Mult.Base * m, Per: s.Mult.Per * m}
+			s = &c
 		}
 		src.mp -= cost
 		z.questEvent(src, game.GoalSkill, "")
@@ -325,6 +340,9 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 			landed = landed || !hit.Miss
 		}
 	}
+	if src.pl != nil && landed && src != dst {
+		z.skillTargetGains(src, s, s.Mult.At(rank) > 0)
+	}
 	if dst.dead || !landed {
 		return
 	}
@@ -364,6 +382,9 @@ func (z *Zone) applyEffect(src, e *entity, def *game.EffectDef) {
 			def = &short
 		}
 	}
+	if src.pl != nil && src != e && (e.mon != nil || e.pl != nil && z.hostile(src, e, false)) && !e.has(def.Kind, z.now) {
+		z.gainEvent(src, game.GenNewEffect) // Carga Arcana: só efeito que o alvo ainda não tinha
+	}
 	e.addEffect(def, z.now, src.id)
 	z.frame.effects = append(z.frame.effects, &pb.EffectEvent{
 		TargetId: e.id, Effect: pb.Effect(def.Kind), DurationMs: uint32(def.Duration * 1000),
@@ -394,6 +415,7 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 		Damage: uint32(hit.Damage), Crit: hit.Crit, Miss: hit.Miss,
 	}
 	z.frame.combat = append(z.frame.combat, ev)
+	engaged := z.now-dst.lastCombat > outOfCombatAfter // o alvo não estava lutando (Ímpeto)
 	src.lastCombat, dst.lastCombat = z.now, z.now
 
 	if dst.mon != nil && src.pl != nil {
@@ -402,6 +424,9 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 		dst.mon.returning = false
 	}
 	if hit.Miss {
+		if src.pl != nil {
+			src.pl.res.Miss(resDef(src)) // Precisão: errar zera
+		}
 		return
 	}
 	dmg := hit.Damage
@@ -425,6 +450,9 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 		ev.Blocked = true
 	}
 	taken := z.damage(src, dst, dmg, ev)
+	if taken > 0 || ev.Blocked {
+		z.hitGains(src, dst, skillID, hit.Crit, ev.Blocked, engaged)
+	}
 
 	if src.pl != nil && taken > 0 && !src.dead {
 		// Sede de Sangue
@@ -554,6 +582,9 @@ func (z *Zone) regen(e *entity, dt float64) {
 	}
 	e.hp = math.Min(e.stats.MaxHP, e.hp+hp*dt)
 	e.mp = math.Min(e.stats.MaxMP, e.mp+mp*dt)
+	if e.pl != nil {
+		e.pl.res.Tick(resDef(e), z.now, e.lastCombat, dt)
+	}
 }
 
 func (z *Zone) inSafe(p Vec2) bool { return p.X*p.X+p.Z*p.Z < z.cfg.SafeRadius*z.cfg.SafeRadius }

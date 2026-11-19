@@ -37,6 +37,8 @@ type SpecDef struct {
 	StarterSkills [2]uint32
 	// StarterItems: itens entregues uma vez ao evoluir (StarterItemsFlag).
 	StarterItems []string
+	// Resource: o recurso de classe (resources.go).
+	Resource *ResourceDef
 }
 
 // BonusText: "+12 Constituição" ou "+6 Força e +6 Constituição".

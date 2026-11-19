@@ -85,6 +85,7 @@ type playerState struct {
 	statsDirty bool
 	sentMP     int
 	sentSelfHP int // vida no último SelfStats (o sentHP é do snapshot e muda antes)
+	sentRes    int // recurso de classe no último SelfStats
 	inv        inventory
 	saveAt     float64 // salvar em breve (0 = só no periódico)
 
@@ -105,6 +106,9 @@ type playerState struct {
 	// Muralha Viva: quando pode disparar de novo. Sumir: o próximo golpe é crítico.
 	lastStandReady float64
 	ambushCrit     bool
+	// Recurso de classe (resources.go) e alvos que já geraram neste lançamento.
+	res         game.ResourceState
+	castTargets int
 
 	// Fase 4: PvP, grupo e clã.
 	accountID  int64
