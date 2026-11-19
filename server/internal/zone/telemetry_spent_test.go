@@ -17,6 +17,7 @@ func TestTelemetryCountsConsumedItems(t *testing.T) {
 	p, _ := joinAt(z, 1, "knight", 30, 0, 0) // fora da cidade: o pergaminho de retorno funciona
 	inv := &p.pl.inv
 	inv.bag = [game.BagSize]stack{}
+	inv.gold = 1000 // a taxa de encantar
 	for _, id := range []string{"potion_hp_s", "scroll_ench_weapon", "scroll_return", "sword_common"} {
 		inv.add(game.Items[id], 1)
 	}

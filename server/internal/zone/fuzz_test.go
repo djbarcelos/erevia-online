@@ -90,6 +90,8 @@ func fuzzDeliver(z *Zone, id uint32, msg *pb.ClientMessage) bool {
 		z.ItemAction(ctx, id, m.StorageGold)
 	case *pb.ClientMessage_Enchant:
 		z.ItemAction(ctx, id, m.Enchant)
+	case *pb.ClientMessage_Crystallize:
+		z.ItemAction(ctx, id, m.Crystallize)
 	case *pb.ClientMessage_ChangeLook:
 		z.ItemAction(ctx, id, m.ChangeLook)
 	case *pb.ClientMessage_PartyCmd:
@@ -654,6 +656,7 @@ func (h *fuzzHarness) ledger() fuzzLedger {
 //   - Craft: só o resultado da receita, no máximo Count, com o ouro e os materiais pagos;
 //   - missão concluída no passo (ex.: A Encruzilhada, da especialização, ou chegar a um
 //     lugar): no máximo as moedas e os itens da recompensa dela;
+//   - Crystallize: só os cristais do grau de uma peça que sumiu, no máximo o que um +10 dela rende;
 //   - Sell troca item por ouro pelo preço de venda, então o "valor" não muda.
 //
 // Fora isso, nenhuma unidade de item aparece e o valor total (ouro + preço de venda dos
@@ -729,6 +732,20 @@ func (h *fuzzHarness) checkEconomy(before, after fuzzLedger, msg *pb.ClientMessa
 				}
 			}
 			allowValue += def.SellPrice() * int64(grew)
+		case msg.GetCrystallize() != nil && def.CrystalOf != game.TierNone:
+			// cristalizar: uma peça do grau do cristal sumiu e rendeu no máximo o que um +10 dela
+			// renderia; o valor de venda dos cristais fica abaixo do da peça (game.CrystalShare)
+			src := ""
+			for pid, pn := range before.units {
+				if d := game.Items[pid]; d != nil && d.Tier == def.CrystalOf && pn-after.units[pid] == 1 && d.Crystallizable() {
+					src = pid
+				}
+			}
+			if src == "" {
+				h.fail("cristalizar criou %d× %s sem gastar uma peça do grau", grew, id)
+			} else if _, most := game.CrystalYield(game.Items[src], game.MaxEnchant); grew > most {
+				h.fail("cristalizar %s rendeu %d× %s (máximo %d)", src, grew, id, most)
+			}
 		default:
 			h.fail("%d× %s apareceram do nada (antes %d, depois %d)", grew, id, before.units[id], n)
 		}
@@ -929,6 +946,7 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_Teleport{Teleport: &pb.Teleport{NpcId: npc + uint32(len(townNPCs)), DestId: 1}}},
 		{Msg: &pb.ClientMessage_CancelChannel{CancelChannel: &pb.CancelChannel{}}},
 		{Msg: &pb.ClientMessage_Enchant{Enchant: &pb.Enchant{ScrollSlot: 8, Place: 1, Slot: game.SlotWeapon}}},
+		{Msg: &pb.ClientMessage_Crystallize{Crystallize: &pb.Crystallize{Slot: 9}}},
 		{Msg: &pb.ClientMessage_StorageMove{StorageMove: &pb.StorageMove{NpcId: npc + uint32(len(townNPCs)+legacyStones), FromPlace: 0, FromSlot: 10, ToPlace: 2, ToSlot: 0}}},
 		{Msg: &pb.ClientMessage_StorageGold{StorageGold: &pb.StorageGold{NpcId: npc + uint32(len(townNPCs)+legacyStones), Amount: 10}}},
 		// Retiradas do armazém (o outro sentido).

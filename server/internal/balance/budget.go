@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 
 	"erevia/server/internal/game"
 )
@@ -69,6 +70,39 @@ func EnchantViolations() []Violation {
 			if ex := p10/p0 - 1; ex > EnchantTolerance {
 				out = append(out, Violation{"enchant:" + d.ID, ex,
 					fmt.Sprintf("+%d %s (%s) contra %s +0 (%s)", game.MaxEnchant, d.Name, num(p10, 1), next.Name, num(p0, 1))})
+			}
+		}
+	}
+	return out
+}
+
+// TierEnchantSafeLevel: o encantamento que não pode passar o +0 do grau seguinte.
+const TierEnchantSafeLevel = 7
+
+// TierEnchantViolations: peças dos graus que, em +7, passam a mesma raridade +0 do grau
+// seguinte, no mesmo encaixe (armas por classe). Sem tolerância (tunnel#154): o grau novo
+// sempre vale a troca.
+func TierEnchantViolations() []Violation {
+	var out []Violation
+	for i := 1; i+1 < len(game.Tiers); i++ {
+		lo, hi := game.Tiers[i], game.Tiers[i+1]
+		for _, fam := range Families() {
+			suffix := ":grau " + lo.Letter()
+			if !strings.HasSuffix(fam, suffix) {
+				continue
+			}
+			next := Ladder(strings.TrimSuffix(fam, suffix) + ":grau " + hi.Letter())
+			for _, d := range Ladder(fam) {
+				for _, n := range next {
+					if n.Grade != d.Grade {
+						continue
+					}
+					p7, p0 := ItemPower(d, TierEnchantSafeLevel), ItemPower(n, 0)
+					if ex := p7/p0 - 1; ex > 0 {
+						out = append(out, Violation{"tier-enchant:" + d.ID, ex,
+							fmt.Sprintf("+%d %s (%s) contra %s +0 (%s)", TierEnchantSafeLevel, d.Name, num(p7, 1), n.Name, num(p0, 1))})
+					}
+				}
 			}
 		}
 	}
@@ -161,7 +195,8 @@ func SetViolations() []Violation {
 // AllViolations: as listas, em ordem de chave.
 func AllViolations() []Violation {
 	out := append(append(append(ItemViolations(), SetViolations()...), EnchantViolations()...), ClassViolations()...)
-	out = append(out, BestiaryViolations()...) // bestiary.go
+	out = append(out, BestiaryViolations()...)    // bestiary.go
+	out = append(out, TierEnchantViolations()...) // o +7 contra o grau seguinte (tunnel#154)
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out
 }

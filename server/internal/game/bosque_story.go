@@ -128,5 +128,5 @@ var terrasQuests = line(TerrasMortasRegion, TalkBrother, 28,
 			kill("ossario_cavaleiro", 8, "Derrotar Cavaleiros do Ossário")},
 		Done: "A Pedra-Selo segue de pé, com mais um dia de vida. Leve este caco: é da primeira Pedra-Selo, e a Guarda vai saber o que fazer com ele. " +
 			"As outras quatro estão além das montanhas.",
-		Reward: QuestReward{XP: boss, Items: items("seal_fragment", 1, "scroll_ench_weapon_b", 1)}},
+		Reward: QuestReward{XP: boss, Items: items("seal_fragment", 1, "scroll_ench_weapon_tc_bl", 1)}},
 )
