@@ -38,8 +38,9 @@ const (
 	arenaSideX      = 9.0              // cada time começa a esta distância do centro
 )
 
-// arenaMasterSpot: onde fica o Mestre da Arena na praça (e onde quem sai da arena aparece).
-var arenaMasterSpot = Vec2{X: 10.5, Z: 5.5}
+// arenaMasterSpot: onde fica o Mestre da Arena, a sudoeste da praça, longe dos outros NPCs e do
+// mercado da loja pessoal (e onde quem sai da arena aparece).
+var arenaMasterSpot = Vec2{X: -11.5, Z: -9.6}
 
 // ArenaBackend é o banco da arena (cmd/zone liga o store).
 type ArenaBackend interface {
@@ -789,5 +790,5 @@ func (z *Zone) arenaSendHome(p *entity) {
 	if dest == nil {
 		dest = z.mgr.Home()
 	}
-	z.crossZone(p, dest, arenaMasterSpot, "arena_exit")
+	z.crossZone(p, dest, Vec2{X: arenaMasterSpot.X + 2.5, Z: arenaMasterSpot.Z}, "arena_exit") // ao lado do Mestre, não em cima
 }

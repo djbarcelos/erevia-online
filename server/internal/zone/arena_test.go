@@ -158,7 +158,7 @@ func TestArenaSoloMatchFromQueueToResult(t *testing.T) {
 		t.Fatal("os dois voltaram à cidade")
 	}
 	back := e.home.players[2]
-	if back.dead || back.hp != back.stats.MaxHP || dist(back.pos, arenaMasterSpot) > 4 {
+	if back.dead || back.hp != back.stats.MaxHP || dist(back.pos, arenaMasterSpot) > 5 || dist(back.pos, arenaMasterSpot) < 1 {
 		t.Fatalf("Beto volta vivo, com vida cheia, perto do Mestre: morto=%v hp %.0f/%.0f %+v", back.dead, back.hp, back.stats.MaxHP, back.pos)
 	}
 }

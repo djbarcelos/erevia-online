@@ -2434,3 +2434,164 @@
     width: 64px;
   }
 }
+
+/* ---------- Arena PvP ranqueada (tunnel#81) ---------- */
+
+.shop-panel.arena-panel {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.arena-season {
+  margin: 0 0 10px;
+}
+
+.arena-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.arena-mode {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(214, 180, 110, 0.18);
+}
+
+.arena-mode p {
+  margin: 0;
+}
+
+.arena-mode.queued {
+  border-color: var(--gold);
+}
+
+.arena-mode-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.arena-rating {
+  font-size: 1.2rem;
+  color: var(--gold-hi);
+  font-variant-numeric: tabular-nums;
+}
+
+.arena-sub {
+  margin: 14px 0 6px;
+  font-size: 0.82rem;
+  color: var(--gold);
+}
+
+.arena-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.arena-tab {
+  padding: 2px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(214, 180, 110, 0.25);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.arena-tab.on {
+  border-color: var(--gold);
+  color: var(--gold-hi);
+}
+
+.arena-rank-list {
+  margin: 0;
+  padding-left: 22px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.82rem;
+}
+
+.arena-rank-list li {
+  padding: 2px 0;
+}
+
+.arena-rank-rating {
+  margin-left: 8px;
+  color: var(--gold-hi);
+  font-variant-numeric: tabular-nums;
+}
+
+.arena-rules {
+  margin: 12px 0 0;
+}
+
+/* O painel da partida, no alto da tela. */
+.arena-match {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: grid;
+  gap: 6px;
+  padding: 8px 14px;
+  min-width: 260px;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  pointer-events: none;
+}
+
+.arena-match-head {
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+
+.arena-timer {
+  font-size: 1.1rem;
+  color: var(--gold-hi);
+  font-variant-numeric: tabular-nums;
+}
+
+.arena-teams {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.arena-team {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.arena-team.mine .alive {
+  color: #8fd27a;
+}
+
+.arena-team.theirs .alive {
+  color: #f08a7a;
+}
+
+.arena-team .out {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.arena-vs {
+  color: var(--gold);
+}
+
+@media (max-width: 520px) {
+  .arena-modes {
+    grid-template-columns: 1fr;
+  }
+}

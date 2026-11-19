@@ -430,9 +430,21 @@ export class EntityManager {
     return this.partyIds.has(id);
   }
 
-  /** Aliado: do grupo ou do mesmo clã (nunca é atacado). */
+  /**
+   * Arena (tunnel#81): durante a partida, o time do jogador (aliados) e o outro (alvos sem
+   * Ctrl). null = fora de partida, valem o grupo e o clã.
+   */
+  private arenaTeams: { mine: Set<number>; foes: Set<number> } | null = null;
+
+  setArenaTeams(mine: number[] | null, foes: number[] = []): void {
+    this.arenaTeams = mine ? { mine: new Set(mine), foes: new Set(foes) } : null;
+  }
+
+  /** Aliado: do grupo ou do mesmo clã (nunca é atacado). Na arena, só o time. */
   isAlly(id: number): boolean {
-    if (id === this.localId || this.partyIds.has(id)) return true;
+    if (id === this.localId) return true;
+    if (this.arenaTeams) return this.arenaTeams.mine.has(id);
+    if (this.partyIds.has(id)) return true;
     const v = this.views.get(id);
     const me = this.local;
     return !!v && !!me && v.kind === EntityKind.PLAYER && v.clanName !== "" && v.clanName === me.clanName;
@@ -448,6 +460,7 @@ export class EntityManager {
     if (!v || v.dead) return false;
     if (v.kind === EntityKind.MONSTER) return true;
     if (v.kind !== EntityKind.PLAYER || this.isAlly(id)) return false;
+    if (this.arenaTeams?.foes.has(id)) return true; // arena: o outro time é alvo sem Ctrl
     return force || v.pvpState !== PvpState.NORMAL;
   }
 

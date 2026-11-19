@@ -2,6 +2,7 @@ import { create, fromBinary, toBinary, type MessageInitShape } from "@bufbuild/p
 import { notePing, type SyncSample } from "./sync-stats";
 import {
   AchievementCmdKind,
+  ArenaCmdKind,
   ChatChannel,
   ClanCmdKind,
   ClanRank,
@@ -132,6 +133,11 @@ export class Connection {
   /** Pergaminho de encantar (na bolsa) num item da bolsa (place 0) ou equipado (1). */
   enchant(scrollSlot: number, place: number, slot: number): void {
     this.send({ case: "enchant", value: { scrollSlot, place, slot } });
+  }
+
+  /** Arena (tunnel#81): abrir a janela do Mestre, entrar e sair da fila. */
+  arenaCmd(kind: ArenaCmdKind, npcId: number, mode = 0): void {
+    this.send({ case: "arenaCmd", value: { kind, npcId, mode } });
   }
 
   /** Canais (tunnel#86): trocar para o canal n (0 = só pedir a lista). */

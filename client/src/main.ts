@@ -5,6 +5,7 @@ import { gameAudio } from "./audio";
 import { type AbstractEngine, Color3, Matrix, Vector3 } from "@babylonjs/core";
 import { create } from "@bufbuild/protobuf";
 import {
+  ArenaCmdKind,
   EntityKind,
   ItemKind,
   ChannelKind,
@@ -66,6 +67,7 @@ import { BarberWindow } from "./ui/barber";
 import { toBodyLook } from "./world/body-look";
 import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
 import { TradeWindow } from "./ui/trade";
+import { ArenaWindow } from "./ui/arena";
 import { PrivateShopWindow } from "./ui/pshop";
 import { applyEnvClasses, isCompact, settings, toast, WindowManager, type WindowDef } from "./ui/kit";
 import { DEFAULT_LOOK } from "./ui/looks";
@@ -924,6 +926,16 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     { choose: (npc, spec) => conn.specCmd(SpecCmdKind.SPEC_CMD_CHOOSE, npc, spec), myClass: () => activeClass, skills: () => welcome.skills },
     hud.element,
   );
+  // Arena PvP ranqueada (tunnel#81): a janela do Mestre e o painel da partida.
+  const arenaWin = new ArenaWindow(
+    {
+      queue: (npcId, mode) => conn.arenaCmd(ArenaCmdKind.ARENA_CMD_QUEUE, npcId, mode),
+      leave: (npcId) => conn.arenaCmd(ArenaCmdKind.ARENA_CMD_LEAVE, npcId),
+    },
+    hud.element,
+    () => welcome.yourId,
+    (mine, foes) => entities.setArenaTeams(mine, foes),
+  );
   const subWin = new SubclassWindow(
     {
       choose: (npc, cls) => conn.subclassCmd(SubclassCmdKind.SUBCLASS_CMD_CHOOSE, npc, cls),
@@ -1036,6 +1048,8 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
     else if (npc?.role === NpcRole.AUCTION) conn.auctionCmd(AuctionCmdKind.AUCTION_CMD_OPEN, id);
     // O Guardião das Sendas responde com SubclassState (abre a janela) ou com um conselho.
     else if (npc?.role === NpcRole.SUBCLASS) conn.subclassCmd(SubclassCmdKind.SUBCLASS_CMD_TALK, id);
+    // O Mestre da Arena responde com ArenaState.open (abre a janela da arena).
+    else if (npc?.role === NpcRole.ARENA) conn.arenaCmd(ArenaCmdKind.ARENA_CMD_OPEN, id);
     else if (npc?.role === NpcRole.TELEPORT) {
       // Indo pela pedra com o "Ir": o destino da missão vem destacado (quem escolhe é o jogador).
       const o = questGo.phase === "toStone" && questGo.offer?.npcId === id ? questGo.offer : null;
@@ -1432,6 +1446,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       else if (contractsWin.isOpen) contractsWin.close();
       else if (specWin.isOpen) specWin.close();
       else if (subWin.isOpen) subWin.close();
+      else if (arenaWin.isOpen) arenaWin.close();
       else if (storageWin.isOpen) storageWin.close();
       else if (tradeWin.isOpen) conn.tradeCmd(TradeCmdKind.TRADE_CMD_CANCEL);
       else if (pshopWin.isOpen) pshopWin.hide();
@@ -1794,6 +1809,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
       subWin.dispose();
       storageWin.dispose();
       tradeWin.dispose();
+      arenaWin.dispose();
       pshopWin.dispose();
       barberWin.dispose();
       window.clearInterval(channelFx);
@@ -1933,6 +1949,9 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         }
         case "trade":
           tradeWin.set(msg.msg.value);
+          break;
+        case "arena":
+          arenaWin.set(msg.msg.value);
           break;
         case "privateShop":
           pshopWin.set(msg.msg.value);
