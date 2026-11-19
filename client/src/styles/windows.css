@@ -2347,3 +2347,90 @@
   background: var(--bc);
   box-shadow: 0 0 10px var(--bc);
 }
+
+/* ---------- Loja pessoal (tunnel#161) ---------- */
+
+.shop-panel.pshop-panel {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.pshop-sub {
+  margin: 0 0 8px;
+}
+
+.pshop-title {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.pshop-list {
+  display: grid;
+  gap: 6px;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+}
+
+.pshop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(214, 180, 110, 0.14);
+}
+
+.pshop-slot {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+}
+
+.pshop-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pshop-price {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--gold-hi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pshop-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--muted, #b7a98f);
+}
+
+.pshop-num {
+  width: 76px;
+}
+
+.pshop-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pshop-empty {
+  margin: 8px 0;
+}
+
+@media (max-width: 520px) {
+  .pshop-row {
+    flex-wrap: wrap;
+  }
+  .pshop-num {
+    width: 64px;
+  }
+}
