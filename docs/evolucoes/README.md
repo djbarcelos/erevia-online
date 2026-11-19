@@ -10,10 +10,10 @@ Cada evolução tem um doc próprio nesta pasta. **O DIogo revisa cada doc antes
 | Cavaleiro | Paladino (`herald`) | Fé | [herald.md](herald.md) | aprovado (19/11) |
 | Bárbaro | Berserker (`bloodrager`) | Fúria | [bloodrager.md](bloodrager.md) | aprovado (19/11) |
 | Bárbaro | Senhor da Guerra (`warlord`) | Ímpeto | [warlord.md](warlord.md) | aprovado (19/11) |
-| Mago | Elementalista (`elementalist`) | Concentração | `elementalist.md` | a fazer |
-| Mago | Arcanista (`occultist`) | Carga Arcana | `occultist.md` | a fazer |
-| Ladino | Assassino (`cutthroat`) | Combo | `cutthroat.md` | a fazer |
-| Ladino | Patrulheiro (`hunter`) | Precisão | `hunter.md` | a fazer |
+| Mago | Elementalista (`elementalist`) | Concentração | [elementalist.md](elementalist.md) | aprovado (19/11) |
+| Mago | Arcanista (`occultist`) | Carga Arcana | [occultist.md](occultist.md) | aprovado (19/11) |
+| Ladino | Assassino (`cutthroat`) | Combo | [cutthroat.md](cutthroat.md) | aprovado (19/11) |
+| Ladino | Patrulheiro (`hunter`) | Precisão | [hunter.md](hunter.md) | aprovado (19/11) |
 
 Os IDs das evoluções são os das especializações de hoje (`spec` no banco e no protocolo) e não mudam. Mudam só os nomes exibidos: Arauto → Paladino, Sanguinário → Berserker, Caudilho → Senhor da Guerra, Ocultista → Arcanista, Sicário → Assassino, Caçador → Patrulheiro. Bastião e Elementalista continuam com o mesmo nome.
 
