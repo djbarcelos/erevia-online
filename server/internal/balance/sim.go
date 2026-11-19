@@ -88,7 +88,7 @@ func modeledOnTarget(k game.EffectKind) bool {
 // (Piscar, Passo Sombrio, Sumir, Escudo Arcano, Imortal) e provocar sozinho.
 func rotation(b *Build) []rotSkill {
 	var out []rotSkill
-	overload := b.rank(game.SkillOverload) > 0
+	overload := game.PassiveTotals(b.Ranks).Has(game.PassiveOverload)
 	for id, r := range b.Ranks {
 		s := game.Skills[id]
 		if s == nil || r < 1 || s.IsPassive() || s.Blink.Base > 0 {
@@ -143,6 +143,7 @@ type Fight struct {
 // potion liga as poções.
 type fight struct {
 	b      *Build
+	pv     game.Passives // passivas por tipo, como a zona (p.pl.passives)
 	p, m   game.Stats
 	def    *game.MonsterDef
 	night  bool
@@ -172,7 +173,7 @@ type fight struct {
 // uma vez depois da outra (engage): recargas, buffs, poções e a Muralha Viva seguem de uma
 // luta para a próxima, como na zona.
 func newFight(b *Build, night, potions bool) *fight {
-	f := &fight{b: b, p: b.Stats, night: night, rot: rotation(b), potion: potions}
+	f := &fight{b: b, pv: game.PassiveTotals(b.Ranks), p: b.Stats, night: night, rot: rotation(b), potion: potions}
 	f.potHP, f.potMP = game.Items["potion_hp_s"], game.Items["potion_mp_s"]
 	if b.Level >= largePotionFrom {
 		f.potHP, f.potMP = game.Items["potion_hp_l"], game.Items["potion_mp_l"]
@@ -193,10 +194,7 @@ func (f *fight) engage(def *game.MonsterDef, level int) {
 // rest: o tempo passa sem luta (andar ou descansar), com a regeneração de fora de combate
 // depois dos primeiros 5 s.
 func (f *fight) rest(t float64) {
-	courage := 0.0
-	if r := f.b.rank(game.SkillCourage); r > 0 {
-		courage = game.Skills[game.SkillCourage].PValue.At(r)
-	}
+	courage := f.pv.Of(game.PassiveCourage)
 	f.hp = regenFor(f.hp, f.p.MaxHP, t, f.p.HPRegen, courage, game.CalmHPRegenMult)
 	f.mp = regenFor(f.mp, f.p.MaxMP, t, f.p.MPRegen, 0, game.CalmMPRegenMult)
 	f.now += t
@@ -204,10 +202,7 @@ func (f *fight) rest(t float64) {
 
 // restNeeded: quanto descansar para chegar às metas de vida e mana.
 func (f *fight) restNeeded() float64 {
-	courage := 0.0
-	if r := f.b.rank(game.SkillCourage); r > 0 {
-		courage = game.Skills[game.SkillCourage].PValue.At(r)
-	}
+	courage := f.pv.Of(game.PassiveCourage)
 	return math.Max(
 		regenTo(f.hp, restHPTarget*f.p.MaxHP, f.p.HPRegen, courage, game.CalmHPRegenMult),
 		regenTo(f.mp, restMPTarget*f.p.MaxMP, f.p.MPRegen, 0, game.CalmMPRegenMult))
@@ -297,15 +292,15 @@ func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) {
 		dmg *= 1 + v
 	}
 	f.damageMonster(dmg)
-	if r := f.b.rank(game.SkillBloodthirst); r > 0 {
-		f.hp = math.Min(f.p.MaxHP, f.hp+dmg*game.Skills[game.SkillBloodthirst].PValue.At(r))
+	if pv := f.pv.Of(game.PassiveLifesteal); pv > 0 {
+		f.hp = math.Min(f.p.MaxHP, f.hp+dmg*pv)
 	}
-	if r := f.b.rank(game.SkillPoisonedBlade); r > 0 && !f.mDead() {
+	if pv := f.pv.Of(game.PassivePoisonProc); pv > 0 && !f.mDead() {
 		chance := 1.0
 		if !noMiss {
 			chance = game.HitChance(in.Accuracy, in.Evasion)
 		}
-		f.poisonAcc += chance * game.Skills[game.SkillPoisonedBlade].PValue.At(r)
+		f.poisonAcc += chance * pv
 		if f.poisonAcc >= 1 {
 			f.poisonAcc--
 			v := math.Max(1, math.Round(f.pAtk(false)*game.PoisonProcFrac))
@@ -361,8 +356,8 @@ func (f *fight) cast(rs rotSkill) {
 		f.mfx.add(def.Kind, def.Value, def.Duration, f.now)
 	}
 	if s.Fire && (s.OnTarget == nil || s.OnTarget.Kind != game.EffectBurn) {
-		if er := f.b.rank(game.SkillEmber); er > 0 {
-			v := math.Round(f.pAtk(true) * game.Skills[game.SkillEmber].PValue.At(er))
+		if pv := f.pv.Of(game.PassiveFireBurn); pv > 0 {
+			v := math.Round(f.pAtk(true) * pv)
 			f.mfx.add(game.EffectBurn, math.Max(1, v), game.FireBurnSeconds, f.now)
 		}
 	}
@@ -421,9 +416,9 @@ func (f *fight) monsterHit() {
 		}
 	}
 	f.hp -= dmg
-	if f.b.rank(game.SkillLivingWall) > 0 && f.hp > 0 && f.now+timeEps >= f.lastStandAt && f.hp < f.p.MaxHP*game.LastStandBelow {
+	if f.pv.Has(game.PassiveLastStand) && f.hp > 0 && f.now+timeEps >= f.lastStandAt && f.hp < f.p.MaxHP*game.LastStandBelow {
 		f.lastStandAt = f.now + game.LastStandCD
-		v := math.Round(f.p.MaxHP * game.Skills[game.SkillLivingWall].PValue.At(1))
+		v := math.Round(f.p.MaxHP * f.pv.Of(game.PassiveLastStand))
 		f.pfx.add(game.EffectShield, v, game.LastStandSeconds, f.now)
 	}
 }
@@ -441,11 +436,9 @@ func (f *fight) tickDoTs() {
 
 func (f *fight) regen() {
 	hp, mp := f.p.HPRegen, f.p.MPRegen
-	if r := f.b.rank(game.SkillCourage); r > 0 { // a aura vale para quem a tem
-		hp += game.Skills[game.SkillCourage].PValue.At(r)
-	}
-	if f.b.rank(game.SkillBearSpirit) > 0 && f.hp < f.p.MaxHP*game.BearBelow {
-		hp += f.p.MaxHP * game.Skills[game.SkillBearSpirit].PValue.At(1)
+	hp += f.pv.Of(game.PassiveCourage) // a aura vale para quem a tem
+	if pv := f.pv.Of(game.PassiveBearSpirit); pv > 0 && f.hp < f.p.MaxHP*game.BearBelow {
+		hp += f.p.MaxHP * pv
 	}
 	f.hp = math.Min(f.p.MaxHP, f.hp+hp*tickDT)
 	f.mp = math.Min(f.p.MaxMP, f.mp+mp*tickDT)

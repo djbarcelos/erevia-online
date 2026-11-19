@@ -137,7 +137,7 @@ func (z *Zone) requestSkill(p *entity, skillID, targetID uint32, force bool) {
 	}
 	z.cancelChannel(p, "Viagem cancelada.")
 	s := game.Skills[skillID]
-	if s == nil || s.Class != p.pl.class || s.IsPassive() || s.Spec != "" && s.Spec != p.pl.spec {
+	if !game.SkillAvailable(s, p.pl.class, p.pl.spec) || s.IsPassive() {
 		return
 	}
 	if p.pl.rank(s.ID) < 1 {

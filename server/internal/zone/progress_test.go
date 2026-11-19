@@ -2,6 +2,7 @@ package zone
 
 import (
 	"math"
+	"strconv"
 	"testing"
 
 	"erevia/server/internal/game"
@@ -662,5 +663,26 @@ func TestLifestealByPassiveKind(t *testing.T) {
 	}
 	if r.hp <= hp {
 		t.Error("PassiveLifesteal deveria curar, de qualquer skill")
+	}
+}
+
+func TestLoadProgressClearsStaleHotbarEntries(t *testing.T) {
+	ranks := map[uint32]int{game.SkillShieldBash: 1}
+	bar := []string{
+		"skill:" + strconv.Itoa(int(game.SkillShieldBash)), // aprendida: fica
+		"skill:" + strconv.Itoa(int(game.SkillFireball)),   // de outra classe: sai
+		"item:potion_hp_s", // consumível: fica
+		"item:nao_existe",  // item que não existe mais: sai
+		"skill:abc",        // lixo: sai
+	}
+	_, _, got := loadProgress("knight", "", 1, game.Attrs{}, ranks, bar)
+	want := []string{bar[0], "", "item:potion_hp_s", "", ""}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("slot %d = %q, want %q", i, got[i], w)
+		}
+	}
+	if len(got) != HotbarSize {
+		t.Errorf("len %d", len(got))
 	}
 }

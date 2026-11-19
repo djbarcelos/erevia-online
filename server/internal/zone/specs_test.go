@@ -334,3 +334,44 @@ func TestSpecActiveSkillsWork(t *testing.T) {
 		}
 	}
 }
+
+// heraldWithoutShield: durante o teste, o Arauto não usa escudo (nenhum caminho restringe
+// armas ainda; as evoluções vão restringir).
+func heraldWithoutShield(t *testing.T) {
+	t.Helper()
+	h := game.Specs["herald"]
+	saved := h.Offhands
+	t.Cleanup(func() { h.Offhands = saved })
+	h.Offhands = []string{game.OffhandGrimoire}
+}
+
+func TestChooseSpecMovesGearThePathCannotUse(t *testing.T) {
+	heraldWithoutShield(t)
+	z := newCombatZone()
+	p, _ := nearMaster(z, 1, "knight", 20)
+	p.pl.inv.equip[game.SlotOffhand] = stack{def: item("shield_badge"), count: 1}
+	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_TALK, "")
+	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_CHOOSE, "herald")
+	if p.pl.spec != "herald" {
+		t.Fatalf("spec = %q", p.pl.spec)
+	}
+	if !p.pl.inv.equip[game.SlotOffhand].empty() {
+		t.Fatal("o escudo deveria ir para a bolsa")
+	}
+	if p.pl.inv.countOf("shield_badge") != 1 {
+		t.Fatal("o escudo sumiu")
+	}
+}
+
+func TestChooseSpecRefusedWhenBagCannotHoldGear(t *testing.T) {
+	heraldWithoutShield(t)
+	z := newCombatZone()
+	p, peer := nearMaster(z, 1, "knight", 20)
+	p.pl.inv.equip[game.SlotOffhand] = stack{def: item("shield_badge"), count: 1}
+	fillBag(&p.pl.inv, item("potion_hp_s"))
+	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_TALK, "")
+	specCmd(z, p, pb.SpecCmdKind_SPEC_CMD_CHOOSE, "herald")
+	if p.pl.spec != "" || p.pl.inv.equip[game.SlotOffhand].empty() || !peer.systemContains("bolsa está cheia") {
+		t.Fatalf("escolheu sem espaço para o escudo: spec %q", p.pl.spec)
+	}
+}

@@ -331,6 +331,17 @@ func (inv *inventory) invalidGear(class, spec string, level int) []int {
 	return out
 }
 
+// freeSlots: quantos espaços vazios a bolsa tem.
+func (inv *inventory) freeSlots() int {
+	n := 0
+	for _, s := range inv.bag {
+		if s.empty() {
+			n++
+		}
+	}
+	return n
+}
+
 // dropInvalidGear manda para a bolsa o equipamento que a classe não usa (ver invalidGear).
 // O que não couber continua equipado (nada se perde; o invariante "equip" avisa): devolve
 // quantos foram para a bolsa e quantos ficaram.

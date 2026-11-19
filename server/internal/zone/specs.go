@@ -87,6 +87,11 @@ func (z *Zone) chooseSpec(p *entity, n *entity, id string) {
 		z.system(p, "Você já segue o caminho "+def.Name+".")
 		return
 	}
+	// Equipamento que o caminho novo não usa vai para a bolsa: sem espaço, nada muda.
+	if off := p.pl.inv.invalidGear(p.pl.class, def.ID, p.level); len(off) > p.pl.inv.freeSlots() {
+		z.system(p, fmt.Sprintf("Sua bolsa está cheia: libere %d espaço(s) para guardar o equipamento que o caminho %s não usa.", len(off)-p.pl.inv.freeSlots(), def.Name))
+		return
+	}
 	old := p.pl.spec
 	if old == "" {
 		if !p.pl.quests.has(game.SpecQuest) && !p.pl.quests.done[game.SpecQuest] {
@@ -107,6 +112,9 @@ func (z *Zone) chooseSpec(p *entity, n *entity, id string) {
 		z.inventoryChanged(p, false)
 	}
 	p.pl.spec = def.ID
+	if moved, _ := p.pl.inv.dropInvalidGear(p.pl.class, def.ID, p.level); moved > 0 {
+		z.inventoryChanged(p, true)
+	}
 	// As skills do caminho antigo somem (os pontos voltam) e saem da barra.
 	if old != "" {
 		for _, s := range game.SpecTree(old) {

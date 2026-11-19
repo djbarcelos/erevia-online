@@ -196,6 +196,11 @@ func (z *Zone) learnSkills(p *entity, want []*pb.SkillRank) {
 // validHotbarEntry: "" (vazio), "skill:<id>" de uma ativa aprendida da classe, ou
 // "item:<id>" de um consumível.
 func validHotbarEntry(p *entity, e string) bool {
+	return hotbarEntryOK(p.pl.class, p.pl.spec, p.pl.ranks, e)
+}
+
+// hotbarEntryOK é a regra de validHotbarEntry sem a entidade (serve ao loadProgress).
+func hotbarEntryOK(class, spec string, ranks map[uint32]int, e string) bool {
 	switch {
 	case e == "":
 		return true
@@ -205,7 +210,7 @@ func validHotbarEntry(p *entity, e string) bool {
 			return false
 		}
 		s := game.Skills[uint32(id)]
-		return game.SkillAvailable(s, p.pl.class, p.pl.spec) && !s.IsPassive() && p.pl.rank(s.ID) > 0
+		return game.SkillAvailable(s, class, spec) && !s.IsPassive() && ranks[s.ID] > 0
 	case strings.HasPrefix(e, "item:"):
 		d := game.Items[e[5:]]
 		return d != nil && (d.HealHP > 0 || d.HealMP > 0 || d.Cleanse)
@@ -246,7 +251,8 @@ func DefaultHotbar(class string) []string {
 
 // loadProgress normaliza o que veio do banco: árvore vazia (personagem antigo) ganha as
 // skills iniciais; ranks inválidos (ou de outro caminho que não spec) são descartados;
-// barra vazia ganha o padrão.
+// barra vazia ganha o padrão; atalhos que não valem mais (skill que saiu da árvore, de outro
+// caminho ou item que deixou de existir) ficam vazios.
 func loadProgress(class, spec string, level int, attrs game.Attrs, ranks map[uint32]int, hotbar []string) (game.Attrs, map[uint32]int, []string) {
 	if !attrs.Valid() || attrs.Sum() > game.AttrPointsTotal(level) {
 		attrs = game.Attrs{}
@@ -270,5 +276,10 @@ func loadProgress(class, spec string, level int, attrs game.Attrs, ranks map[uin
 	}
 	bar := make([]string, HotbarSize)
 	copy(bar, hotbar)
+	for i, e := range bar {
+		if len(e) > 40 || !hotbarEntryOK(class, spec, clean, e) {
+			bar[i] = ""
+		}
+	}
 	return attrs, clean, bar
 }
