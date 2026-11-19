@@ -106,6 +106,41 @@ func TestClientStatsRecordsFPS(t *testing.T) {
 	}
 }
 
+// Dessincronia (tunnel#122): a amostra com ping vira também um client_sync, com os
+// contadores limitados; NaN no ping não entra (o lote da telemetria não pode quebrar).
+func TestClientStatsRecordsSync(t *testing.T) {
+	z := newCombatZone()
+	z.SetEventSink(nopSink{})
+	p, _ := joinAt(z, 1, "knight", 30, 0, 0)
+	drainEvents(z)
+	z.handle(clientStatsEvent{id: p.id, msg: &pb.ClientStats{FpsAvg: 60, FpsLow: 50, Device: "desktop mac", Seconds: 60,
+		Corrections: 7, CorrectionsBig: 2, Resyncs: 1, Flickers: 3, PingAvg: 120, PingP95: 310}})
+	z.handle(clientStatsEvent{id: p.id, msg: &pb.ClientStats{FpsAvg: 60, Seconds: 60, Corrections: 1 << 30, PingAvg: 80, PingP95: 90}})
+	z.handle(clientStatsEvent{id: p.id, msg: &pb.ClientStats{FpsAvg: 60, Seconds: 60, PingAvg: float32(math.NaN())}})
+	var sync []GameEvent
+	for _, e := range drainEvents(z) {
+		if e.Kind == "client_sync" {
+			sync = append(sync, e)
+		}
+	}
+	if len(sync) != 2 {
+		t.Fatalf("client_sync = %+v", sync)
+	}
+	e := sync[0]
+	if e.Amount != 60 || e.Extra["corrections"] != uint32(7) || e.Extra["corrections_big"] != uint32(2) || e.Extra["resyncs"] != uint32(1) ||
+		e.Extra["flickers"] != uint32(3) || e.Extra["ping_p95"] != float32(310) || e.X != 30 {
+		t.Fatalf("client_sync = %+v", e)
+	}
+	if sync[1].Extra["corrections"] != uint32(maxSyncPerSample) {
+		t.Fatalf("o contador tem teto: %+v", sync[1].Extra)
+	}
+	for _, e := range sync {
+		if _, err := json.Marshal(e.Extra); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // Achado pelo teste de caos: o cliente manda o FPS, e um NaN, um infinito ou um NUL no
 // aparelho iam para o extra do evento. O lote da telemetria é gravado de uma vez, e
 // json.Marshal (NaN/Inf) ou o JSONB do Postgres (\u0000) recusavam o lote inteiro: perdiam-se

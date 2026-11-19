@@ -1,11 +1,17 @@
 /**
  * Telemetria de desempenho: lê o FPS 1×/s (fora do loop de render) e, a cada 60
- * amostras, manda a média e a média dos 10% piores segundos ao servidor. Aba em
- * segundo plano (FPS ~0) não conta.
+ * amostras, manda a média e a média dos 10% piores segundos ao servidor, junto com os
+ * números de dessincronia da mesma janela (sync-stats.ts, tunnel#122). Aba em segundo
+ * plano (FPS ~0) não conta.
  */
+import { takeSyncSample, type SyncSample } from "./sync-stats";
+
 const SAMPLES = 60;
 
-export function startPerfSampler(fps: () => number, send: (avg: number, low: number, device: string, seconds: number) => void): () => void {
+export function startPerfSampler(
+  fps: () => number,
+  send: (avg: number, low: number, device: string, seconds: number, sync: SyncSample) => void,
+): () => void {
   const device = deviceLabel();
   let samples: number[] = [];
   const timer = window.setInterval(() => {
@@ -17,7 +23,7 @@ export function startPerfSampler(fps: () => number, send: (avg: number, low: num
     const worst = sorted.slice(0, Math.max(1, Math.round(sorted.length * 0.1)));
     const avg = samples.reduce((s, v) => s + v, 0) / samples.length;
     const low = worst.reduce((s, v) => s + v, 0) / worst.length;
-    send(avg, low, device, samples.length);
+    send(avg, low, device, samples.length, takeSyncSample());
     samples = [];
   }, 1000);
   return () => window.clearInterval(timer);

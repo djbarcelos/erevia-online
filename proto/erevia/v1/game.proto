@@ -262,6 +262,15 @@ message ClientStats {
   float fps_low = 2; // média dos 10% piores segundos
   string device = 3; // "mobile"/"desktop" + sistema (curto)
   uint32 seconds = 4; // segundos cobertos pela amostra
+  // Dessincronia (tunnel#122), na mesma janela: correções da posição prevista do jogador local
+  // acima de 0,5 m e acima de 2 m, retomadas pelo servidor (a previsão errou demais e o
+  // servidor assumiu), entidades que sumiram e voltaram em menos de 1 s, e o ping (ms).
+  uint32 corrections = 5;
+  uint32 corrections_big = 6;
+  uint32 resyncs = 7;
+  uint32 flickers = 8;
+  float ping_avg = 9;
+  float ping_p95 = 10;
 }
 
 // Criar um item com uma receita do Ferreiro (materiais + moedas).

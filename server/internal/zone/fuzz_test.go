@@ -937,7 +937,7 @@ func fuzzValidMessages() []*pb.ClientMessage {
 		{Msg: &pb.ClientMessage_ChangeLook{ChangeLook: &pb.ChangeLook{NpcId: npc + 2, Look: &pb.BodyLook{Skin: 1, Hair: 2, Outfit: 3, Head: "rogue"}}}},
 		{Msg: &pb.ClientMessage_TradeCmd{TradeCmd: &pb.TradeCmd{Kind: pb.TradeCmdKind(1), TargetId: 2}}},
 		{Msg: &pb.ClientMessage_Craft{Craft: &pb.Craft{NpcId: npc + 1, RecipeId: fuzzRecipeIDs[0]}}},
-		{Msg: &pb.ClientMessage_ClientStats{ClientStats: &pb.ClientStats{FpsAvg: 58.5, FpsLow: 41, Device: "desktop windows", Seconds: 60}}},
+		{Msg: &pb.ClientMessage_ClientStats{ClientStats: &pb.ClientStats{FpsAvg: 58.5, FpsLow: 41, Device: "desktop windows", Seconds: 60, Corrections: 3, CorrectionsBig: 1, Resyncs: 1, Flickers: 2, PingAvg: 90, PingP95: 180}}},
 		{Msg: &pb.ClientMessage_FriendCmd{FriendCmd: &pb.FriendCmd{Kind: pb.FriendCmdKind(1), Name: "Beto"}}},
 		{Msg: &pb.ClientMessage_MailCmd{MailCmd: &pb.MailCmd{Kind: pb.MailCmdKind(1), To: "Beto", Subject: "oi", Body: "tudo bem?"}}},
 		{Msg: &pb.ClientMessage_RankingRequest{RankingRequest: &pb.RankingRequest{}}},

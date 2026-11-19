@@ -4249,13 +4249,22 @@ func (x *BestiaryCmd) GetKind() BestiaryCmdKind {
 
 // Amostra de desempenho do cliente (a cada ~60 s; o FPS é medido 1×/s, nunca por quadro).
 type ClientStats struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	FpsAvg        float32                `protobuf:"fixed32,1,opt,name=fps_avg,json=fpsAvg,proto3" json:"fps_avg,omitempty"`
-	FpsLow        float32                `protobuf:"fixed32,2,opt,name=fps_low,json=fpsLow,proto3" json:"fps_low,omitempty"` // média dos 10% piores segundos
-	Device        string                 `protobuf:"bytes,3,opt,name=device,proto3" json:"device,omitempty"`                 // "mobile"/"desktop" + sistema (curto)
-	Seconds       uint32                 `protobuf:"varint,4,opt,name=seconds,proto3" json:"seconds,omitempty"`              // segundos cobertos pela amostra
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	FpsAvg  float32                `protobuf:"fixed32,1,opt,name=fps_avg,json=fpsAvg,proto3" json:"fps_avg,omitempty"`
+	FpsLow  float32                `protobuf:"fixed32,2,opt,name=fps_low,json=fpsLow,proto3" json:"fps_low,omitempty"` // média dos 10% piores segundos
+	Device  string                 `protobuf:"bytes,3,opt,name=device,proto3" json:"device,omitempty"`                 // "mobile"/"desktop" + sistema (curto)
+	Seconds uint32                 `protobuf:"varint,4,opt,name=seconds,proto3" json:"seconds,omitempty"`              // segundos cobertos pela amostra
+	// Dessincronia (tunnel#122), na mesma janela: correções da posição prevista do jogador local
+	// acima de 0,5 m e acima de 2 m, retomadas pelo servidor (a previsão errou demais e o
+	// servidor assumiu), entidades que sumiram e voltaram em menos de 1 s, e o ping (ms).
+	Corrections    uint32  `protobuf:"varint,5,opt,name=corrections,proto3" json:"corrections,omitempty"`
+	CorrectionsBig uint32  `protobuf:"varint,6,opt,name=corrections_big,json=correctionsBig,proto3" json:"corrections_big,omitempty"`
+	Resyncs        uint32  `protobuf:"varint,7,opt,name=resyncs,proto3" json:"resyncs,omitempty"`
+	Flickers       uint32  `protobuf:"varint,8,opt,name=flickers,proto3" json:"flickers,omitempty"`
+	PingAvg        float32 `protobuf:"fixed32,9,opt,name=ping_avg,json=pingAvg,proto3" json:"ping_avg,omitempty"`
+	PingP95        float32 `protobuf:"fixed32,10,opt,name=ping_p95,json=pingP95,proto3" json:"ping_p95,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ClientStats) Reset() {
@@ -4312,6 +4321,48 @@ func (x *ClientStats) GetDevice() string {
 func (x *ClientStats) GetSeconds() uint32 {
 	if x != nil {
 		return x.Seconds
+	}
+	return 0
+}
+
+func (x *ClientStats) GetCorrections() uint32 {
+	if x != nil {
+		return x.Corrections
+	}
+	return 0
+}
+
+func (x *ClientStats) GetCorrectionsBig() uint32 {
+	if x != nil {
+		return x.CorrectionsBig
+	}
+	return 0
+}
+
+func (x *ClientStats) GetResyncs() uint32 {
+	if x != nil {
+		return x.Resyncs
+	}
+	return 0
+}
+
+func (x *ClientStats) GetFlickers() uint32 {
+	if x != nil {
+		return x.Flickers
+	}
+	return 0
+}
+
+func (x *ClientStats) GetPingAvg() float32 {
+	if x != nil {
+		return x.PingAvg
+	}
+	return 0
+}
+
+func (x *ClientStats) GetPingP95() float32 {
+	if x != nil {
+		return x.PingP95
 	}
 	return 0
 }
@@ -16576,12 +16627,19 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x04kind\x18\x01 \x01(\x0e2\x1d.erevia.v1.AchievementCmdKindR\x04kind\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\"=\n" +
 	"\vBestiaryCmd\x12.\n" +
-	"\x04kind\x18\x01 \x01(\x0e2\x1a.erevia.v1.BestiaryCmdKindR\x04kind\"q\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x1a.erevia.v1.BestiaryCmdKindR\x04kind\"\xa8\x02\n" +
 	"\vClientStats\x12\x17\n" +
 	"\afps_avg\x18\x01 \x01(\x02R\x06fpsAvg\x12\x17\n" +
 	"\afps_low\x18\x02 \x01(\x02R\x06fpsLow\x12\x16\n" +
 	"\x06device\x18\x03 \x01(\tR\x06device\x12\x18\n" +
-	"\aseconds\x18\x04 \x01(\rR\aseconds\";\n" +
+	"\aseconds\x18\x04 \x01(\rR\aseconds\x12 \n" +
+	"\vcorrections\x18\x05 \x01(\rR\vcorrections\x12'\n" +
+	"\x0fcorrections_big\x18\x06 \x01(\rR\x0ecorrectionsBig\x12\x18\n" +
+	"\aresyncs\x18\a \x01(\rR\aresyncs\x12\x1a\n" +
+	"\bflickers\x18\b \x01(\rR\bflickers\x12\x19\n" +
+	"\bping_avg\x18\t \x01(\x02R\apingAvg\x12\x19\n" +
+	"\bping_p95\x18\n" +
+	" \x01(\x02R\apingP95\";\n" +
 	"\x05Craft\x12\x15\n" +
 	"\x06npc_id\x18\x01 \x01(\rR\x05npcId\x12\x1b\n" +
 	"\trecipe_id\x18\x02 \x01(\tR\brecipeId\"\x92\x01\n" +
