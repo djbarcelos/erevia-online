@@ -8,6 +8,7 @@
 //	go run ./cmd/balance -noite   # monstros e XP da noite
 //	go run ./cmd/balance -vitalidade # tempo até o máximo jogando 1 h por dia, com a vitalidade
 //	go run ./cmd/balance -grupo      # XP/h de cada membro de um grupo de 3 contra caçar sozinho
+//	go run ./cmd/balance -combate    # do 20 ao 30: comum, elite, chefe de campo e PvP (tunnel#152)
 package main
 
 import (
@@ -24,7 +25,13 @@ func main() {
 	night := flag.Bool("noite", false, "de noite: monstros batem mais e dão mais XP")
 	vitality := flag.Bool("vitalidade", false, "tempo até o máximo jogando poucas horas por dia, com a vitalidade (tunnel#150)")
 	group := flag.Bool("grupo", false, "XP por hora em grupo contra sozinho, carregar e monstro fraco (tunnel#151)")
+	combat := flag.Bool("combate", false, "do 20 ao 30: tempo para matar comum e elite, chefe de campo em grupo e PvP (tunnel#152)")
 	flag.Parse()
+
+	if *combat {
+		balance.WriteCombatMarkdown(os.Stdout)
+		return
+	}
 
 	if *group {
 		balance.WriteGroupMarkdown(os.Stdout)
