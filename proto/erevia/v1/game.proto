@@ -50,6 +50,7 @@ message ClientMessage {
     SubclassCmd subclass_cmd = 67; // Subclasse: falar com o Guardião das Sendas, escolher e trocar de classe
     Crystallize crystallize = 70; // cristalizar uma peça da bolsa (tunnel#154)
     ChangeChannel change_channel = 73; // canais: trocar de canal na cidade (0 = só pedir a lista; tunnel#86)
+    ArenaCmd arena_cmd = 74; // arena: abrir a janela, entrar e sair da fila (tunnel#81)
     NpcTalk npc_talk = 45; // conversa com NPC: abrir, aceitar e entregar missão, perguntar
     PrivateShopCmd private_shop = 72; // loja pessoal: abrir, fechar, ver a de outro e comprar (tunnel#161)
   }
@@ -422,6 +423,82 @@ message Enchant {
   uint32 slot = 3;
 }
 
+// ---------- Arena PvP ranqueada (tunnel#81) ----------
+
+enum ArenaCmdKind {
+  ARENA_CMD_UNSPECIFIED = 0;
+  ARENA_CMD_OPEN = 1; // abre a janela do Mestre da Arena (npc_id)
+  ARENA_CMD_QUEUE = 2; // entra na fila do modo (1 = 1x1; 3 = 3x3, o líder de um grupo de 3)
+  ARENA_CMD_LEAVE = 3; // sai da fila
+}
+
+message ArenaCmd {
+  ArenaCmdKind kind = 1;
+  uint32 npc_id = 2;
+  uint32 mode = 3;
+}
+
+// A pontuação do jogador num modo, na temporada.
+message ArenaModeInfo {
+  uint32 mode = 1;
+  int32 rating = 2;
+  uint32 wins = 3;
+  uint32 losses = 4;
+  bool queued = 5; // está na fila deste modo
+  uint32 queue_size = 6; // times esperando neste modo
+}
+
+message ArenaRank {
+  string name = 1;
+  string class = 2;
+  uint32 level = 3;
+  int32 rating = 4;
+  uint32 wins = 5;
+  uint32 losses = 6;
+}
+
+message ArenaRanking {
+  uint32 mode = 1;
+  repeated ArenaRank rows = 2;
+}
+
+enum ArenaPhase {
+  ARENA_PHASE_NONE = 0;
+  ARENA_PHASE_COUNTDOWN = 1; // preparação: ninguém ataca
+  ARENA_PHASE_FIGHT = 2;
+  ARENA_PHASE_DONE = 3; // resultado; logo todos voltam à cidade
+}
+
+message ArenaFighter {
+  uint32 id = 1;
+  string name = 2;
+  uint32 team = 3; // 0 ou 1
+  bool alive = 4;
+}
+
+// A partida em que o jogador está.
+message ArenaMatch {
+  uint32 mode = 1;
+  ArenaPhase phase = 2;
+  uint32 seconds_left = 3; // da fase
+  repeated ArenaFighter fighters = 4;
+  uint32 my_team = 5;
+  int32 winner = 6; // -1 = ainda não acabou
+  int32 rating_before = 7; // no fim (0 = ainda não calculado)
+  int32 rating_after = 8;
+}
+
+// Estado da arena para o jogador: a janela do Mestre (open), a fila e a partida.
+message ArenaState {
+  bool open = 1; // abrir a janela do Mestre
+  uint32 npc_id = 2;
+  uint32 season = 3; // 202611
+  string season_label = 4; // "novembro de 2026"
+  repeated ArenaModeInfo modes = 5;
+  repeated ArenaRanking rankings = 6;
+  ArenaMatch match = 7; // ausente = fora de partida
+}
+
 // ---------- Canais (tunnel#86) ----------
 
 // Trocar de canal: só na cidade, fora de combate. channel = 0 só pede a lista (ChannelList).
@@ -629,6 +706,7 @@ message ServerMessage {
     StonesKnown stones_known = 48; // pedras de teleporte descobertas (ao entrar e quando descobre uma)
     AreaEventStatus area_event = 49; // evento de área em andamento e postos fechados (areaevent.go)
     ChannelList channels = 73; // canais do mapa principal (ao entrar e quando pedidos; tunnel#86)
+    ArenaState arena = 74; // arena: janela do Mestre, fila e a partida em andamento (tunnel#81)
     PrivateShopView private_shop = 72; // loja pessoal (tunnel#161)
   }
 }
@@ -1116,6 +1194,7 @@ enum NpcRole {
   NPC_ROLE_GATE = 6; // portão para outro mapa (UseGate)
   NPC_ROLE_SUBCLASS = 7; // Guardião das Sendas (subclasse)
   NPC_ROLE_QUEST = 8; // contador de história: dá e recebe missões (NpcTalk)
+  NPC_ROLE_ARENA = 9; // Mestre da Arena: fila do PvP ranqueado (ArenaCmd; tunnel#81)
 }
 
 // Atributos e skills aprendidas do jogador.

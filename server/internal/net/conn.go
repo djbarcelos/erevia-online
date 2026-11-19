@@ -307,6 +307,8 @@ func (s *Server) readPump(ctx context.Context, sess *session, id uint32) {
 			z.Social(ctx, id, m.PrivateShop)
 		case *pb.ClientMessage_UseGate:
 			z.UseGate(ctx, id, m.UseGate.NpcId)
+		case *pb.ClientMessage_ArenaCmd:
+			z.ArenaCmd(ctx, id, m.ArenaCmd)
 		case *pb.ClientMessage_ChangeChannel:
 			z.ChangeChannel(ctx, id, int(min(m.ChangeChannel.Channel, 99)))
 		case *pb.ClientMessage_Ping:

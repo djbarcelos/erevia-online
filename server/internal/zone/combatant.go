@@ -147,6 +147,8 @@ type playerState struct {
 	contracts contractsState
 	// Casa de leilões: operações a caminho do banco, anúncios vistos e anexos do correio.
 	auc auctionState
+	// arenaSeen: a última leitura do banco para a janela da arena (arena.go).
+	arenaSeen *arenaSeen
 	hop     hopState // portão e zonas (gate.go)
 	// Vitalidade e recuperação (vitality.go).
 	vit vitalityState

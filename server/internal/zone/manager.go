@@ -44,6 +44,8 @@ type Manager struct {
 	// channels: os canais do mapa principal (channels.go); channels[0] é o próprio mapa
 	// principal. Vazio = o processo não tem canais.
 	channels []*Zone
+	// arena: a fila do PvP ranqueado, de todos os canais (arena.go).
+	arena arenaQueue
 
 	mu  sync.Mutex
 	ctx context.Context // o do Run: as entregas do portão desistem quando o processo para

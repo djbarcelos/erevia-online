@@ -97,7 +97,58 @@ function clearing({ id, seed, half, safe }) {
   };
 }
 
-const maps = [clearing({ id: 'teste', seed: 20261136, half: 60, safe: 9 })];
+/**
+ * Arena (tunnel#81): um círculo de pedra pintado (o "muro" da praça, sem muralha) fechado por
+ * um anel de pedras grandes com colisão; tochas em volta e montanhas no horizonte. Sem zona
+ * segura (safeRadius 0): a luta vale em todo lugar. Os times começam a ±9 m do centro, no eixo x.
+ */
+function arena({ id, seed, half, ring }) {
+  const rand = mulberry32(seed);
+  const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+  const between = (a, b) => a + rand() * (b - a);
+  const objects = [];
+  const colliders = [];
+  const place = (k, x, z, rotY, s) => {
+    if (!SIZES[k]) throw new Error(`item desconhecido: ${k}`);
+    objects.push({ k, x: round(x), z: round(z), r: round(rotY), s: [s, s, s].map(round) });
+  };
+  const collide = (x, z, r) => colliders.push({ x: round(x), z: round(z), r: round(r) });
+  // O anel: pedras grandes coladas umas nas outras, e a colisão contínua por dentro.
+  const ROCK_BIG = ['rock_3_a', 'rock_3_e'];
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 14) {
+    const r = ring + between(0.8, 1.6);
+    place(pick(ROCK_BIG), r * Math.cos(a), r * Math.sin(a), rand() * 6.28, between(2.2, 2.9));
+  }
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 40) collide((ring + 1) * Math.cos(a), (ring + 1) * Math.sin(a), 1.4);
+  // Grama rala do lado de fora e montanhas fechando o horizonte.
+  const GRASS = ['grass_1_a', 'grass_2_a'];
+  for (let i = 0; i < 160; i++) {
+    const a = rand() * Math.PI * 2;
+    const r = between(ring + 3, half - 1);
+    place(pick(GRASS), r * Math.cos(a), r * Math.sin(a), rand() * 6.28, between(0.9, 1.5));
+  }
+  const MOUNTAINS = ['mountain_a_grass_trees', 'mountain_b_grass', 'mountain_c_grass_trees', 'hills_a_trees', 'hills_b_trees'];
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+    place(pick(MOUNTAINS), (half + 14) * Math.cos(a), (half + 14) * Math.sin(a), rand() * 6.28, between(16, 22));
+  }
+  const torches = [];
+  for (let a = Math.PI / 8; a < Math.PI * 2; a += Math.PI / 4) torches.push({ x: round((ring - 1.2) * Math.cos(a)), z: round((ring - 1.2) * Math.sin(a)) });
+  return {
+    version: 1,
+    id,
+    size: half * 2,
+    bounds: { minX: -half, maxX: half, minZ: -half, maxZ: half },
+    safeRadius: 0,
+    wall: { apothem: ring - 0.5, sides: 24 },
+    roads: [],
+    kits: ['/models/env-forest.glb'],
+    colliders,
+    objects,
+    torches,
+  };
+}
+
+const maps = [clearing({ id: 'teste', seed: 20261136, half: 60, safe: 9 }), arena({ id: 'arena', seed: 20261181, half: 30, ring: 16 })];
 for (const m of maps) {
   const json = JSON.stringify(m);
   for (const p of [resolve(here, `../public/worlds/${m.id}.json`), resolve(here, `../../server/internal/world/maps/${m.id}.json`)]) {
