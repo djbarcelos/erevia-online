@@ -241,12 +241,7 @@ func (z *Zone) switchClass(p *entity, n *entity, class string) {
 	}
 	inv := &pl.inv
 	off := inv.invalidGear(class, newSpec, level) // encaixes com o que a classe nova não usa
-	free := 0
-	for _, s := range inv.bag {
-		if s.empty() {
-			free++
-		}
-	}
+	free := inv.freeSlots()
 	if len(off) > free {
 		z.system(p, fmt.Sprintf("Sua bolsa está cheia: libere %d espaço(s) para guardar o equipamento que a classe %s não pode usar.", len(off)-free, def.Name))
 		return
