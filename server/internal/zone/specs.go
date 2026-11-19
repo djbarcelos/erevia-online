@@ -38,6 +38,9 @@ func specCatalog() []*pb.SpecInfo {
 			Bonus: attrsPB(s.Bonus), BonusText: s.BonusText(),
 			Weapons: s.Weapons, Offhands: s.Offhands, StarterSkills: s.StarterSkills[:],
 		})
+		if r := s.Resource; r != nil {
+			out[len(out)-1].Resource = &pb.ResourceInfo{Name: r.Name, Color: r.Color, Max: uint32(r.Max)}
+		}
 		for _, b := range s.Branches {
 			out[len(out)-1].Branches = append(out[len(out)-1].Branches, &pb.SkillBranch{Name: b.Name, Description: b.Description, Color: b.Color})
 		}
@@ -133,6 +136,7 @@ func (z *Zone) chooseSpec(p *entity, n *entity, id string) {
 	}
 	z.giveStarterItems(p, def, items)
 	z.resetTree(p)
+	resetRes(p)
 	// As iniciais de antes passam a tecla para as iniciais da evolução.
 	for i, e := range p.pl.hotbar {
 		for k, from := range prevStarters {

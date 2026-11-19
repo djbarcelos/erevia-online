@@ -189,6 +189,11 @@ type SkillDef struct {
 	EvolvedFrom uint32
 	// Weapon: tipos de arma exigidos para lançar (vazio = qualquer).
 	Weapon []string
+	// Recurso da evolução (resources.go): custo, ganho ao lançar e ao acertar (por alvo, até
+	// o teto de alvos); ResSpendAll gasta tudo e causa +ResPerPoint de dano por ponto.
+	ResCost, ResOnCast, ResOnHit float64
+	ResSpendAll                  bool
+	ResPerPoint                  float64
 
 	Passive PassiveKind // != 0: skill passiva (não se usa)
 	PValue  Scale
@@ -385,6 +390,7 @@ func init() {
 		}
 	}
 	placeEvolutionSkills()
+	applySkillResources()
 	indexModifiers()
 	Classes["knight"].Branches = [3]Branch{
 		{"Guardião", "Defesa e controle da linha de frente.", "#6f93d6"},

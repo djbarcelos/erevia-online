@@ -218,6 +218,15 @@
   font-size: 0.58rem;
 }
 
+.hud-me .pbar.res {
+  height: 12px;
+}
+
+.hud-me .pbar.res b {
+  font-size: 0.58rem;
+  line-height: 12px;
+}
+
 .hud-me.low .pbar.hp {
   animation: low-hp 0.9s ease-in-out infinite;
 }

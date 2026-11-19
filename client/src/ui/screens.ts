@@ -464,7 +464,7 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
         "dt-grid",
         cell("Classe", cls0.label),
         cell("Subclasse", subs ? c.classes!.slice(1).map((k) => classInfo(k.class).label).join(", ") : "Nenhuma"),
-        cell("Evolução", subs || "Classe base"),
+        cell("Evolução", c.specName || "Classe base"),
         cell("Emblema", sw),
       ),
       el("p", "hint-box small", "Clique duas vezes num cartão, ou use o botão abaixo, para entrar no mundo."),

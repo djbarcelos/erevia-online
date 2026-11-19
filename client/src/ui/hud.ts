@@ -25,6 +25,7 @@ import {
   type ItemInfo,
   type PartyState,
   type QuestLog,
+  type ResourceInfo,
   type SelfStats,
   type SkillInfo,
   type VitalityState,
@@ -154,6 +155,9 @@ function kindLabel(s: SkillInfo): string {
 /** HTML da dica de uma skill (mesmo formato das janelas). */
 export function skillTipHtml(s: SkillInfo, keyHint = ""): string {
   const meta = [`<span>Mana <b>${s.mpCost}</b></span>`, `<span>Recarga <b>${formatSeconds(s.cooldownMs)} s</b></span>`];
+  const res = s.spec ? specInfo(s.spec)?.resource : undefined;
+  if (res && s.resSpendAll) meta.push(`<span>${res.name} <b>toda</b></span>`);
+  else if (res && s.resCost > 0) meta.push(`<span>${res.name} <b>${s.resCost}</b></span>`);
   if (s.target === SkillTarget.ENEMY) meta.push(`<span>Alcance <b>${formatSeconds(s.range * 1000)} m</b></span>`);
   if (s.target === SkillTarget.AREA) meta.push(`<span>Raio <b>${formatSeconds(s.range * 1000)} m</b></span>`);
   let html = `<h4>${s.name}</h4><div class="sub">${kindLabel(s)}</div><div class="meta">${meta.join("")}</div>`;
@@ -161,6 +165,8 @@ export function skillTipHtml(s: SkillInfo, keyHint = ""): string {
   if (s.extraCrit > 0) html += `<div>+${Math.round(s.extraCrit * 100)}% de chance de crítico</div>`;
   if (s.description) html += `<div class="desc">${s.description}</div>`;
   if (s.effect !== Effect.UNSPECIFIED) html += `<div class="${isDebuff(s.effect) ? "bad" : "ok"}">${s.effectOnSelf ? "Em você: " : "No alvo: "}${effectText(s.effect, s.effectValue, s.effectMs)}</div>`;
+  if (res && s.resOnCast > 0) html += `<div class="ok">Gera ${s.resOnCast} de ${res.name} ao lançar</div>`;
+  if (res && s.resOnHit > 0) html += `<div class="ok">Gera ${s.resOnHit} de ${res.name} por alvo atingido</div>`;
   if (keyHint) html += `<div class="cmp muted">${keyHint}</div>`;
   return html;
 }
@@ -188,6 +194,10 @@ export class Hud {
   // Elementos
   private hpBar = bar("hp");
   private mpBar = bar("mp");
+  /** Recurso de classe da evolução (Determinação, Fúria…): escondida sem evolução. */
+  private resBar = bar("res");
+  private resource: ResourceInfo | undefined;
+  private resNow = 0;
   private xpBar = bar("xp", "hud-xp");
   private self: SelfStats | null = null;
   private mastery: MasteryState | null = null;
@@ -277,7 +287,8 @@ export class Hud {
     crest.setAttribute("aria-label", "Abrir personagem");
     crest.onclick = () => cb.openWindow("character");
     tooltip(crest, () => `Personagem <span class="muted">(${keyLabel(settings.get().keys.character)})</span>`);
-    this.meEl.append(crest, el("div", "me-body", this.meName, this.hpBar.root, this.mpBar.root));
+    this.meEl.append(crest, el("div", "me-body", this.meName, this.hpBar.root, this.mpBar.root, this.resBar.root));
+    this.resBar.root.hidden = true;
     // Selo da vitalidade: dica no hover (PC) e no toque (celular, onde a barra de XP é fina).
     const vit = this.vitEl as HTMLButtonElement;
     vit.type = "button";
@@ -605,10 +616,24 @@ export class Hud {
   // Estado vindo do servidor
   // ------------------------------------------------------------------------------------
 
+  /** O recurso da evolução atual (undefined = sem evolução: a barra some). */
+  setResource(r: ResourceInfo | undefined): void {
+    this.resource = r;
+    const root = this.resBar.root;
+    root.hidden = !r;
+    if (!r) return;
+    root.style.setProperty("--a", r.color);
+    root.style.setProperty("--b", `color-mix(in srgb, ${r.color} 55%, #000)`);
+    root.title = r.name;
+    this.resBar.set(this.resNow, r.max, `${r.name} ${this.resNow}`);
+  }
+
   setStats(s: SelfStats): void {
     this.hpBar.set(s.hp, s.maxHp);
     this.mpBar.set(s.mp, s.maxMp);
     this.mpNow = s.mp;
+    this.resNow = s.res;
+    if (this.resource) this.resBar.set(s.res, this.resource.max, `${this.resource.name} ${s.res}`);
     this.meLevel.textContent = String(s.level);
     this.meEl.classList.toggle("low", s.maxHp > 0 && s.hp / s.maxHp < 0.3);
     this.self = s;
@@ -780,7 +805,13 @@ export class Hud {
   }
 
   hasMana(skill: SkillInfo): boolean {
-    return this.mpNow >= skill.mpCost;
+    return this.mpNow >= skill.mpCost && this.hasRes(skill);
+  }
+
+  /** Há recurso de classe suficiente (as que gastam tudo pedem ao menos 1). */
+  private hasRes(skill: SkillInfo): boolean {
+    const cost = skill.resSpendAll ? Math.max(1, skill.resCost) : skill.resCost;
+    return cost <= 0 || this.resNow >= cost;
   }
 
   skillList(): SkillInfo[] {
@@ -1275,7 +1306,7 @@ export class Hud {
         if (st) {
           left = st.readyAt - now;
           span = st.span;
-          noMana = this.mpNow < st.info.mpCost;
+          noMana = this.mpNow < st.info.mpCost || !this.hasRes(st.info);
           far = st.info.target === SkillTarget.ENEMY && dist !== null && dist > st.info.range;
           queued = this.queued === st.info.id;
         }

@@ -62,7 +62,7 @@ import { NpcDialogWindow } from "./ui/dialog";
 import { TeleportWindow } from "./ui/teleport";
 import { SpecWindow } from "./ui/spec";
 import { SubclassWindow } from "./ui/subclass";
-import { setSpecs } from "./ui/specs";
+import { setSpecs, specInfo } from "./ui/specs";
 import { BarberWindow } from "./ui/barber";
 import { toBodyLook } from "./world/body-look";
 import { PLACE_STORAGE, StorageWindow } from "./ui/storage";
@@ -778,6 +778,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
   });
   hud.setIdentity(character.name, classInfo(activeClass).label[0], emblem);
   hud.setHotbar(welcome.hotbar?.slots ?? []);
+  hud.setResource(specInfo(progress?.spec)?.resource);
   migrateLocalHotbar();
   /** Pontos livres viram uma bolinha nos botões de Personagem e Skills. */
   const refreshBadges = () =>
@@ -1868,6 +1869,7 @@ async function startGame(conn: Connection, character: CharacterInfo, welcome: We
         }
         case "progress":
           progress = msg.msg.value;
+          hud.setResource(specInfo(progress.spec)?.resource);
           hud.setSkills(learnedActives());
           refreshBadges();
           for (const fn of progressListeners) fn();

@@ -965,7 +965,7 @@ func (z *Zone) update(dt float64) {
 	z.runSystem(sysAfterSnapshot, z.runAfterSnapshot)
 	z.runSystem(sysSelfStats, func() {
 		for _, p := range z.players {
-			if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || p.mpInt() != p.pl.sentMP {
+			if p.pl.statsDirty || p.hpInt() != p.pl.sentSelfHP || p.mpInt() != p.pl.sentMP || resInt(p) != p.pl.sentRes {
 				z.sendSelfStats(p)
 			}
 		}
@@ -1063,6 +1063,7 @@ func (z *Zone) sendSelfStats(p *entity) {
 	p.pl.statsDirty = false
 	p.pl.sentSelfHP = p.hpInt()
 	p.pl.sentMP = p.mpInt()
+	p.pl.sentRes = resInt(p)
 	z.sendTo(p, &pb.ServerMessage{Msg: &pb.ServerMessage_SelfStats{SelfStats: z.selfStats(p)}})
 }
 

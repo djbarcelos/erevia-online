@@ -272,6 +272,7 @@ func (z *Zone) switchClass(p *entity, n *entity, class string) {
 	}
 	p.effects = kept
 	pl.lastStandReady, pl.ambushCrit = 0, false
+	pl.res.Reset() // o recurso é da evolução da classe de antes
 	z.refreshStats(p)
 	p.hp, p.mp = math.Max(1, hpFrac*p.stats.MaxHP), mpFrac*p.stats.MaxMP
 

@@ -543,6 +543,11 @@ select.input {
   --b: var(--mp-b);
 }
 
+.pbar.res {
+  --a: #d6b46e;
+  --b: #6b5a37;
+}
+
 .pbar.xp {
   --a: var(--xp-a);
   --b: var(--xp-b);
