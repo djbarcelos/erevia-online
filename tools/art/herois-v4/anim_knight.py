@@ -208,6 +208,28 @@ def key_all(f):
             pb[n].keyframe_insert("location", frame=f)
 
 
+def slerp_dir(a, b, t):
+    """Direção girando de a para b (arco, não reta)."""
+    a, b = a.normalized(), b.normalized()
+    q = a.rotation_difference(b)
+    return Quaternion().slerp(q, t) @ a
+
+
+def arc(a, b, t, center):
+    """Ponto andando em arco em volta de `center` (o ombro): a mão varre, não cutuca em linha reta."""
+    va, vb = a - center, b - center
+    la, lb = va.length, vb.length
+    return center + slerp_dir(va, vb, t) * (la + (lb - la) * t)
+
+
+EASE = {
+    "io": lambda t: t * t * (3 - 2 * t),          # suave nas duas pontas
+    "in": lambda t: t ** 2.4,                      # acelera até o fim (o golpe)
+    "out": lambda t: 1 - (1 - t) ** 2.4,           # sai rápido e assenta (depois do impacto)
+    "lin": lambda t: t,
+}
+
+
 def lerp_pose(a, b, t):
     """Mistura de duas poses (para respiração e variações): pontos e direções interpolados."""
     out = {}
@@ -216,7 +238,7 @@ def lerp_pose(a, b, t):
         if va is None or vb is None:
             out[key] = va if vb is None else vb
         elif key.startswith("hand_"):
-            out[key] = tuple(x.lerp(y, t) for x, y in zip(va, vb))
+            out[key] = (arc(va[0], vb[0], t, SH[key[-1]]), slerp_dir(va[1], vb[1], t), slerp_dir(va[2], vb[2], t))
         elif key.startswith("foot_"):
             out[key] = (va[0].lerp(vb[0], t), va[1] + (vb[1] - va[1]) * t)
         elif key.startswith("elbow_") or key == "hip":
@@ -283,7 +305,7 @@ A2_HIT = mod(STANCE,
              foot_r=(Vector((-0.03, -0.20, 0)), 4.0), foot_l=(Vector((0.03, -0.06, 0)), -5.0))
 A2_FOLLOW = mod(A2_HIT, hand_r=(R(0.36, 0.34, -0.10), dR(1, 0.3, 0), dR(0.2, 0.2, -1)))
 
-# Golpe 3: pancada de escudo + estocada curta (fecha o combo).
+# Golpe 3: pancada de escudo + corte de cima para baixo (fecha o combo).
 A3_COCK = mod(STANCE,
               spine_02=[("z", -8)], chest=[("z", -6)],
               hand_l=(L(0.06, 0.10, -0.12), dL(0.05, 0.1, 1), dL(-0.7, 0.4, -0.2)),
@@ -294,11 +316,18 @@ A3_BASH = mod(A3_COCK,
               hand_l=(L(-0.14, 0.56, -0.08), dL(0.05, 0.2, 1), dL(-1, 0.25, 0)),
               elbow_l=L(0.45, -0.1, -0.1),
               foot_l=(Vector((0.04, -0.22, 0)), -5.0))
-A3_THRUST = mod(A3_BASH,
-                spine_02=[("x", 6), ("z", -12)], chest=[("z", -8)], head=[("z", 8)],
-                hand_r=(R(-0.06, 0.60, -0.12), dR(-0.12, 1, 0.02), dR(-0.4, 0.4, -0.8)),
-                elbow_r=R(0.4, -0.3, -0.4),
-                hand_l=(L(0.10, 0.28, -0.22), dL(0.1, 0.3, 1), dL(-0.8, 0.3, -0.3)))
+A3_RAISE = mod(A3_BASH,
+               spine_02=[("x", 0), ("z", 4)], chest=[("z", 2)], head=[("z", -4)],
+               hand_r=(R(0.02, 0.06, 0.32), dR(0.05, -0.35, 1), dR(0.2, 0.7, 0.5)),
+               elbow_r=R(0.5, 0.0, 0.15),
+               hand_l=(L(-0.02, 0.36, -0.14), dL(0.05, 0.25, 1), dL(-1, 0.2, -0.1)))
+A3_CHOP = mod(A3_BASH,
+              hip=Vector((0, -0.12, -0.10)),
+              spine_01=[("x", 6)], spine_02=[("x", 12), ("z", -6)], chest=[("x", 6), ("z", -4)], head=[("x", -8), ("z", 4)],
+              hand_r=(R(-0.12, 0.50, -0.34), dR(-0.08, 0.75, -0.65), dR(-0.3, 0.4, -0.8)),
+              elbow_r=R(0.4, -0.2, -0.3),
+              hand_l=(L(0.08, 0.26, -0.26), dL(0.1, 0.4, 1), dL(-0.8, 0.3, -0.4)))
+A3_FOLLOW = mod(A3_CHOP, hand_r=(R(-0.10, 0.44, -0.42), dR(-0.08, 0.6, -0.8), dR(-0.3, 0.3, -0.9)))
 
 # Bloqueio: escudo para cima, corpo se fecha atrás dele, recua meio passo.
 BLOCK = mod(STANCE,
@@ -310,16 +339,20 @@ BLOCK = mod(STANCE,
 
 
 def make(name, keys, loop=False, ease=None):
-    """keys: [(quadro, pose)] — chaves com interpolação de Bézier (o Blender suaviza)."""
+    """keys: [(quadro, pose)] ou [(quadro, pose, curva)]: a curva ("io", "in", "out") vale para o trecho que
+    chega naquela chave. Todos os quadros são calculados aqui (mãos em arco em volta do ombro, direções girando),
+    não pela interpolação do Blender entre poucas chaves (que levava a mão em linha reta)."""
     for p in pb:
         p.location = (0, 0, 0)
         p.rotation_quaternion = (1, 0, 0, 0)
     arm.animation_data_create()
     act = bpy.data.actions.new(name)
     arm.animation_data.action = act
-    for f, p in keys:
-        pose(p)
-        key_all(f)
+    keys = [(k[0], k[1], k[2] if len(k) > 2 else "io") for k in keys]
+    for (f0, p0, _), (f1, p1, cv) in zip(keys, keys[1:]):
+        for f in range(f0, f1 + (1 if f1 == keys[-1][0] else 0)):
+            pose(lerp_pose(p0, p1, EASE[cv]((f - f0) / (f1 - f0))))
+            key_all(f)
     return act
 
 
@@ -360,9 +393,9 @@ CLIPS = {}
 specs = [
     ("kn.idle", 120, True, [], lambda: strap(breathe(POSTURE, 120), 120)),
     ("kn.stance", 60, True, [], lambda: breathe(STANCE, 60, amp=1.0, shift=0.006)),
-    ("kn.attack.sword.1", 30, False, [13], lambda: [(0, STANCE), (7, A1_UP), (10, lerp_pose(A1_UP, A1_HIT, 0.55)), (13, A1_HIT), (18, A1_FOLLOW), (30, STANCE)]),
-    ("kn.attack.sword.2", 30, False, [12], lambda: [(0, STANCE), (5, A2_WIND), (8, A2_STEP), (12, A2_HIT), (17, A2_FOLLOW), (30, STANCE)]),
-    ("kn.attack.sword.3", 36, False, [16], lambda: [(0, STANCE), (5, A3_COCK), (9, A3_BASH), (12, lerp_pose(A3_BASH, A3_THRUST, 0.3)), (16, A3_THRUST), (22, A3_THRUST), (36, STANCE)]),
+    ("kn.attack.sword.1", 30, False, [13], lambda: [(0, STANCE), (8, A1_UP, "io"), (10, A1_UP, "lin"), (13, A1_HIT, "in"), (18, A1_FOLLOW, "out"), (30, STANCE, "io")]),
+    ("kn.attack.sword.2", 30, False, [12], lambda: [(0, STANCE), (6, A2_WIND, "io"), (8, A2_STEP, "io"), (12, A2_HIT, "in"), (17, A2_FOLLOW, "out"), (30, STANCE, "io")]),
+    ("kn.attack.sword.3", 36, False, [16], lambda: [(0, STANCE), (5, A3_COCK, "io"), (8, A3_BASH, "in"), (12, A3_RAISE, "io"), (16, A3_CHOP, "in"), (21, A3_FOLLOW, "out"), (36, STANCE, "io")]),
     ("kn.block", 20, False, [6], lambda: [(0, STANCE), (5, BLOCK), (13, BLOCK), (20, STANCE)]),
 ]
 

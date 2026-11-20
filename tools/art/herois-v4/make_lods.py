@@ -22,6 +22,7 @@ def tris(o):
     return sum(len(p.vertices) - 2 for p in o.data.polygons)
 
 
+HAND_KEEP = [0.993, 0.997, 1.0]  # LOD0, LOD1, LOD2
 base = tris(src)
 made = []
 for k, target in enumerate(targets):
@@ -33,12 +34,24 @@ for k, target in enumerate(targets):
     for m in list(o.modifiers):
         if m.type == "ARMATURE":
             o.modifiers.remove(m)
+    # mãos protegidas: com o peso 1 em tudo, as duas mãos ficavam com ~450 triângulos cada e os dedos do punho
+    # fechado viravam pontas (de longe, mão aberta). Peso menor nas mãos = menos colapso ali (o efeito é muito
+    # sensível: 0,993 dá ~900 triângulos por mão no LOD0).
+    hw = HAND_KEEP[k]
+    names = {g.index: g.name for g in o.vertex_groups}
+    vg = o.vertex_groups.new(name="decimar")
+    for v in o.data.vertices:
+        h = min(1.0, 2 * sum(g.weight for g in v.groups if names[g.group].startswith(("hand_", "thumb_", "index_", "fingers_"))))
+        vg.add([v.index], 1.0 - (1.0 - hw) * h, "REPLACE")
     dec = o.modifiers.new("Decimate", "DECIMATE")
     dec.decimate_type = "COLLAPSE"
     dec.ratio = target / base
+    dec.vertex_group = "decimar"
+    dec.vertex_group_factor = 1.0
     dec.use_collapse_triangulate = True
     bpy.context.view_layer.objects.active = o
     bpy.ops.object.modifier_apply(modifier=dec.name)
+    o.vertex_groups.remove(o.vertex_groups["decimar"])  # antes do limite de 4 influências
     # pesos: no máximo 4 influências e somando 1
     bpy.ops.object.mode_set(mode="WEIGHT_PAINT")
     bpy.ops.object.vertex_group_limit_total(group_select_mode="ALL", limit=4)
