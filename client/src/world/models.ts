@@ -1020,7 +1020,8 @@ export class CharacterModels {
       if (painted) this.releasePaint(model, painted.tier, painted.look);
       painted = null;
       for (const m of paintable()) m.material = base;
-      if (!needsRepaint(l)) return;
+      // v4: a máscara de repintura é do UV dos heróis antigos; o corpo novo fica com a cor dele até ter a própria.
+      if (!needsRepaint(l) || isV4Hero(model)) return;
       const mine = { look: l, tier: tierId };
       painted = mine;
       void this.acquirePaint(model, tierId, base, l).then((mat) => {
@@ -1142,7 +1143,8 @@ export class CharacterModels {
       setPiece("helm", helm);
       refreshVis();
       if (!baseMat) return;
-      const tier = bodyTier(a);
+      // v4: as texturas de raridade (armor/<classe>_<faixa>.ktx2) são do UV antigo; o corpo novo ainda não tem as dele.
+      const tier = isV4Hero(model) ? 0 : bodyTier(a);
       if (tier <= 1) {
         tierMat = tier === 1 ? this.goodMaterial(baseMat) : null;
         tierId = tier;

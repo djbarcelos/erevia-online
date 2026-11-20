@@ -11,7 +11,7 @@ motion. Gera, por enquanto:
 O pé de apoio anda para trás exatamente na velocidade do clipe: no jogo, tocado a `velocidade / footSpeed`,
 o pé fica parado no chão (deslize 1,00).
 
-    Blender --background --factory-startup corpo-mf.blend --python tools/art/herois-v4/anim_base.py -- saida.blend saida-clips.json
+    Blender --background --factory-startup corpo-lod.blend --python tools/art/herois-v4/anim_base.py -- saida.blend saida-clips.json
 """
 import json
 import math
@@ -105,8 +105,30 @@ for s in ("l", "r"):
     ca.influence = 0.0
 
 
-def key(bone, frame, loc=None, rot=None):
-    """loc: deslocamento em relação ao repouso, em coordenadas do mundo; rot: Euler (graus) local XYZ."""
+def palm_twist(s):
+    """Giro (graus, no eixo do antebraço) que deixa a linha dos nós (do mínimo ao indicador) para a frente,
+    com a palma virada para o corpo. O corpo do Meshy veio com a mão direita girada ~90° (palma para trás):
+    sem isto a arma sai de lado. Repartido meio a meio entre o antebraço e a mão (sem torcer o pulso)."""
+    a = (H[f"hand_{s}"] - H[f"forearm_{s}"]).normalized()
+    k = H[f"index_01_{s}"] - H[f"fingers_01_{s}"]
+    k = (k - a * k.dot(a)).normalized()
+    t = (FWD - a * FWD.dot(a)).normalized()
+    return math.degrees(math.atan2(k.cross(t).dot(a), k.dot(t)))
+
+
+TWIST = {s: palm_twist(s) for s in ("l", "r")}
+print("giro da palma (graus):", {s: round(v, 1) for s, v in TWIST.items()})
+
+
+def twist_keys(f, bend):
+    """Antebraço: primeiro gira no próprio eixo (Y), depois dobra o cotovelo (X) no plano de sempre."""
+    for s in ("l", "r"):
+        key(f"forearm_{s}", f, rot=(bend[s], TWIST[s] * 0.5, 0), mode="YXZ")
+        key(f"hand_{s}", f, rot=(0, TWIST[s] * 0.5, 0))
+
+
+def key(bone, frame, loc=None, rot=None, mode="XYZ"):
+    """loc: deslocamento em relação ao repouso, em coordenadas do mundo; rot: Euler (graus) local, ordem `mode`."""
     p = pb[bone]
     if loc is not None:
         # converte deslocamento de mundo para o espaço local do osso
@@ -114,7 +136,7 @@ def key(bone, frame, loc=None, rot=None):
         p.location = m @ Vector(loc)
         p.keyframe_insert("location", frame=frame)
     if rot is not None:
-        p.rotation_mode = "XYZ"
+        p.rotation_mode = mode
         p.rotation_euler = [math.radians(a) for a in rot]
         p.keyframe_insert("rotation_euler", frame=frame)
 
@@ -165,6 +187,7 @@ def make_locomotion(name, frames, speed, lift, duty, bob, lean, arm_swing, spine
     stride = speed * duty * frames / FPS  # no apoio o pé anda para trás exatamente na velocidade do clipe
     for f in range(frames + 1):
         ph = f / frames
+        bend = {}
         for s, off in (("l", 0.0), ("r", 0.5)):
             fwd, h, pitch = foot_track((ph + off) % 1.0, stride, lift, duty)
             key(f"ik_foot_{s}", f, loc=FWD * fwd + UP * h, rot=(pitch, 0, 0))
@@ -172,7 +195,7 @@ def make_locomotion(name, frames, speed, lift, duty, bob, lean, arm_swing, spine
             sw = arm_swing * math.cos(2 * math.pi * (ph + off))
             sg = 1 if s == "l" else -1
             key(f"upperarm_{s}", f, rot=(sw, 0, sg * -38))  # braço abaixado ao lado do corpo e balançando
-            key(f"forearm_{s}", f, rot=(-abs(sw) * 0.4 - elbow, 0, 0))
+            bend[s] = -abs(sw) * 0.4 - elbow
         # quadril: desce no contato e sobe na passagem (duas vezes por ciclo)
         z = -bob * (0.5 + 0.5 * math.cos(4 * math.pi * ph))
         sway = 0.02 * math.sin(2 * math.pi * ph)
@@ -180,6 +203,7 @@ def make_locomotion(name, frames, speed, lift, duty, bob, lean, arm_swing, spine
         key("spine_02", f, rot=(lean, 0, -spine_twist * 1.4 * math.sin(2 * math.pi * ph)))
         key("chest", f, rot=(lean * 0.5, 0, -spine_twist * 0.6 * math.sin(2 * math.pi * ph)))
         key("head", f, rot=(-lean * 0.8, 0, spine_twist * 0.8 * math.sin(2 * math.pi * ph)))
+        twist_keys(f, bend)
         fist(f)
     return act
 
@@ -193,15 +217,17 @@ def make_idle(name, frames):
         br = math.sin(2 * math.pi * ph * 4)  # 4 respirações no ciclo
         shift = math.sin(2 * math.pi * ph)   # troca de peso: uma ida e volta
         look = math.sin(2 * math.pi * ph) ** 3
+        bend = {}
         for s, sg in (("l", 1), ("r", -1)):
             key(f"ik_foot_{s}", f, loc=Vector((sg * 0.04, 0, 0)), rot=(0, 0, 0))
             key(f"upperarm_{s}", f, rot=(4 + 1.5 * br, 0, sg * -38))  # braços caídos ao lado do corpo
-            key(f"forearm_{s}", f, rot=(-12 - 2 * br, 0, 0))
+            bend[s] = -12 - 2 * br
             key(f"clavicle_{s}", f, rot=(0, 0, sg * 1.5 * br))
         key("pelvis", f, loc=Vector((0.025 * shift, 0, -0.01 - 0.005 * br)), rot=(0, 2.5 * shift, 0))
         key("spine_02", f, rot=(2 + 1.2 * br, -1.5 * shift, 0))
         key("chest", f, rot=(1.5 * br, -1 * shift, 0))
         key("head", f, rot=(-2, 0, 18 * look))
+        twist_keys(f, bend)
         fist(f)
     return act
 
