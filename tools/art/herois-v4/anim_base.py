@@ -117,6 +117,8 @@ def palm_twist(s):
 
 
 TWIST = {s: palm_twist(s) for s in ("l", "r")}
+# sinal da dobra do cotovelo no X do antebraço: positivo leva a mão para a frente (com -1 o antebraço ia para trás)
+ELBOW = 1
 print("giro da palma (graus):", {s: round(v, 1) for s, v in TWIST.items()})
 
 
@@ -195,7 +197,7 @@ def make_locomotion(name, frames, speed, lift, duty, bob, lean, arm_swing, spine
             sw = arm_swing * math.cos(2 * math.pi * (ph + off))
             sg = 1 if s == "l" else -1
             key(f"upperarm_{s}", f, rot=(sw, 0, sg * -38))  # braço abaixado ao lado do corpo e balançando
-            bend[s] = -abs(sw) * 0.4 - elbow
+            bend[s] = ELBOW * (abs(sw) * 0.4 + elbow)
         # quadril: desce no contato e sobe na passagem (duas vezes por ciclo)
         z = -bob * (0.5 + 0.5 * math.cos(4 * math.pi * ph))
         sway = 0.02 * math.sin(2 * math.pi * ph)
@@ -221,7 +223,7 @@ def make_idle(name, frames):
         for s, sg in (("l", 1), ("r", -1)):
             key(f"ik_foot_{s}", f, loc=Vector((sg * 0.04, 0, 0)), rot=(0, 0, 0))
             key(f"upperarm_{s}", f, rot=(4 + 1.5 * br, 0, sg * -38))  # braços caídos ao lado do corpo
-            bend[s] = -12 - 2 * br
+            bend[s] = ELBOW * (12 + 2 * br)
             key(f"clavicle_{s}", f, rot=(0, 0, sg * 1.5 * br))
         key("pelvis", f, loc=Vector((0.025 * shift, 0, -0.01 - 0.005 * br)), rot=(0, 2.5 * shift, 0))
         key("spine_02", f, rot=(2 + 1.2 * br, -1.5 * shift, 0))
