@@ -109,6 +109,10 @@ type playerState struct {
 	// Recurso de classe (resources.go) e alvos que já geraram neste lançamento.
 	res         game.ResourceState
 	castTargets int
+	// Último Reduto: quando pode disparar de novo; redirecting: apanhando no lugar de um
+	// aliado (não redireciona de novo).
+	lastBastionReady float64
+	redirecting      bool
 
 	// Fase 4: PvP, grupo e clã.
 	accountID  int64

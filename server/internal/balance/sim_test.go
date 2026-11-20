@@ -28,11 +28,12 @@ func TestTypicalBuildsFollowTheRules(t *testing.T) {
 			}
 		}
 	}
-	// No máximo todas as ativas da evolução estão aprendidas.
+	// No máximo todas as ativas do marco 20 da evolução estão aprendidas (a árvore inteira
+	// não cabe nos pontos: escolher continua valendo).
 	for _, p := range Paths() {
 		b := NewBuild(p, game.MaxLevel, 0)
 		for _, s := range game.EvolutionTree(p.Spec) {
-			if s.IsPassive() || !reachable(s) {
+			if s.IsPassive() || s.Level > game.SpecLevel || s.Node != game.NodeActive || !reachable(s) {
 				continue
 			}
 			if b.rank(s.ID) < 1 {

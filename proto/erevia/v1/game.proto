@@ -1708,6 +1708,10 @@ enum Effect {
   EFFECT_BANNER = 21; // +value de defesa (perto do estandarte)
   EFFECT_COURAGE = 22; // regenera value de vida por segundo (aura)
   EFFECT_DEATH_MARK = 23; // Marca da Morte do raid boss: explode em volta do marcado
+  EFFECT_BUFF_BLOCK = 24; // +value de chance de bloqueio (com escudo)
+  EFFECT_GUARDED = 25; // value do dano vai para quem protege (source)
+  EFFECT_SACRIFICE = 26; // a vida não cai abaixo de value × máx.; o excesso vai para source
+  EFFECT_REGEN = 27; // regenera value de vida por segundo (Renovação)
 }
 
 message EffectEvent {

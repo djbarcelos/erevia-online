@@ -68,7 +68,7 @@ type rotSkill struct {
 func modeledOnSelf(k game.EffectKind) bool {
 	switch k {
 	case game.EffectBuffAtk, game.EffectWarCry, game.EffectBuffAtkSpeed, game.EffectBuffDef,
-		game.EffectFrostArmor, game.EffectShield:
+		game.EffectFrostArmor, game.EffectShield, game.EffectBuffBlock, game.EffectRegen:
 		return true
 	}
 	return false
@@ -365,8 +365,23 @@ func (f *fight) cast(rs rotSkill) {
 		f.res.LastCast = s.ID
 		f.gain(n)
 	}
-	if def := s.OnSelf.At(r); def != nil && modeledOnSelf(def.Kind) {
-		f.pfx.add(def.Kind, def.Value, def.Duration, f.now)
+	if !s.AllyOnly { // OnSelf e os efeitos a mais em si (como zone.selfEffects)
+		for _, spec := range append([]*game.EffectSpec{s.OnSelf}, s.ExtraOnSelf...) {
+			if spec == nil {
+				continue
+			}
+			def := spec.At(r)
+			if !modeledOnSelf(def.Kind) {
+				continue
+			}
+			if spec.MaxHPFrac && def.Duration > 0 {
+				def.Value = f.p.MaxHP * def.Value / def.Duration
+			}
+			if def.Kind == game.EffectRegen || def.Kind == game.EffectShield {
+				def.Value *= 1 + f.pv.Of(game.PassiveHealPower)
+			}
+			f.pfx.add(def.Kind, def.Value, def.Duration, f.now)
+		}
 	}
 	if s.Banner != nil {
 		f.pfx.add(s.Banner.Effect, s.Banner.Value, s.Banner.Duration, f.now)
@@ -382,9 +397,20 @@ func (f *fight) cast(rs rotSkill) {
 		if s.ResSpendAll {
 			mult *= game.SpendAllMult(s, spent)
 		}
+		extraCrit := s.ExtraCrit
+		if s.Holy { // Zelo e Fervor (como zone.skillDamageBonus)
+			mult *= 1 + f.pv.Of(game.PassiveHolyDamagePct)
+			extraCrit += f.pv.Of(game.PassiveHolyCrit)
+		}
+		for _, k := range s.BonusVs {
+			if f.mfxActive(k) {
+				mult *= 1 + s.BonusVsPct
+				break
+			}
+		}
 		chance := 0.0
 		for i := 0; i < max(1, s.Hits) && !f.mDead(); i++ {
-			chance = math.Max(chance, f.hit(s.Magic, mult, s.ExtraCrit, s.NoMiss))
+			chance = math.Max(chance, f.hit(s.Magic, mult, extraCrit, s.NoMiss))
 		}
 		if f.rd != nil {
 			f.gain(chance * f.rd.Gen(game.GenSkillHit))
@@ -407,6 +433,11 @@ func (f *fight) cast(rs rotSkill) {
 			f.gain(f.rd.Gen(game.GenNewEffect))
 		}
 		f.mfx.add(def.Kind, def.Value, def.Duration, f.now)
+	}
+	for _, spec := range s.ExtraOnTarget {
+		if def := spec.At(r); modeledOnTarget(def.Kind) && !f.def.ImmuneTo(def.Kind) {
+			f.mfx.add(def.Kind, def.Value, def.Duration, f.now)
+		}
 	}
 	if s.Fire && (s.OnTarget == nil || s.OnTarget.Kind != game.EffectBurn) {
 		if pv := f.pv.Of(game.PassiveFireBurn); pv > 0 {
@@ -464,16 +495,21 @@ func (f *fight) monsterHit() {
 	dmg := game.ExpectedHit(game.HitInput{Atk: f.mAtk(), Def: f.pDef(f.m.Magic), Mult: 1,
 		Crit: f.m.Crit, CritMult: f.m.CritDamage, Accuracy: acc, Evasion: f.p.Evasion})
 	// Bloqueio do escudo (Fase 4), pelo valor esperado: só golpe físico.
-	if !f.m.Magic && f.p.Block > 0 {
-		dmg *= 1 - math.Min(1, f.p.Block)*game.BlockCut(f.p)
+	block := f.p.Block
+	if v, ok := f.pfx.active(game.EffectBuffBlock, f.now); ok && block > 0 {
+		block += v
 	}
+	if !f.m.Magic && block > 0 {
+		dmg *= 1 - math.Min(1, block)*game.BlockCut(f.p)
+	}
+	dmg *= 1 - math.Min(0.5, f.pv.Of(game.PassiveAllyDamageReduce)) // Vínculo de Guarda (vale em si)
 	if f.rd != nil { // recurso de quem apanha (Determinação, Fúria)
 		n := f.rd.Gen(game.GenDamageTaken)
 		if f.dist <= game.MeleeTakenRange {
 			n += f.rd.Gen(game.GenMeleeTaken)
 		}
 		if !f.m.Magic {
-			n += f.rd.Gen(game.GenBlock) * math.Min(1, f.p.Block)
+			n += f.rd.Gen(game.GenBlock) * math.Min(1, block)
 		}
 		f.gain(game.HitChance(acc, f.p.Evasion) * n)
 	}
@@ -507,6 +543,9 @@ func (f *fight) tickDoTs() {
 func (f *fight) regen() {
 	hp, mp := f.p.HPRegen, f.p.MPRegen
 	hp += f.pv.Of(game.PassiveCourage) // a aura vale para quem a tem
+	if v, ok := f.pfx.active(game.EffectRegen, f.now); ok { // Renovação
+		hp += v
+	}
 	if pv := f.pv.Of(game.PassiveBearSpirit); pv > 0 && f.hp < f.p.MaxHP*game.BearBelow {
 		hp += f.p.MaxHP * pv
 	}

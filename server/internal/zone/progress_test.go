@@ -561,7 +561,7 @@ func TestExecuteTwinBladesJudgmentLifestealSplashParalysis(t *testing.T) {
 		for i := 0; i < 60; i++ {
 			a.hp, a.dead = a.stats.MaxHP*frac, false
 			k := len(z.frame.combat)
-			z.skillHit(barb, a, game.Skills[game.SkillExecute], 1)
+			z.skillHit(barb, a, game.Skills[game.SkillExecute], 1, false)
 			if c := z.frame.combat[k]; !c.Miss && !c.Crit {
 				total += float64(c.Damage)
 				n++
@@ -589,21 +589,21 @@ func TestExecuteTwinBladesJudgmentLifestealSplashParalysis(t *testing.T) {
 	r, _ := joinAt(z, 2, "rogue", 31, 1, 0)
 	atLevel(z, r, 20)
 	n := len(z.frame.combat)
-	z.skillHit(r, a, game.Skills[game.SkillTwinBlades], 1)
+	z.skillHit(r, a, game.Skills[game.SkillTwinBlades], 1, false)
 	if len(z.frame.combat)-n != 2 {
 		t.Errorf("twin blades hits: %d", len(z.frame.combat)-n)
 	}
 	// Paralisia só atordoa envenenado.
 	b.removeEffect(game.EffectStun)
 	for i := 0; i < 5; i++ {
-		z.skillHit(r, b, game.Skills[game.SkillParalysis], 1)
+		z.skillHit(r, b, game.Skills[game.SkillParalysis], 1, false)
 	}
 	if b.stunned(z.now) {
 		t.Error("paralysis stunned a target without poison")
 	}
 	z.applyEffect(r, b, &game.EffectDef{Kind: game.EffectPoison, Duration: 5, Value: 1})
 	for i := 0; i < 10 && !b.stunned(z.now); i++ {
-		z.skillHit(r, b, game.Skills[game.SkillParalysis], 1)
+		z.skillHit(r, b, game.Skills[game.SkillParalysis], 1, false)
 	}
 	if !b.stunned(z.now) {
 		t.Error("paralysis should stun a poisoned target")
@@ -616,7 +616,7 @@ func TestExecuteTwinBladesJudgmentLifestealSplashParalysis(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		a.hp, a.dead = a.stats.MaxHP, false
 		n := len(z.frame.combat)
-		z.skillHit(k, a, game.Skills[game.SkillJudgment], 1)
+		z.skillHit(k, a, game.Skills[game.SkillJudgment], 1, false)
 		if z.frame.combat[n].Miss {
 			t.Fatal("judgment missed")
 		}

@@ -229,7 +229,7 @@ func TestFifthTierBarbarian(t *testing.T) {
 		for i := 0; i < 80; i++ {
 			near.hp, near.dead = near.stats.MaxHP*frac, false
 			n := len(z.frame.combat)
-			z.skillHit(b, near, game.Skills[game.SkillSeismicAxe], 1)
+			z.skillHit(b, near, game.Skills[game.SkillSeismicAxe], 1, false)
 			if c := z.frame.combat[n]; !c.Miss && !c.Crit {
 				total += float64(c.Damage)
 				k++
@@ -325,7 +325,7 @@ func TestFifthTierRogue(t *testing.T) {
 		for i := 0; i < 200; i++ {
 			near.hp, near.dead = near.stats.MaxHP*frac, false
 			n := len(z.frame.combat)
-			z.skillHit(r, near, game.Skills[game.SkillFatalBlow], 1)
+			z.skillHit(r, near, game.Skills[game.SkillFatalBlow], 1, false)
 			if c := z.frame.combat[n]; !c.Miss && !c.Crit {
 				total += float64(c.Damage)
 				k++

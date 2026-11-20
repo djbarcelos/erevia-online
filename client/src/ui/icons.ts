@@ -197,6 +197,10 @@ const EFFECT_THEMES: Partial<Record<Effect, SkillTheme>> = {
   [Effect.WAR_CRY]: { glyph: "shout", bg: ["#4fae8e", "#0e2a22"], accent: "#c0ffe8" },
   [Effect.BANNER]: { glyph: "banner", bg: ["#3fa88a", "#0a2a20"], accent: "#ffe9a8" },
   [Effect.COURAGE]: { glyph: "heart", bg: ["#4fb0a0", "#0c2a28"], accent: "#e0fff6" },
+  [Effect.BUFF_BLOCK]: { glyph: "shield", bg: ["#6f93d6", "#0e1a34"], accent: "#e0ecff" },
+  [Effect.GUARDED]: { glyph: "shield", bg: ["#5fc4a6", "#0a2a22"], accent: "#e0fff4" },
+  [Effect.SACRIFICE]: { glyph: "heart", bg: ["#ffd86a", "#3a2a08"], accent: "#fff6d0" },
+  [Effect.REGEN]: { glyph: "heart", bg: ["#7ad07a", "#0c2a0c"], accent: "#e8ffe0" },
 };
 
 export function effectIcon(effect: Effect): string {
@@ -253,6 +257,14 @@ export function effectName(effect: Effect): string {
       return "Estandarte";
     case Effect.COURAGE:
       return "Coragem";
+    case Effect.BUFF_BLOCK:
+      return "Guarda erguida";
+    case Effect.GUARDED:
+      return "Protegido";
+    case Effect.SACRIFICE:
+      return "Sacrifício";
+    case Effect.REGEN:
+      return "Renovação";
     default:
       return "Efeito";
   }
@@ -306,6 +318,14 @@ export function effectText(effect: Effect, value: number, ms: number): string {
       return `+${pct} de defesa perto do estandarte`;
     case Effect.COURAGE:
       return `Regenera ${Math.round(value)} de vida por segundo`;
+    case Effect.BUFF_BLOCK:
+      return `+${pct} de chance de bloqueio por ${dur}`;
+    case Effect.GUARDED:
+      return `${pct} do dano que você leva vai para quem protege (${dur})`;
+    case Effect.SACRIFICE:
+      return `A vida não cai abaixo de ${pct}: o resto vai para quem se sacrifica (${dur})`;
+    case Effect.REGEN:
+      return `Regenera ${Math.round(value)} de vida por segundo por ${dur}`;
     default:
       return "";
   }
