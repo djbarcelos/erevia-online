@@ -55,6 +55,10 @@ type SkillMod struct {
 	ExtraOnSelf []*EffectSpec
 	// Estandarte: +raio e +duração.
 	BannerRadius, BannerDuration Scale
+	BurnExtra                    Scale // +s na queimadura da Brasa Viva
+	// Gastar recurso por bônus de dano.
+	ResBonusCost float64
+	ResBonusPct  Scale
 }
 
 // EvolutionMilestones: os marcos da árvore evoluída até o teto 40 (45–60 com o teto 60).
@@ -311,6 +315,11 @@ func EffectiveSkill(s *SkillDef, ranks map[uint32]int) *SkillDef {
 		out.ResOnHit += mod.ResOnHit.atOrZero(r)
 		out.ResOnCrit += mod.ResOnCrit.atOrZero(r)
 		out.ResOnAlly += mod.ResOnAlly.atOrZero(r)
+		out.BurnExtra += mod.BurnExtra.atOrZero(r)
+		if mod.ResBonusCost > 0 {
+			out.ResBonusCost = mod.ResBonusCost
+			out.ResBonusPct += mod.ResBonusPct.atOrZero(r)
+		}
 		if len(mod.ExtraOnSelf) > 0 {
 			out.ExtraOnSelf = append(append([]*EffectSpec{}, out.ExtraOnSelf...), mod.ExtraOnSelf...)
 		}

@@ -1715,6 +1715,9 @@ enum Effect {
   EFFECT_BLEED = 28; // dano por segundo (value), sangramento
   EFFECT_FURY_DOUBLE = 29; // os ataques básicos geram o dobro de recurso
   EFFECT_UNSTOPPABLE = 30; // imune a lentidão e a prender
+  EFFECT_CURSE = 31; // dano por segundo (value), maldição
+  EFFECT_ARMOR_BREAK = 32; // -value de defesa
+  EFFECT_BANISH = 33; // fora de cena: não age, não bate e não apanha
 }
 
 message EffectEvent {

@@ -1509,6 +1509,9 @@ const (
 	Effect_EFFECT_BLEED          Effect = 28 // dano por segundo (value), sangramento
 	Effect_EFFECT_FURY_DOUBLE    Effect = 29 // os ataques básicos geram o dobro de recurso
 	Effect_EFFECT_UNSTOPPABLE    Effect = 30 // imune a lentidão e a prender
+	Effect_EFFECT_CURSE          Effect = 31 // dano por segundo (value), maldição
+	Effect_EFFECT_ARMOR_BREAK    Effect = 32 // -value de defesa
+	Effect_EFFECT_BANISH         Effect = 33 // fora de cena: não age, não bate e não apanha
 )
 
 // Enum value maps for Effect.
@@ -1545,6 +1548,9 @@ var (
 		28: "EFFECT_BLEED",
 		29: "EFFECT_FURY_DOUBLE",
 		30: "EFFECT_UNSTOPPABLE",
+		31: "EFFECT_CURSE",
+		32: "EFFECT_ARMOR_BREAK",
+		33: "EFFECT_BANISH",
 	}
 	Effect_value = map[string]int32{
 		"EFFECT_UNSPECIFIED":    0,
@@ -1578,6 +1584,9 @@ var (
 		"EFFECT_BLEED":          28,
 		"EFFECT_FURY_DOUBLE":    29,
 		"EFFECT_UNSTOPPABLE":    30,
+		"EFFECT_CURSE":          31,
+		"EFFECT_ARMOR_BREAK":    32,
+		"EFFECT_BANISH":         33,
 	}
 )
 
@@ -19781,7 +19790,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x16MONSTER_ARCHETYPE_PACK\x10\x05\x12\x1c\n" +
 	"\x18MONSTER_ARCHETYPE_SHIELD\x10\x06\x12\x1e\n" +
 	"\x1aMONSTER_ARCHETYPE_SPLITTER\x10\a\x12\x1e\n" +
-	"\x1aMONSTER_ARCHETYPE_EXPLODER\x10\b*\x82\x05\n" +
+	"\x1aMONSTER_ARCHETYPE_EXPLODER\x10\b*\xbf\x05\n" +
 	"\x06Effect\x12\x16\n" +
 	"\x12EFFECT_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vEFFECT_STUN\x10\x01\x12\x0f\n" +
@@ -19814,7 +19823,10 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\fEFFECT_REGEN\x10\x1b\x12\x10\n" +
 	"\fEFFECT_BLEED\x10\x1c\x12\x16\n" +
 	"\x12EFFECT_FURY_DOUBLE\x10\x1d\x12\x16\n" +
-	"\x12EFFECT_UNSTOPPABLE\x10\x1e*q\n" +
+	"\x12EFFECT_UNSTOPPABLE\x10\x1e\x12\x10\n" +
+	"\fEFFECT_CURSE\x10\x1f\x12\x16\n" +
+	"\x12EFFECT_ARMOR_BREAK\x10 \x12\x11\n" +
+	"\rEFFECT_BANISH\x10!*q\n" +
 	"\vSkillTarget\x12\x1c\n" +
 	"\x18SKILL_TARGET_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12SKILL_TARGET_ENEMY\x10\x01\x12\x15\n" +

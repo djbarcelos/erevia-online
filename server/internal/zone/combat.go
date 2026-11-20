@@ -102,6 +102,16 @@ func (z *Zone) hitInput(src, dst *entity, magic bool, mult, extraCrit float64) g
 	in.Mult *= 1 + z.bestiaryBonus(src, dst) // Bestiário: +1% contra o tipo no 500º abate (bestiary.go)
 	if src.pl != nil {
 		in.Mult *= 1 + z.leaderAura(src) // Liderança
+		pv := &src.pl.passives
+		if v := pv.Of(game.PassiveSlowedDamagePct); v > 0 && dst.has(game.EffectSlow, z.now) {
+			in.Mult *= 1 + v // Frio Penetrante
+		}
+		if v := pv.Of(game.PassiveCursedDamagePct); v > 0 && cursed(dst, z.now) {
+			in.Mult *= 1 + v // Agonia
+		}
+		if pv.Has(game.PassiveWinterHeart) && (dst.has(game.EffectStun, z.now) || dst.has(game.EffectRoot, z.now)) {
+			in.ForceCrit = true // Coração do Inverno
+		}
 	}
 	// Saindo da invisibilidade: o primeiro golpe é crítico garantido.
 	if src.pl != nil && src.pl.ambushCrit {
@@ -246,6 +256,12 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			return
 		}
 		spent, _ := z.castResource(src, s)
+		if s.ResBonusCost > 0 && src.pl.res.Spend(s.ResBonusCost) { // Rajada Concentrada
+			c := *s
+			c.Mult = game.Scale{Base: s.Mult.Base * (1 + s.ResBonusPct), Per: s.Mult.Per * (1 + s.ResBonusPct)}
+			s = &c
+			z.afterResSpend(src, s.ResBonusCost)
+		}
 		if s.ResSpendAll && spent > 0 { // gasta tudo: o dano cresce com o que foi gasto
 			c := *s
 			m := game.SpendAllMult(s, spent)
@@ -286,6 +302,11 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 
 	if s.ChainCharge > 0 && src.pl != nil {
 		z.chainCharge(src, s, rank, target)
+		return
+	}
+	if s.Pandemic && target != nil {
+		z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID, TargetId: target.id})
+		z.pandemic(src, target)
 		return
 	}
 	switch s.Target {
@@ -354,6 +375,19 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int, splash boo
 			}
 			mult *= em
 		}
+		if s.Reaction && dst.has(game.EffectBurn, z.now) && dst.has(game.EffectSlow, z.now) {
+			mult *= 2 // Reação Elemental: consome a queimadura e a lentidão
+			for _, k := range []game.EffectKind{game.EffectBurn, game.EffectSlow} {
+				if dst.removeEffect(k) {
+					z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: dst.id, Effect: pb.Effect(k)})
+				}
+			}
+			z.gainRes(src, s.ResOnReaction)
+		}
+		fireHeart := s.Fire && src.pl != nil && src.pl.passives.Has(game.PassiveFireHeart) && dst.has(game.EffectBurn, z.now)
+		if fireHeart {
+			mult *= 1 + game.FireHeartBonus // Coração do Vulcão
+		}
 		extraCrit := s.ExtraCrit
 		if src.pl != nil && game.SkillResCost(s) > 0 && src.pl.passives.Has(game.PassiveResCostCut) {
 			extraCrit += game.ResSkillCrit // Ira Desmedida
@@ -418,8 +452,14 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int, splash boo
 	if s.Fire && src.pl != nil && (s.OnTarget == nil || s.OnTarget.Kind != game.EffectBurn) {
 		if pv := src.pl.passives.Of(game.PassiveFireBurn); pv > 0 {
 			v := math.Round(src.atk(true, z.now) * pv)
-			z.applyEffect(src, dst, &game.EffectDef{Kind: game.EffectBurn, Duration: game.FireBurnSeconds, Value: math.Max(1, v)})
+			z.applyEffect(src, dst, &game.EffectDef{Kind: game.EffectBurn, Duration: game.FireBurnSeconds + s.BurnExtra, Value: math.Max(1, v)})
 		}
+	}
+	if s.Fire && src.pl != nil && src.pl.passives.Has(game.PassiveFireHeart) {
+		z.spreadBurn(src, dst) // Coração do Vulcão
+	}
+	if s.RenewCurses {
+		z.renewCurses(src, dst)
 	}
 }
 
@@ -429,6 +469,14 @@ func (z *Zone) applyEffect(src, e *entity, def *game.EffectDef) {
 	}
 	if (def.Kind == game.EffectSlow || def.Kind == game.EffectRoot) && e.has(game.EffectUnstoppable, z.now) {
 		return // Grito de Reagrupar
+	}
+	if def.Kind == game.EffectBanish && (e.mon == nil || e.mon.def.Boss) {
+		return // Prisão Etérea: só em monstro que não é chefe
+	}
+	if isCurse(def.Kind) && src.pl != nil && src != e && src.pl.passives.Has(game.PassiveDeepAbyss) {
+		d := *def // Abismo Interior
+		d.Duration *= game.DeepAbyssMult
+		def = &d
 	}
 	if def.Kind == game.EffectUnstoppable {
 		for _, k := range []game.EffectKind{game.EffectSlow, game.EffectRoot} {
@@ -566,7 +614,7 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 // damage tira vida de dst passando por escudo, escudo de mana e Imortal. Devolve quanto
 // dano de fato foi causado (para o roubo de vida). ev (opcional) recebe o absorvido.
 func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64 {
-	if dst.dead || dmg <= 0 {
+	if dst.dead || dmg <= 0 || dst.has(game.EffectBanish, z.now) {
 		return 0
 	}
 	absorbed := 0.0

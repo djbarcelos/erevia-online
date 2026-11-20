@@ -40,11 +40,19 @@ const (
 	EffectBleed                   // Value = dano por segundo (Ruptura)
 	EffectFuryDouble              // os ataques básicos geram o dobro do recurso (Fúria Incontrolável)
 	EffectUnstoppable             // imune a lentidão e a prender (Grito de Reagrupar)
+	EffectCurse                   // Value = dano por segundo (Maldição Persistente)
+	EffectArmorBreak              // Value = -fração de defesa (Fraqueza)
+	EffectBanish                  // fora de cena: não age, não bate e não apanha (Prisão Etérea)
+
+	effectKindCount // sempre o último: quantos tipos de efeito há
 )
+
+// EffectKinds: quantos tipos de efeito existem (tamanho das tabelas por tipo).
+const EffectKinds = int(effectKindCount)
 
 // IsDoT: efeitos que causam dano a cada segundo.
 func (k EffectKind) IsDoT() bool {
-	return k == EffectPoison || k == EffectBurn || k == EffectPlague || k == EffectBleed
+	return k == EffectPoison || k == EffectBurn || k == EffectPlague || k == EffectBleed || k == EffectCurse
 }
 
 // EffectDef é um efeito pronto para aplicar (valores de um rank).
@@ -127,6 +135,14 @@ const (
 	PassivePAtkPct                      // +Value de ataque físico
 	PassiveChargeMomentum               // depois de uma investida: +Value de dano e +2×Value de velocidade por 5 s
 	PassiveDominance                    // inimigos perto causam -10% e ficam 15% mais lentos; atordoar dura +0,5 s
+	PassiveSlowedDamagePct              // alvos lentos recebem +Value de dano seu (Frio Penetrante)
+	PassiveFireHeart                    // fogo em alvo queimado: +20% e espalha a queimadura (Coração do Vulcão)
+	PassiveWinterHeart                  // golpe em alvo congelado ou preso é crítico (Coração do Inverno)
+	PassiveCursedDamagePct              // alvos amaldiçoados recebem +Value de dano seu (Agonia)
+	PassiveDeepAbyss                    // maldições duram +50% (Abismo Interior)
+	PassiveSpreadPower                  // a praga que pula leva +Value de força (Contágio)
+	PassiveDotCrit                      // pragas e maldições podem dar crítico: +Value de chance (Putrefação)
+	PassiveManaOnSpend                  // cada 10 de recurso gasto devolve Value × mana máx. (Fluxo Arcano)
 
 	passiveKindCount // sempre o último: tamanho de Passives
 )
@@ -203,6 +219,12 @@ const (
 	ChainChargeRange = 10.0 // Investida Implacável
 	ResSkillCrit     = 0.15 // Ira Desmedida: +crítico nas skills que gastam recurso
 	BossExecuteCap   = 1.5  // execução contra chefe: no máximo +50%
+	FireHeartBonus   = 0.2  // Coração do Vulcão
+	FireHeartSpread  = 3.0
+	DeepAbyssMult    = 1.5 // Abismo Interior
+	PandemicRange    = 8.0 // Pandemia
+	PlagueJumpRes    = 3.0 // Carga Arcana por praga que pula…
+	PlagueJumpResMax = 3   // …até 3 por morte
 )
 
 // ZoneDef é uma área no chão contra inimigos: a cada Period, quem está dentro é provocado
@@ -213,6 +235,9 @@ type ZoneDef struct {
 	Effect                   EffectKind
 	Value                    Scale
 	EffectSecs               float64
+	// Damage: dano por pulso (fração do ataque de quem pôs a zona; Magic = mágico).
+	Damage Scale
+	Magic  bool
 }
 
 // BannerDef é o estandarte que fica no chão: aliados perto ganham o efeito.
@@ -282,6 +307,17 @@ type SkillDef struct {
 	CommandSkill bool
 	// ChainCharge: salta entre até tantos inimigos a até ChainChargeRange, batendo em cada um.
 	ChainCharge int
+	// Fogo: segundos a mais na queimadura da Brasa Viva (Chama Persistente).
+	BurnExtra float64
+	// Reaction: dobra o dano em alvo queimado e lento e consome os dois (+ResOnReaction).
+	Reaction      bool
+	ResOnReaction float64
+	// ResBonusCost: com esse recurso, gasta e causa +ResBonusPct (Rajada Concentrada).
+	ResBonusCost, ResBonusPct float64
+	// Pandemic: espalha as pragas e maldições do alvo para os inimigos a até PandemicRange.
+	Pandemic bool
+	// RenewCurses: ao acertar, renova as outras maldições suas no alvo.
+	RenewCurses bool
 	// Recurso da evolução (resources.go): custo, ganho ao lançar e ao acertar (por alvo, até
 	// o teto de alvos); ResSpendAll gasta tudo e causa +ResPerPoint de dano por ponto.
 	ResCost, ResOnCast, ResOnHit float64
@@ -471,7 +507,7 @@ func atkName(magic bool) string {
 // ---------------------------------------------------------------------------------------
 
 func init() {
-	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees(), evoSkills(), knightEvoSkills(), barbarianEvoSkills()} {
+	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees(), evoSkills(), knightEvoSkills(), barbarianEvoSkills(), mageEvoSkills()} {
 		for _, s := range list {
 			if s.Hits == 0 {
 				s.Hits = 1
@@ -485,6 +521,7 @@ func init() {
 	placeEvolutionSkills()
 	adjustKnightEvolutions()
 	adjustBarbarianEvolutions()
+	adjustMageEvolutions()
 	applySkillResources()
 	indexModifiers()
 	Classes["knight"].Branches = [3]Branch{

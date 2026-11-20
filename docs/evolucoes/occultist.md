@@ -117,3 +117,9 @@ Os IDs a partir do 167 são **provisórios**. ★ marca as 2 skills iniciais.
 1. A Praga do Arcanista é uma skill nova (**Praga Arcana**), porque a "Praga" do Ladino não pode trocar de classe.
 2. A **Prisão Etérea** tira o alvo de cena (sem dano nos dois sentidos). Não funciona em chefe.
 3. A **Mente Afiada** é a "mente clara" da evolução: eficiência de mana, como pede a seção 5.4 do design.
+
+## Calibragem no simulador (Fase 11, 19/11)
+
+Na árvore do Arcanista, as skills de dano ficaram com **85% do dano do doc** (custos iguais).
+
+Resultado (tempo para matar, distância da média): 20–24 **−8%**, 25–29 −14%, 30–34 −21%, 35–40 **−16%**, perto da meta (−15% a 0%). A média das faixas ainda muda com a árvore completa do Ladino.

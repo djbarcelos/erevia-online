@@ -166,9 +166,24 @@ func (z *Zone) tickZone(o *entity) {
 	if owner == nil || owner.dead {
 		return
 	}
+	dmg := 0.0
+	if def.Damage != (game.Scale{}) {
+		dmg = math.Max(1, math.Round(owner.atk(def.Magic, z.now)*def.Damage.At(o.obj.zoneRank)))
+	}
 	for _, m := range z.monsters {
 		if m.dead || m.mon.unseen() || dist(o.pos, m.pos)-m.bodyRadius() > def.Radius {
 			continue
+		}
+		if dmg > 0 { // Nuvem Pestilenta: dano por pulso, como um DoT (não gera recurso)
+			ev := &pb.CombatEvent{SourceId: owner.id, TargetId: m.id, Damage: uint32(dmg), Dot: pb.Effect(game.EffectPlague)}
+			z.frame.combat = append(z.frame.combat, ev)
+			m.lastCombat = z.now
+			m.mon.hate[owner.id] += dmg
+			m.mon.returning = false
+			z.damage(owner, m, dmg, ev)
+			if m.dead {
+				continue
+			}
 		}
 		if def.Taunt {
 			z.taunt(owner, m, def.Period+0.5)
@@ -362,6 +377,72 @@ func (z *Zone) dominanceAuras() {
 			}
 			z.applyAura(p, m, game.EffectWeaken, game.DominanceWeaken)
 			z.applyAura(p, m, game.EffectSlow, game.DominanceSlow)
+		}
+	}
+}
+
+// curseKinds: o que conta como maldição (Agonia, Abismo Interior, Maldição Persistente).
+var curseKinds = []game.EffectKind{game.EffectWeaken, game.EffectMark, game.EffectArmorBreak, game.EffectCurse}
+
+func isCurse(k game.EffectKind) bool {
+	for _, c := range curseKinds {
+		if c == k {
+			return true
+		}
+	}
+	return false
+}
+
+// cursed: o alvo tem alguma maldição ativa.
+func cursed(e *entity, now float64) bool {
+	for _, k := range curseKinds {
+		if e.has(k, now) {
+			return true
+		}
+	}
+	return false
+}
+
+// renewCurses (Maldição Persistente): as outras maldições de src no alvo voltam à duração
+// inteira.
+func (z *Zone) renewCurses(src, dst *entity) {
+	for i := range dst.effects {
+		ef := &dst.effects[i]
+		if ef.source == src.id && isCurse(ef.kind) && ef.kind != game.EffectCurse && ef.until > z.now {
+			ef.until = z.now + ef.duration
+		}
+	}
+}
+
+// spreadBurn (Coração do Vulcão): a queimadura do alvo passa para quem está a até 3 m.
+func (z *Zone) spreadBurn(src, dst *entity) {
+	ef := dst.effectRef(game.EffectBurn, z.now)
+	if ef == nil {
+		return
+	}
+	def := &game.EffectDef{Kind: game.EffectBurn, Duration: ef.until - z.now, Value: ef.value}
+	for _, m := range z.monsters {
+		if m != dst && !m.dead && !m.mon.unseen() && !m.has(game.EffectBurn, z.now) && dist(m.pos, dst.pos)-m.bodyRadius() <= game.FireHeartSpread {
+			z.applyEffect(src, m, def)
+		}
+	}
+}
+
+// pandemic (Pandemia): as pragas e maldições do alvo (com o tempo que falta) passam para os
+// inimigos a até PandemicRange.
+func (z *Zone) pandemic(src, dst *entity) {
+	var defs []*game.EffectDef
+	for _, ef := range dst.effects {
+		if ef.until > z.now && (ef.kind == game.EffectPlague || isCurse(ef.kind)) {
+			defs = append(defs, &game.EffectDef{Kind: ef.kind, Duration: ef.until - z.now, Value: ef.value})
+		}
+	}
+	for _, m := range z.monsters {
+		if m == dst || m.dead || m.mon.unseen() || dist(m.pos, dst.pos)-m.bodyRadius() > game.PandemicRange {
+			continue
+		}
+		for _, d := range defs {
+			z.applyEffect(src, m, d)
 		}
 	}
 }

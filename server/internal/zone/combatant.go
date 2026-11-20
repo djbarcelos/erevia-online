@@ -191,7 +191,7 @@ func (e *entity) effect(kind game.EffectKind, now float64) (float64, bool) {
 
 func (e *entity) stunned(now float64) bool {
 	_, ok := e.effect(game.EffectStun, now)
-	return ok
+	return ok || e.has(game.EffectBanish, now) // Prisão Etérea: fora de cena, não age
 }
 
 func (e *entity) has(kind game.EffectKind, now float64) bool {
@@ -289,7 +289,10 @@ func (e *entity) def(magic bool, now float64) float64 {
 			bonus += v
 		}
 	}
-	return d * (1 + bonus)
+	if v, ok := e.effect(game.EffectArmorBreak, now); ok { // Fraqueza
+		bonus -= v
+	}
+	return d * math.Max(0, 1+bonus)
 }
 
 // addEffect aplica (ou renova) um efeito; o mais novo do mesmo tipo substitui o antigo.
