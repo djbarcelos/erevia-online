@@ -23,6 +23,8 @@ type AccountGone struct {
 	// Clans: clãs que eram liderados por um personagem da conta e quem o banco pôs no
 	// lugar (0 = o clã foi desfeito).
 	Clans []ClanSuccession
+	// CharacterOnly: só um personagem foi apagado (a conta e o armazém dela ficam).
+	CharacterOnly bool
 }
 
 type ClanSuccession struct {
@@ -30,7 +32,10 @@ type ClanSuccession struct {
 	LeaderID int64
 }
 
-const accountGoneReason = "Esta conta foi apagada."
+const (
+	accountGoneReason   = "Esta conta foi apagada."
+	characterGoneReason = "Este personagem foi apagado."
+)
 
 type accountGoneEvent struct{ d AccountGone }
 
@@ -46,12 +51,16 @@ func (z *Zone) onAccountGone(d AccountGone) {
 		z.gone = map[uint32]bool{}
 	}
 	touched := map[*clan]bool{}
+	reason := accountGoneReason
+	if d.CharacterOnly {
+		reason = characterGoneReason
+	}
 	for _, cid := range d.Characters {
 		id := uint32(cid)
 		z.gone[id] = true // um Join atrasado (personagem carregado antes de apagar) é recusado
 		if p := z.players[id]; p != nil {
-			z.sendTo(p, kickedMsg(accountGoneReason))
-			p.pl.peer.Close("account deleted")
+			z.sendTo(p, kickedMsg(reason))
+			p.pl.peer.Close("character deleted")
 			z.removePlayer(id)
 		}
 		delete(z.recent, id)
@@ -67,7 +76,9 @@ func (z *Zone) onAccountGone(d AccountGone) {
 			touched[c] = true
 		}
 	}
-	delete(z.storages, d.AccountID)
+	if !d.CharacterOnly {
+		delete(z.storages, d.AccountID)
+	}
 
 	succ := map[int64]int64{}
 	for _, s := range d.Clans {
@@ -101,7 +112,7 @@ func (z *Zone) onAccountGone(d AccountGone) {
 		z.clanSystem(c, fmt.Sprintf("%s agora é o líder do clã.", m.name))
 		z.sendClan(c)
 	}
-	z.log.Info("account deleted", "account", d.AccountID, "characters", len(d.Characters))
+	z.log.Info("characters deleted", "account", d.AccountID, "characters", len(d.Characters), "account_gone", !d.CharacterOnly)
 }
 
 // clanSuccessor: cargo mais alto, depois o personagem mais antigo (menor id). 0 = ninguém.

@@ -30,7 +30,7 @@ var migrations embed.FS
 
 const (
 	SessionTTL           = 30 * 24 * time.Hour
-	MaxCharsPerAccount   = 3
+	MaxCharsPerAccount   = 4
 	spawnRadius          = 8.0
 	pgUniqueViolation    = "23505"
 	charactersNameIdxKey = "characters_name_lower_idx"

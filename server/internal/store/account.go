@@ -15,6 +15,8 @@ type DeletedAccount struct {
 	Characters []int64
 	// Clans: clãs que eram liderados por um personagem da conta.
 	Clans []ClanSuccession
+	// CharacterOnly: só um personagem foi apagado (DeleteCharacter); a conta e o armazém ficam.
+	CharacterOnly bool
 }
 
 // ClanSuccession: o novo líder de um clã cujo líder foi apagado (LeaderID 0 = o clã
@@ -68,16 +70,7 @@ func (s *Store) deleteAccount(ctx context.Context, accountID int64) (DeletedAcco
 		}
 
 		if len(out.Characters) > 0 {
-			if err := passClans(ctx, tx, out.Characters, &out.Clans); err != nil {
-				return err
-			}
-			// O registro dos raid bosses guarda o nome de quem mais causou dano.
-			if _, err := tx.Exec(ctx, `UPDATE world_bosses SET top_name = '' WHERE lower(top_name) = ANY($1)`, names); err != nil {
-				return err
-			}
-			// Cartas enviadas ficam com quem recebeu (from_id vira NULL pela chave), mas sem
-			// o nome do personagem apagado.
-			if _, err := tx.Exec(ctx, `UPDATE mail SET from_name = 'Personagem apagado' WHERE from_id = ANY($1)`, out.Characters); err != nil {
+			if err := forgetCharacters(ctx, tx, out.Characters, names, &out.Clans); err != nil {
 				return err
 			}
 		}
@@ -105,6 +98,67 @@ func (s *Store) deleteAccount(ctx context.Context, accountID int64) (DeletedAcco
 			return err
 		}
 		return nil
+	})
+	if err != nil {
+		return DeletedAccount{}, err
+	}
+	return out, nil
+}
+
+// forgetCharacters: o que fica no banco apontando para personagens que vão ser apagados (clãs
+// liderados, o registro dos raid bosses, o remetente das cartas). names em minúsculas.
+func forgetCharacters(ctx context.Context, tx pgx.Tx, chars []int64, names []string, clans *[]ClanSuccession) error {
+	if err := passClans(ctx, tx, chars, clans); err != nil {
+		return err
+	}
+	// O registro dos raid bosses guarda o nome de quem mais causou dano.
+	if _, err := tx.Exec(ctx, `UPDATE world_bosses SET top_name = '' WHERE lower(top_name) = ANY($1)`, names); err != nil {
+		return err
+	}
+	// Cartas enviadas ficam com quem recebeu (from_id vira NULL pela chave), mas sem
+	// o nome do personagem apagado.
+	_, err := tx.Exec(ctx, `UPDATE mail SET from_name = 'Personagem apagado' WHERE from_id = ANY($1)`, chars)
+	return err
+}
+
+// DeleteCharacter apaga um personagem da conta, numa transação: itens, amigos, cartas
+// recebidas, leilões e participação em clã vão em cascata; o clã que ele liderava passa
+// adiante (forgetCharacters). A conta, o armazém e os outros personagens ficam. Os
+// eventos de telemetria ficam sem o personagem. Personagem de outra conta (ou que não
+// existe) devolve ErrNotFound. O resultado tem a forma do DeleteAccount (a zona usa o mesmo
+// caminho para derrubar e acertar os clãs).
+func (s *Store) DeleteCharacter(ctx context.Context, accountID, characterID int64) (DeletedAccount, error) {
+	var out DeletedAccount
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ { // deadlock com um salvamento: tenta de novo (ver DeleteAccount)
+		out, err = s.deleteCharacter(ctx, accountID, characterID)
+		var pgErr *pgconn.PgError
+		if !errors.As(err, &pgErr) || (pgErr.Code != "40P01" && pgErr.Code != "40001") {
+			break
+		}
+	}
+	return out, err
+}
+
+func (s *Store) deleteCharacter(ctx context.Context, accountID, characterID int64) (DeletedAccount, error) {
+	out := DeletedAccount{AccountID: accountID, Characters: []int64{characterID}, CharacterOnly: true}
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var name string
+		err := tx.QueryRow(ctx, `SELECT lower(name) FROM characters WHERE id = $1 AND account_id = $2 FOR UPDATE`, characterID, accountID).Scan(&name)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if err := forgetCharacters(ctx, tx, out.Characters, []string{name}, &out.Clans); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM characters WHERE id = $1`, characterID); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE game_events SET character_id = NULL WHERE character_id = $1`, characterID)
+		return err
 	})
 	if err != nil {
 		return DeletedAccount{}, err

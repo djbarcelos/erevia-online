@@ -233,3 +233,78 @@ func TestClanLeaderCannotBeDeletedDirectly(t *testing.T) {
 		t.Fatalf("clans = %+v", clans)
 	}
 }
+
+func TestDeleteCharacterKeepsAccountAndOthers(t *testing.T) {
+	s, url := storetest.NewWithURL(t)
+	ctx := context.Background()
+	db, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close(ctx) })
+
+	acc, _ := s.LoginIdentity(ctx, "google", "sub-um", "Um")
+	other, _ := s.LoginIdentity(ctx, "discord", "sub-outro", "Outro")
+	newChar := func(account int64, name, class string) store.Character {
+		c, err := s.CreateCharacter(ctx, account, name, class, game.DefaultLook(class))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	a1, a2 := newChar(acc, "Alfa", "knight"), newChar(acc, "Beta", "mage")
+	b1 := newChar(other, "Delta", "rogue")
+	// Alfa lidera um clã com o Delta (que assume).
+	lobos, _ := s.CreateClan(ctx, "Lobos", a1.ID)
+	if err := s.ApplyClanOp(ctx, store.ClanOp{Kind: store.ClanOpJoin, ClanID: lobos, CharacterID: b1.ID, Rank: store.ClanRankMember}); err != nil {
+		t.Fatal(err)
+	}
+	seq := time.Now().UnixNano()
+	if err := s.SaveStates(ctx, []store.CharacterState{{
+		CharacterID: a1.ID, Level: 5, HP: -1, MP: -1, Gold: 99, Seq: seq,
+		Items:   []game.ItemRecord{{Slot: 0, ItemID: "bone_old", Count: 3}},
+		Storage: &store.StorageState{AccountID: acc, Gold: 500, Seq: seq, Items: []game.ItemRecord{{Slot: 0, ItemID: "bone_old", Count: 9}}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// De outra conta (ou inexistente): não acha e não apaga nada.
+	if _, err := s.DeleteCharacter(ctx, other, a1.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("delete from other account: %v", err)
+	}
+	if _, err := s.DeleteCharacter(ctx, acc, 999999); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("delete missing: %v", err)
+	}
+
+	d, err := s.DeleteCharacter(ctx, acc, a1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.CharacterOnly || d.AccountID != acc || !slices.Equal(d.Characters, []int64{a1.ID}) {
+		t.Fatalf("deleted = %+v", d)
+	}
+	if want := []store.ClanSuccession{{ClanID: lobos, LeaderID: b1.ID}}; !slices.Equal(d.Clans, want) {
+		t.Fatalf("clans = %+v, want %+v", d.Clans, want)
+	}
+	for _, q := range []struct {
+		query string
+		arg   int64
+		want  int
+	}{
+		{`SELECT count(*) FROM characters WHERE id = $1`, a1.ID, 0},
+		{`SELECT count(*) FROM character_items WHERE character_id = $1`, a1.ID, 0},
+		{`SELECT count(*) FROM clan_members WHERE character_id = $1`, a1.ID, 0},
+		{`SELECT count(*) FROM characters WHERE id = $1`, a2.ID, 1},
+		{`SELECT count(*) FROM accounts WHERE id = $1`, acc, 1},
+		{`SELECT count(*) FROM account_items WHERE account_id = $1`, acc, 1},
+	} {
+		if n := count(t, db, q.query, q.arg); n != q.want {
+			t.Errorf("%s ($1=%d) → %d linhas, want %d", q.query, q.arg, n, q.want)
+		}
+	}
+	if n := count(t, db, `SELECT count(*) FROM clans WHERE id = $1 AND leader_id = $2`, lobos, b1.ID); n != 1 {
+		t.Errorf("o Delta não assumiu o clã (%d)", n)
+	}
+	// O nome fica livre de novo, e cabe um personagem novo no lugar.
+	newChar(acc, "Alfa", "rogue")
+}

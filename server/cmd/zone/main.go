@@ -185,10 +185,10 @@ func run(log *slog.Logger) error {
 	// Portal: personagem offline vai para a zona gravada no banco (a do próximo login).
 	m.SetZoneLookup(func(ctx context.Context, id uint32) (string, error) { return st.CharacterZone(ctx, int64(id)) })
 
-	// Conta apagada: o banco já apagou tudo; a zona derruba quem estiver online e acerta os
+	// Conta (ou personagem) apagada: o banco já apagou tudo; a zona derruba quem estiver online e acerta os
 	// clãs em memória do jeito que o banco deixou.
 	httpAPI.OnAccountDeleted(func(d store.DeletedAccount) {
-		g := zone.AccountGone{AccountID: d.AccountID, Characters: d.Characters}
+		g := zone.AccountGone{AccountID: d.AccountID, Characters: d.Characters, CharacterOnly: d.CharacterOnly}
 		for _, c := range d.Clans {
 			g.Clans = append(g.Clans, zone.ClanSuccession{ClanID: c.ClanID, LeaderID: c.LeaderID})
 		}

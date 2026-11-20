@@ -84,6 +84,8 @@ export const api = {
   logout: () => request<{ ok: boolean }>("POST", "/api/auth/logout", {}),
   /** Apaga a conta e tudo o que é dela (o servidor exige confirm = "APAGAR"). */
   deleteAccount: (confirm: string) => request<{ ok: boolean }>("DELETE", "/api/account", { confirm }),
+  /** Apaga um personagem da conta (o servidor exige confirm = o nome dele). */
+  deleteCharacter: (id: number, confirm: string) => request<{ ok: boolean }>("DELETE", `/api/characters/${id}`, { confirm }),
   characters: () => request<{ characters: CharacterInfo[]; max: number }>("GET", "/api/characters"),
   createCharacter: (name: string, cls: ClassId, look: LookChoice) =>
     request<CharacterInfo>("POST", "/api/characters", { name, class: cls, look }),

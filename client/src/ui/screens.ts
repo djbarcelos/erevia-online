@@ -468,7 +468,22 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
         cell("Emblema", sw),
       ),
       el("p", "hint-box small", "Clique duas vezes num cartão, ou use o botão abaixo, para entrar no mundo."),
+      delBtn(c),
     );
+  };
+  /** Apagar o personagem escolhido (janela com o nome para confirmar). */
+  const delBtn = (c: CharacterInfo) => {
+    const b = button("", "btn btn-ghost btn-sm btn-danger-ghost char-delete", () =>
+      openCharacterDeleteDialog(c, () => {
+        roster = roster.filter((x) => x.id !== c.id);
+        picked = 0;
+        toast(`${c.name} foi apagado.`);
+        if (roster.length) renderSelect();
+        else modeTabs.select("create");
+      }),
+    );
+    b.innerHTML = `${ui("trash", 14)}<span>Apagar personagem</span>`;
+    return b;
   };
 
   // ---------- Criação ----------
@@ -689,6 +704,97 @@ export async function showCharacters(onPlay: (c: CharacterInfo) => void, onLogou
   spinR.onclick = () => preview?.spin(0.6);
   modeTabs.select(mode, false);
   setMode(mode);
+}
+
+// ---------------------------------------------------------------------------------------
+// Apagar um personagem
+// ---------------------------------------------------------------------------------------
+
+/** Janela para apagar um personagem: para sempre, e só com o nome dele digitado. */
+function openCharacterDeleteDialog(c: CharacterInfo, onDeleted: () => void): void {
+  document.querySelector(".account-modal")?.remove();
+  const scrim = el("div", "account-modal");
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") close();
+  };
+  const close = () => {
+    scrim.remove();
+    document.removeEventListener("keydown", onKey, true);
+  };
+  document.addEventListener("keydown", onKey, true);
+  scrim.onclick = (e) => {
+    if (e.target === scrim) close();
+  };
+  const x = button("✕", "btn btn-icon btn-ghost btn-sm account-x", close);
+  x.setAttribute("aria-label", "Fechar");
+
+  const confirm = el("input", "input account-confirm");
+  confirm.id = "char-delete-confirm";
+  confirm.autocomplete = "off";
+  confirm.spellcheck = false;
+  confirm.placeholder = c.name;
+  const label = el("label", "label", `Digite ${c.name} para confirmar`);
+  label.htmlFor = confirm.id;
+  const error = el("p", "account-error bad small");
+  error.setAttribute("role", "alert");
+  const del = button("", "btn btn-danger btn-block");
+  del.innerHTML = `${ui("trash", 16)}<span>Apagar ${c.name}</span>`;
+  del.disabled = true;
+  const typed = () => confirm.value.trim().toLowerCase() === c.name.toLowerCase();
+  confirm.oninput = () => {
+    del.disabled = !typed();
+    error.textContent = "";
+  };
+  const run = async () => {
+    if (!typed() || del.classList.contains("loading")) return;
+    del.disabled = true;
+    confirm.disabled = true;
+    del.classList.add("loading");
+    try {
+      await api.deleteCharacter(c.id, confirm.value.trim());
+      close();
+      onDeleted();
+    } catch (err) {
+      error.textContent = err instanceof ApiError ? err.message : "Não foi possível apagar o personagem. Tente de novo.";
+      confirm.disabled = false;
+      del.disabled = !typed();
+    } finally {
+      del.classList.remove("loading");
+    }
+  };
+  del.onclick = () => void run();
+  confirm.onkeydown = (e) => {
+    if (e.key === "Enter") void run();
+  };
+
+  const cls = classInfo(c.activeClass ?? c.class).label;
+  const box = el(
+    "section",
+    "account-dialog frame",
+    x,
+    el("h2", "title", "Apagar personagem"),
+    el(
+      "div",
+      "account-danger",
+      el("h3", "title", `${c.name} · ${cls} nível ${c.level ?? 1}`),
+      el("p", null, "Apaga para sempre o personagem, o nível, as subclasses, a bolsa, o equipamento e as moedas dele. Não dá para desfazer."),
+      el(
+        "p",
+        "small muted",
+        "O armazém da conta e os outros personagens ficam. Se ele lidera um clã, a liderança passa para o membro de cargo mais alto (ou o clã é desfeito, se ficar vazio). O nome fica livre para outro jogador.",
+      ),
+      label,
+      confirm,
+      error,
+      del,
+    ),
+  );
+  box.setAttribute("role", "dialog");
+  box.setAttribute("aria-modal", "true");
+  box.setAttribute("aria-label", "Apagar personagem");
+  scrim.append(box);
+  document.body.append(scrim);
+  if (!isCompact()) confirm.focus({ preventScroll: true });
 }
 
 // ---------------------------------------------------------------------------------------
