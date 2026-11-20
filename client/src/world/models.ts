@@ -347,7 +347,7 @@ const SHIELD: Grip = { rot: [0, 20, 0], pos: [-0.02, -0.45, 0.12], hand: "l" };
 // com o antebraço atravessado no peito, como no combate). Na diagonal (45°) ficava torto na guarda.
 const V4_SHIELD: Grip = { rot: [0, 0, 0], q: [-0.5, 0.5, 0.5, -0.5], pos: [-0.2, -0.42, 0], hand: "l" };
 // Redondo de bossa (shield_b): segurado pela alça atrás da bossa, com o punho bem atrás do centro.
-const V4_SHIELD_ROUND: Grip = { rot: [0, 0, 0], q: [-0.5, 0.5, 0.5, -0.5], pos: [-0.15, 0.08, 0], hand: "l" };
+const V4_SHIELD_ROUND: Grip = { rot: [0, 0, 0], q: [-0.6683, 0.5221, 0.4947, -0.1899], pos: [-0.2375, -0.275, -0.075], hand: "l" }; // posicionado pelo DIogo no painel de ajuste
 export const V4_GRIPS: Record<string, Grip> = {
   shield_badge_color: V4_SHIELD, shield_square: V4_SHIELD,
   shield_round_barbarian: V4_SHIELD_ROUND, shield_spikes: V4_SHIELD_ROUND, shield_spikes_color: V4_SHIELD_ROUND,
