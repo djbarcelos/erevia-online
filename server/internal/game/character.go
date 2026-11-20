@@ -15,7 +15,7 @@ const (
 
 // CharacterStats: classe no nível → atributos (base da classe + pontos + bônus da
 // especialização; alcance, intervalo e "mágico" vêm da arma) → equipamento (gear: a soma dos bônus, ver AddItemBonus) → passivas →
-// regeneração (com a Mente Clara por cima). weaponType é o tipo da arma equipada ("" =
+// regeneração (com o multiplicador de mana da classe por cima). weaponType é o tipo da arma equipada ("" =
 // nenhuma; a Esgrima só vale com espada).
 func CharacterStats(class, spec string, level int, spent Attrs, gear Stats, ranks map[uint32]int, weaponType string) Stats {
 	total := ClassBaseAttrs[class].Add(spent).Add(SpecBonus(class, spec))
@@ -25,8 +25,8 @@ func CharacterStats(class, spec string, level int, spent Attrs, gear Stats, rank
 	s = s.AddBonus(gear)
 	s = ApplyPassives(s, ranks, weaponType)
 	s = FinishRegen(s, class, total)
-	if v := PassiveTotals(ranks).Of(PassiveMPRegenPct); v > 0 { // Mente Clara
-		s.MPRegen *= 1 + v
+	if c := Classes[class]; c != nil && c.MPRegenMult > 0 { // o Mago regenera menos mana
+		s.MPRegen *= c.MPRegenMult
 	}
 	return s
 }
@@ -70,12 +70,14 @@ func AddItemBonus(b Stats, d *ItemDef, enchant int) Stats {
 	return b
 }
 
-// SkillMPCost: custo de mana no rank, arredondado (a Sobrecarga encarece 10%).
-func SkillMPCost(s *SkillDef, rank int, overload bool) float64 {
+// SkillMPCost: custo de mana no rank, arredondado (a Sobrecarga encarece 10%; a Mente
+// Clara barateia até MPEfficiencyCap).
+func SkillMPCost(s *SkillDef, rank int, pv Passives) float64 {
 	cost := s.MPCost(rank)
-	if overload {
+	if pv.Has(PassiveOverload) {
 		cost *= OverloadMPCost
 	}
+	cost *= 1 - math.Min(MPEfficiencyCap, pv.Of(PassiveMPEfficiency))
 	return math.Round(cost)
 }
 

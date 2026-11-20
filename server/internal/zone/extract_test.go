@@ -45,8 +45,9 @@ func oldComputeStats(p *entity, spent game.Attrs) game.Stats {
 	s = s.AddBonus(oldItemsBonus(&p.pl.inv, p.level))
 	s = oldApplyPassives(s, p)
 	s = game.FinishRegen(s, cls, total)
-	if r := p.pl.rank(game.SkillClearMind); r > 0 {
-		s.MPRegen *= 1 + game.Skills[game.SkillClearMind].PValue.At(r)
+	// Fase 8: o Mago regenera menos mana; a Mente Clara passou a baratear o custo.
+	if m := game.Classes[cls].MPRegenMult; m > 0 {
+		s.MPRegen *= m
 	}
 	return s
 }
@@ -84,6 +85,9 @@ func oldSkillMP(p *entity, s *game.SkillDef) float64 {
 	cost := s.MPCost(p.pl.rank(s.ID))
 	if p.pl.rank(game.SkillOverload) > 0 {
 		cost *= game.OverloadMPCost
+	}
+	if r := p.pl.rank(game.SkillClearMind); r > 0 { // Fase 8: Mente Clara barateia
+		cost *= 1 - math.Min(game.MPEfficiencyCap, game.Skills[game.SkillClearMind].PValue.At(r))
 	}
 	return math.Round(cost)
 }

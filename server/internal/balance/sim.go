@@ -88,13 +88,13 @@ func modeledOnTarget(k game.EffectKind) bool {
 // (Piscar, Passo Sombrio, Sumir, Escudo Arcano, Imortal) e provocar sozinho.
 func rotation(b *Build) []rotSkill {
 	var out []rotSkill
-	overload := game.PassiveTotals(b.Ranks).Has(game.PassiveOverload)
+	pv := game.PassiveTotals(b.Ranks)
 	for id, r := range b.Ranks {
 		s := game.EffectiveSkill(game.Skills[id], b.Ranks) // com os modificadores, como no servidor
 		if s == nil || r < 1 || s.IsPassive() || s.Blink.Base > 0 {
 			continue
 		}
-		rs := rotSkill{s: s, rank: r, mp: game.SkillMPCost(s, r, overload), cd: game.SkillCooldownFor(s, r, b.Stats.CastSpeed)}
+		rs := rotSkill{s: s, rank: r, mp: game.SkillMPCost(s, r, pv), cd: game.SkillCooldownFor(s, r, b.Stats.CastSpeed)}
 		self := s.OnSelf != nil && modeledOnSelf(s.OnSelf.Kind) || s.Banner != nil
 		target := s.OnTarget != nil && modeledOnTarget(s.OnTarget.Kind)
 		switch {
@@ -639,4 +639,40 @@ func TimeToDie(b *Build, def *game.MonsterDef, level int, night, potions bool) (
 		return math.Inf(1), dps
 	}
 	return out.Time, dps
+}
+
+// ManaFightTime: duração da luta de mana (README das evoluções, seção 4).
+const ManaFightTime = 60.0
+
+// ManaDry: em quanto tempo a build fica sem mana para a skill de dano mais barata da
+// rotação, lutando sem poções contra um monstro que não cai (+Inf = a mana dura os
+// ManaFightTime segundos inteiros).
+func ManaDry(b *Build, def *game.MonsterDef, level int) float64 {
+	f := newFight(b, false, false)
+	f.engage(def, level)
+	f.immortal = true
+	cheapest := math.Inf(1)
+	for _, rs := range f.rot {
+		if rs.s.Mult.At(rs.rank) > 0 && rs.mp > 0 {
+			cheapest = math.Min(cheapest, rs.mp)
+		}
+	}
+	if math.IsInf(cheapest, 1) {
+		return math.Inf(1) // nada na rotação gasta mana
+	}
+	start := f.now
+	for step := 1; float64(step)*tickDT <= ManaFightTime; step++ {
+		f.now = start + float64(step)*tickDT
+		f.tickDoTs()
+		f.playerActs()
+		f.monsterActs()
+		if f.hp <= 0 {
+			return math.Inf(1) // morreu antes: a mana não foi o limite
+		}
+		f.regen()
+		if f.mp < cheapest {
+			return f.now - start
+		}
+	}
+	return math.Inf(1)
 }
