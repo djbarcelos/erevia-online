@@ -734,6 +734,66 @@
   border-radius: 50%;
 }
 
+/* Tipos de nó da árvore da evolução */
+.tnode.mod {
+  width: 50px;
+  height: 50px;
+  border-style: dashed;
+}
+
+.tnode.key {
+  border-width: 3px;
+  border-color: color-mix(in srgb, var(--gold) 70%, var(--bc));
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.6),
+    0 0 14px color-mix(in srgb, var(--gold) 45%, transparent);
+}
+
+.tnode.supreme {
+  border-width: 3px;
+  border-color: var(--gold-glow);
+}
+
+.tn-req {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 16px;
+  color: var(--muted);
+  background: #0e0b14;
+  border: 1px solid var(--line);
+}
+
+.tn-req.ok {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.tg-cell.multi .tn-wrap {
+  max-width: 76px;
+}
+
+.tg-cell.multi .tn-name {
+  font-size: 0.66rem;
+}
+
+.tg-future {
+  grid-column: 2 / -1;
+  align-self: center;
+  padding: 10px 6px;
+  font-size: 0.72rem;
+  color: var(--dim);
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
 .tnode .tn-icon {
   position: absolute;
   inset: 3px;
