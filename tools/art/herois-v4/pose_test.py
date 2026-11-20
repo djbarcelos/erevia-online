@@ -13,6 +13,10 @@ from mathutils import Euler, Vector
 
 out = sys.argv[sys.argv.index("--") + 1]
 arm = bpy.data.objects["heroi"]
+LOD = sys.argv[sys.argv.index("--") + 2] if len(sys.argv) > sys.argv.index("--") + 2 else ""
+for o in bpy.data.objects:  # mostra só um nível de detalhe (padrão: o LOD0, "corpo")
+    if o.type == "MESH":
+        o.hide_render = o.name != ("corpo" + (f"_{LOD}" if LOD else ""))
 pb = arm.pose.bones
 
 
