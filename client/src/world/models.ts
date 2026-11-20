@@ -343,9 +343,14 @@ const SHIELD: Grip = { rot: [0, 20, 0], pos: [-0.02, -0.45, 0.12], hand: "l" };
  * segue o polegar e o centro fica no meio do antebraço (o SHIELD dos heróis antigos punha a face para o lado
  * do polegar e a altura ao longo do braço: com o antebraço atravessado no peito, o escudo deitava).
  */
-const V4_SHIELD: Grip = { rot: [0, 0, 0], q: [-0.5, 0.5, 0.5, -0.5], pos: [-0.2, -0.42, 0], hand: "l" }; // centro a ~8 cm do antebraço, no meio dele
+// Alto (heater, shield_high_b): preso no meio do antebraço, a ~8 cm dele, com a altura seguindo o polegar (de pé
+// com o antebraço atravessado no peito, como no combate). Na diagonal (45°) ficava torto na guarda.
+const V4_SHIELD: Grip = { rot: [0, 0, 0], q: [-0.5, 0.5, 0.5, -0.5], pos: [-0.2, -0.42, 0], hand: "l" };
+// Redondo de bossa (shield_b): segurado pela alça atrás da bossa, com o punho bem atrás do centro.
+const V4_SHIELD_ROUND: Grip = { rot: [0, 0, 0], q: [-0.5, 0.5, 0.5, -0.5], pos: [-0.15, 0.08, 0], hand: "l" };
 const V4_GRIPS: Record<string, Grip> = {
-  shield_badge_color: V4_SHIELD, shield_round_barbarian: V4_SHIELD, shield_square: V4_SHIELD, shield_spikes: V4_SHIELD, shield_spikes_color: V4_SHIELD,
+  shield_badge_color: V4_SHIELD, shield_square: V4_SHIELD,
+  shield_round_barbarian: V4_SHIELD_ROUND, shield_spikes: V4_SHIELD_ROUND, shield_spikes_color: V4_SHIELD_ROUND,
 };
 export const WEAPON_GRIPS: Record<string, Grip> = {
   sword_1handed: BLADE, axe_1handed: BLADE, wand: BLADE,
