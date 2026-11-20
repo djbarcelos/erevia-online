@@ -223,11 +223,20 @@ type Piece struct {
 	Enchant int
 }
 
-// TypicalGear: o equipamento típico da classe no nível, todas as peças com +enchant.
+// TypicalGear: o equipamento típico da classe (sem evolução) no nível, todas as peças com +enchant.
 func TypicalGear(class string, level, enchant int) []Piece {
+	return TypicalGearFor(class, "", level, enchant)
+}
+
+// TypicalGearFor: o equipamento típico com a evolução (spec): a arma tem que ser de um tipo que
+// ela empunha (o Patrulheiro usa arco ou besta; o Ladino base e o Assassino, adagas).
+func TypicalGearFor(class, spec string, level, enchant int) []Piece {
 	best := map[game.ItemKind]*game.ItemDef{}
 	for _, d := range Gear() {
 		if !typical(d) || d.ReqLevel > level || !d.UsableBy(class) {
+			continue
+		}
+		if d.Kind == game.KindWeapon && !game.CanWield(class, spec, d.WeaponType) {
 			continue
 		}
 		if d.Weight != game.WeightNone && d.Weight != typicalWeight[class] {
@@ -292,7 +301,7 @@ func NewBuild(p Path, level, enchant int) *Build {
 		spec = ""
 	}
 	b := &Build{Path: Path{p.Class, spec}, Level: level, Enchant: enchant,
-		Attrs: SpentAttrs(p.Class, level), Ranks: Ranks(p.Class, spec, level), Gear: TypicalGear(p.Class, level, enchant)}
+		Attrs: SpentAttrs(p.Class, level), Ranks: Ranks(p.Class, spec, level), Gear: TypicalGearFor(p.Class, spec, level, enchant)}
 	if err := game.ValidateRanks(p.Class, spec, level, b.Ranks); err != nil {
 		panic(fmt.Sprintf("árvore típica inválida (%s nv %d): %v", p.Name(), level, err))
 	}

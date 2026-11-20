@@ -143,7 +143,7 @@ func samePieces(a, b []Piece) bool {
 func GearSwapGain(p Path, level int) float64 {
 	now := NewBuild(p, level, 0)
 	old := NewBuild(p, level, 0)
-	old.Gear = TypicalGear(p.Class, level-1, 0)
+	old.Gear = TypicalGearFor(p.Class, old.Path.Spec, level-1, 0)
 	old.Stats = game.CharacterStats(p.Class, old.Path.Spec, level, old.Attrs, GearBonus(level, old.Gear), old.Ranks, weaponType(old.Gear))
 	return buildRegimeTTK(now, level)/buildRegimeTTK(old, level) - 1
 }

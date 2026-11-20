@@ -30,8 +30,8 @@ func TestCatalogIsConsistent(t *testing.T) {
 			if Weapons[d.WeaponType] == nil {
 				t.Errorf("%s: tipo de arma %q sem entrada em Weapons", id, d.WeaponType)
 			}
-			if len(d.Classes) == 1 && !CanWield(d.Classes[0], "", d.WeaponType) {
-				t.Errorf("%s: a classe %s não empunha %s", id, d.Classes[0], d.WeaponType)
+			if len(d.Classes) == 1 && !wieldedByClassOrEvolution(d.Classes[0], d.WeaponType) {
+				t.Errorf("%s: nem a classe %s nem uma evolução dela empunha %s", id, d.Classes[0], d.WeaponType)
 			}
 		}
 		if d.Equippable() && d.Price <= 0 {
@@ -266,12 +266,50 @@ func TestWeaponHandsAndWands(t *testing.T) {
 		if d.Kind == KindWeapon && d.Model == "wand" && d.WeaponType != WeaponWand {
 			t.Errorf("%s usa o modelo da varinha mas é %s", id, d.WeaponType)
 		}
-		switch d.WeaponType { // tipos definidos para as próximas fases: nenhum item os usa ainda
-		case WeaponAxe2H, WeaponBow, WeaponCrossbow, WeaponCrossbow2H:
+		if d.WeaponType == WeaponAxe2H { // definido para o Berserker: nenhum item o usa ainda
 			t.Errorf("%s: tipo %s ainda sem item", id, d.WeaponType)
 		}
 	}
 	if Items["daggers_common"].TwoHanded() == false {
 		t.Error("as adagas são duplas e ocupam a mão secundária")
+	}
+}
+
+// wieldedByClassOrEvolution: a classe base ou uma das evoluções dela usa o tipo de arma.
+func wieldedByClassOrEvolution(class, weaponType string) bool {
+	if CanWield(class, "", weaponType) {
+		return true
+	}
+	for _, sp := range ClassSpecs(class) {
+		if CanWield(class, sp.ID, weaponType) {
+			return true
+		}
+	}
+	return false
+}
+
+// Arco e bestas: as versões das armas do Ladino do 16 em diante, com o ataque do tipo.
+func TestRangedVariants(t *testing.T) {
+	base := Items["daggers_c20"]
+	for _, c := range []struct {
+		id, name, wt string
+		atk          float64
+	}{{"bow_c20", "Arco de Sílex", WeaponBow, 23}, {"crossbow_c20", "Besta de Sílex", WeaponCrossbow, 26}, {"crossbow2h_c20", "Besta Pesada de Sílex", WeaponCrossbow2H, 33}} {
+		d := Items[c.id]
+		if d == nil || d.Name != c.name || d.WeaponType != c.wt || d.Bonus.PAtk != c.atk || d.ReqLevel != base.ReqLevel || d.Grade != base.Grade {
+			t.Errorf("%s: %+v", c.id, d)
+		}
+	}
+	if Items["bow_b30"].Name != "Arco Rúnico" || Items["crossbow_b30_rare"].Name != "Besta Rúnica Desperta" {
+		t.Errorf("concordância: %q %q", Items["bow_b30"].Name, Items["crossbow_b30_rare"].Name)
+	}
+	if Items["bow_d10"] != nil {
+		t.Error("abaixo do 16 não há arco")
+	}
+	if CanWield("rogue", "", WeaponBow) || !CanWield("rogue", "hunter", WeaponBow) || CanWield("rogue", "hunter", WeaponDaggers) {
+		t.Error("só o Patrulheiro usa arco (e deixa as adagas)")
+	}
+	if Items[HunterStarterBow] == nil || Specs["hunter"].StarterItems[0] != HunterStarterBow {
+		t.Error("arco inicial do Patrulheiro")
 	}
 }

@@ -855,6 +855,27 @@ export class Fx {
     });
   }
 
+  /** Flecha (arco) ou virote (besta): rápida, reta, com um rastro curto. */
+  arrow(from: Vector3, to: Vector3, dur: number, heavy = false): void {
+    const wood = new Color3(0.86, 0.78, 0.6);
+    this.orb(from, to, dur, {
+      core: new Color3(1, 0.97, 0.88),
+      halo: wood,
+      size: heavy ? 0.16 : 0.12,
+      arc: heavy ? 0.02 : 0.08,
+      trail: {
+        tex: this.tex.flare,
+        life: [0.08, 0.16],
+        size: [0.05, 0.1],
+        speed: [0, 0.1],
+        colors: [c4(1, 0.96, 0.85, 0.8), c4(0.86, 0.78, 0.6, 0.5), c4(0.6, 0.5, 0.35, 0)],
+        grow: 0,
+      },
+      rate: 90,
+      onArrive: (at) => this.flash(at, 0.5, wood, 0.1),
+    });
+  }
+
   /** Brilho na mão de quem conjura. */
   castGlow(at: Vector3, color: Color3): void {
     this.flash(at, 1.2, color, 0.3);

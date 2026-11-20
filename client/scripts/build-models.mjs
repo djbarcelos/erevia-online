@@ -46,6 +46,8 @@ const WEAPONS = [
   'sword_1handed', 'shield_badge_color', 'axe_1handed', 'shield_round_barbarian', 'staff', 'dagger',
   // Fase 3: armas e escudos das outras raridades
   'sword_2handed', 'sword_2handed_color', 'axe_2handed', 'wand', 'shield_square', 'shield_spikes', 'shield_spikes_color',
+  // Patrulheiro: arco, bestas e os projéteis (flecha e virote)
+  'bow_withString', 'crossbow_1handed', 'crossbow_2handed', 'arrow_bow', 'arrow_crossbow',
 ];
 // Adereços avulsos (Medieval Hexagon): saquinho dos itens no chão.
 const PROPS = { loot_sack: 'decoration/props/sack' };

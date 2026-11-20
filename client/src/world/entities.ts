@@ -1218,7 +1218,7 @@ export class EntityManager {
     } else if (src && src !== dst) {
       release = this.swing(src, dst, ev.skillId ? "skill" : "attack", now);
       if (sk && sk.target === SkillTarget.ENEMY) this.fx.skillName(src.head, sk.name);
-      if (!isCaster(src.model)) this.startTrail(src, release, sk);
+      if (!shoots(src)) this.startTrail(src, release, sk);
     }
     const local = ev.sourceId === this.localId || ev.targetId === this.localId;
 
@@ -1246,7 +1246,13 @@ export class EntityManager {
       } else if (bolt) {
         launch((a, b) => this.fx.bolt(a, b, travel, bolt));
         impact = release + travel * 1000;
-      } else if (!ev.skillId && isCaster(src.model)) {
+      } else if ((projectileOf(src) === "arrow" || projectileOf(src) === "bolt") && (!sk || (sk.target === SkillTarget.ENEMY && sk.range > 4))) {
+        // Arco e besta (Patrulheiro): o básico e os tiros das skills saem como flecha ou virote.
+        const heavy = projectileOf(src) === "bolt";
+        const t = travel * 0.6;
+        launch((a, b) => this.fx.arrow(a, b, t, heavy));
+        impact = release + t * 1000;
+      } else if (!ev.skillId && projectileOf(src) === "arcane") {
         // Ataque básico de quem usa magia (magos e esqueletos magos).
         launch((a, b) => this.fx.arcaneBolt(a, b, travel));
         impact = release + travel * 1000;
@@ -2265,6 +2271,20 @@ const SKILL_NUMBER_COLOR: Record<string, string> = {
 /** Modelos que atacam com magia à distância. */
 function isCaster(model: string): boolean {
   return model === "mage" || model.includes("mage");
+}
+
+/** O que a entidade dispara no ataque à distância: flecha (arco), virote (besta), orbe (magos). */
+type Projectile = "arrow" | "bolt" | "arcane" | null;
+function projectileOf(e: { model: string; weapon?: string | null }): Projectile {
+  const w = e.weapon ?? "";
+  if (w.startsWith("bow")) return "arrow";
+  if (w.startsWith("crossbow")) return "bolt";
+  return isCaster(e.model) ? "arcane" : null;
+}
+
+/** Atira de longe (arco, besta ou magia): sem rastro de golpe corpo a corpo. */
+function shoots(e: { model: string; weapon?: string | null }): boolean {
+  return projectileOf(e) !== null;
 }
 
 /** Configurações → Jogo → Números de dano. */

@@ -149,3 +149,20 @@ func TestRelentlessHuntPassesMark(t *testing.T) {
 		t.Errorf("Caçada Implacável: Precisão %v, marca passou %v", p.pl.res.Value, ms[1].has(game.EffectMark, z.now))
 	}
 }
+
+// Quem já era Patrulheiro antes do arco: no login as adagas vão para a bolsa e o arco inicial
+// entra e é equipado (uma vez).
+func TestOldHunterGetsBowOnLogin(t *testing.T) {
+	z := newCombatZone()
+	p := evolved(z, 1, "rogue", "hunter", 30)
+	p.pl.inv.equip[game.SlotWeapon] = stack{}
+	delete(p.pl.quests.done, game.StarterItemsFlag("hunter"))
+	grantMissingStarterItems(p)
+	if p.pl.inv.weaponType() != game.WeaponBow || !p.pl.quests.done[game.StarterItemsFlag("hunter")] {
+		t.Fatalf("arma %q", p.pl.inv.weaponType())
+	}
+	grantMissingStarterItems(p)
+	if p.pl.inv.countOf(game.HunterStarterBow) != 0 {
+		t.Error("o arco entra uma vez só (já está equipado, não na bolsa)")
+	}
+}

@@ -251,3 +251,30 @@ func (z *Zone) giveStarterItems(p *entity, def *game.SpecDef, items []*game.Item
 		z.inventoryChanged(p, true)
 	}
 }
+
+// grantMissingStarterItems: quem evoluiu antes de a evolução ter itens iniciais (o arco do
+// Patrulheiro) recebe no login, se houver espaço, e equipa a arma se estiver de mãos vazias.
+// Sem espaço, tenta de novo no próximo login.
+func grantMissingStarterItems(p *entity) {
+	def := game.SpecFor(p.pl.class, p.pl.spec)
+	if def == nil || len(def.StarterItems) == 0 || p.pl.quests.done[game.StarterItemsFlag(def.ID)] {
+		return
+	}
+	var items []*game.ItemDef
+	for _, id := range def.StarterItems {
+		if d := game.Items[id]; d != nil {
+			items = append(items, d)
+		}
+	}
+	inv := &p.pl.inv
+	if len(items) > inv.freeSlots() {
+		return
+	}
+	for _, d := range items {
+		inv.add(d, 1)
+		if d.Kind == game.KindWeapon && inv.weaponType() == "" {
+			inv.equipFromBag(inv.slotOf(d.ID), p.pl.class, p.pl.spec, p.level)
+		}
+	}
+	p.pl.quests.done[game.StarterItemsFlag(def.ID)] = true
+}

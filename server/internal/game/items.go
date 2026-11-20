@@ -477,10 +477,11 @@ var Items = func() map[string]*ItemDef {
 	}
 	list = append(list, RepItems...) // as capas das facções (reputation.go)
 	list = append(list, bridgeItems()...)
-	list = append(list, bosqueItems()...)   // o Bosque Gris e as Terras Mortas (bosque.go)
-	list = append(list, bastionMedalItem()) // a medalha dos eventos de área (events.go)
-	list = append(list, tierGear.items...)  // os graus D, C e B (tiers.go)
-	list = append(list, crystalItems()...)  // cristais e pergaminhos do C e do B (crystal.go)
+	list = append(list, bosqueItems()...)     // o Bosque Gris e as Terras Mortas (bosque.go)
+	list = append(list, bastionMedalItem())   // a medalha dos eventos de área (events.go)
+	list = append(list, tierGear.items...)    // os graus D, C e B (tiers.go)
+	list = append(list, crystalItems()...)    // cristais e pergaminhos do C e do B (crystal.go)
+	list = append(list, rangedItems(list)...) // arco e bestas do Patrulheiro (ranged.go)
 	m := make(map[string]*ItemDef, len(list))
 	for _, d := range list {
 		if d.Equippable() {
@@ -548,6 +549,7 @@ var (
 		"sword_common", "blade_common", "sword_good", "axe_common", "axe_jagged_common", "axe_good",
 		"staff_common", "wand_common", "staff_dark_common", "staff_good",
 		"daggers_common", "blades_common", "daggers_mixed_common", "daggers_good",
+		"bow_c20", "crossbow_c20", "crossbow2h_c20",
 		"shield_badge", "shield_buckler", "shield_tower", "shield_good",
 		"armor_common", "armor_good", "helm_common", "helm_good", "legs_common", "legs_good",
 		"gloves_common", "gloves_good", "boots_common", "boots_good", "cape_common", "cape_good",
