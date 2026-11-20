@@ -156,3 +156,24 @@ Cor, com equipamento comum em cima e épico embaixo:
 - [ ] Está dentro do orçamento (seção 5), com LOD0/1/2 exportados.
 - [ ] Material único, com emissivo só onde o guia permite.
 - [ ] O FPS medido com `?bench=1` não piorou na região onde o asset aparece.
+
+---
+
+## 9. Heróis v4 (clima novo)
+
+Os heróis v4 ([plano](arte/plano-herois-v4.md)) mudam o clima dos heróis e mantêm as regras de leitura deste guia (85 px, valor antes da cor, orçamento, raridade pela forma). Monstros, NPCs e cenário seguem as seções 1–8 até ganharem um plano próprio.
+
+**O que muda nos heróis:**
+
+| | Estilo B (seções 2–4) | Heróis v4 |
+|---|---|---|
+| Clima | fantasia heroica, viva | **sombrio e gasto**: ARPG de mundo em guerra, inspirado no clima do Grim Dawn (sem copiar designs) |
+| Proporção | 6,5–7 cabeças, mãos e pés maiores | **7 cabeças**, mãos e pés 10–15% maiores (igual); ombros largos (igual); menos exagero nas formas, mais peso |
+| Corpo | um por classe | **um só**, com ajuste masculino/feminino; a classe se lê pelo kit, pela arma e pelo movimento |
+| Cor | saturação média | **base dessaturada** (couro, aço gasto, lã escura); a cor da maestria aparece no destaque e no emissivo |
+| Materiais | pintura limpa | pintura à mão com **desgaste**: arranhões no metal, couro rachado, barra do pano suja de lama; ainda sem normal map |
+| Silhueta | uma por classe | uma por **kit**: classe, evolução e dupla, cada uma com uma peça só dela (cabeça, ombros ou capa) |
+
+**Teste de entrada** (além da seção 8): o kit é reconhecível a 85 px em cinza, ao lado da sua classe e das suas maestrias, e a dupla se distingue da ordem inversa (ex.: Possesso Bárbaro e Possesso Mago).
+
+Detalhes em [herois-v4/contrato.md](arte/herois-v4/contrato.md) (corpo, esqueleto, orçamento), [herois-v4/movimento.md](arte/herois-v4/movimento.md) (como cada classe se move) e [herois-v4/kits.md](arte/herois-v4/kits.md) (paletas, emblemas, peças e os 41 kits).
