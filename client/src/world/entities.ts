@@ -1182,7 +1182,7 @@ export class EntityManager {
     if (ev.skillId === MONSTER_HEAL_HIT) {
       if (src && src !== dst) {
         this.face(src, dst);
-        src.anim?.play("skill", { lead: SWING_LEAD });
+        src.anim?.play("skill", { lead: src.anim?.swingLead ?? SWING_LEAD });
       }
       this.at(Math.max(now, dst.impactUntil), dst.id, () => {
         if (ev.heal && showDamage()) this.fx.number(dst.head, "heal", `+${ev.heal}`);
@@ -1317,7 +1317,7 @@ export class EntityManager {
     let lead = 0;
     if (src.anim) {
       let speed = 1;
-      const startLead = ranged ? SHOT_LEAD : SWING_LEAD;
+      const startLead = ranged ? SHOT_LEAD : (src.anim.swingLead ?? SWING_LEAD);
       const rest = src.anim.remaining(role, startLead);
       if (interval > 0.3 && interval < 3 && rest > interval * 0.9) speed = clamp(rest / (interval * 0.9), 1, 2);
       lead = src.anim.play(role, { lead: startLead, speed });
@@ -1528,7 +1528,7 @@ export class EntityManager {
     // Skill de alvo sem dano direto (Frasco Tóxico, Praga): projétil até o alvo.
     const dst = ev.targetId ? this.views.get(ev.targetId) : undefined;
     if (dst) {
-      const release = src !== dst ? this.swing(src, dst, "skill", now) : now + (src.anim?.play("skill", { lead: SWING_LEAD }) ?? 0) * 1000;
+      const release = src !== dst ? this.swing(src, dst, "skill", now) : now + (src.anim?.play("skill", { lead: src.anim?.swingLead ?? SWING_LEAD }) ?? 0) * 1000;
       const from = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
       const to = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
       const travel = Vector3.Distance(from, to) / PROJECTILE_SPEED;
@@ -1556,7 +1556,7 @@ export class EntityManager {
       return;
     }
     // O efeito da área sai no instante do golpe da animação; os golpes desse snapshot também.
-    const lead = src.anim?.play(sk.target === SkillTarget.AREA ? "skill" : "buff", { lead: SWING_LEAD }) ?? 0;
+    const lead = src.anim?.play(sk.target === SkillTarget.AREA ? "skill" : "buff", { lead: src.anim?.swingLead ?? SWING_LEAD }) ?? 0;
     const at = now + lead * 1000;
     src.swingImpact = src.lastLand = at;
     src.lastSwing = now;

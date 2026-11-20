@@ -14,6 +14,11 @@ export class RoleMap extends Map<AnimRole, AnimationGroup> {
    * Sem isto (golem de código), vale a regra antiga (RUN_ANIM_SPEED).
    */
   footSpeeds: { walk?: number; run: number } | undefined;
+  /**
+   * Segundos de golpe mostrados antes do impacto (no lugar do SWING_LEAD do combate). Os heróis v4 têm a
+   * preparação animada inteira (0,4–0,5 s até o impacto): com o padrão de 0,18 s ela era pulada.
+   */
+  swingLead?: number;
 }
 
 /** Variantes de cada papel (o que existir no conjunto): o golpe alterna em sequência, dano e morte sorteiam. */
@@ -247,6 +252,11 @@ export class AnimController {
    * Toca uma ação uma vez. Devolve em quantos segundos o golpe encosta (com `lead`), ou 0
    * se a ação não tocou.
    */
+  /** Preparação do golpe própria do modelo (RoleMap.swingLead), se houver. */
+  get swingLead(): number | undefined {
+    return this.anims instanceof RoleMap ? this.anims.swingLead : undefined;
+  }
+
   play(asked: AnimRole, opts: PlayOpts = {}): number {
     const role = this.variant(asked, true);
     const g = this.anims.get(role);

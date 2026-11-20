@@ -225,6 +225,8 @@ const V4_KNIGHT: AnimSet = {
 CLIP_IMPACT["kn.attack.sword.1"] = 13 / 30;
 CLIP_IMPACT["kn.attack.sword.2"] = 12 / 30;
 CLIP_IMPACT["kn.attack.sword.3"] = 16 / 30;
+/** Golpes v4 com preparação inteira: o clipe começa até 0,45 s antes do impacto (RoleMap.swingLead). */
+const V4_SWING_LEAD = 0.45;
 const V4_FOOT_SPEEDS = { walk: 1.1, run: 4.41 }; // medidos no Blender (tools/art/herois-v4/retarget_meshy.py, clips-base.json)
 const isV4Hero = (model: string) => HEROIS_V4 && HERO_MODELS.includes(model);
 if (HEROIS_V4) for (const m of HERO_MODELS) REMASTER_SETS[m] = m === "knight" ? V4_KNIGHT : V4_SET;
@@ -335,6 +337,15 @@ export interface Grip {
 const SLOT_INV = new Quaternion(-0.5, -0.5, -0.5, 0.5);
 const BLADE: Grip = { rot: [125, 0, 20], pos: [0, 0, 0], scale: 1.2, fist: {} };
 const SHIELD: Grip = { rot: [0, 20, 0], pos: [-0.02, -0.45, 0.12], hand: "l" };
+/**
+ * Escudo nos heróis v4: preso no antebraço como escudo de verdade. A face olha pelas costas da mão, a altura
+ * segue o polegar e o centro fica no meio do antebraço (o SHIELD dos heróis antigos punha a face para o lado
+ * do polegar e a altura ao longo do braço: com o antebraço atravessado no peito, o escudo deitava).
+ */
+const V4_SHIELD: Grip = { rot: [0, 0, 0], q: [-0.5, 0.5, 0.5, -0.5], pos: [-0.125, -0.375, 0], hand: "l" };
+const V4_GRIPS: Record<string, Grip> = {
+  shield_badge_color: V4_SHIELD, shield_round_barbarian: V4_SHIELD, shield_square: V4_SHIELD, shield_spikes: V4_SHIELD, shield_spikes_color: V4_SHIELD,
+};
 export const WEAPON_GRIPS: Record<string, Grip> = {
   sword_1handed: BLADE, axe_1handed: BLADE, wand: BLADE,
   // adaga: o cabo na palma (a mão do rig fica aberta, sem dedos); a esquerda tem pega própria
@@ -911,7 +922,8 @@ export class CharacterModels {
       for (const child of wRoot.getChildren() as TransformNode[]) {
         child.parent = hand as TransformNode;
         child.position = Vector3.Zero();
-        const grip = assets.remaster ? WEAPON_GRIPS[this.weaponFileOf.get(container) ?? ""] : undefined;
+        const file = this.weaponFileOf.get(container) ?? "";
+        const grip = assets.remaster ? ((isV4Hero(model) ? V4_GRIPS[file] : undefined) ?? WEAPON_GRIPS[file]) : undefined;
         const side = slot === "handslot.l" ? "l" : "r";
         // v4: o punho do corpo novo (um para as 4 classes), medido no Blender com os dedos das animações
         const fist = grip?.fist ? (isV4Hero(model) ? HERO_FISTS_V4[side] : HERO_FISTS[model]?.[side]) : undefined;
@@ -1045,6 +1057,7 @@ export class CharacterModels {
     // Animações (só as do conjunto do modelo), reaplicadas pelo nome dos ossos.
     const anims = new RoleMap();
     anims.footSpeeds = isV4Hero(model) ? V4_FOOT_SPEEDS : (assets.remaster ? FOOT_SPEEDS_REMASTER : FOOT_SPEEDS_KAYKIT)[model];
+    if (isV4Hero(model)) anims.swingLead = V4_SWING_LEAD;
     const cloned = new Map<string, AnimationGroup>();
     const impacts: Partial<Record<AnimRole, number>> = {};
     const groupFor = (animName: string): AnimationGroup | null => {

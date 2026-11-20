@@ -3,7 +3,7 @@
 Cada pose diz onde fica cada pulso e para onde apontam a lâmina e o escudo; o braço chega lá por IK
 (cotovelo com polo), e a mão copia a rotação do alvo. A direção da lâmina é a linha dos nós do punho
 fechado (do mínimo ao indicador), a mesma que o jogo usa para encaixar a espada (HERO_FISTS_V4); o escudo
-olha para onde aponta a linha dos nós da mão esquerda (k). Pés presos no chão por IK, quadril e
+fica preso no antebraço (V4_SHIELD no cliente): a face olha pelas costas da mão e a altura segue o polegar (k). Pés presos no chão por IK, quadril e
 coluna por rotação em eixos do mundo (+X esquerda do personagem, -Y frente, +Z cima). No fim tudo é
 convertido (bake) para os ossos do contrato, os controles saem, e o .blend fica com os clipes novos.
 
@@ -239,7 +239,7 @@ POSTURE = {
     "hip": Vector((0, 0.01, -0.045)),
     "spine_01": [("x", -2)], "spine_02": [("x", -1)], "chest": [("x", 1)], "head": [("x", 2)],
     "hand_r": (R(0.07, 0.13, -0.40), dR(0.12, 1, -0.5), dR(0.1, 0.25, -1)),
-    "hand_l": (L(-0.20, 0.30, -0.17), dL(0.05, 1, 0.05), dL(-1, 0.1, -0.1)),
+    "hand_l": (L(-0.20, 0.30, -0.17), dL(0.05, 0.2, 1), dL(-1, 0.1, -0.1)),
     "elbow_l": L(0.55, -0.05, -0.3),
     "elbow_r": R(0.3, -0.5, -0.2),
 }
@@ -247,8 +247,8 @@ POSTURE = {
 STANCE = mod(POSTURE,
              hip=Vector((0, 0.02, -0.06)),
              spine_02=[("x", 3)], chest=[("x", 2)], head=[("x", -2)],
-             hand_l=(L(-0.10, 0.30, -0.06), dL(0.05, 1, 0.1), dL(-1, 0.1, 0.05)),
-             hand_r=(R(0.02, 0.22, -0.02), dR(-0.15, 1, 0.25), dR(-0.6, 0.1, 0.8)),
+             hand_l=(L(-0.10, 0.30, -0.06), dL(0.05, 0.15, 1), dL(-1, 0.1, 0.05)),
+             hand_r=(R(0.12, 0.20, -0.12), dR(-0.15, 1, 0.25), dR(-0.5, 0.2, 0.8)),
              elbow_r=R(0.45, -0.2, -0.45), elbow_l=L(0.55, -0.05, -0.35),
              foot_l=(Vector((0.03, -0.10, 0)), -5.0), foot_r=(Vector((-0.03, 0.12, 0)), 12.0))
 
@@ -257,13 +257,13 @@ A1_UP = mod(STANCE,
             spine_02=[("x", 0), ("z", -10)], chest=[("z", -8)], head=[("z", 10)],
             hand_r=(R(0.02, 0.02, 0.30), dR(0.15, -0.45, 1), dR(0.3, 0.8, 0.4)),
             elbow_r=R(0.5, 0.0, 0.1),
-            hand_l=(L(-0.08, 0.28, -0.12), dL(0.05, 1, 0.05), dL(-1, 0.1, 0)))
+            hand_l=(L(-0.08, 0.28, -0.12), dL(0.05, 0.2, 1), dL(-1, 0.1, 0)))
 A1_HIT = mod(STANCE,
              hip=Vector((0, -0.03, -0.08)),
              spine_01=[("x", 4)], spine_02=[("x", 8), ("z", 12)], chest=[("x", 4), ("z", 8)], head=[("z", -12), ("x", -6)],
              hand_r=(R(-0.30, 0.42, -0.36), dR(-0.55, 0.7, -0.5), dR(-0.6, 0.4, -0.6)),
              elbow_r=R(0.4, -0.2, -0.3),
-             hand_l=(L(0.04, 0.10, -0.40), dL(0.5, 1, 0), dL(0, 0.2, -1)),
+             hand_l=(L(0.04, 0.10, -0.40), dL(0.1, 1, 0.15), dL(0, 0.2, -1)),
              elbow_l=L(0.4, -0.3, -0.2))
 A1_FOLLOW = mod(A1_HIT, hand_r=(R(-0.26, 0.36, -0.42), dR(-0.6, 0.55, -0.6), dR(-0.6, 0.3, -0.7)))
 
@@ -272,39 +272,39 @@ A2_WIND = mod(STANCE,
               spine_02=[("z", 14)], chest=[("z", 10)], head=[("z", -14)],
               hand_r=(R(-0.36, 0.26, -0.06), dR(-1, 0.25, 0.1), dR(-0.2, 0.2, -1)),
               elbow_r=R(0.2, -0.3, -0.4),
-              hand_l=(L(0.0, 0.18, -0.20), dL(0.2, 1, 0.1), dL(-0.8, 0.2, -0.3)))
+              hand_l=(L(0.0, 0.18, -0.20), dL(0.1, 0.4, 1), dL(-0.8, 0.2, -0.3)))
 A2_STEP = mod(A2_WIND, foot_r=(Vector((-0.03, -0.05, 0.08)), 0.0))
 A2_HIT = mod(STANCE,
              hip=Vector((0, -0.12, -0.08)),
              spine_01=[("x", 3)], spine_02=[("x", 5), ("z", -14)], chest=[("z", -10)], head=[("z", 12)],
              hand_r=(R(0.22, 0.50, -0.08), dR(0.65, 0.75, 0.05), dR(0.1, 0.3, -1)),
              elbow_r=R(0.5, -0.1, -0.35),
-             hand_l=(L(0.02, 0.14, -0.26), dL(0.3, 1, 0.1), dL(-0.6, 0.3, -0.6)),
+             hand_l=(L(0.02, 0.14, -0.26), dL(0.1, 0.5, 1), dL(-0.6, 0.3, -0.6)),
              foot_r=(Vector((-0.03, -0.20, 0)), 4.0), foot_l=(Vector((0.03, -0.06, 0)), -5.0))
 A2_FOLLOW = mod(A2_HIT, hand_r=(R(0.36, 0.34, -0.10), dR(1, 0.3, 0), dR(0.2, 0.2, -1)))
 
 # Golpe 3: pancada de escudo + estocada curta (fecha o combo).
 A3_COCK = mod(STANCE,
               spine_02=[("z", -8)], chest=[("z", -6)],
-              hand_l=(L(0.06, 0.10, -0.12), dL(0.1, 1, 0.1), dL(-0.7, 0.4, -0.2)),
+              hand_l=(L(0.06, 0.10, -0.12), dL(0.05, 0.1, 1), dL(-0.7, 0.4, -0.2)),
               hand_r=(R(0.10, 0.02, -0.12), dR(-0.1, 1, 0.05), dR(-0.5, 0.2, -0.8)))
 A3_BASH = mod(A3_COCK,
               hip=Vector((0, -0.10, -0.07)),
               spine_01=[("x", 4)], spine_02=[("x", 6), ("z", 16)], chest=[("z", 10)], head=[("z", -14)],
-              hand_l=(L(-0.14, 0.56, -0.08), dL(0, 1, 0.05), dL(-1, 0.25, 0)),
+              hand_l=(L(-0.14, 0.56, -0.08), dL(0.05, 0.2, 1), dL(-1, 0.25, 0)),
               elbow_l=L(0.45, -0.1, -0.1),
               foot_l=(Vector((0.04, -0.22, 0)), -5.0))
 A3_THRUST = mod(A3_BASH,
                 spine_02=[("x", 6), ("z", -12)], chest=[("z", -8)], head=[("z", 8)],
                 hand_r=(R(-0.06, 0.60, -0.12), dR(-0.12, 1, 0.02), dR(-0.4, 0.4, -0.8)),
                 elbow_r=R(0.4, -0.3, -0.4),
-                hand_l=(L(0.10, 0.28, -0.22), dL(0.3, 1, 0.1), dL(-0.8, 0.3, -0.3)))
+                hand_l=(L(0.10, 0.28, -0.22), dL(0.1, 0.3, 1), dL(-0.8, 0.3, -0.3)))
 
 # Bloqueio: escudo para cima, corpo se fecha atrás dele, recua meio passo.
 BLOCK = mod(STANCE,
             hip=Vector((0, 0.08, -0.10)),
             spine_01=[("x", 6)], spine_02=[("x", 8), ("z", 6)], chest=[("x", 4)], head=[("x", -4)],
-            hand_l=(L(-0.10, 0.38, 0.04), dL(0, 1, 0.2), dL(-1, 0.05, 0.1)),
+            hand_l=(L(-0.10, 0.38, 0.04), dL(0.05, 0.3, 1), dL(-1, 0.05, 0.1)),
             hand_r=(R(0.0, 0.14, -0.12), dR(-0.2, 1, 0.3), dR(-0.6, 0.1, 0.7)),
             foot_r=(Vector((-0.03, 0.22, 0)), 14.0), foot_l=(Vector((0.03, 0.0, 0)), -5.0))
 
@@ -350,7 +350,7 @@ def strap(keys, frames):
             u = math.sin(math.pi * (t - 0.45) / 0.30)
             hl = p["hand_l"]
             p = dict(p)
-            p["hand_l"] = (hl[0] + Vector((0.02, -0.03, 0.06)) * u, (hl[1] + Vector((0, 0, 0.35)) * u).normalized(), hl[2])
+            p["hand_l"] = (hl[0] + Vector((0.02, -0.03, 0.06)) * u, (hl[1] + Vector((0, -0.3, 0)) * u).normalized(), hl[2])
             p["head"] = p.get("head", []) + [("z", -10 * u), ("x", 6 * u)]
         out.append((f, p))
     return out
