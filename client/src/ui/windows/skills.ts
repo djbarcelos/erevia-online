@@ -8,7 +8,7 @@
  * Mestra dos Caminhos (Progress.spec); antes disso, um aviso com os dois caminhos.
  */
 
-import type { Progress, SkillBranch, SkillInfo } from "../../gen/erevia/v1/game_pb";
+import { SkillNode, type Progress, type SkillBranch, type SkillInfo } from "../../gen/erevia/v1/game_pb";
 import { formatSeconds, skillIcon } from "../icons";
 import { ui, uniqueIds } from "../art";
 import { beginDrag } from "../dragdrop";
@@ -134,13 +134,32 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
     render();
   }
 
+  /** Classe do tipo de nó (moldura): modificador, chave ou suprema. */
+  function nodeClass(s: SkillInfo): string {
+    if (s.node === SkillNode.MODIFIER) return "mod";
+    if (s.node === SkillNode.KEY) return "key";
+    if (s.node === SkillNode.SUPREME) return "supreme";
+    return "";
+  }
+
+  /** "Ativa", "Passiva", "Modificador" ou "Chave". */
+  function kindName(s: SkillInfo): string {
+    if (s.node === SkillNode.MODIFIER) return "Modificador";
+    if (s.node === SkillNode.KEY) return s.passive ? "Chave (passiva)" : "Chave";
+    if (s.node === SkillNode.SUPREME) return "Suprema";
+    return s.passive ? "Passiva" : "Ativa";
+  }
+
   function tipHtml(s: SkillInfo): string {
     const r = rank(s);
     const cur = rankInfo(s, r || 1);
     const meta = s.passive
       ? `<div class="meta"><span><b>Passiva</b></span></div>`
       : `<div class="meta"><span>Mana <b>${cur.mpCost}</b></span><span>Recarga <b>${formatSeconds(cur.cooldownMs)} s</b></span>${s.range ? `<span>${s.target === 3 ? "Raio" : "Alcance"} <b>${formatSeconds(s.range * 1000)} m</b></span>` : ""}</div>`;
-    let html = `<h4>${s.name}</h4><div class="sub">${s.passive ? "Passiva" : "Ativa"} · Rank ${r}/${s.maxRank}</div>${meta}<div>${cur.text}</div>`;
+    const modOf = s.modifies ? byId.get(s.modifies) : undefined;
+    let html = `<h4>${s.name}</h4><div class="sub">${kindName(s)} · Rank ${r}/${s.maxRank}</div>${meta}<div>${cur.text}</div>`;
+    if (modOf) html += `<div class="muted">Modifica: ${modOf.name}</div>`;
+    if (s.branchPoints) html += `<div class="muted">Exige ${s.branchPoints} pontos no ramo.</div>`;
     if (s.description) html += `<div class="desc">${s.description}</div>`;
     const why = blocker(s);
     html += `<div class="cmp">`;
@@ -154,10 +173,15 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
     const r = rank(s);
     const pend = r > (saved().get(s.id) ?? 0);
     const state = r > 0 ? "learned" : blocker(s) === null ? "available" : "locked";
-    const b = el("button", `tnode ${s.passive ? "passive" : "active"} ${state}${pend ? " pending" : ""}${selected?.id === s.id ? " sel" : ""}`);
+    const b = el("button", `tnode ${s.passive ? "passive" : "active"} ${nodeClass(s)} ${state}${pend ? " pending" : ""}${selected?.id === s.id ? " sel" : ""}`);
     b.type = "button";
     b.style.setProperty("--bc", color);
     b.append(art(uniqueIds(skillIcon(s.fx)), "tn-icon"), el("span", "tn-rank", `${r}/${s.maxRank}`));
+    if (s.branchPoints) {
+      const req = el("span", `tn-req${branchSpent(s) >= s.branchPoints ? " ok" : ""}`, String(s.branchPoints));
+      req.title = `${s.branchPoints} pontos no ramo`;
+      b.append(req);
+    }
     if (state === "locked" && d.level() < s.levelReq) b.append(art(ui("lock", 12), "tn-lock"));
     b.setAttribute("aria-label", `${s.name}, rank ${r} de ${s.maxRank}`);
     tooltip(b, () => tipHtml(s));
@@ -296,6 +320,10 @@ export function buildSkills(d: SkillsDeps): HTMLElement {
         }
         tree.append(cell);
       }
+    }
+    if (evolution()) {
+      // Os marcos 45–60 chegam com o nível máximo 60 (docs/evolucoes).
+      tree.append(el("div", "tg-level locked", el("span", null, "Nv 45+")), el("div", "tg-future", "Marcos 45, 50, 55 e 60 (suprema) chegam com o nível máximo 60."));
     }
     tree.append(specRow());
     const f = free();
