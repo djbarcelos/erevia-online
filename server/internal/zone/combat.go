@@ -260,19 +260,18 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		z.revealIfHidden(src) // atacar revela quem está invisível
 	}
 
-	if def := s.OnSelf.At(rank); def != nil {
-		z.applyEffect(src, src, def)
-		if s.AllyRadius > 0 {
-			for _, p := range z.players {
-				if p != src && !p.dead && z.allies(src, p) && dist(p.pos, src.pos) <= s.AllyRadius {
-					z.applyEffect(src, p, def)
-					z.markHelp(src) // buff em alguém do grupo
-				}
-			}
-		}
-	}
+	z.selfEffects(src, s, rank)
 	if s.Banner != nil {
 		z.spawnBanner(src, s.Banner)
+	}
+	if s.Zone != nil {
+		z.spawnZone(src, s.Zone, rank)
+	}
+	if s.CleanseAllies != (game.Scale{}) {
+		z.cleanse(src, s, rank)
+	}
+	if s.RenewBlessings && src.pl != nil {
+		z.renewBlessings(src, s)
 	}
 	if s.Blink.Base > 0 {
 		z.blink(src, s.Blink.At(rank))
@@ -284,16 +283,23 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			// Sem golpe não há CombatEvent: o cast leva o alvo para o cliente animar.
 			z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID, TargetId: target.id})
 		}
-		z.skillHit(src, target, s, rank)
+		z.skillHit(src, target, s, rank, false)
 		if s.Splash > 0 {
+			// SplashMax: no máximo tantos alvos extras (Eco do Escudo).
+			left := s.SplashMax
+			if left <= 0 {
+				left = math.MaxInt
+			}
 			for _, m := range z.monsters {
-				if m != target && !m.dead && !m.mon.unseen() && dist(target.pos, m.pos)-m.bodyRadius() <= s.Splash {
-					z.skillHit(src, m, s, rank)
+				if left > 0 && m != target && !m.dead && !m.mon.unseen() && dist(target.pos, m.pos)-m.bodyRadius() <= s.Splash {
+					z.skillHit(src, m, s, rank, true)
+					left--
 				}
 			}
 			for _, o := range z.players { // área nunca acerta quem não é hostil
-				if o != target && o != src && dist(target.pos, o.pos) <= s.Splash && z.hostile(src, o, false) {
-					z.skillHit(src, o, s, rank)
+				if left > 0 && o != target && o != src && dist(target.pos, o.pos) <= s.Splash && z.hostile(src, o, false) {
+					z.skillHit(src, o, s, rank, true)
+					left--
 				}
 			}
 		}
@@ -304,12 +310,12 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			if m.dead || m.mon.unseen() || dist(src.pos, m.pos)-m.bodyRadius() > s.Range {
 				continue
 			}
-			z.skillHit(src, m, s, rank)
+			z.skillHit(src, m, s, rank, false)
 		}
 		if src.pl != nil {
 			for _, o := range z.players {
 				if o != src && dist(src.pos, o.pos) <= s.Range && z.hostile(src, o, false) {
-					z.skillHit(src, o, s, rank)
+					z.skillHit(src, o, s, rank, false)
 				}
 			}
 		}
@@ -319,7 +325,8 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 }
 
 // skillHit aplica a skill num alvo: golpes, efeito no alvo, provocação e queimadura.
-func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
+// splash: alvo da área em volta (SplashMult no dano; SplashNoEffect tira os efeitos).
+func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int, splash bool) {
 	if dst.dead {
 		return
 	}
@@ -332,12 +339,23 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 		if s.ExecuteBelow > 0 && dst.hp < dst.stats.MaxHP*s.ExecuteBelow {
 			mult *= s.ExecuteMult
 		}
+		extraCrit := s.ExtraCrit
+		mult *= z.skillDamageBonus(src, dst, s)
+		if s.Holy && src.pl != nil {
+			extraCrit += src.pl.passives.Of(game.PassiveHolyCrit)
+		}
+		if splash && s.SplashMult != (game.Scale{}) {
+			mult *= s.SplashMult.At(rank)
+		}
 		for i := 0; i < max(1, s.Hits) && !dst.dead; i++ {
-			in := z.hitInput(src, dst, s.Magic, mult, s.ExtraCrit)
+			in := z.hitInput(src, dst, s.Magic, mult, extraCrit)
 			in.NoMiss = s.NoMiss
 			hit := game.RollHit(z.rng, in)
 			z.applyHit(src, dst, s.ID, hit, s.Magic)
 			landed = landed || !hit.Miss
+			if hit.Crit && s.Holy && src.pl != nil && src.pl.passives.Has(game.PassiveHolyCrit) {
+				z.gainRes(src, fervorFaith) // Fervor: crítico sagrado gera Fé
+			}
 		}
 	}
 	if src.pl != nil && landed && src != dst {
@@ -354,12 +372,22 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int) {
 		dst.mon.hate[src.id] = top + tauntHate
 		dst.mon.returning = false
 	}
+	if splash && s.SplashNoEffect {
+		return
+	}
 	if spec := s.OnTarget; spec != nil && (s.OnTargetNeeds == game.EffectNone || dst.has(s.OnTargetNeeds, z.now)) {
 		def := spec.At(rank)
 		if spec.AtkFrac {
 			def.Value = math.Round(z.attackPower(src, s.Magic) * def.Value)
 		}
 		z.applyEffect(src, dst, def)
+	}
+	for _, spec := range s.ExtraOnTarget {
+		if spec.Kind == game.EffectTaunt && dst.mon != nil {
+			z.taunt(src, dst, spec.Duration.At(rank))
+			continue
+		}
+		z.applyEffect(src, dst, spec.At(rank))
 	}
 	// Brasa Viva: skills de fogo deixam o alvo queimando (menos as que já queimam por conta
 	// própria, como o Inferno: a queimadura mais fraca da Brasa substituiria a delas).
@@ -443,7 +471,19 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 	}
 	// Bloqueio do jogador com escudo (Fase 4): golpe físico de qualquer direção (o servidor não
 	// guarda para onde o jogador olha). O sorteio só acontece com chance > 0.
-	if !magic && dst.pl != nil && src != dst && dst.stats.Block > 0 && z.rng.Float64() < dst.stats.Block {
+	if dst.pl != nil && src != dst { // Vínculo de Guarda
+		if cut := z.allyDamageCut(dst); cut > 0 {
+			dmg = math.Round(dmg * (1 - cut))
+			ev.Damage = uint32(dmg)
+		}
+	}
+	block := dst.stats.Block
+	if block > 0 { // Guarda Inabalável: mais chance enquanto dura (só com escudo)
+		if v, ok := dst.effect(game.EffectBuffBlock, z.now); ok {
+			block += v
+		}
+	}
+	if !magic && dst.pl != nil && src != dst && block > 0 && z.rng.Float64() < block {
 		b := math.Round(dmg * game.BlockCut(dst.stats))
 		dmg -= b
 		ev.Damage = uint32(dmg)
@@ -512,6 +552,10 @@ func (z *Zone) damage(src, dst *entity, dmg float64, ev *pb.CombatEvent) float64
 	if dst.pl != nil && dst.pl.channel != nil {
 		z.cancelChannel(dst, "Você levou dano: a viagem foi interrompida.")
 	}
+	if dst.pl != nil && !dst.pl.redirecting {
+		dmg = z.redirect(src, dst, dmg) // Interceptar, Juramento, Sacrifício
+		dmg = z.lastBastion(dst, dmg)   // Último Reduto
+	}
 	if dst.has(game.EffectUndying, z.now) && dst.hp-dmg < 1 {
 		dmg = math.Max(0, dst.hp-1)
 	}
@@ -551,6 +595,7 @@ func (z *Zone) checkLastStand(p *entity) {
 	p.pl.lastStandReady = z.now + game.LastStandCD
 	v := math.Round(p.stats.MaxHP * p.pl.passives.Of(game.PassiveLastStand))
 	z.applyEffect(p, p, &game.EffectDef{Kind: game.EffectShield, Duration: game.LastStandSeconds, Value: v})
+	z.gainRes(p, game.LastStandResGain) // Muralha Viva evoluída: Determinação (sem recurso, nada)
 	z.system(p, "Muralha Viva! Um escudo protege você.")
 }
 
@@ -574,6 +619,9 @@ func (z *Zone) regen(e *entity, dt float64) {
 		}
 	}
 	if v, ok := e.effect(game.EffectCourage, z.now); ok {
+		hp += v
+	}
+	if v, ok := e.effect(game.EffectRegen, z.now); ok { // Renovação
 		hp += v
 	}
 	// Espírito do Urso

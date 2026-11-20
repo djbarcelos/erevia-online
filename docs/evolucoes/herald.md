@@ -137,3 +137,11 @@ Os IDs de 100 em diante são **provisórios**. ★ marca as 2 iniciais. "(evol.)
 2. **Bênção do Arauto** passa a se chamar **Bênção da Prontidão**. O ID continua o 65.
 3. **Bônus de atributo:** +6 Força e +6 Sabedoria, no lugar de +12 Sabedoria.
 4. **Sol Nascente:** fica no marco 20, com 3 ranks. Quem já tem a skill não perde o rank.
+
+## Calibragem no simulador (Fase 9, 19/11)
+
+| Skill | Doc | Calibrado |
+|---|---|---|
+| Golpe Radiante (100) | 170→210% | **250→310%** |
+
+Resultado (tempo para matar, distância da média): 20–24 **5,0 s (+24%)**, 25–29 4,7 s (+18%), 30–34 5,8 s (+26%), 35–40 **4,1 s (+24%)**, dentro da meta do 40 (+15% a +35%). O dano por segundo no 20 (138) já passa o do Cavaleiro base no 19 (130).

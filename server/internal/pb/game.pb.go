@@ -1502,6 +1502,10 @@ const (
 	Effect_EFFECT_BANNER         Effect = 21 // +value de defesa (perto do estandarte)
 	Effect_EFFECT_COURAGE        Effect = 22 // regenera value de vida por segundo (aura)
 	Effect_EFFECT_DEATH_MARK     Effect = 23 // Marca da Morte do raid boss: explode em volta do marcado
+	Effect_EFFECT_BUFF_BLOCK     Effect = 24 // +value de chance de bloqueio (com escudo)
+	Effect_EFFECT_GUARDED        Effect = 25 // value do dano vai para quem protege (source)
+	Effect_EFFECT_SACRIFICE      Effect = 26 // a vida não cai abaixo de value × máx.; o excesso vai para source
+	Effect_EFFECT_REGEN          Effect = 27 // regenera value de vida por segundo (Renovação)
 )
 
 // Enum value maps for Effect.
@@ -1531,6 +1535,10 @@ var (
 		21: "EFFECT_BANNER",
 		22: "EFFECT_COURAGE",
 		23: "EFFECT_DEATH_MARK",
+		24: "EFFECT_BUFF_BLOCK",
+		25: "EFFECT_GUARDED",
+		26: "EFFECT_SACRIFICE",
+		27: "EFFECT_REGEN",
 	}
 	Effect_value = map[string]int32{
 		"EFFECT_UNSPECIFIED":    0,
@@ -1557,6 +1565,10 @@ var (
 		"EFFECT_BANNER":         21,
 		"EFFECT_COURAGE":        22,
 		"EFFECT_DEATH_MARK":     23,
+		"EFFECT_BUFF_BLOCK":     24,
+		"EFFECT_GUARDED":        25,
+		"EFFECT_SACRIFICE":      26,
+		"EFFECT_REGEN":          27,
 	}
 )
 
@@ -19760,7 +19772,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x16MONSTER_ARCHETYPE_PACK\x10\x05\x12\x1c\n" +
 	"\x18MONSTER_ARCHETYPE_SHIELD\x10\x06\x12\x1e\n" +
 	"\x1aMONSTER_ARCHETYPE_SPLITTER\x10\a\x12\x1e\n" +
-	"\x1aMONSTER_ARCHETYPE_EXPLODER\x10\b*\xed\x03\n" +
+	"\x1aMONSTER_ARCHETYPE_EXPLODER\x10\b*\xc0\x04\n" +
 	"\x06Effect\x12\x16\n" +
 	"\x12EFFECT_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vEFFECT_STUN\x10\x01\x12\x0f\n" +
@@ -19786,7 +19798,11 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x0eEFFECT_WAR_CRY\x10\x14\x12\x11\n" +
 	"\rEFFECT_BANNER\x10\x15\x12\x12\n" +
 	"\x0eEFFECT_COURAGE\x10\x16\x12\x15\n" +
-	"\x11EFFECT_DEATH_MARK\x10\x17*q\n" +
+	"\x11EFFECT_DEATH_MARK\x10\x17\x12\x15\n" +
+	"\x11EFFECT_BUFF_BLOCK\x10\x18\x12\x12\n" +
+	"\x0eEFFECT_GUARDED\x10\x19\x12\x14\n" +
+	"\x10EFFECT_SACRIFICE\x10\x1a\x12\x10\n" +
+	"\fEFFECT_REGEN\x10\x1b*q\n" +
 	"\vSkillTarget\x12\x1c\n" +
 	"\x18SKILL_TARGET_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12SKILL_TARGET_ENEMY\x10\x01\x12\x15\n" +

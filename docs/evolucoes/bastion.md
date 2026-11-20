@@ -132,3 +132,15 @@ Os IDs de 85 em diante são **provisórios** e só são fechados no código. ★
 2. **Vigor do Bastião:** passa a ter 5 ranks, com o mesmo máximo de 15%. A redistribuição grátis cobre quem perder valor.
 3. **Interceptar:** entra no marco 30, como está acima.
 4. **Meta de tempo para matar:** de +50% a +70% acima da média no 40.
+
+## Calibragem no simulador (Fase 9, 19/11)
+
+Com a árvore completa no código, o Bastião ficou em 11,4 s para matar no 20 (+139% da média), porque o dano dele vinha quase só do ataque básico. Para chegar à meta, os golpes saem mais vezes e batem mais:
+
+| Skill | Doc | Calibrado |
+|---|---|---|
+| Golpe de Escudo (95) | 150→190%, recarga 8 s | **300→370%**, recarga **5 s** |
+| Baluarte (49) | 140→180%, recarga 24 s | **240→300%**, recarga **12 s** |
+| Último Bastião (63) | 160→200% | **240→300%** |
+
+Resultado (tempo para matar, distância da média): 20–24 **6,6 s (+63%)**, 25–29 6,9 s (+76%), 30–34 7,8 s (+69%), 35–40 **5,5 s (+68%)**. A meta do 40 (+50% a +70%) foi cumprida; a do 20 (≤ 6,1 s) ficou perto, porque a média da faixa subiu com as evoluções ainda incompletas das outras classes.

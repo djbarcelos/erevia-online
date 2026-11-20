@@ -175,10 +175,10 @@ func TestSpecSkillsOnlyForChosenPath(t *testing.T) {
 	if h.pl.rank(game.SkillBastionDefy) != 0 || none.pl.rank(game.SkillBastionDefy) != 0 {
 		t.Fatal("skill do Bastião aprendida por quem não é Bastião")
 	}
-	// Passiva do caminho: Vigor do Bastião (+5% de vida no rank 1).
+	// Passiva do caminho: Vigor do Bastião (+3% de vida no rank 1).
 	with := b.stats.MaxHP
 	delete(b.pl.ranks, game.SkillBastionVigor)
-	if without := z.computeStats(b, b.pl.attrs).MaxHP; with < without*1.049 || with > without*1.051 {
+	if without := z.computeStats(b, b.pl.attrs).MaxHP; with < without*1.029 || with > without*1.031 {
 		t.Errorf("Vigor do Bastião: vida %.0f com, %.0f sem", with, without)
 	}
 	b.pl.ranks[game.SkillBastionVigor] = 1
@@ -295,7 +295,9 @@ func TestChangeSpecCostsGoldAndRefundsPoints(t *testing.T) {
 func TestSpecActiveSkillsWork(t *testing.T) {
 	for _, sp := range game.SpecList {
 		for _, s := range game.EvolutionTree(sp.ID) {
-			if s.IsPassive() {
+			// Modificadores, as que agem só nos aliados e as de suporte têm testes próprios
+			// (evo_knight_test.go).
+			if s.IsPassive() || s.Node == game.NodeModifier || s.AllyOnly || s.RenewBlessings || s.CleanseAllies != (game.Scale{}) || s.Zone != nil {
 				continue
 			}
 			t.Run(s.Name, func(t *testing.T) {

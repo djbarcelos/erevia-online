@@ -37,6 +37,18 @@ type SkillMod struct {
 	Hits      [4]int // golpes extras por rank (índice = rank; 0 = nenhum)
 	NoMiss    bool   // passa a não errar
 	EffectDur Scale  // +segundos no efeito no alvo (ou em si, se não houver no alvo)
+	// EffectValue soma ao valor do efeito principal; EffectValPct multiplica (1 + v).
+	EffectValue, EffectValPct Scale
+	Range                     Scale // +alcance (ou raio, nas de área em volta de si)
+	// Área extra: alvos, dano e sem efeito (Eco do Escudo).
+	SplashMax      int
+	SplashMult     Scale
+	SplashNoEffect bool
+	ExtraOnTarget  []*EffectSpec
+	// Dano a mais contra quem tem algum dos efeitos (Veredito).
+	BonusVs    []EffectKind
+	BonusVsPct Scale
+	ResOnHit   Scale // recurso a mais por alvo atingido
 }
 
 // EvolutionMilestones: os marcos da árvore evoluída até o teto 40 (45–60 com o teto 60).
@@ -275,15 +287,34 @@ func EffectiveSkill(s *SkillDef, ranks map[uint32]int) *SkillDef {
 			out.Hits += mod.Hits[r]
 		}
 		out.NoMiss = out.NoMiss || mod.NoMiss
-		if d := mod.EffectDur.atOrZero(r); d != 0 {
+		out.Range += mod.Range.atOrZero(r)
+		if mod.SplashMax > 0 {
+			out.SplashMax = mod.SplashMax
+		}
+		if mod.SplashMult != (Scale{}) {
+			out.SplashMult = Scale{Base: mod.SplashMult.At(r)}
+		}
+		out.SplashNoEffect = out.SplashNoEffect || mod.SplashNoEffect
+		if len(mod.ExtraOnTarget) > 0 {
+			out.ExtraOnTarget = append(append([]*EffectSpec{}, out.ExtraOnTarget...), mod.ExtraOnTarget...)
+		}
+		if len(mod.BonusVs) > 0 {
+			out.BonusVs = append(append([]EffectKind{}, out.BonusVs...), mod.BonusVs...)
+			out.BonusVsPct += mod.BonusVsPct.atOrZero(r)
+		}
+		out.ResOnHit += mod.ResOnHit.atOrZero(r)
+		dur, val, valPct := mod.EffectDur.atOrZero(r), mod.EffectValue.atOrZero(r), mod.EffectValPct.atOrZero(r)
+		if dur != 0 || val != 0 || valPct != 0 {
+			change := func(e *EffectSpec) *EffectSpec {
+				c := *e
+				c.Duration = scalePlus(c.Duration, dur)
+				c.Value = scaleTimes(scalePlus(c.Value, val), 1+valPct)
+				return &c
+			}
 			if out.OnTarget != nil {
-				e := *out.OnTarget
-				e.Duration = scalePlus(e.Duration, d)
-				out.OnTarget = &e
+				out.OnTarget = change(out.OnTarget)
 			} else if out.OnSelf != nil {
-				e := *out.OnSelf
-				e.Duration = scalePlus(e.Duration, d)
-				out.OnSelf = &e
+				out.OnSelf = change(out.OnSelf)
 			}
 		}
 	}

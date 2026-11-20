@@ -33,6 +33,10 @@ const (
 	EffectBanner                  // Value = +fração de defesa (perto do estandarte)
 	EffectCourage                 // Value = vida regenerada por segundo (aura)
 	EffectDeathMark               // Marca da Morte (raid): explode em volta do marcado no fim
+	EffectBuffBlock               // Value = +chance de bloqueio (com escudo)
+	EffectGuarded                 // Value = fração do dano que vai para a fonte (Interceptar, Juramento)
+	EffectSacrifice               // Value = piso de vida (fração da máx.); o que passar vai para a fonte
+	EffectRegen                   // Value = vida regenerada por segundo (Renovação)
 )
 
 // IsDoT: efeitos que causam dano a cada segundo.
@@ -62,6 +66,9 @@ type EffectSpec struct {
 	Value    Scale
 	// AtkFrac: Value é uma fração do ataque de quem lança (dano por segundo de venenos).
 	AtkFrac bool
+	// MaxHPFrac: Value é uma fração da vida máxima de quem recebe, espalhada pela duração
+	// (cura ao longo do tempo: vira vida por segundo).
+	MaxHPFrac bool
 }
 
 func (e *EffectSpec) At(rank int) *EffectDef {
@@ -84,21 +91,28 @@ const (
 type PassiveKind uint8
 
 const (
-	PassiveNone         PassiveKind = iota
-	PassivePDefPct                  // +Value de defesa física
-	PassiveSwordPAtk                // +Value de ataque físico com espada
-	PassiveLastStand                // abaixo de 30% de vida: escudo de Value × vida máx. (recarga 60 s)
-	PassiveCourage                  // aliados a até 10 m regeneram Value de vida por segundo
-	PassiveCritDamage               // +Value no multiplicador do crítico
-	PassiveLifesteal                // recupera Value do dano causado como vida
-	PassiveMaxHPPct                 // +Value de vida máxima
-	PassiveBearSpirit               // abaixo de 50% de vida: regenera Value × vida máx. por segundo
-	PassiveFireBurn                 // skills de fogo queimam: Value × ataque mágico por segundo, 3 s
-	PassiveMPEfficiency             // -Value no custo de mana (teto MPEfficiencyCap)
-	PassiveOverload                 // +Value de ataque mágico; skills custam 10% a mais de mana
-	PassiveCrit                     // +Value de chance de crítico
-	PassiveEvasion                  // +Value de esquiva
-	PassivePoisonProc               // Value = chance de envenenar ao acertar (4% do ataque/s, 5 s)
+	PassiveNone             PassiveKind = iota
+	PassivePDefPct                      // +Value de defesa física
+	PassiveSwordPAtk                    // +Value de ataque físico com espada
+	PassiveLastStand                    // abaixo de 30% de vida: escudo de Value × vida máx. (recarga 60 s)
+	PassiveCourage                      // aliados a até 10 m regeneram Value de vida por segundo
+	PassiveCritDamage                   // +Value no multiplicador do crítico
+	PassiveLifesteal                    // recupera Value do dano causado como vida
+	PassiveMaxHPPct                     // +Value de vida máxima
+	PassiveBearSpirit                   // abaixo de 50% de vida: regenera Value × vida máx. por segundo
+	PassiveFireBurn                     // skills de fogo queimam: Value × ataque mágico por segundo, 3 s
+	PassiveMPEfficiency                 // -Value no custo de mana (teto MPEfficiencyCap)
+	PassiveOverload                     // +Value de ataque mágico; skills custam 10% a mais de mana
+	PassiveCrit                         // +Value de chance de crítico
+	PassiveEvasion                      // +Value de esquiva
+	PassivePoisonProc                   // Value = chance de envenenar ao acertar (4% do ataque/s, 5 s)
+	PassiveHolyDamagePct                // +Value de dano das skills sagradas
+	PassiveHolyCrit                     // +Value de chance de crítico nas skills sagradas
+	PassiveHealPower                    // curas e escudos dados ficam +Value mais fortes
+	PassiveBlockPct                     // com escudo: +Value de chance de bloqueio e de dano bloqueado
+	PassiveAllyDamageReduce             // você e os aliados a até AllyAuraRadius recebem -Value de dano
+	PassiveLastBastion                  // golpe que mataria: fica com 1 de vida e gasta o recurso num escudo
+	PassiveFaithShield                  // cada 10 de recurso gasto: escudo de Value × vida máx. por 10 s
 
 	passiveKindCount // sempre o último: tamanho de Passives
 )
@@ -153,7 +167,24 @@ const (
 	FrostArmorSlow   = 0.3  // Armadura de Gelo: lentidão em quem bate de perto…
 	FrostArmorSecs   = 2.0  // …por 2 s
 	MeleeRange       = 4.0  // até onde um golpe conta como "de perto"
+	AllyAuraRadius   = 10.0 // Vínculo de Guarda
+	GuardRange       = 15.0 // Interceptar/Juramento/Sacrifício: o protetor precisa estar perto
+	LastStandResGain = 30.0 // Muralha Viva evoluída: +30 de Determinação ao disparar
+	LastBastionCD    = 120.0
+	LastBastionSecs  = 6.0
+	LastBastionPer   = 0.01 // escudo de 1% da vida máx. por ponto gasto
+	FaithShieldSecs  = 10.0
 )
+
+// ZoneDef é uma área no chão contra inimigos: a cada Period, quem está dentro é provocado
+// (Taunt) e ganha o efeito (Effect com Value por rank, por EffectSecs).
+type ZoneDef struct {
+	Radius, Duration, Period float64
+	Taunt                    bool
+	Effect                   EffectKind
+	Value                    Scale
+	EffectSecs               float64
+}
 
 // BannerDef é o estandarte que fica no chão: aliados perto ganham o efeito.
 type BannerDef struct {
@@ -190,6 +221,30 @@ type SkillDef struct {
 	EvolvedFrom uint32
 	// Weapon: tipos de arma exigidos para lançar (vazio = qualquer).
 	Weapon []string
+	// Holy: skill sagrada (Paladino: Zelo, Fervor, Penitência).
+	Holy bool
+	// Efeitos a mais, aplicados junto com OnTarget/OnSelf (a mesma regra de aliados).
+	ExtraOnTarget, ExtraOnSelf []*EffectSpec
+	// Área em volta do alvo: no máximo SplashMax alvos extras (0 = todos), com SplashMult do
+	// dano (0 = o mesmo) e, com SplashNoEffect, sem os efeitos no alvo.
+	SplashMax      int
+	SplashMult     Scale
+	SplashNoEffect bool
+	// BonusVs: +BonusVsPct de dano contra quem tem algum desses efeitos.
+	BonusVs    []EffectKind
+	BonusVsPct float64
+	// ResOnAlly: recurso por aliado que ganhou algo (sem o efeito ou sem a vida cheia), até 3.
+	ResOnAlly float64
+	// Purificar: tira 1 efeito negativo de você e de até CleanseAllies aliados a até
+	// AllyRadius e cura CleanseHeal × a vida máx. de cada um.
+	CleanseAllies Scale
+	CleanseHeal   float64
+	// Zone: área no chão contra inimigos (provocar, lentidão, dano).
+	Zone *ZoneDef
+	// RenewBlessings: renova as bênçãos aprendidas nos aliados com o efeito dobrado.
+	RenewBlessings bool
+	// AllyOnly: o efeito em si (OnSelf) vai só para os aliados em AllyRadius, não para quem lança.
+	AllyOnly bool
 	// Recurso da evolução (resources.go): custo, ganho ao lançar e ao acertar (por alvo, até
 	// o teto de alvos); ResSpendAll gasta tudo e causa +ResPerPoint de dano por ponto.
 	ResCost, ResOnCast, ResOnHit float64
@@ -379,7 +434,7 @@ func atkName(magic bool) string {
 // ---------------------------------------------------------------------------------------
 
 func init() {
-	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees(), evoSkills()} {
+	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees(), evoSkills(), knightEvoSkills()} {
 		for _, s := range list {
 			if s.Hits == 0 {
 				s.Hits = 1
@@ -391,6 +446,7 @@ func init() {
 		}
 	}
 	placeEvolutionSkills()
+	adjustKnightEvolutions()
 	applySkillResources()
 	indexModifiers()
 	Classes["knight"].Branches = [3]Branch{

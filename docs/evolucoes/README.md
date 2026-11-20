@@ -6,8 +6,8 @@ Cada evolução tem um doc próprio nesta pasta. **O DIogo revisa cada doc antes
 
 | Classe | Evolução (ID) | Recurso | Doc | Situação |
 |---|---|---|---|---|
-| Cavaleiro | Bastião (`bastion`) | Determinação | [bastion.md](bastion.md) | aprovado (19/11) |
-| Cavaleiro | Paladino (`herald`) | Fé | [herald.md](herald.md) | aprovado (19/11) |
+| Cavaleiro | Bastião (`bastion`) | Determinação | [bastion.md](bastion.md) | **no jogo** (Fase 9) |
+| Cavaleiro | Paladino (`herald`) | Fé | [herald.md](herald.md) | **no jogo** (Fase 9) |
 | Bárbaro | Berserker (`bloodrager`) | Fúria | [bloodrager.md](bloodrager.md) | aprovado (19/11) |
 | Bárbaro | Senhor da Guerra (`warlord`) | Ímpeto | [warlord.md](warlord.md) | aprovado (19/11) |
 | Mago | Elementalista (`elementalist`) | Concentração | [elementalist.md](elementalist.md) | aprovado (19/11) |

@@ -80,16 +80,20 @@ func TestSpecDataIsConsistent(t *testing.T) {
 						t.Errorf("%s: modificador inválido", s.Name)
 					}
 				}
-				if s.IsPassive() != (s.Node == NodePassive) {
+				if s.IsPassive() && s.Node != NodePassive && s.Node != NodeKey || !s.IsPassive() && s.Node == NodePassive {
 					t.Errorf("%s: tipo de nó %d", s.Name, s.Node)
 				}
-				if s.IsPassive() {
+				if (s.Node == NodeKey || s.Node == NodeSupreme) != (s.MaxRank == 1 && s.Level >= 40) {
+					t.Errorf("%s: chave com %d ranks no marco %d", s.Name, s.MaxRank, s.Level)
+				}
+				if s.IsPassive() || s.Node == NodeModifier {
 					continue
 				}
 				if s.Target == 0 || s.MP.At(1)+SkillResCost(s) <= 0 || s.CD.At(1) <= 0 {
 					t.Errorf("%s: ativa sem alvo, custo ou recarga", s.Name)
 				}
-				if s.Mult.At(1) <= 0 && s.OnTarget == nil && s.OnSelf == nil && s.Banner == nil {
+				if s.Mult.At(1) <= 0 && s.OnTarget == nil && s.OnSelf == nil && s.Banner == nil && s.Zone == nil &&
+					s.CleanseAllies == (Scale{}) && !s.RenewBlessings {
 					t.Errorf("%s: não faz nada", s.Name)
 				}
 			}
@@ -199,5 +203,35 @@ func TestEffectiveSkillModifiers(t *testing.T) {
 	}
 	if base.OnTarget.Duration.At(1) != 3 || base.Mult.At(1) != 2 {
 		t.Error("o modificador alterou a skill original")
+	}
+}
+
+// completeEvolutions: as evoluções com a árvore inteira (fases de conteúdo já feitas).
+var completeEvolutions = []string{"bastion", "herald"}
+
+// A árvore completa tem folga: pelo menos 1,4× os pontos do 40 e 26 ranks no marco 20;
+// uma chave por ramo no 40, que exige 15 pontos no ramo.
+func TestCompleteTreesHaveRoom(t *testing.T) {
+	for _, id := range completeEvolutions {
+		total, at20 := 0, 0
+		keys := map[int]int{}
+		for _, s := range EvolutionTree(id) {
+			total += s.MaxRank
+			if s.Level == 20 {
+				at20 += s.MaxRank
+			}
+			if s.Node == NodeKey {
+				keys[s.Branch]++
+			}
+		}
+		if pts := SkillPointsTotal(40, true); float64(total) < 1.4*float64(pts) {
+			t.Errorf("%s: %d ranks para %d pontos no 40", id, total, pts)
+		}
+		if at20 < 26 {
+			t.Errorf("%s: %d ranks no marco 20, want ≥ 26", id, at20)
+		}
+		if len(keys) != 3 || keys[0] != 1 || keys[1] != 1 || keys[2] != 1 {
+			t.Errorf("%s: chaves por ramo %v", id, keys)
+		}
 	}
 }

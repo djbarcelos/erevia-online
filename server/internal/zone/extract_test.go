@@ -76,6 +76,11 @@ func oldApplyPassives(s game.Stats, p *entity) game.Stats {
 			s.Crit += v
 		case game.PassiveEvasion:
 			s.Evasion += v
+		case game.PassiveBlockPct: // Fase 9: Guarda do Escudo (só com escudo)
+			if s.Block > 0 {
+				s.Block += v
+				s.BlockReduce += v
+			}
 		}
 	}
 	return s

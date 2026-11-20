@@ -142,6 +142,7 @@ func (z *Zone) castResource(p *entity, s *game.SkillDef) (float64, bool) {
 		spent = s.ResCost
 	}
 	p.pl.castTargets = 0
+	z.faithShield(p, spent)
 	n := s.ResOnCast
 	if p.pl.res.LastCast != s.ID {
 		n += d.Gen(game.GenDistinctCast)
@@ -177,4 +178,25 @@ func (z *Zone) killGains(dead *entity) {
 			z.gainEvent(p, game.GenKill)
 		}
 	}
+}
+
+// fervorFaith: Fé por crítico sagrado com Fervor.
+const fervorFaith = 3.0
+
+// skillDamageBonus: multiplicadores de dano da skill no alvo: sagrada (Zelo) e contra
+// quem tem um dos efeitos de BonusVs (Veredito).
+func (z *Zone) skillDamageBonus(src, dst *entity, s *game.SkillDef) float64 {
+	m := 1.0
+	if s.Holy && src.pl != nil {
+		m *= 1 + src.pl.passives.Of(game.PassiveHolyDamagePct)
+	}
+	if s.BonusVsPct > 0 {
+		for _, k := range s.BonusVs {
+			if dst.has(k, z.now) {
+				m *= 1 + s.BonusVsPct
+				break
+			}
+		}
+	}
+	return m
 }

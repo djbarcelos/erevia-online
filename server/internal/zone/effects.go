@@ -19,6 +19,10 @@ type objectState struct {
 	until  float64
 	banner *game.BannerDef
 	title  string // túmulo do chefe de campo: a dica (fieldboss.go)
+	// Zona no chão contra inimigos (evo_mechanics.go): rank da skill e o próximo pulso.
+	zone     *game.ZoneDef
+	zoneRank int
+	nextTick float64
 }
 
 // ---------------------------------------------------------------------------------------
@@ -136,6 +140,10 @@ func (z *Zone) updateAuras() {
 		if z.now >= o.obj.until {
 			delete(z.objects, id)
 			z.broadcast(&pb.ServerMessage{Msg: &pb.ServerMessage_Despawn{Despawn: &pb.Despawn{Id: id}}}, 0)
+			continue
+		}
+		if o.obj.zone != nil {
+			z.tickZone(o)
 			continue
 		}
 		b := o.obj.banner
