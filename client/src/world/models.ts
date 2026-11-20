@@ -215,7 +215,7 @@ for (const [m, p] of Object.entries(NPC_CLIP_PREFIX)) REMASTER_SETS[m] = npcSet(
 const V4_SET: AnimSet = {
   idle: "rc.idle", walk: "base.walk", run: "base.run", attack: "rc.idle", skill: "rc.idle", buff: "rc.idle", hit: "rc.idle", death: "rc.idle",
 };
-const V4_FOOT_SPEEDS = { walk: 1.57, run: 4.94 }; // medidos no Blender (tools/art/herois-v4/anim_base.py, clips-base.json)
+const V4_FOOT_SPEEDS = { walk: 1.1, run: 4.43 }; // medidos no Blender (tools/art/herois-v4/retarget_meshy.py, clips-base.json)
 const isV4Hero = (model: string) => HEROIS_V4 && HERO_MODELS.includes(model);
 if (HEROIS_V4) for (const m of HERO_MODELS) REMASTER_SETS[m] = V4_SET;
 
