@@ -14,8 +14,8 @@ Visual novo dos heróis: um corpo (masculino e feminino), 41 kits (recruta, 4 cl
 
 | Fase | Situação |
 |---|---|
-| 0. Guia e contrato | **para aprovação** |
-| 1. Bíblia visual | — |
+| 0. Guia e contrato | aprovada (19/11) |
+| 1. Bíblia visual | **para aprovação**: [fase1/](fase1/README.md) |
 | 2. Corpo e fatia do Cavaleiro | — |
 | 3. Bárbaro, Mago e Ladino | — |
 | 4. Kits restantes | — |
