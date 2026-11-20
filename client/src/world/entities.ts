@@ -104,6 +104,8 @@ const THROWN_COLOR = new Color3(0.86, 0.8, 0.62);
  * e morte só quando o golpe encosta (ou o projétil chega).
  */
 const SWING_LEAD = 0.18;
+/** Arco e besta: o tiro começa este tanto antes da soltura, para a puxada da corda aparecer antes de a flecha sair. */
+const SHOT_LEAD = 0.6;
 /** Segundo golpe que chega enquanto o primeiro ainda sobe: encosta este tempo depois (ms). */
 const FOLLOW_UP_MS = 140;
 /** Quanto a morte espera depois do último impacto, para o golpe ser visto antes da queda (ms). */
@@ -1290,6 +1292,7 @@ export class EntityManager {
     if (now < src.swingImpact) {
       src.swingImpact = Math.max(src.swingImpact, src.lastLand) + FOLLOW_UP_MS;
       src.lastLand = src.swingImpact;
+      if (projectileOf(src) === "arrow") src.aimUntil = src.swingImpact + 450;
       return src.swingImpact;
     }
     const interval = (now - src.lastSwing) / 1000;
@@ -1297,9 +1300,11 @@ export class EntityManager {
     let lead = 0;
     if (src.anim) {
       let speed = 1;
-      const rest = src.anim.remaining(role, SWING_LEAD);
+      const shot = projectileOf(src);
+      const startLead = shot === "arrow" || shot === "bolt" ? SHOT_LEAD : SWING_LEAD;
+      const rest = src.anim.remaining(role, startLead);
       if (interval > 0.3 && interval < 3 && rest > interval * 0.9) speed = clamp(rest / (interval * 0.9), 1, 2);
-      lead = src.anim.play(role, { lead: SWING_LEAD, speed });
+      lead = src.anim.play(role, { lead: startLead, speed });
     }
     src.swingImpact = src.lastLand = now + lead * 1000;
     // Arco: o corpo gira de lado enquanto mira e solta (BOW_AIM_YAW).

@@ -272,7 +272,9 @@ CLIP_IMPACT.MB_Attack2 = 0.73;
 CLIP_IMPACT.MB_Attack3 = 0.63;
 CLIP_IMPACT.RB_Attack2 = 0.57; // combo triplo, 1º corte
 CLIP_IMPACT.RB_Attack3 = 0.53; // giro das lâminas
-CLIP_IMPACT.RB_Shoot = 0.53; // arco: a mão da corda solta a flecha (pico da mão direita)
+// Arco: o clipe do Meshy (Archery_Shot_1) puxa a corda e termina com ela toda puxada; a soltura é o fim dele
+// (a volta ao parado leva o braço de volta).
+CLIP_IMPACT.RB_Shoot = 0.96;
 CLIP_IMPACT.RB_ShootCB = 0.53; // besta: o disparo, no meio da mira (recorte 0,5–2,0 s do clipe do Meshy)
 
 export type Slot = "handslot.r" | "handslot.l";
