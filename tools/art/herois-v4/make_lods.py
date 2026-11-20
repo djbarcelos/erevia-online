@@ -5,6 +5,7 @@ Abre o .blend do corpo (build_rig.py), cria `corpo` (LOD0), `corpo_LOD1` e `corp
 
     Blender --background --factory-startup corpo.blend --python tools/art/herois-v4/make_lods.py -- saida.blend saida.glb [lod0 lod1 lod2]
 """
+import math
 import sys
 
 import bpy
@@ -23,6 +24,7 @@ def tris(o):
 
 
 HAND_KEEP = [0.993, 0.997, 1.0]  # LOD0, LOD1, LOD2
+SMOOTH_ANGLE = 40  # graus: acima disso a aresta fica marcada
 base = tris(src)
 made = []
 for k, target in enumerate(targets):
@@ -52,6 +54,11 @@ for k, target in enumerate(targets):
     bpy.context.view_layer.objects.active = o
     bpy.ops.object.modifier_apply(modifier=dec.name)
     o.vertex_groups.remove(o.vertex_groups["decimar"])  # antes do limite de 4 influências
+    # sombreamento: as normais do Meshy (custom) não servem depois da redução e deixavam a malha facetada;
+    # liso, com quina só onde a superfície dobra de verdade (borda de placa, aba do elmo)
+    with bpy.context.temp_override(object=o, active_object=o, selected_objects=[o], selected_editable_objects=[o]):
+        bpy.ops.mesh.customdata_custom_splitnormals_clear()
+        bpy.ops.object.shade_smooth_by_angle(angle=math.radians(SMOOTH_ANGLE))
     # pesos: no máximo 4 influências e somando 1
     bpy.ops.object.mode_set(mode="WEIGHT_PAINT")
     bpy.ops.object.vertex_group_limit_total(group_select_mode="ALL", limit=4)

@@ -7,7 +7,8 @@
 // ratios: fração de triângulos do LOD0 que o import gera para o LOD1 e o LOD2 (null = não gera),
 //   as mesmas proporções da tabela do guia (3000/8000, 1000/8000, ...).
 export const BUDGET = {
-  personagem: { tris: 8000, lod1: 3000, lod2: 1000, texture: 1024, materials: 2, bones: 60, ratios: [0.375, 0.125] },
+  // heróis v4 vestidos (kit): armadura, mãos e capa (3 materiais); 20 mil perto; os LODs seguram o desempenho com a praça cheia (contrato, seção 3)
+  personagem: { tris: 20000, lod1: 6000, lod2: 2000, texture: 2048, materials: 3, bones: 60, ratios: [0.3, 0.1] },
   arma: { tris: 800, lod1: 300, lod2: null, texture: 1024, materials: 1, bones: 0, ratios: [0.375, null] },
   // Peça de armadura anexada ao herói (ombreiras, capa, elmo): textura própria e um material (tunnel#96).
   armadura: { tris: 1600, lod1: 650, lod2: null, texture: 1024, materials: 1, bones: 0, ratios: [0.4, null] },

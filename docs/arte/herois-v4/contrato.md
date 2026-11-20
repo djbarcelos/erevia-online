@@ -87,7 +87,7 @@ A mão fechada é uma **pose**, não uma malha dobrada: os dedos fecham pelos os
 
 | | LOD0 | LOD1 (≥ 20 m) | LOD2 (≥ 35 m) |
 |---|---|---|---|
-| Personagem vestido | ≤ 8.000 | ≤ 3.000 | ≤ 1.000 |
+| Personagem vestido | ≤ 20.000 | ≤ 6.000 | ≤ 2.000 |
 | Dedos | os 16 ossos | punho fixo | punho fixo |
 
 Nome das malhas: `<nome>`, `<nome>_LOD1`, `<nome>_LOD2`.
@@ -96,7 +96,7 @@ Nome das malhas: `<nome>`, `<nome>_LOD1`, `<nome>_LOD2`.
 
 ## 4. Textura e material
 
-- **Um atlas de 1024 px** por kit (corpo, cabeça e cabelo num atlas próprio de 1024 px, compartilhado por todos os kits).
+- **Um atlas de 2048 px** por kit (KTX2 ETC1S; com 1024 a cota de malha e as placas borravam) (corpo, cabeça e cabelo num atlas próprio de 1024 px, compartilhado por todos os kits).
 - KTX2 no jogo, PNG no arquivo-fonte.
 - **Um material** + **um emissivo** (runas, magia e o brilho da raridade alta).
 - **Máscara de repintura** (RGBA, 512 px):
@@ -104,7 +104,7 @@ Nome das malhas: `<nome>`, `<nome>_LOD1`, `<nome>_LOD2`.
   - G: pele (tom de pele);
   - B: cabelo (cor do cabelo);
   - A: **metal da raridade** (onde o acabamento muda de comum a lendário).
-- Pintura à mão com luz na textura, sem normal map (guia, seção 4).
+- Pintura à mão com luz na textura, sem normal map (guia, seção 4). Com 8 mil triângulos o kit ficava facetado e o normal map gravado da malha alta manchava em triângulos; com 20 mil a forma vem da malha.
 
 ---
 

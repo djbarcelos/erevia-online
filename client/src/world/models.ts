@@ -1,5 +1,6 @@
 import { HERO_FISTS, type FistFrame } from "./hero-fists";
 import { HERO_FISTS_V4 } from "./hero-fists-v4";
+import { attachCapeSpring } from "./cape";
 import "@babylonjs/loaders/glTF";
 import {
   AbstractMesh,
@@ -997,6 +998,8 @@ export class CharacterModels {
     const unwatchLod = assets.remaster
       ? this.watchLod({ root, level: 0, set: (l) => ((lodLevel = l), refreshVis()) })
       : () => {};
+    // capa dos heróis v4: mola depois das animações (desligada a partir do LOD1)
+    const unCape = isV4Hero(model) ? attachCapeSpring(this.scene, root as TransformNode, byName, () => lodLevel >= 1) : () => {};
     let head = { id: firstHead, mesh: bodyMeshes.find((m) => m.name.split("#")[0] === `Head_${firstHead}`) };
     // O elmo separável (remaster) tem material próprio (aço liso, cor de vértice): a repintura não o toca.
     const isHatMesh = (m: AbstractMesh) => /^Hat(_LODd)?(.d+)?$/.test(m.name.split("#")[0]);
@@ -1226,6 +1229,7 @@ export class CharacterModels {
         disposed = true;
         aimObs?.remove();
         unwatchLod();
+        unCape();
         if (painted) this.releasePaint(model, painted.tier, painted.look);
         painted = null;
         for (const p of pieces.values()) for (const n of p.nodes) n.dispose(false, false);

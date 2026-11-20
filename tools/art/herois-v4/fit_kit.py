@@ -13,9 +13,11 @@
 import sys
 
 import bpy
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 
-kit_glb, out_blend = sys.argv[sys.argv.index("--") + 1:][:2]
+_args = sys.argv[sys.argv.index("--") + 1:]
+kit_glb, out_blend = _args[:2]
+CAPA_FILE = _args[_args.index("--capa") + 1] if "--capa" in _args else None  # kit gerado sem capa + capa avulsa
 body = bpy.data.objects["corpo"]
 arm = bpy.data.objects["heroi"]
 before = set(bpy.data.objects)
@@ -137,6 +139,186 @@ bpy.ops.object.vertex_group_limit_total(group_select_mode="ALL", limit=4)
 bpy.ops.object.vertex_group_normalize_all(group_select_mode="ALL", lock_active=False)
 bpy.ops.object.mode_set(mode="OBJECT")
 
+if not CAPA_FILE:
+    # ---- 3c. capa: os vértices de tecido nas costas obedecem aos ossos de capa (a mola do jogo balança) ----
+    from mathutils.bvhtree import BVHTree
+    dg = bpy.context.evaluated_depsgraph_get()
+    bev = body.evaluated_get(dg)
+    bvh = BVHTree.FromPolygons([body.matrix_world @ v.co for v in bev.data.vertices], [p.vertices[:] for p in bev.data.polygons])
+    c0, c1, c2 = (B["cape_l_01"].head_local, B["cape_l_02"].head_local, B["cape_l_02"].tail_local)
+    cx = (B["cape_l_01"].head_local.x + B["cape_r_01"].head_local.x) / 2
+    back_y = B["chest"].head_local.y
+    t1 = (c0.z - c1.z) / (c0.z - c2.z)
+    names = {g.index: g.name for g in kmesh.vertex_groups}
+    ARMS = ("upperarm", "forearm", "hand", "thumb", "index", "fingers")  # a clavícula não: o alto da capa pesa nela
+
+
+    def sstep(e0, e1, x):
+        u = max(0.0, min(1.0, (x - e0) / (e1 - e0)))
+        return u * u * (3 - 2 * u)
+
+
+    # só o tecido marrom da capa (pela cor da textura no UV do vértice): o tabardo azul e a cota ficam com o corpo
+    img = next(n.image for m in kmesh.data.materials if m and m.use_nodes for n in m.node_tree.nodes if n.type == "TEX_IMAGE" and n.image)
+    W, H = img.size
+    px = list(img.pixels)
+    uv = kmesh.data.uv_layers.active.data
+    vuv = {}
+    for lp in kmesh.data.loops:
+        vuv.setdefault(lp.vertex_index, uv[lp.index].uv.copy())
+
+
+    def is_cape_color(vi):
+        u = vuv.get(vi)
+        if u is None:
+            return False
+        x = min(W - 1, max(0, int(u.x * W)))
+        y = min(H - 1, max(0, int(u.y * H)))
+        k = (y * W + x) * 4
+        r, g, b = px[k], px[k + 1], px[k + 2]
+        return r > b * 1.08 and r > 0.06 and (r - b) > 0.02  # marrom: vermelho acima do azul (o tabardo é azulado, a cota é cinza)
+
+
+    # 1) candidatos: atrás das costas, longe do corpo, fora dos braços, na faixa da capa e com cor de capa
+    nv = len(kmesh.data.vertices)
+    cand = [False] * nv
+    free = [0.0] * nv
+    pos = [kmesh.matrix_world @ v.co for v in kmesh.data.vertices]
+    for v in kmesh.data.vertices:
+        p = pos[v.index]
+        if p.y < back_y - 0.02 or p.z > c0.z + 0.16 or p.z < c2.z - 0.15:  # do capuz até a barra
+            continue
+        if sum(g.weight for g in v.groups if names[g.group].split("_")[0] in ARMS) > 0.35:
+            continue
+        hit = bvh.find_nearest(p)
+        if hit[0] is None:
+            continue
+        cand[v.index] = is_cape_color(v.index)  # o alto da capa encosta nas costas: a cor decide
+        if hit[3] < 0.015:
+            continue
+        t = (c0.z - p.z) / (c0.z - c2.z)
+        free[v.index] = sstep(0.0, 0.14, t) * sstep(0.015, 0.04, hit[3])
+    # 2) votação entre vizinhos: a sombra e o avesso da capa (cor mais escura) entram, manchas soltas saem
+    nb = [[] for _ in range(nv)]
+    for e in kmesh.data.edges:
+        a_, b_ = e.vertices
+        nb[a_].append(b_)
+        nb[b_].append(a_)
+    for _ in range(6):
+        cand = [(sum(cand[j] for j in nb[i]) * 2 > len(nb[i]) if nb[i] else cand[i]) for i in range(nv)]
+    # 3) campos de peso da capa, suavizados pela malha (sem fronteira dura, sem rasgo)
+    F = {k: [0.0] * nv for k in ("cape_l_01", "cape_l_02", "cape_r_01", "cape_r_02")}
+    for i in range(nv):
+        if not cand[i]:
+            continue
+        p = pos[i]
+        t = (c0.z - p.z) / (c0.z - c2.z)
+        w2 = sstep(t1 * 0.6, 1.0, t)
+        sl = sstep(-0.05, 0.05, p.x - cx)
+        f = free[i]
+        F["cape_l_01"][i] = f * (1 - w2) * sl
+        F["cape_l_02"][i] = f * w2 * sl
+        F["cape_r_01"][i] = f * (1 - w2) * (1 - sl)
+        F["cape_r_02"][i] = f * w2 * (1 - sl)
+    for _ in range(8):
+        for k in F:
+            a_ = F[k]
+            F[k] = [0.5 * a_[i] + 0.5 * (sum(a_[j] for j in nb[i]) / len(nb[i]) if nb[i] else a_[i]) for i in range(nv)]
+    cape_n = 0
+    for v in kmesh.data.vertices:
+        i = v.index
+        tot_c = sum(F[k][i] for k in F)
+        if tot_c < 1e-3:
+            continue
+        tot_c = min(1.0, tot_c)
+        old = {names[g.group]: g.weight for g in v.groups}
+        for gi in [g.group for g in v.groups]:
+            kmesh.vertex_groups[gi].remove([i])
+        merged = {k: w * (1 - tot_c) for k, w in old.items()}
+        s_ = sum(F[k][i] for k in F)
+        for k in F:
+            if F[k][i] > 0:
+                merged[k] = merged.get(k, 0) + F[k][i] / s_ * tot_c
+        items = sorted(((k, w) for k, w in merged.items() if w > 1e-4), key=lambda kv: -kv[1])[:4]
+        tw = sum(w for _, w in items)
+        for k, w in items:
+            kmesh.vertex_groups[k].add([i], w / tw, "REPLACE")
+        cape_n += 1
+    print("vértices da capa nos ossos de capa:", cape_n)
+
+    # ---- 3d. capa independente: vira uma ilha de malha (sem aresta ligada ao corpo), só com ossos de capa e
+    # peito; no lugar dela, um forro colado às costas e às pernas (a casca do Meshy não tem nada debaixo) ----
+    from mathutils.kdtree import KDTree
+    bnames = {g.index: g.name for g in body.vertex_groups}
+    bpos = [body.matrix_world @ v.co for v in bev.data.vertices]
+    kd = KDTree(len(bpos))
+    for i, p in enumerate(bpos):
+        kd.insert(p, i)
+    kd.balance()
+    bw = [{bnames[g.group]: g.weight for g in v.groups} for v in body.data.vertices]
+    bm = bmesh.new()
+    bm.from_mesh(kmesh.data)
+    dl = bm.verts.layers.deform.verify()
+    gidx = {g.name: g.index for g in kmesh.vertex_groups}
+    CAPE_G = [gidx[k] for k in ("cape_l_01", "cape_l_02", "cape_r_01", "cape_r_02")]
+    chest_g = gidx["chest"]
+
+
+    def cape_w(v):
+        d = v[dl]
+        return sum(d.get(g, 0.0) for g in CAPE_G)
+
+
+    cape_set = {f for f in bm.faces if sum(cand[v.index] for v in f.verts) * 2 > len(f.verts)}  # pela cor (votada)
+    # fecha buracos: face cercada de capa (2+ vizinhas) e atrás das costas também é capa
+    for _ in range(4):
+        add = set()
+        for f in bm.faces:
+            if f in cape_set or (kmesh.matrix_world @ f.calc_center_median()).y < back_y:
+                continue
+            if sum(1 for e in f.edges for g in e.link_faces if g is not f and g in cape_set) >= 2:
+                add.add(f)
+        cape_set |= add
+    cape_faces = list(cape_set)
+    # forro: cópia das faces da capa, assentada no corpo e com os pesos do corpo
+    dup = bmesh.ops.duplicate(bm, geom=cape_faces)
+    for v in [e for e in dup["geom"] if isinstance(e, bmesh.types.BMVert)]:
+        w = kmesh.matrix_world @ v.co
+        hit = bvh.find_nearest(w)
+        if hit[0] is not None:
+            v.co = kmesh.matrix_world.inverted() @ (hit[0] + hit[1] * 0.006)
+        _, bi, _ = kd.find(kmesh.matrix_world @ v.co)
+        d = v[dl]
+        d.clear()
+        for n, wt in bw[bi].items():
+            if n in gidx and wt > 1e-4:
+                d[gidx[n]] = wt
+    # corta a capa do resto: as arestas da borda viram duplas (ilha separada)
+    border = [e for e in bm.edges if len(e.link_faces) == 2 and ((e.link_faces[0] in cape_set) != (e.link_faces[1] in cape_set))]
+    bmesh.ops.split_edges(bm, edges=border)
+    # pesos da capa, agora peça solta: só a altura manda (presa nos ombros, solta até a barra); nada das pernas
+    # nem do quadril, e a distância ao corpo não conta mais (a barra rente às canelas ficava presa e esticava)
+    GL = {s_: (gidx[f"cape_{s_}_01"], gidx[f"cape_{s_}_02"]) for s_ in ("l", "r")}
+    cape_verts = {v for f in cape_set for v in f.verts}
+    for v in cape_verts:
+        p = kmesh.matrix_world @ v.co
+        t = (c0.z - p.z) / (c0.z - c2.z)
+        fr = sstep(0.0, 0.16, t)
+        w2 = sstep(t1 * 0.6, 1.0, t)
+        sl = sstep(-0.06, 0.06, p.x - cx)
+        d = v[dl]
+        d.clear()
+        if fr < 1.0:
+            d[chest_g] = 1.0 - fr
+        for s_, ws in (("l", sl), ("r", 1.0 - sl)):
+            if fr * ws * (1 - w2) > 1e-4:
+                d[GL[s_][0]] = fr * ws * (1 - w2)
+            if fr * ws * w2 > 1e-4:
+                d[GL[s_][1]] = fr * ws * w2
+    bm.to_mesh(kmesh.data)
+    bm.free()
+    print("capa independente:", len(cape_faces), "faces; forro colado no corpo, arestas de borda cortadas:", len(border))
+
 # ---- 3b. mãos do corpo no lugar das do kit (os dedos do kit vêm fundidos e viram garra) ----
 HANDS = ("hand_", "thumb_", "index_", "fingers_")
 
@@ -173,6 +355,24 @@ kmesh.select_set(True)
 bpy.context.view_layer.objects.active = kmesh
 bpy.ops.object.join()
 print("mãos do corpo no kit; materiais:", [m.name for m in kmesh.data.materials])
+
+# ---- 3e. capa avulsa (extract_cape.py): peça solta sobre o kit sem capa, só com ossos de capa e peito ----
+if CAPA_FILE:
+    with bpy.data.libraries.load(CAPA_FILE, link=False) as (src_, dst_):
+        dst_.objects = ["capa"]
+    capa = dst_.objects[0]
+    bpy.context.scene.collection.objects.link(capa)
+    capa.parent = None
+    for m in list(capa.modifiers):
+        capa.modifiers.remove(m)
+    bpy.ops.object.select_all(action="DESELECT")
+    capa.select_set(True)
+    kmesh.select_set(True)
+    bpy.context.view_layer.objects.active = kmesh
+    bpy.ops.object.join()
+    with bpy.context.temp_override(object=kmesh, active_object=kmesh, selected_objects=[kmesh]):
+        bpy.ops.object.material_slot_remove_unused()
+    print("capa avulsa vestida; materiais:", [m.name for m in kmesh.data.materials])
 
 # ---- 4. o kit vira o "corpo" ----
 kname = "corpo"

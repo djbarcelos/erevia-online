@@ -39,11 +39,13 @@ node scripts/qa-heroi-v4.mjs
 cd ..
 for kit in cavaleiro:kn; do
   dir=${kit%%:*}; id=${kit##*:}; K=assets-src/herois-v4/kits/$dir
-  run "kit $dir: encaixe" $B --background --factory-startup $C/corpo.blend --python $T/fit_kit.py -- $K/kit-rigado.glb $K/kit-corpo.blend
-  run "kit $dir: LODs"    $B --background --factory-startup $K/kit-corpo.blend --python $T/make_lods.py -- $K/kit-lod.blend $K/kit-lod.glb
-  run "kit $dir: normais" $B --background --factory-startup $K/kit-lod.blend --python $T/bake_normal.py -- $K/kit-normal.png 2048
+  # capa avulsa: recortada do kit gerado com capa; o corpo vem do kit gerado sem capa (semcapa/)
+  run "kit $dir: capa"    $B --background --factory-startup $C/corpo.blend --python $T/fit_kit.py -- $K/kit-rigado.glb $K/kit-corpo-com-capa.blend
+  run "kit $dir: recorte" $B --background --factory-startup $K/kit-corpo-com-capa.blend --python $T/extract_cape.py -- $K/capa.blend
+  run "kit $dir: encaixe" $B --background --factory-startup $C/corpo.blend --python $T/fit_kit.py -- $K/semcapa/kit-rigado.glb $K/kit-corpo.blend --capa $K/capa.blend
+  run "kit $dir: LODs"    $B --background --factory-startup $K/kit-corpo.blend --python $T/make_lods.py -- $K/kit-lod.blend $K/kit-lod.glb 20000 6000 2000
   run "kit $dir: animado" $B --background --factory-startup $A/base.blend --python $T/swap_kit.py -- $K/kit-lod.blend $K/kit-anim.blend
   run "kit $dir: exportar" $B --background --factory-startup $K/kit-anim.blend --python $T/export_v4.py -- $K/heroi_v4_${id}_raw.glb
   node $T/slots-glb.mjs $K/heroi_v4_${id}_raw.glb | tail -1
-  (cd client && node scripts/import-asset.mjs ../$K/heroi_v4_${id}_raw.glb personagem heroi_v4_$id --resize=1024 2>&1 | grep -E "→|FORA|triângulos" && node scripts/qa-heroi-v4.mjs public/models/heroi_v4_$id.glb)
+  (cd client && node scripts/import-asset.mjs ../$K/heroi_v4_${id}_raw.glb personagem heroi_v4_$id --resize=2048 --etc1s 2>&1 | grep -E "→|FORA|triângulos" && node scripts/qa-heroi-v4.mjs public/models/heroi_v4_$id.glb)
 done
