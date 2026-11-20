@@ -1398,7 +1398,8 @@ export class EntityManager {
       const kind = onMe ? "taken" : ev.crit ? "crit" : sk ? "skill" : mine ? "mine" : "damage";
       if (numbers) this.fx.number(dst.head, kind, ev.crit ? `${ev.damage}!` : String(ev.damage), color);
     }
-    if (!ev.kill && !dst.dead) dst.anim?.play("hit");
+    // O escudo segurou (bloqueio ou absorção): quem tem bloqueio animado levanta o escudo em vez de apanhar.
+    if (!ev.kill && !dst.dead) dst.anim?.play((ev.blocked || ev.absorbed) && dst.anim.has("block") ? "block" : "hit");
   }
 
   /**

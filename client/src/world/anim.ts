@@ -118,6 +118,10 @@ export class AnimController {
   private comboStep = 0;
   private breakW = 0;
   private breakTimer = 0;
+  /** Segundos que ainda faltam "em combate" (golpe, skill, dano ou bloqueio recentes): o parado vira a guarda. */
+  private combatLeft = 0;
+  /** Mistura do parado para a guarda (0 = parado, 1 = guarda). */
+  private stanceW = 0;
 
   /**
    * resetPose: devolve os ossos à pose de descanso quando uma ação sai.
@@ -257,7 +261,13 @@ export class AnimController {
     return this.anims instanceof RoleMap ? this.anims.swingLead : undefined;
   }
 
+  /** O conjunto tem esse papel (ex.: "block" só nos heróis com escudo animado). */
+  has(role: AnimRole): boolean {
+    return this.anims.has(role);
+  }
+
   play(asked: AnimRole, opts: PlayOpts = {}): number {
+    if (COMBAT_ROLES.has(asked)) this.combatLeft = COMBAT_STANCE_S;
     const role = this.variant(asked, true);
     const g = this.anims.get(role);
     if (!g) return 0;
@@ -265,7 +275,7 @@ export class AnimController {
     // Apanhar não interrompe um ataque em andamento.
     // (Um "apanhar" em andamento pode recomeçar, mesmo que a variante sorteada agora seja outra.)
     const hitting = this.action === this.anims.get("hit") || this.action === this.anims.get("hit2");
-    if (asked === "hit" && this.action && !this.actionDone && !hitting) return 0;
+    if ((asked === "hit" || asked === "block") && this.action && !this.actionDone && !hitting) return 0;
 
     const speed = opts.speed ?? 1;
     const start = this.startAt(role, opts.lead);
@@ -358,6 +368,8 @@ export class AnimController {
     const idle = this.anims.get("idle");
     const run = this.anims.get("run");
     if (idle) idle.speedRatio = 1;
+    const stance = this.anims.get("stance");
+    if (stance) stance.speedRatio = 1;
     for (const g of this.breaks) g.speedRatio = 1;
     if (run) run.speedRatio = this.runRatio;
     const walk = this.anims.get("walk");
@@ -552,7 +564,17 @@ export class AnimController {
     // Peso exatamente 0 faz o Babylon pular a animação (não calcula os ossos). As misturas
     // convergem exponencialmente e nunca chegam a 0 sozinhas, então zeramos as sobras.
     // Pausas do parado: só com o corpo parado, sem ação; entram e saem suaves, e o clipe acaba antes do fim.
-    const standing = loco > 0.9 && this.runWeight < 0.05;
+    // Guarda: em combate o parado mistura para a postura de combate (se o conjunto tiver), sem pausas.
+    this.combatLeft = Math.max(0, this.combatLeft - dt);
+    const stance = this.anims.get("stance");
+    const stanceTarget = stance && this.combatLeft > 0 ? 1 : 0;
+    this.stanceW += (stanceTarget - this.stanceW) * (1 - Math.exp(-5 * dt));
+    if (stance && this.stanceW > 0.001 && !stance.isPlaying) stance.start(true);
+    if (stance && stanceTarget === 0 && this.stanceW < 0.01) {
+      this.stanceW = 0;
+      if (stance.isPlaying) stance.stop();
+    }
+    const standing = loco > 0.9 && this.runWeight < 0.05 && this.stanceW < 0.05;
     let breakTarget = 0;
     if (this.breakGroup) {
       const frame = this.breakGroup.animatables[0]?.masterFrame ?? this.breakGroup.from;
@@ -576,7 +598,9 @@ export class AnimController {
     }
     const bw = this.breakGroup ? this.breakW : 0;
     if (this.breakGroup) this.breakGroup.weight = Math.max(loco * (1 - this.runWeight) * bw, 0.001);
-    if (idle) idle.weight = snap(loco * (1 - this.runWeight) * (1 - bw));
+    const still = loco * (1 - this.runWeight) * (1 - bw);
+    if (idle) idle.weight = snap(still * (1 - this.stanceW));
+    if (stance && this.stanceW > 0) stance.weight = snap(still * this.stanceW);
     const walk = this.anims.get("walk");
     const walkW = walk ? this.walkMix : 0;
     if (run) {
@@ -595,6 +619,10 @@ export class AnimController {
 /** Velocidade (m/s) abaixo da qual o personagem anda em vez de correr, e a que o clipe de andar casa com o chão. */
 const WALK_BELOW = 3.4;
 const WALK_ANIM_SPEED = 1.9;
+
+/** Papéis que põem o personagem em combate, e por quanto tempo (s) a guarda fica depois do último. */
+const COMBAT_ROLES = new Set<AnimRole>(["attack", "attack2", "attack3", "skill", "hit", "hit2", "block"]);
+const COMBAT_STANCE_S = 6;
 
 /** Intervalo (s) entre as pausas do parado. */
 const BREAK_MIN_S = 8;
