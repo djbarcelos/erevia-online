@@ -236,8 +236,13 @@ func TestZonesSoak50Bots(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	// Para: espera as entregas em andamento chegarem e desliga as zonas (salvam todos).
-	time.Sleep(500 * time.Millisecond)
+	// Para: espera as entregas em andamento chegarem (ninguém no meio do portão; no CI com -race
+	// 500 ms fixos às vezes não bastavam e um bot ficava sem zona) e desliga as zonas (salvam todos).
+	time.Sleep(200 * time.Millisecond)
+	for deadline := time.Now().Add(10 * time.Second); m.bus.inTransit() > 0 && time.Now().Before(deadline); {
+		time.Sleep(20 * time.Millisecond)
+	}
+	time.Sleep(200 * time.Millisecond)
 	m.checkBus()
 	cancel()
 	zwg.Wait()
@@ -298,4 +303,17 @@ func TestZonesSoak50Bots(t *testing.T) {
 	if m.Hops() < soakBots {
 		t.Fatalf("poucas travessias: %d", m.Hops())
 	}
+}
+
+// inTransit: quantos personagens estão no meio do portão (entregues, ainda na fila da zona de destino).
+func (b *Bus) inTransit() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	n := 0
+	for _, e := range b.players {
+		if e.pending {
+			n++
+		}
+	}
+	return n
 }

@@ -29,6 +29,8 @@ const BLEND_RATE = 14;
 const ACTION_IN_RATE = 20;
 /** Saída de uma ação que terminou ou foi trocada (s), em curva suave (começa e termina devagar). */
 const ACTION_OUT_S = 0.3;
+/** Andando há este tanto (s) no meio de um golpe ou tiro: a ação cede para a corrida (senão o corpo desliza parado). */
+const MOVE_BREAKS_ACTION_S = 0.12;
 
 /** Como tocar uma ação. */
 export interface PlayOpts {
@@ -54,6 +56,8 @@ export interface PlayOpts {
  */
 export class AnimController {
   private runWeight = 0;
+  /** Há quanto tempo (s) o corpo está andando sem parar. */
+  private movingFor = 0;
   /** 0 = correr, 1 = andar (só modelos com clipe "walk": o remaster). */
   private walkMix = 0;
   private walkRatio = 1;
@@ -489,6 +493,10 @@ export class AnimController {
     this.walkMix += (walkTarget - this.walkMix) * k;
     // A ação chega ao fim no próximo quadro: para ali (velocidade 0, ainda na mistura). Em
     // loop o Babylon voltaria ao primeiro quadro, e o corpo pularia para o começo do golpe.
+    // Saiu andando no meio da ação (o alvo morreu, a auto-caça foi para o próximo): a ação sai aos poucos e a
+    // corrida assume, em vez de o golpe seguir tocando com o corpo deslizando pelo chão.
+    this.movingFor = moving ? this.movingFor + dt : 0;
+    if (this.action && !this.actionDone && !this.holding && !this.looping && this.movingFor >= MOVE_BREAKS_ACTION_S) this.actionDone = true;
     const a = this.action;
     if (a && !this.actionDone && !this.holding && !this.looping) {
       const frame = a.animatables[0]?.masterFrame ?? a.from;
