@@ -1234,7 +1234,14 @@ export class EntityManager {
           gameAudio.launch(sk?.fx, src.root.position, local);
           this.fx.as(local, () => fn(src.root.position.add(new Vector3(0, 1.3 * src.scale, 0)), dst.root.position.add(new Vector3(0, 1 * dst.scale, 0))));
         });
-      if (sk?.fx === "fireball" || sk?.fx === "me_lance") {
+      const shot = projectileOf(src);
+      if ((shot === "arrow" || shot === "bolt") && (!sk || (sk.target === SkillTarget.ENEMY && sk.range > 4))) {
+        // Arco e besta (Patrulheiro): o básico e os tiros das skills saem como flecha ou virote
+        // de verdade, nunca como o projétil de luz das magias.
+        const t = travel * 0.6;
+        launch((a, b) => this.fx.arrow(a, b, t, shot === "bolt"));
+        impact = release + t * 1000;
+      } else if (sk?.fx === "fireball" || sk?.fx === "me_lance") {
         launch((a, b) => this.fx.fireball(a, b, travel));
         impact = release + travel * 1000;
       } else if (sk?.fx === "m_rain" || sk?.fx === "m_inferno") {
@@ -1246,12 +1253,6 @@ export class EntityManager {
       } else if (bolt) {
         launch((a, b) => this.fx.bolt(a, b, travel, bolt));
         impact = release + travel * 1000;
-      } else if ((projectileOf(src) === "arrow" || projectileOf(src) === "bolt") && (!sk || (sk.target === SkillTarget.ENEMY && sk.range > 4))) {
-        // Arco e besta (Patrulheiro): o básico e os tiros das skills saem como flecha ou virote.
-        const heavy = projectileOf(src) === "bolt";
-        const t = travel * 0.6;
-        launch((a, b) => this.fx.arrow(a, b, t, heavy));
-        impact = release + t * 1000;
       } else if (!ev.skillId && projectileOf(src) === "arcane") {
         // Ataque básico de quem usa magia (magos e esqueletos magos).
         launch((a, b) => this.fx.arcaneBolt(a, b, travel));
@@ -1505,6 +1506,12 @@ export class EntityManager {
         const a = src.root.position.add(new Vector3(0, 1.3 * src.scale, 0));
         const b = dst.root.position.add(new Vector3(0, 1 * dst.scale, 0));
         gameAudio.cast(sk.fx, src.root.position, local);
+        const shot = projectileOf(src);
+        if ((shot === "arrow" || shot === "bolt") && sk.range > 4) {
+          // Tiro de arco ou besta sem dano direto (rede, marca): a flecha leva o efeito.
+          this.fx.as(local, () => this.fx.arrow(a, b, travel * 0.6, shot === "bolt"));
+          return;
+        }
         this.fx.as(local, () =>
           this.fx.bolt(a, b, travel, color, () => {
             gameAudio.hit(sk.fx, false, false, dst.root.position, local);
