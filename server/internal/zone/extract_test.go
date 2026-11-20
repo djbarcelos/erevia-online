@@ -76,6 +76,8 @@ func oldApplyPassives(s game.Stats, p *entity) game.Stats {
 			s.Crit += v
 		case game.PassiveEvasion:
 			s.Evasion += v
+		case game.PassivePAtkPct: // Fase 10: Braço de Guerra
+			s.PAtk *= 1 + v
 		case game.PassiveBlockPct: // Fase 9: Guarda do Escudo (só com escudo)
 			if s.Block > 0 {
 				s.Block += v
@@ -93,6 +95,9 @@ func oldSkillMP(p *entity, s *game.SkillDef) float64 {
 	}
 	if r := p.pl.rank(game.SkillClearMind); r > 0 { // Fase 8: Mente Clara barateia
 		cost *= 1 - math.Min(game.MPEfficiencyCap, game.Skills[game.SkillClearMind].PValue.At(r))
+	}
+	if s.CommandSkill && p.pl.rank(game.SkillWarlordCommand2) > 0 { // Fase 10: Comando Absoluto
+		cost *= game.CommandMPMult
 	}
 	return math.Round(cost)
 }

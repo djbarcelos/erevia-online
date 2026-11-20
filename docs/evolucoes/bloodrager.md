@@ -136,3 +136,15 @@ Os IDs de 117 em diante são **provisórios**. ★ marca as 2 iniciais. "(evol.)
 2. A skill-base "Fúria" passa a se chamar **Cólera** na evolução.
 3. **Fúria Incontrolável:** o risco é receber +10% de dano.
 4. **Carnificina** no marco 35. Quem a tem entre o 28 e o 34 recebe os pontos de volta até chegar ao 35.
+
+## Calibragem no simulador (Fase 10, 19/11)
+
+| Skill | Doc | Calibrado |
+|---|---|---|
+| Golpe Brutal (117) | 220→280% | **170→220%** |
+| Golpe Rubro (67) | 260→330% | **190→250%** |
+| Machadada Sísmica (52) | 240→300% | **190→250%** |
+| Ruptura (120) | 160→200%, sangra 30→50%/s | **130→170%**, sangra **20→40%/s** |
+| Execução (131) | 300→350% | **250→300%** |
+
+Resultado (tempo para matar, distância da média): 20–24 **−22%**, 25–29 −20%, 30–34 −22%, 35–40 **−19%**. Fica na borda da meta (−20% a −5%); a média das faixas ainda muda quando o Mago e o Ladino ganharem as árvores completas.

@@ -1712,6 +1712,9 @@ enum Effect {
   EFFECT_GUARDED = 25; // value do dano vai para quem protege (source)
   EFFECT_SACRIFICE = 26; // a vida não cai abaixo de value × máx.; o excesso vai para source
   EFFECT_REGEN = 27; // regenera value de vida por segundo (Renovação)
+  EFFECT_BLEED = 28; // dano por segundo (value), sangramento
+  EFFECT_FURY_DOUBLE = 29; // os ataques básicos geram o dobro de recurso
+  EFFECT_UNSTOPPABLE = 30; // imune a lentidão e a prender
 }
 
 message EffectEvent {

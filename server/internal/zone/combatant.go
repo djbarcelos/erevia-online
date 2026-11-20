@@ -113,6 +113,11 @@ type playerState struct {
 	// aliado (não redireciona de novo).
 	lastBastionReady float64
 	redirecting      bool
+	// Sequência Selvagem: alvo, acúmulos e o último básico; Carnificina Final: recarga.
+	frenzyTarget   uint32
+	frenzyStacks   int
+	frenzyAt       float64
+	killResetReady float64
 
 	// Fase 4: PvP, grupo e clã.
 	accountID  int64
@@ -212,10 +217,21 @@ func (e *entity) invisible(now float64) bool { return e.has(game.EffectInvisible
 // attackInterval: tempo entre ataques básicos (Frenesi acelera).
 func (e *entity) attackInterval(now float64) float64 {
 	iv := e.stats.AtkInterval
+	speed := 0.0
 	if v, ok := e.effect(game.EffectBuffAtkSpeed, now); ok {
-		iv /= 1 + v
+		speed += v
 	}
-	return iv
+	if e.pl != nil {
+		// Sequência Selvagem: acúmulos de básicos seguidos no mesmo alvo.
+		if now-e.pl.frenzyAt <= game.FrenzyStackSecs {
+			speed += float64(e.pl.frenzyStacks) * e.pl.passives.Of(game.PassiveFrenzyStacks)
+		}
+		// Sede Insaciável: abaixo de 50% de vida.
+		if v := e.pl.passives.Of(game.PassiveBloodFrenzy); v > 0 && e.hp < e.stats.MaxHP*game.BloodFrenzyBelow {
+			speed += v
+		}
+	}
+	return iv / (1 + speed)
 }
 
 // accuracy: precisão (Bomba de Fumaça cega: cada 1% de erro extra = 5 pontos).

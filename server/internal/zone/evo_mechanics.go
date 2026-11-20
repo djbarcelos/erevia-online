@@ -263,3 +263,105 @@ func (z *Zone) faithShield(p *entity, spent float64) {
 	v := math.Round(p.stats.MaxHP * pv * math.Floor(spent/10) * (1 + p.pl.passives.Of(game.PassiveHealPower)))
 	z.applyEffect(p, p, &game.EffectDef{Kind: game.EffectShield, Duration: game.FaithShieldSecs, Value: v})
 }
+
+// frenzyStack (Sequência Selvagem): básico seguido no mesmo alvo soma um acúmulo (até 5);
+// outro alvo ou 3 s sem bater recomeçam.
+func (z *Zone) frenzyStack(p, dst *entity) {
+	if !p.pl.passives.Has(game.PassiveFrenzyStacks) {
+		return
+	}
+	if p.pl.frenzyTarget != dst.id || z.now-p.pl.frenzyAt > game.FrenzyStackSecs {
+		p.pl.frenzyTarget, p.pl.frenzyStacks = dst.id, 0
+	}
+	p.pl.frenzyStacks = min(game.FrenzyStackMax, p.pl.frenzyStacks+1)
+	p.pl.frenzyAt = z.now
+	p.pl.statsDirty = true
+}
+
+// killReset (Carnificina Final): matar com a skill zera a recarga dela, 1 vez a cada 10 s.
+func (z *Zone) killReset(p *entity, s *game.SkillDef) {
+	if p.pl == nil || !p.pl.passives.Has(game.PassiveKillReset) || z.now < p.pl.killResetReady {
+		return
+	}
+	p.pl.killResetReady = z.now + game.KillResetCD
+	delete(p.pl.cooldowns, s.ID)
+	z.sendCooldown(p, s.ID, 0)
+}
+
+// leaderAura (Liderança): o maior bônus de dano entre os Senhores da Guerra perto (e o
+// próprio), sem somar.
+func (z *Zone) leaderAura(src *entity) float64 {
+	best := 0.0
+	for _, p := range z.players {
+		v := p.pl.passives.Of(game.PassiveAllyDamageAura)
+		if v <= best || p.dead || (p != src && (!z.allies(p, src) || dist(p.pos, src.pos) > game.LeaderRadius)) {
+			continue
+		}
+		best = v
+	}
+	return best
+}
+
+// chargeMomentum (Ímpeto de Carga): depois de uma investida, dano e velocidade por 5 s.
+func (z *Zone) chargeMomentum(p *entity) {
+	v := p.pl.passives.Of(game.PassiveChargeMomentum)
+	if v <= 0 {
+		return
+	}
+	z.applyEffect(p, p, &game.EffectDef{Kind: game.EffectBuffAtk, Duration: game.MomentumSecs, Value: v})
+	z.applyEffect(p, p, &game.EffectDef{Kind: game.EffectBuffSpeed, Duration: game.MomentumSecs, Value: 2 * v})
+}
+
+// chainCharge (Investida Implacável): salta até ChainCharge vezes, do alvo para o inimigo
+// mais perto ainda não atingido (até ChainChargeRange), batendo em cada um.
+func (z *Zone) chainCharge(src *entity, s *game.SkillDef, rank int, first *entity) {
+	hit := map[uint32]bool{}
+	next := first
+	for i := 0; i < s.ChainCharge && next != nil; i++ {
+		if landing, ok := z.chargeLanding(src, next); ok {
+			src.teleportTo(landing)
+		}
+		z.skillHit(src, next, s, rank, false)
+		hit[next.id] = true
+		var best *entity
+		for _, m := range z.monsters {
+			if m.dead || m.mon.unseen() || hit[m.id] || dist(src.pos, m.pos) > game.ChainChargeRange {
+				continue
+			}
+			if best == nil || dist(src.pos, m.pos) < dist(src.pos, best.pos) {
+				best = m
+			}
+		}
+		next = best
+	}
+	z.chargeMomentum(src)
+}
+
+// interrupt: atordoar um monstro com um aviso no chão pendente cancela o golpe (o aviso
+// some) e gera recurso para quem atordoou (Ímpeto).
+func (z *Zone) interrupt(src, m *entity) {
+	for _, t := range z.telegraphs {
+		if t.src == m.id && !t.posthumous && t.gen == m.mon.abilGen {
+			m.mon.abilGen++
+			z.gainEvent(src, game.GenInterrupt)
+			return
+		}
+	}
+}
+
+// dominanceAuras (Presença Dominante): os inimigos perto do Senhor da Guerra ficam
+// enfraquecidos e lentos enquanto estiverem ali.
+func (z *Zone) dominanceAuras() {
+	for _, p := range z.players {
+		if p.dead || !p.pl.passives.Has(game.PassiveDominance) {
+			continue
+		}
+		for _, m := range z.monsters {
+			if m.dead || m.mon.unseen() || dist(p.pos, m.pos)-m.bodyRadius() > game.DominanceRadius {
+				continue
+			}
+			z.applyAura(p, m, game.EffectWeaken, game.DominanceWeaken)
+			z.applyAura(p, m, game.EffectSlow, game.DominanceSlow)
+		}
+	}
+}

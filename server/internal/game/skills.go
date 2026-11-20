@@ -37,10 +37,15 @@ const (
 	EffectGuarded                 // Value = fração do dano que vai para a fonte (Interceptar, Juramento)
 	EffectSacrifice               // Value = piso de vida (fração da máx.); o que passar vai para a fonte
 	EffectRegen                   // Value = vida regenerada por segundo (Renovação)
+	EffectBleed                   // Value = dano por segundo (Ruptura)
+	EffectFuryDouble              // os ataques básicos geram o dobro do recurso (Fúria Incontrolável)
+	EffectUnstoppable             // imune a lentidão e a prender (Grito de Reagrupar)
 )
 
 // IsDoT: efeitos que causam dano a cada segundo.
-func (k EffectKind) IsDoT() bool { return k == EffectPoison || k == EffectBurn || k == EffectPlague }
+func (k EffectKind) IsDoT() bool {
+	return k == EffectPoison || k == EffectBurn || k == EffectPlague || k == EffectBleed
+}
 
 // EffectDef é um efeito pronto para aplicar (valores de um rank).
 type EffectDef struct {
@@ -113,6 +118,15 @@ const (
 	PassiveAllyDamageReduce             // você e os aliados a até AllyAuraRadius recebem -Value de dano
 	PassiveLastBastion                  // golpe que mataria: fica com 1 de vida e gasta o recurso num escudo
 	PassiveFaithShield                  // cada 10 de recurso gasto: escudo de Value × vida máx. por 10 s
+	PassiveResCostCut                   // skills que gastam recurso custam -Value (Ira Desmedida)
+	PassiveFrenzyStacks                 // básico seguido no mesmo alvo: +Value de velocidade de ataque por acúmulo
+	PassiveBloodFrenzy                  // abaixo de 50% de vida: roubo de vida em dobro e +Value de vel. de ataque
+	PassiveKillReset                    // matar com skill ResetOnKill zera a recarga dela (1 vez a cada 10 s)
+	PassiveAllyDamageAura               // você e os aliados a até LeaderRadius causam +Value de dano
+	PassiveCommand                      // com aliado perto: +50% de recurso e CommandSkill custa metade da mana
+	PassivePAtkPct                      // +Value de ataque físico
+	PassiveChargeMomentum               // depois de uma investida: +Value de dano e +2×Value de velocidade por 5 s
+	PassiveDominance                    // inimigos perto causam -10% e ficam 15% mais lentos; atordoar dura +0,5 s
 
 	passiveKindCount // sempre o último: tamanho de Passives
 )
@@ -174,6 +188,21 @@ const (
 	LastBastionSecs  = 6.0
 	LastBastionPer   = 0.01 // escudo de 1% da vida máx. por ponto gasto
 	FaithShieldSecs  = 10.0
+	FrenzyStackMax   = 5    // Sequência Selvagem: acúmulos
+	FrenzyStackSecs  = 3.0  // …perdidos depois de 3 s sem bater
+	BloodFrenzyBelow = 0.5  // Sede Insaciável
+	KillResetCD      = 10.0 // Carnificina Final
+	LeaderRadius     = 12.0 // Liderança e Comando Absoluto
+	CommandResMult   = 1.5
+	CommandMPMult    = 0.5
+	MomentumSecs     = 5.0 // Ímpeto de Carga
+	DominanceRadius  = 6.0 // Presença Dominante
+	DominanceWeaken  = 0.10
+	DominanceSlow    = 0.15
+	DominanceStun    = 0.5
+	ChainChargeRange = 10.0 // Investida Implacável
+	ResSkillCrit     = 0.15 // Ira Desmedida: +crítico nas skills que gastam recurso
+	BossExecuteCap   = 1.5  // execução contra chefe: no máximo +50%
 )
 
 // ZoneDef é uma área no chão contra inimigos: a cada Period, quem está dentro é provocado
@@ -245,6 +274,14 @@ type SkillDef struct {
 	RenewBlessings bool
 	// AllyOnly: o efeito em si (OnSelf) vai só para os aliados em AllyRadius, não para quem lança.
 	AllyOnly bool
+	// ResOnCrit: recurso a mais por crítico; ResOnMarkKill: recurso ao matar quem você marcou
+	// (EffectMark); ResetOnKill: matar com ela zera a recarga (com PassiveKillReset).
+	ResOnCrit, ResOnMarkKill float64
+	ResetOnKill              bool
+	// CommandSkill: custa metade da mana com PassiveCommand (Brado e Estandarte).
+	CommandSkill bool
+	// ChainCharge: salta entre até tantos inimigos a até ChainChargeRange, batendo em cada um.
+	ChainCharge int
 	// Recurso da evolução (resources.go): custo, ganho ao lançar e ao acertar (por alvo, até
 	// o teto de alvos); ResSpendAll gasta tudo e causa +ResPerPoint de dano por ponto.
 	ResCost, ResOnCast, ResOnHit float64
@@ -434,7 +471,7 @@ func atkName(magic bool) string {
 // ---------------------------------------------------------------------------------------
 
 func init() {
-	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees(), evoSkills(), knightEvoSkills()} {
+	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees(), evoSkills(), knightEvoSkills(), barbarianEvoSkills()} {
 		for _, s := range list {
 			if s.Hits == 0 {
 				s.Hits = 1
@@ -447,6 +484,7 @@ func init() {
 	}
 	placeEvolutionSkills()
 	adjustKnightEvolutions()
+	adjustBarbarianEvolutions()
 	applySkillResources()
 	indexModifiers()
 	Classes["knight"].Branches = [3]Branch{

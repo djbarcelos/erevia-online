@@ -127,3 +127,13 @@ Os IDs de 133 em diante são **provisórios**. ★ marca as 2 iniciais. "(evol.)
 2. Os nomes passam a ser **Brado de Guerra** (70) e **Avanço de Guerra** (71).
 3. O **Desafio** (provocar) fica no Senhor da Guerra, mas com raio e duração menores que os do Bastião.
 4. O **bloqueio não gera Ímpeto**.
+
+## Calibragem no simulador (Fase 10, 19/11)
+
+| Skill | Doc | Calibrado |
+|---|---|---|
+| Golpe de Comando (138) | 200→250%, recarga 6 s | **320→390%**, recarga **5 s** |
+| Avanço de Guerra (71) | 180→230% | **260→320%** |
+| Impacto (141) | 160→200% | **200→250%** |
+
+Resultado (tempo para matar, distância da média): 20–24 **+1%**, 25–29 −3%, 30–34 +2%, 35–40 **+8%**, dentro da meta (±10%).

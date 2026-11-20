@@ -207,7 +207,7 @@ func TestEffectiveSkillModifiers(t *testing.T) {
 }
 
 // completeEvolutions: as evoluções com a árvore inteira (fases de conteúdo já feitas).
-var completeEvolutions = []string{"bastion", "herald"}
+var completeEvolutions = []string{"bastion", "herald", "bloodrager", "warlord"}
 
 // A árvore completa tem folga: pelo menos 1,4× os pontos do 40 e 26 ranks no marco 20;
 // uma chave por ramo no 40, que exige 15 pontos no ramo.
