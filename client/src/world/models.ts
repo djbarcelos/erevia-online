@@ -343,7 +343,7 @@ const SHIELD: Grip = { rot: [0, 20, 0], pos: [-0.02, -0.45, 0.12], hand: "l" };
  * segue o polegar e o centro fica no meio do antebraço (o SHIELD dos heróis antigos punha a face para o lado
  * do polegar e a altura ao longo do braço: com o antebraço atravessado no peito, o escudo deitava).
  */
-const V4_SHIELD: Grip = { rot: [0, 0, 0], q: [-0.5, 0.5, 0.5, -0.5], pos: [-0.27, -0.375, 0], hand: "l" }; // centro a ~11 cm do antebraço
+const V4_SHIELD: Grip = { rot: [0, 0, 0], q: [-0.5, 0.5, 0.5, -0.5], pos: [-0.2, -0.42, 0], hand: "l" }; // centro a ~8 cm do antebraço, no meio dele
 const V4_GRIPS: Record<string, Grip> = {
   shield_badge_color: V4_SHIELD, shield_round_barbarian: V4_SHIELD, shield_square: V4_SHIELD, shield_spikes: V4_SHIELD, shield_spikes_color: V4_SHIELD,
 };

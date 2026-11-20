@@ -79,8 +79,10 @@ for s_, slot in (("r", "handslot.r"), ("l", "handslot.l")):
     y = Vector((0, 1, 0))                   # dedos estendidos = eixo da mão (como nos heróis do remaster), sem a parte do cabo
     fing = (y - axis * y.dot(axis)).normalized()
     fists[s_] = {"pos": [round(x, 3) for x in pos], "axis": [round(x, 3) for x in axis], "fingers": [round(x, 3) for x in fing]}
-for p_ in pb:
+for p_ in pb:  # volta ao modo das ações (quaternion): com Euler, o exportador ignorava as curvas dos dedos e a mão saía aberta
     p_.rotation_euler = (0, 0, 0)
+    p_.rotation_mode = "QUATERNION"
+    p_.rotation_quaternion = (1, 0, 0, 0)
 bpy.context.view_layer.update()
 print("PUNHO", json.dumps(fists))
 if fists_ts:
