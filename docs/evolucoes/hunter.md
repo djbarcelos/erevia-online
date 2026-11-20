@@ -135,10 +135,9 @@ Os IDs a partir do 203 são **provisórios**. ★ marca as 2 skills iniciais.
 
 ## Calibragem no simulador (Fase 12, 19/11)
 
-Na árvore do Patrulheiro, as skills de dano ficaram com **75% do dano do doc**.
+**Armas (Fase 3):** o Patrulheiro usa arco, besta ou besta pesada, e não usa mais as adagas.
+- **Itens:** cada arma do Ladino do nível 16 em diante ganha as três versões, com o mesmo grau e o mesmo bônus. O ataque da arma é igual ao das adagas no arco, +15% na besta e +45% na besta pesada.
+- **Na loja:** o Ferreiro vende as três do grau C.
+- **Ao evoluir:** ele ganha o Arco do Patrulheiro. Quem já era Patrulheiro recebe o arco no login, que já entra equipado.
 
-Com as 8 árvores completas, ele ficou entre **−5% e −17%** da média (20–40), perto da meta (−10% a +5%).
-
-**Armas:** o arco e as bestas dependem da Fase 3 (modelo, animação de tiro e projéteis no cliente). Até lá, o Patrulheiro usa as adagas, e o Tiro Preciso e os outros tiros têm alcance próprio (14 m). Quando a Fase 3 entrar:
-- a evolução passa a exigir arco ou besta;
-- ele ganha o Arco comum ao evoluir.
+Com o arco (tiro a cada 1,5 s, contra 0,8 s das adagas), as skills de dano da árvore ficaram com **115% do dano do doc**. Com as 8 árvores completas, ele ficou entre **−7% e +7%** da média (20–40), dentro da meta (−10% a +5%).

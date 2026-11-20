@@ -224,7 +224,7 @@ func rogueEvoSkills() []*SkillDef {
 
 // rogueTuning: calibragem no simulador (metas dos docs: Assassino entre −20% e −5% do tempo
 // para matar médio, Patrulheiro entre −10% e +5%): o dano das skills de dano de cada árvore.
-var rogueTuning = struct{ cutDamage, huntDamage float64 }{cutDamage: 0.65, huntDamage: 0.75}
+var rogueTuning = struct{ cutDamage, huntDamage float64 }{cutDamage: 0.65, huntDamage: 1.15}
 
 // adjustRogueEvolutions: os ajustes dos docs nas skills que já existiam.
 func adjustRogueEvolutions() {

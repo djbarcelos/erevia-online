@@ -215,6 +215,19 @@ for (const [m, p] of Object.entries(NPC_CLIP_PREFIX)) REMASTER_SETS[m] = npcSet(
 const REMASTER_2H: Record<string, Partial<Record<AnimRole, string | null>>> = {
   barbarian: { idle: "BB_2_Idle", walk: "BB_2_Walk", run: "BB_2_Run", break1: null, break2: null },
 };
+/**
+ * Conjunto de clipes com arco ou besta na mão (Patrulheiro, Fase 3): o golpe e a skill viram o tiro
+ * (Meshy Archery_Shot_1) e o dano tem a reação com o arco. Sem as variantes do golpe corpo a corpo.
+ */
+const REMASTER_RANGED: Record<string, Partial<Record<AnimRole, string | null>>> = {
+  rogue: { attack: "RB_Shoot", attack2: null, attack3: null, skill: "RB_Shoot", hit: "RB_HitBow", hit2: null },
+};
+/** Besta: o tiro de uma mão (Meshy Cowboy_Quick_Draw_Shooting, recortado), por cima do conjunto do arco. */
+const REMASTER_CROSSBOW: Record<string, Partial<Record<AnimRole, string | null>>> = {
+  rogue: { attack: "RB_ShootCB", skill: "RB_ShootCB" },
+};
+/** Armas de longe: com elas o herói usa o conjunto REMASTER_RANGED. */
+const RANGED_WEAPONS = new Set(["bow_withString", "crossbow_1handed", "crossbow_2handed"]);
 /** Armas de duas mãos dos heróis do remaster: o cabo passa pelas duas mãos (aimTwoHand). */
 const TWO_HANDED = new Set(["sword_2handed", "sword_2handed_color", "axe_2handed"]);
 
@@ -259,6 +272,8 @@ CLIP_IMPACT.MB_Attack2 = 0.73;
 CLIP_IMPACT.MB_Attack3 = 0.63;
 CLIP_IMPACT.RB_Attack2 = 0.57; // combo triplo, 1º corte
 CLIP_IMPACT.RB_Attack3 = 0.53; // giro das lâminas
+CLIP_IMPACT.RB_Shoot = 0.53; // arco: a mão da corda solta a flecha (pico da mão direita)
+CLIP_IMPACT.RB_ShootCB = 0.53; // besta: o disparo, no meio da mira (recorte 0,5–2,0 s do clipe do Meshy)
 
 export type Slot = "handslot.r" | "handslot.l";
 
@@ -286,7 +301,11 @@ export interface Grip {
    * vem do punho de cada modelo e de cada mão, sem calibrar. `slide` corre a arma ao longo do cabo (positivo
    * = a mão mais perto da ponta, para cajados), e `rot`/`pos`/`q` ficam só para os modelos sem punho.
    */
-  fist?: { slide?: number; /** Inclina o cabo para o lado do braço (graus): o cajado sai em diagonal para cima. */ tilt?: number };
+  fist?: {
+    slide?: number;
+    /** Inclina o cabo para o lado do braço (graus): o cajado sai em diagonal para cima. */ tilt?: number;
+    /** Gira o modelo antes de encaixar (graus, X Y Z): o arco tem o comprimento no X, não no Y. */ pre?: [number, number, number];
+  };
 }
 /** Inverso da rotação dos encaixes (0,5 0,5 0,5 0,5): com ele a arma fica no eixo do osso da mão (X lateral, Y ao longo do braço, Z para a frente). */
 const SLOT_INV = new Quaternion(-0.5, -0.5, -0.5, 0.5);
@@ -301,7 +320,14 @@ export const WEAPON_GRIPS: Record<string, Grip> = {
   staff: { rot: [135, 0, 5], pos: [0, 0.35, 0], scale: 1.4, fist: { slide: 0.2, tilt: 60 } },
   shield_badge_color: SHIELD, shield_round_barbarian: SHIELD, shield_square: SHIELD, shield_spikes: SHIELD,
   shield_spikes_color: SHIELD,
+  // Patrulheiro (Fase 3, calibrado no laboratório): o arco na mão esquerda, pelo meio, de pé ao
+  // lado do corpo; as bestas na direita, ao longo do antebraço (penduradas no descanso, para a frente no tiro).
+  bow_withString: { ...BLADE, scale: 1.1, fist: { pre: [90, 0, 0], tilt: -70 } },
+  crossbow_1handed: { ...BLADE, scale: 1.1, fist: { pre: [-90, 0, 0], tilt: -90 } },
+  crossbow_2handed: { ...BLADE, scale: 1.2, fist: { pre: [-90, 0, 0], tilt: -90 } },
 };
+/** Arcos: o servidor manda na mão principal, mas o arco se segura com a esquerda. */
+const LEFT_HAND_WEAPONS = new Set(["bow_withString"]);
 /** Armas padrão de cada modelo. Os heróis usam o que o servidor manda (equipamento). */
 const WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
   knight: {},
@@ -319,6 +345,7 @@ const NPC_WEAPONS: Record<string, Partial<Record<Slot, string>>> = {
 const ITEM_WEAPONS = [
   "sword_1handed", "sword_2handed", "sword_2handed_color", "axe_1handed", "axe_2handed", "staff", "wand", "dagger",
   "shield_badge_color", "shield_round_barbarian", "shield_square", "shield_spikes", "shield_spikes_color",
+  "bow_withString", "crossbow_1handed", "crossbow_2handed",
   // Opções da criação de personagem (mesmos arquivos das armas dos esqueletos).
   "skeleton_blade", "skeleton_axe", "skeleton_staff", "skeleton_shield_large_a",
 ];
@@ -869,7 +896,9 @@ export class CharacterModels {
           const fx = f0.scale(Math.cos(tl)).subtractInPlace(a0.scale(Math.sin(tl)));
           const z = Vector3.Cross(fx, ax);
           const q = Quaternion.FromRotationMatrix(Matrix.FromValues(fx.x, fx.y, fx.z, 0, ax.x, ax.y, ax.z, 0, z.x, z.y, z.z, 0, 0, 0, 0, 1));
-          child.rotationQuaternion = SLOT_INV.multiply(q).multiply(child.rotationQuaternion ?? Quaternion.Identity());
+          const pre = grip.fist?.pre;
+          const preQ = pre ? Quaternion.FromEulerAngles((pre[0] * Math.PI) / 180, (pre[1] * Math.PI) / 180, (pre[2] * Math.PI) / 180) : Quaternion.Identity();
+          child.rotationQuaternion = SLOT_INV.multiply(q).multiply(preQ).multiply(child.rotationQuaternion ?? Quaternion.Identity());
           Vector3.FromArray(fist.pos).addInPlace(ax.scale(grip.fist?.slide ?? 0)).rotateByQuaternionToRef(SLOT_INV, child.position);
           if (grip.scale) child.scaling.scaleInPlace(grip.scale);
         } else if (grip) {
@@ -1002,8 +1031,14 @@ export class CharacterModels {
       return g;
     };
     /** Monta os papéis do conjunto normal ou do de duas mãos (o AnimController é avisado pelo RoleMap). */
-    const applySet = (two: boolean) => {
-      const over = two && assets.remaster ? REMASTER_2H[model] : undefined;
+    const applySet = (mode: "normal" | "two" | "ranged" | "crossbow") => {
+      const over = !assets.remaster
+        ? undefined
+        : mode === "two"
+          ? REMASTER_2H[model]
+          : mode === "ranged" || mode === "crossbow"
+            ? { ...REMASTER_RANGED[model], ...(mode === "crossbow" ? REMASTER_CROSSBOW[model] : {}) }
+            : undefined;
       anims.clear();
       for (const k of Object.keys(impacts)) delete impacts[k as AnimRole];
       for (const [role, base] of Object.entries(set) as [AnimRole, string][]) {
@@ -1015,17 +1050,20 @@ export class CharacterModels {
       }
       anims.onChange?.();
     };
-    applySet(false);
-    let twoMode = false;
+    applySet("normal");
+    let setMode: "normal" | "two" | "ranged" | "crossbow" = "normal";
     let twoWeapon: TransformNode | null = null;
     /** Arma de duas mãos na direita e a esquerda vazia: usa o conjunto de duas mãos e o cabo passa pelas duas mãos. */
     const refreshTwoHand = () => {
       const r = heldFile.get("handslot.r");
       const two = !!assets.remaster && !!r && TWO_HANDED.has(r) && !heldFile.has("handslot.l") && !!REMASTER_2H[model];
       twoWeapon = two ? (held.get("handslot.r")?.[0] ?? null) : null;
-      if (two !== twoMode) {
-        twoMode = two;
-        applySet(two);
+      const ranged = !!assets.remaster && !!REMASTER_RANGED[model] && [...heldFile.values()].some((f) => RANGED_WEAPONS.has(f));
+      const crossbow = ranged && [...heldFile.values()].some((f) => f.startsWith("crossbow"));
+      const mode = two ? "two" : crossbow ? "crossbow" : ranged ? "ranged" : "normal";
+      if (mode !== setMode) {
+        setMode = mode;
+        applySet(mode);
       }
     };
     refreshTwoHand();
@@ -1126,6 +1164,7 @@ export class CharacterModels {
         }
       },
       setWeapons: (right, left, grade = 0, enchant = 0) => {
+        if (right && !left && LEFT_HAND_WEAPONS.has(right)) [right, left] = [null, right];
         attach("handslot.r", right ? this.weaponFiles.get(right) : null, grade, enchant);
         attach("handslot.l", left ? this.weaponFiles.get(left) : null, grade, enchant);
         refreshTwoHand();

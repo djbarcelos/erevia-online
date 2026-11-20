@@ -38,9 +38,12 @@ func StatPower(b game.Stats) float64 {
 		wSpeed*b.Speed + wHaste*math.Max(b.AtkSpeed, b.CastSpeed) + wRegen*(b.HPRegen+b.MPRegen)
 }
 
-// ItemPower: poder do item com o encantamento (o mesmo bônus que a zona soma).
+// ItemPower: poder do item com o encantamento (o mesmo bônus que a zona soma). Nas bestas, o
+// ataque a mais paga o tiro mais lento (game.RangedAtkMult) e não conta no orçamento.
 func ItemPower(d *game.ItemDef, enchant int) float64 {
-	return StatPower(game.AddItemBonus(game.Stats{}, d, enchant))
+	b := game.AddItemBonus(game.Stats{}, d, enchant)
+	b.PAtk /= game.RangedAtkMult(d.WeaponType)
+	return StatPower(b)
 }
 
 // Orçamento de poder: quanto um item deveria valer pelo nível exigido e pela raridade.

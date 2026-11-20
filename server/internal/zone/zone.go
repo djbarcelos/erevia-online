@@ -664,6 +664,7 @@ func (z *Zone) onJoin(info JoinInfo) {
 		},
 	}
 	p.pl.contracts = loadContracts(info.Contracts, info.Reputation)
+	grantMissingStarterItems(p) // o arco de quem já era Patrulheiro (specs.go)
 	p.pl.sentPvp = z.pvpState(p)
 	p.hp, p.mp = math.MaxFloat64, math.MaxFloat64
 	z.refreshStats(p) // classe + atributos + equipamento + passivas; limita a vida/mana ao máximo

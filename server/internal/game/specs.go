@@ -96,6 +96,8 @@ var SpecList = []*SpecDef{
 	{ID: "hunter", Class: "rogue", Name: "Patrulheiro", Color: "#8cc850", Bonus: Attrs{Str: 6, Dex: 6},
 		Description:   "Caça de longe: tiros precisos, armadilhas e perseguição.",
 		StarterSkills: [2]uint32{SkillHuntShot, SkillHuntKnife},
+		Weapons:       []string{WeaponBow, WeaponCrossbow, WeaponCrossbow2H},
+		StarterItems:  []string{HunterStarterBow},
 		Branches: [3]Branch{{"Arqueria", "Dano à distância.", "#d6b46e"},
 			{"Armadilhas", "Controle de área.", "#6ad06a"}, {"Caçada", "Marcação e perseguição.", "#8cc850"}}},
 }
