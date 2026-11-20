@@ -207,6 +207,8 @@ const EFFECT_THEMES: Partial<Record<Effect, SkillTheme>> = {
   [Effect.CURSE]: { glyph: "skull", bg: ["#7a4ab0", "#1e0a30"], accent: "#e0c0ff" },
   [Effect.ARMOR_BREAK]: { glyph: "shield", bg: ["#8a3a3a", "#2a0808"], accent: "#ffc0a0" },
   [Effect.BANISH]: { glyph: "mask", bg: ["#9a6ae8", "#1e0e40"], accent: "#f0e0ff" },
+  [Effect.VEIL]: { glyph: "mask", bg: ["#5a4ab0", "#100a30"], accent: "#e0d0ff" },
+  [Effect.HUNT]: { glyph: "mark", bg: ["#8cc850", "#1a2a08"], accent: "#e8ffd0" },
 };
 
 export function effectIcon(effect: Effect): string {
@@ -283,6 +285,10 @@ export function effectName(effect: Effect): string {
       return "Sem defesa";
     case Effect.BANISH:
       return "Fora de cena";
+    case Effect.VEIL:
+      return "Véu mortal";
+    case Effect.HUNT:
+      return "Perseguição";
     default:
       return "Efeito";
   }
@@ -356,6 +362,10 @@ export function effectText(effect: Effect, value: number, ms: number): string {
       return `-${pct} de defesa por ${dur}`;
     case Effect.BANISH:
       return `Fora de cena por ${dur}: não age e não recebe dano`;
+    case Effect.VEIL:
+      return `Matar um inimigo deixa você invisível por ${formatSeconds(value * 1000)} s (${dur})`;
+    case Effect.HUNT:
+      return `+${pct} de dano contra alvos marcados por ${dur}`;
     default:
       return "";
   }

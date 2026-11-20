@@ -121,3 +121,9 @@ Os IDs a partir do 185 são **provisórios**. ★ marca as 2 skills iniciais.
 1. **Pelas costas** = o atacante dentro do cone de 120° atrás do alvo.
 2. A **Sentença** vai para o marco 30 e passa a ter 3 ranks, com o limite de PvP acima.
 3. O **teto de execução em chefe** (+50%) vale para o Golpe Fatal, a Sentença e o Golpe de Misericórdia.
+
+## Calibragem no simulador (Fase 12, 19/11)
+
+Na árvore do Assassino, as skills de dano ficaram com **65% do dano do doc**. O texto de cada skill mostra o valor calibrado.
+
+Com as 8 árvores completas, ele ficou entre **−19% e −24%** da média (20–40), na borda da meta (−20% a −5%).

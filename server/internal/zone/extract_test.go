@@ -78,6 +78,11 @@ func oldApplyPassives(s game.Stats, p *entity) game.Stats {
 			s.Evasion += v
 		case game.PassivePAtkPct: // Fase 10: Braço de Guerra
 			s.PAtk *= 1 + v
+		case game.PassiveHawkEye: // Fase 12: Olho de Falcão
+			s.Crit += v
+			s.Range += game.HawkEyeRange * v
+		case game.PassiveMoveSpeedPct: // Fase 12: Passo de Caça
+			s.Speed *= 1 + v
 		case game.PassiveBlockPct: // Fase 9: Guarda do Escudo (só com escudo)
 			if s.Block > 0 {
 				s.Block += v

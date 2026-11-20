@@ -58,6 +58,11 @@ func ApplyPassives(s Stats, ranks map[uint32]int, weaponType string) Stats {
 			s.Evasion += v
 		case PassivePAtkPct: // Braço de Guerra
 			s.PAtk *= 1 + v
+		case PassiveHawkEye: // Olho de Falcão
+			s.Crit += v
+			s.Range += HawkEyeRange * v
+		case PassiveMoveSpeedPct: // Passo de Caça
+			s.Speed *= 1 + v
 		case PassiveBlockPct: // Guarda do Escudo: só com escudo (o bloqueio vem dele)
 			if s.Block > 0 {
 				s.Block += v

@@ -43,6 +43,8 @@ const (
 	EffectCurse                   // Value = dano por segundo (Maldição Persistente)
 	EffectArmorBreak              // Value = -fração de defesa (Fraqueza)
 	EffectBanish                  // fora de cena: não age, não bate e não apanha (Prisão Etérea)
+	EffectVeil                    // matar um inimigo deixa invisível por Value s (Véu Mortal)
+	EffectHunt                    // +Value de dano contra alvos marcados (Perseguição)
 
 	effectKindCount // sempre o último: quantos tipos de efeito há
 )
@@ -143,6 +145,17 @@ const (
 	PassiveSpreadPower                  // a praga que pula leva +Value de força (Contágio)
 	PassiveDotCrit                      // pragas e maldições podem dar crítico: +Value de chance (Putrefação)
 	PassiveManaOnSpend                  // cada 10 de recurso gasto devolve Value × mana máx. (Fluxo Arcano)
+	PassiveFinisherRefund               // finalizações devolvem Value do recurso gasto (Dança das Lâminas)
+	PassiveShadowAssassin               // sair da invisibilidade: +40 de recurso e +100% de dano crítico no 1º golpe
+	PassiveCritBleed                    // críticos sangram: Value × ataque por segundo, 4 s (Sangrar)
+	PassivePerfectExecution             // matar com finalização zera Passo Sombrio e Golpe das Sombras
+	PassiveHawkEye                      // +Value de crítico e +50×Value m de alcance (Olho de Falcão)
+	PassivePerfectAim                   // recurso cheio: o tiro é crítico garantido (Mira Perfeita)
+	PassiveTrapPower                    // armadilhas e redes: +Value de dano e prendem +Value×5/3 s (Mestre Armadilheiro)
+	PassiveAmbush                       // presos por armadilha ou rede recebem +25% dos seus golpes (Emboscada)
+	PassiveMoveSpeedPct                 // +Value de velocidade de movimento (Passo de Caça)
+	PassiveHunterInstinct               // +Value de dano contra alvos lentos ou presos (Instinto do Caçador)
+	PassiveRelentlessHunt               // matar o marcado devolve 50 de recurso e passa a marca (Caçada Implacável)
 
 	passiveKindCount // sempre o último: tamanho de Passives
 )
@@ -183,48 +196,58 @@ func SkillAvailable(s *SkillDef, class, spec string) bool {
 
 // Constantes das passivas e mecânicas especiais.
 const (
-	LastStandBelow   = 0.30 // Muralha Viva
-	LastStandCD      = 60.0
-	LastStandSeconds = 10.0
-	CourageRadius    = 10.0 // Aura de Coragem
-	BearBelow        = 0.50 // Espírito do Urso
-	FireBurnSeconds  = 3.0  // Brasa Viva
-	OverloadMPCost   = 1.10 // Sobrecarga
-	MPEfficiencyCap  = 0.25 // Mente Clara: no máximo −25% no custo de mana
-	PoisonProcFrac   = 0.04 // Lâmina Envenenada: 4% do ataque por segundo…
-	PoisonProcSecs   = 5.0  // …por 5 s
-	PlagueSpread     = 6.0  // Praga: raio do contágio
-	FrostArmorSlow   = 0.3  // Armadura de Gelo: lentidão em quem bate de perto…
-	FrostArmorSecs   = 2.0  // …por 2 s
-	MeleeRange       = 4.0  // até onde um golpe conta como "de perto"
-	AllyAuraRadius   = 10.0 // Vínculo de Guarda
-	GuardRange       = 15.0 // Interceptar/Juramento/Sacrifício: o protetor precisa estar perto
-	LastStandResGain = 30.0 // Muralha Viva evoluída: +30 de Determinação ao disparar
-	LastBastionCD    = 120.0
-	LastBastionSecs  = 6.0
-	LastBastionPer   = 0.01 // escudo de 1% da vida máx. por ponto gasto
-	FaithShieldSecs  = 10.0
-	FrenzyStackMax   = 5    // Sequência Selvagem: acúmulos
-	FrenzyStackSecs  = 3.0  // …perdidos depois de 3 s sem bater
-	BloodFrenzyBelow = 0.5  // Sede Insaciável
-	KillResetCD      = 10.0 // Carnificina Final
-	LeaderRadius     = 12.0 // Liderança e Comando Absoluto
-	CommandResMult   = 1.5
-	CommandMPMult    = 0.5
-	MomentumSecs     = 5.0 // Ímpeto de Carga
-	DominanceRadius  = 6.0 // Presença Dominante
-	DominanceWeaken  = 0.10
-	DominanceSlow    = 0.15
-	DominanceStun    = 0.5
-	ChainChargeRange = 10.0 // Investida Implacável
-	ResSkillCrit     = 0.15 // Ira Desmedida: +crítico nas skills que gastam recurso
-	BossExecuteCap   = 1.5  // execução contra chefe: no máximo +50%
-	FireHeartBonus   = 0.2  // Coração do Vulcão
-	FireHeartSpread  = 3.0
-	DeepAbyssMult    = 1.5 // Abismo Interior
-	PandemicRange    = 8.0 // Pandemia
-	PlagueJumpRes    = 3.0 // Carga Arcana por praga que pula…
-	PlagueJumpResMax = 3   // …até 3 por morte
+	LastStandBelow      = 0.30 // Muralha Viva
+	LastStandCD         = 60.0
+	LastStandSeconds    = 10.0
+	CourageRadius       = 10.0 // Aura de Coragem
+	BearBelow           = 0.50 // Espírito do Urso
+	FireBurnSeconds     = 3.0  // Brasa Viva
+	OverloadMPCost      = 1.10 // Sobrecarga
+	MPEfficiencyCap     = 0.25 // Mente Clara: no máximo −25% no custo de mana
+	PoisonProcFrac      = 0.04 // Lâmina Envenenada: 4% do ataque por segundo…
+	PoisonProcSecs      = 5.0  // …por 5 s
+	PlagueSpread        = 6.0  // Praga: raio do contágio
+	FrostArmorSlow      = 0.3  // Armadura de Gelo: lentidão em quem bate de perto…
+	FrostArmorSecs      = 2.0  // …por 2 s
+	MeleeRange          = 4.0  // até onde um golpe conta como "de perto"
+	AllyAuraRadius      = 10.0 // Vínculo de Guarda
+	GuardRange          = 15.0 // Interceptar/Juramento/Sacrifício: o protetor precisa estar perto
+	LastStandResGain    = 30.0 // Muralha Viva evoluída: +30 de Determinação ao disparar
+	LastBastionCD       = 120.0
+	LastBastionSecs     = 6.0
+	LastBastionPer      = 0.01 // escudo de 1% da vida máx. por ponto gasto
+	FaithShieldSecs     = 10.0
+	FrenzyStackMax      = 5    // Sequência Selvagem: acúmulos
+	FrenzyStackSecs     = 3.0  // …perdidos depois de 3 s sem bater
+	BloodFrenzyBelow    = 0.5  // Sede Insaciável
+	KillResetCD         = 10.0 // Carnificina Final
+	LeaderRadius        = 12.0 // Liderança e Comando Absoluto
+	CommandResMult      = 1.5
+	CommandMPMult       = 0.5
+	MomentumSecs        = 5.0 // Ímpeto de Carga
+	DominanceRadius     = 6.0 // Presença Dominante
+	DominanceWeaken     = 0.10
+	DominanceSlow       = 0.15
+	DominanceStun       = 0.5
+	ChainChargeRange    = 10.0 // Investida Implacável
+	ResSkillCrit        = 0.15 // Ira Desmedida: +crítico nas skills que gastam recurso
+	BossExecuteCap      = 1.5  // execução contra chefe: no máximo +50%
+	FireHeartBonus      = 0.2  // Coração do Vulcão
+	FireHeartSpread     = 3.0
+	DeepAbyssMult       = 1.5  // Abismo Interior
+	PandemicRange       = 8.0  // Pandemia
+	PlagueJumpRes       = 3.0  // Carga Arcana por praga que pula…
+	PlagueJumpResMax    = 3    // …até 3 por morte
+	FinisherRefund      = 0.3  // Dança das Lâminas
+	ShadowAssassinRes   = 40.0 // Assassino das Sombras
+	ShadowAssassinCrit  = 1.0
+	CritBleedSecs       = 4.0     // Sangrar
+	HawkEyeRange        = 50.0    // Olho de Falcão: metros por ponto de crítico
+	TrapRootPerPower    = 5.0 / 3 // Mestre Armadilheiro: s de prender por fração de dano
+	AmbushBonus         = 0.25    // Emboscada
+	RelentlessHuntRes   = 50.0    // Caçada Implacável
+	RelentlessHuntRange = 12.0
+	PierceWidth         = 1.5 // Disparo Perfurante: largura da linha
 )
 
 // ZoneDef é uma área no chão contra inimigos: a cada Period, quem está dentro é provocado
@@ -238,6 +261,9 @@ type ZoneDef struct {
 	// Damage: dano por pulso (fração do ataque de quem pôs a zona; Magic = mágico).
 	Damage Scale
 	Magic  bool
+	// Trap: dispara uma vez no primeiro inimigo que entrar: TrapMult do ataque e o efeito.
+	Trap     bool
+	TrapMult Scale
 }
 
 // BannerDef é o estandarte que fica no chão: aliados perto ganham o efeito.
@@ -318,6 +344,14 @@ type SkillDef struct {
 	Pandemic bool
 	// RenewCurses: ao acertar, renova as outras maldições suas no alvo.
 	RenewCurses bool
+	// RevealSpeed: ao sair da invisibilidade desta skill, +velocidade por 3 s (Sombra Persistente).
+	RevealSpeed float64
+	// Pierce: acerta até tantos inimigos em linha à frente, até Range (Disparo Perfurante).
+	Pierce int
+	// Com ResAbove de recurso ou mais, +ResAbovePct de dano (Flecha Carregada).
+	ResAbove, ResAbovePct float64
+	// Trap: armadilha ou rede (Mestre Armadilheiro e Emboscada).
+	Trap bool
 	// Recurso da evolução (resources.go): custo, ganho ao lançar e ao acertar (por alvo, até
 	// o teto de alvos); ResSpendAll gasta tudo e causa +ResPerPoint de dano por ponto.
 	ResCost, ResOnCast, ResOnHit float64
@@ -507,7 +541,7 @@ func atkName(magic bool) string {
 // ---------------------------------------------------------------------------------------
 
 func init() {
-	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees(), evoSkills(), knightEvoSkills(), barbarianEvoSkills(), mageEvoSkills()} {
+	for _, list := range [][]*SkillDef{knightTree(), barbarianTree(), mageTree(), rogueTree(), specTrees(), evoSkills(), knightEvoSkills(), barbarianEvoSkills(), mageEvoSkills(), rogueEvoSkills()} {
 		for _, s := range list {
 			if s.Hits == 0 {
 				s.Hits = 1
@@ -522,6 +556,7 @@ func init() {
 	adjustKnightEvolutions()
 	adjustBarbarianEvolutions()
 	adjustMageEvolutions()
+	adjustRogueEvolutions()
 	applySkillResources()
 	indexModifiers()
 	Classes["knight"].Branches = [3]Branch{

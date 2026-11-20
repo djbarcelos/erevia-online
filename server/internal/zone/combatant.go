@@ -114,6 +114,7 @@ type playerState struct {
 	lastBastionReady float64
 	redirecting      bool
 	// Sequência Selvagem: alvo, acúmulos e o último básico; Carnificina Final: recarga.
+	revealSpeed    float64 // Sombra Persistente: velocidade ao sair do Sumir
 	frenzyTarget   uint32
 	frenzyStacks   int
 	frenzyAt       float64

@@ -113,10 +113,17 @@ func (z *Zone) hitInput(src, dst *entity, magic bool, mult, extraCrit float64) g
 			in.ForceCrit = true // Coração do Inverno
 		}
 	}
-	// Saindo da invisibilidade: o primeiro golpe é crítico garantido.
+	// Saindo da invisibilidade: o primeiro golpe é crítico garantido (com o Assassino das
+	// Sombras, +100% de dano crítico nele).
 	if src.pl != nil && src.pl.ambushCrit {
 		in.ForceCrit = true
 		src.pl.ambushCrit = false
+		if src.pl.passives.Has(game.PassiveShadowAssassin) {
+			in.CritMult += game.ShadowAssassinCrit
+		}
+	}
+	if src.pl != nil {
+		z.rogueHitBonus(src, dst, &in)
 	}
 	// Emboscador que acabou de aparecer: o primeiro golpe dói mais (archetypes.go).
 	if src.mon != nil && src.mon.arch.ambushHit {
@@ -256,6 +263,14 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			return
 		}
 		spent, _ := z.castResource(src, s)
+		if s.ResAbove > 0 && src.pl.res.Value >= s.ResAbove { // Flecha Carregada
+			c := *s
+			c.Mult = game.Scale{Base: s.Mult.Base * (1 + s.ResAbovePct), Per: s.Mult.Per * (1 + s.ResAbovePct)}
+			s = &c
+		}
+		if s.RevealSpeed > 0 { // Sombra Persistente: vale quando sair desta invisibilidade
+			src.pl.revealSpeed = s.RevealSpeed
+		}
 		if s.ResBonusCost > 0 && src.pl.res.Spend(s.ResBonusCost) { // Rajada Concentrada
 			c := *s
 			c.Mult = game.Scale{Base: s.Mult.Base * (1 + s.ResBonusPct), Per: s.Mult.Per * (1 + s.ResBonusPct)}
@@ -288,7 +303,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		z.spawnBanner(src, s.Banner)
 	}
 	if s.Zone != nil {
-		z.spawnZone(src, s.Zone, rank)
+		z.spawnZone(src, s.Zone, rank, s.Trap)
 	}
 	if s.CleanseAllies != (game.Scale{}) {
 		z.cleanse(src, s, rank)
@@ -316,6 +331,9 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 			z.frame.casts = append(z.frame.casts, &pb.SkillCast{SourceId: src.id, SkillId: s.ID, TargetId: target.id})
 		}
 		z.skillHit(src, target, s, rank, false)
+		if s.Pierce > 1 {
+			z.pierce(src, target, s, rank)
+		}
 		if s.Splash > 0 {
 			// SplashMax: no máximo tantos alvos extras (Eco do Escudo).
 			left := s.SplashMax
@@ -396,6 +414,9 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int, splash boo
 		if s.Holy && src.pl != nil {
 			extraCrit += src.pl.passives.Of(game.PassiveHolyCrit)
 		}
+		if s.Trap && src.pl != nil { // Mestre Armadilheiro
+			mult *= 1 + src.pl.passives.Of(game.PassiveTrapPower)
+		}
 		if splash && s.SplashMult != (game.Scale{}) {
 			mult *= s.SplashMult.At(rank)
 		}
@@ -413,6 +434,9 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int, splash boo
 			}
 			if dst.dead && s.ResetOnKill {
 				z.killReset(src, s) // Carnificina Final
+			}
+			if dst.dead && game.SkillResCost(s) > 0 {
+				z.perfectExecution(src) // Execução Perfeita
 			}
 		}
 	}
@@ -437,6 +461,9 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int, splash boo
 		def := spec.At(rank)
 		if spec.AtkFrac {
 			def.Value = math.Round(z.attackPower(src, s.Magic) * def.Value)
+		}
+		if s.Trap && def.Kind == game.EffectRoot && src.pl != nil { // Mestre Armadilheiro: prende mais
+			def.Duration += src.pl.passives.Of(game.PassiveTrapPower) * game.TrapRootPerPower
 		}
 		z.applyEffect(src, dst, def)
 	}
@@ -598,6 +625,11 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 				ev.Heal = uint32(heal)
 				z.areaEventHeal(src, heal)
 			}
+		}
+		// Sangrar: críticos abrem uma ferida
+		if pv := src.pl.passives.Of(game.PassiveCritBleed); pv > 0 && hit.Crit && !dst.dead {
+			v := math.Max(1, math.Round(z.attackPower(src, false)*pv))
+			z.applyEffect(src, dst, &game.EffectDef{Kind: game.EffectBleed, Duration: game.CritBleedSecs, Value: v})
 		}
 		// Lâmina Envenenada
 		if pv := src.pl.passives.Of(game.PassivePoisonProc); pv > 0 && !dst.dead && z.rng.Float64() < pv {
