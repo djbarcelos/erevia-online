@@ -16,7 +16,7 @@ Visual novo dos heróis: um corpo (masculino e feminino), 41 kits (recruta, 4 cl
 |---|---|
 | 0. Guia e contrato | aprovada (19/11) |
 | 1. Bíblia visual | **para aprovação**: [fase1/](fase1/README.md) |
-| 2. Corpo e fatia do Cavaleiro | — |
+| 2. Corpo e fatia do Cavaleiro | **em andamento**: corpo, rig, LODs, feminino e animações base no jogo (`?herois=v4`) |
 | 3. Bárbaro, Mago e Ladino | — |
 | 4. Kits restantes | — |
 | 5. Skills e efeitos | — |

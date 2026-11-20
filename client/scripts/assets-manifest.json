@@ -46,6 +46,9 @@
     "armor/pauldron_legend.glb": {
       "categoria": "armadura"
     },
+    "barbarian_b.glb": {
+      "categoria": "personagem"
+    },
     "barbarian.glb": {
       "categoria": "personagem",
       "variantes": [
@@ -57,9 +60,6 @@
           "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
         }
       }
-    },
-    "barbarian_b.glb": {
-      "categoria": "personagem"
     },
     "bone_lord_b.glb": {
       "categoria": "chefe"
@@ -88,16 +88,13 @@
     "frog_b.glb": {
       "categoria": "monstro"
     },
-    "knight.glb": {
-      "categoria": "personagem",
-      "variantes": [
-        "^Head_"
-      ]
+    "heroi_v4.glb": {
+      "categoria": "personagem"
     },
     "knight_b.glb": {
       "categoria": "personagem"
     },
-    "mage.glb": {
+    "knight.glb": {
       "categoria": "personagem",
       "variantes": [
         "^Head_"
@@ -105,6 +102,12 @@
     },
     "mage_b.glb": {
       "categoria": "personagem"
+    },
+    "mage.glb": {
+      "categoria": "personagem",
+      "variantes": [
+        "^Head_"
+      ]
     },
     "nature_boat_b.glb": {
       "categoria": "cenario"
@@ -229,14 +232,17 @@
     "props/loot_sack.glb": {
       "categoria": "cenario"
     },
+    "rogue_b.glb": {
+      "categoria": "personagem"
+    },
     "rogue.glb": {
       "categoria": "personagem",
       "variantes": [
         "^Head_"
       ]
     },
-    "rogue_b.glb": {
-      "categoria": "personagem"
+    "skeleton_mage_b.glb": {
+      "categoria": "monstro"
     },
     "skeleton_mage.glb": {
       "categoria": "monstro",
@@ -251,7 +257,7 @@
         }
       }
     },
-    "skeleton_mage_b.glb": {
+    "skeleton_minion_b.glb": {
       "categoria": "monstro"
     },
     "skeleton_minion.glb": {
@@ -267,7 +273,7 @@
         }
       }
     },
-    "skeleton_minion_b.glb": {
+    "skeleton_rogue_b.glb": {
       "categoria": "monstro"
     },
     "skeleton_rogue.glb": {
@@ -283,7 +289,7 @@
         }
       }
     },
-    "skeleton_rogue_b.glb": {
+    "skeleton_warrior_b.glb": {
       "categoria": "monstro"
     },
     "skeleton_warrior.glb": {
@@ -298,9 +304,6 @@
           "motivo": "KayKit legado, substituído na #98"
         }
       }
-    },
-    "skeleton_warrior_b.glb": {
-      "categoria": "monstro"
     },
     "slime_b.glb": {
       "categoria": "monstro"
@@ -404,9 +407,6 @@
     "weapons/crossbow_2handed.glb": {
       "categoria": "arma"
     },
-    "weapons/dagger.glb": {
-      "categoria": "arma"
-    },
     "weapons/dagger_b.glb": {
       "categoria": "arma"
     },
@@ -414,6 +414,9 @@
       "categoria": "arma"
     },
     "weapons/dagger_rare_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/dagger.glb": {
       "categoria": "arma"
     },
     "weapons/shield_b.glb": {
@@ -431,10 +434,10 @@
     "weapons/shield_round_barbarian.glb": {
       "categoria": "arma"
     },
-    "weapons/shield_spikes.glb": {
+    "weapons/shield_spikes_color.glb": {
       "categoria": "arma"
     },
-    "weapons/shield_spikes_color.glb": {
+    "weapons/shield_spikes.glb": {
       "categoria": "arma"
     },
     "weapons/shield_square.glb": {
@@ -458,9 +461,6 @@
         }
       }
     },
-    "weapons/staff.glb": {
-      "categoria": "arma"
-    },
     "weapons/staff_b.glb": {
       "categoria": "arma"
     },
@@ -470,13 +470,16 @@
     "weapons/staff_rare_b.glb": {
       "categoria": "arma"
     },
+    "weapons/staff.glb": {
+      "categoria": "arma"
+    },
     "weapons/sword_1handed.glb": {
       "categoria": "arma"
     },
-    "weapons/sword_2handed.glb": {
+    "weapons/sword_2handed_color.glb": {
       "categoria": "arma"
     },
-    "weapons/sword_2handed_color.glb": {
+    "weapons/sword_2handed.glb": {
       "categoria": "arma"
     },
     "weapons/sword_b.glb": {
@@ -488,9 +491,6 @@
     "weapons/sword_rare_b.glb": {
       "categoria": "arma"
     },
-    "weapons/wand.glb": {
-      "categoria": "arma"
-    },
     "weapons/wand_b.glb": {
       "categoria": "arma"
     },
@@ -498,6 +498,9 @@
       "categoria": "arma"
     },
     "weapons/wand_rare_b.glb": {
+      "categoria": "arma"
+    },
+    "weapons/wand.glb": {
       "categoria": "arma"
     },
     "wolf_b.glb": {

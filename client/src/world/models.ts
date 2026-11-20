@@ -27,7 +27,7 @@ import { reportClientError } from "../net/errors";
 import { RoleMap } from "./anim";
 import { createGolem, GOLEM_MODEL } from "./golem";
 import { setPaletteKind } from "./palette-material";
-import { lodFor, MODEL_FALLBACK, REMASTER, REMASTER_FILES, REMASTER_LAZY, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_NO_PREFETCH, REMASTER_ONLY, REMASTER_WEAPONS, WEAPON_FORM_FILES, remasterWeapon } from "./remaster";
+import { HERO_MODELS, HEROIS_V4, lodFor, MODEL_FALLBACK, REMASTER, REMASTER_FILES, REMASTER_LAZY, REMASTER_HEIGHTS, REMASTER_MASKS, REMASTER_NO_PREFETCH, REMASTER_ONLY, REMASTER_WEAPONS, WEAPON_FORM_FILES, remasterWeapon } from "./remaster";
 import { armorKey, bodyTier, capeFile, helmFile, NO_ARMOR, pauldronFile, TIER_FILES, type ArmorGrades } from "./armor";
 import { ARMOR_ATTACH } from "./armor-attach";
 import { bodyPalettes, colorKey, outfitShade, needsRepaint, normalLook, ORIGINAL_LOOK, paintTexture, type BodyLook, type BodyPalettes } from "./body-look";
@@ -206,6 +206,17 @@ export const NPC_CLIP_PREFIX: Record<string, string> = {
   npc_gaspar: "GS_", npc_rovena: "RV_",
 };
 for (const [m, p] of Object.entries(NPC_CLIP_PREFIX)) REMASTER_SETS[m] = npcSet(p);
+
+/**
+ * Heróis v4 (?herois=v4, docs/arte/herois-v4): clipes do contrato (`base.*`, `rc.*`). Só existem o parado do
+ * recruta, o andar e o correr; os outros papéis caem no parado até ganharem clipe.
+ */
+const V4_SET: AnimSet = {
+  idle: "rc.idle", walk: "base.walk", run: "base.run", attack: "rc.idle", skill: "rc.idle", buff: "rc.idle", hit: "rc.idle", death: "rc.idle",
+};
+const V4_FOOT_SPEEDS = { walk: 1.57, run: 4.94 }; // medidos no Blender (tools/art/herois-v4/anim_base.py, clips-base.json)
+const isV4Hero = (model: string) => HEROIS_V4 && HERO_MODELS.includes(model);
+if (HEROIS_V4) for (const m of HERO_MODELS) REMASTER_SETS[m] = V4_SET;
 
 /**
  * Conjunto de clipes quando o herói segura uma arma de duas mãos (e a esquerda está vazia): parado, andar e
@@ -890,7 +901,8 @@ export class CharacterModels {
         child.parent = hand as TransformNode;
         child.position = Vector3.Zero();
         const grip = assets.remaster ? WEAPON_GRIPS[this.weaponFileOf.get(container) ?? ""] : undefined;
-        const fist = grip?.fist ? HERO_FISTS[model]?.[slot === "handslot.l" ? "l" : "r"] : undefined;
+        // v4: o corpo novo ainda não tem as medidas de punho (o encaixe é o socket_hand_* do contrato)
+        const fist = grip?.fist && !isV4Hero(model) ? HERO_FISTS[model]?.[slot === "handslot.l" ? "l" : "r"] : undefined;
         if (grip && fist) {
           // Punho fechado: o cabo (Y da arma) segue o eixo do punho e o fio (X) acompanha os dedos.
           const a0 = Vector3.FromArray(fist.axis), f0 = Vector3.FromArray(fist.fingers).scale(-1);
@@ -1019,7 +1031,7 @@ export class CharacterModels {
 
     // Animações (só as do conjunto do modelo), reaplicadas pelo nome dos ossos.
     const anims = new RoleMap();
-    anims.footSpeeds = (assets.remaster ? FOOT_SPEEDS_REMASTER : FOOT_SPEEDS_KAYKIT)[model];
+    anims.footSpeeds = isV4Hero(model) ? V4_FOOT_SPEEDS : (assets.remaster ? FOOT_SPEEDS_REMASTER : FOOT_SPEEDS_KAYKIT)[model];
     const cloned = new Map<string, AnimationGroup>();
     const impacts: Partial<Record<AnimRole, number>> = {};
     const groupFor = (animName: string): AnimationGroup | null => {
@@ -1035,7 +1047,7 @@ export class CharacterModels {
     };
     /** Monta os papéis do conjunto normal ou do de duas mãos (o AnimController é avisado pelo RoleMap). */
     const applySet = (mode: "normal" | "two" | "ranged" | "crossbow") => {
-      const over = !assets.remaster
+      const over = !assets.remaster || isV4Hero(model) // v4: ainda sem conjuntos de duas mãos e de tiro
         ? undefined
         : mode === "two"
           ? REMASTER_2H[model]

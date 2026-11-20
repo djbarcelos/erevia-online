@@ -13,6 +13,14 @@
 export const REMASTER = new URLSearchParams(location.search).get("remaster") !== "0";
 
 /**
+ * Heróis v4 (docs/arte/herois-v4): o corpo novo, com o esqueleto do contrato e as animações feitas no Blender.
+ * Só com `?herois=v4`; sem a chave, os heróis continuam os do remaster. Por enquanto: um corpo para as 4 classes
+ * (masculino), andar, correr e o parado do recruta (os outros papéis caem no parado até ganharem clipe).
+ */
+export const HEROIS_V4 = REMASTER && new URLSearchParams(location.search).get("herois") === "v4";
+export const HERO_MODELS = ["knight", "barbarian", "mage", "rogue"];
+
+/**
  * NPCs com identidade (tunnel#NPC, docs/arte/remaster-npcs.md): nome do NPC no Welcome → modelo próprio do estilo B.
  * O servidor continua mandando o modelo de herói (knight, rogue...); no remaster (o padrão) o cliente troca pelo mapa abaixo.
  * Carregam sob demanda (CharacterModels.ensure), na primeira vez que o NPC aparece.
@@ -52,6 +60,8 @@ export const REMASTER_FILES: Record<string, string> = {
   brejeiro: "brejeiro_b",
   // NPCs (REMASTER_NPC_BY_NAME): o arquivo é <modelo>_b; o servidor não conhece estes modelos.
   ...Object.fromEntries(Object.values(REMASTER_NPC_BY_NAME).map((m) => [m, `${m}_b`])),
+  // Heróis v4: as 4 classes usam o mesmo corpo (?herois=v4).
+  ...(HEROIS_V4 ? Object.fromEntries(HERO_MODELS.map((m) => [m, "heroi_v4"])) : {}),
 };
 
 /**
@@ -109,10 +119,8 @@ export const REMASTER_HEIGHTS: Record<string, number> = {
 
 /** Modelo do jogo → máscara de repintura (PNG ao lado do GLB; ver scripts/make-remaster-mask.mjs). */
 export const REMASTER_MASKS: Record<string, string> = {
-  knight: "knight_b.mask.png",
-  barbarian: "barbarian_b.mask.png",
-  mage: "mage_b.mask.png",
-  rogue: "rogue_b.mask.png",
+  // Heróis v4 ainda sem máscara de repintura: sem entrada, o corpo usa a cor da textura.
+  ...(HEROIS_V4 ? {} : { knight: "knight_b.mask.png", barbarian: "barbarian_b.mask.png", mage: "mage_b.mask.png", rogue: "rogue_b.mask.png" }),
   npc_guarda: "npc_guarda_b.mask.png", // o tabardo do guarda: Bertrand (Cavaleiro do Bastião) usa a cor do Bastião
 };
 
