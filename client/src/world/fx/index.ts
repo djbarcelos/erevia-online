@@ -1,10 +1,12 @@
 import {
+  AssetContainer,
   Color3,
   Color4,
   Constants,
   CylinderDirectedParticleEmitter,
   CylinderParticleEmitter,
   HemisphericParticleEmitter,
+  LoadAssetContainerAsync,
   Material,
   Mesh,
   MeshBuilder,
@@ -855,25 +857,86 @@ export class Fx {
     });
   }
 
-  /** Flecha (arco) ou virote (besta): rápida, reta, com um rastro curto. */
+  /** Flecha (arco) ou virote (besta): o modelo de verdade voando de ponta para o alvo, com um
+   * rastro fraco de ar (sem brilho de magia). */
   arrow(from: Vector3, to: Vector3, dur: number, heavy = false): void {
-    const wood = new Color3(0.86, 0.78, 0.6);
-    this.orb(from, to, dur, {
-      core: new Color3(1, 0.97, 0.88),
-      halo: wood,
-      size: heavy ? 0.16 : 0.12,
-      arc: heavy ? 0.02 : 0.08,
-      trail: {
-        tex: this.tex.flare,
-        life: [0.08, 0.16],
-        size: [0.05, 0.1],
-        speed: [0, 0.1],
-        colors: [c4(1, 0.96, 0.85, 0.8), c4(0.86, 0.78, 0.6, 0.5), c4(0.6, 0.5, 0.35, 0)],
-        grow: 0,
-      },
-      rate: 90,
-      onArrive: (at) => this.flash(at, 0.5, wood, 0.1),
+    const root = this.arrowMesh(heavy);
+    root.position.copyFrom(from);
+    root.lookAt(to);
+    const trail = this.particles("fx-arrow-trail", 24, {
+      tex: this.tex.flare,
+      life: [0.08, 0.14],
+      size: [0.03, 0.06],
+      speed: [0, 0.05],
+      colors: [c4(0.95, 0.93, 0.88, 0.35), c4(0.85, 0.82, 0.75, 0.2), c4(0.6, 0.55, 0.5, 0)],
+      grow: 0,
     });
+    trail.emitter = root.position;
+    this.budget.stream(trail, 60, this.owner);
+    trail.start();
+    const arc = heavy ? 0.03 : 0.12;
+    const prev = from.clone();
+    const tmp = new Vector3();
+    const arrive = this.keep((at: Vector3) => this.flash(at, 0.35, new Color3(0.86, 0.78, 0.6), 0.08));
+    let arrived = -1;
+    this.run(
+      (t) => {
+        if (arrived < 0) {
+          const k = Math.min(1, t / Math.max(0.05, dur));
+          Vector3.LerpToRef(from, to, k, tmp);
+          tmp.y += Math.sin(Math.PI * k) * arc;
+          prev.copyFrom(root.position);
+          root.position.copyFrom(tmp);
+          // Aponta para onde está indo (acompanha o arco).
+          if (Vector3.DistanceSquared(prev, tmp) > 1e-8) root.lookAt(tmp.add(tmp.subtract(prev)));
+          if (k >= 1) {
+            arrived = t;
+            root.setEnabled(false);
+            trail.stop();
+            arrive(to.clone());
+          }
+          return true;
+        }
+        return t - arrived < 0.3;
+      },
+      () => {
+        this.disposeParticles(trail);
+        root.dispose(false, false);
+      },
+    );
+  }
+
+  /** Modelos da flecha e do virote (carregados uma vez, na primeira flecha). */
+  private arrowModels: Record<string, AssetContainer | null | "loading"> = {};
+
+  /** Uma flecha nova (o modelo; enquanto ele não carrega, uma haste simples). A ponta fica em +Z. */
+  private arrowMesh(heavy: boolean): TransformNode {
+    const file = heavy ? "arrow_crossbow" : "arrow_bow";
+    const c = this.arrowModels[file];
+    if (c === undefined) {
+      this.arrowModels[file] = "loading";
+      LoadAssetContainerAsync(`/models/weapons/${file}.glb`, this.scene).then(
+        (got) => (this.arrowModels[file] = got),
+        () => (this.arrowModels[file] = null),
+      );
+    }
+    const root = new TransformNode("fx-arrow", this.scene);
+    if (c && c !== "loading") {
+      const inst = c.instantiateModelsToScene((n) => `fx-${n}`, false, { doNotInstantiate: false });
+      for (const n of inst.rootNodes) {
+        n.parent = root;
+        for (const m of n.getChildMeshes()) m.isPickable = false;
+      }
+      root.scaling.setAll(heavy ? 0.85 : 0.6);
+      return root;
+    }
+    const len = heavy ? 0.6 : 0.75;
+    const shaft = MeshBuilder.CreateCylinder("fx-arrow-shaft", { height: len, diameter: 0.025, tessellation: 5 }, this.scene);
+    shaft.material = this.mat(new Color3(0.55, 0.4, 0.25), null, false);
+    shaft.rotation.x = Math.PI / 2;
+    shaft.isPickable = false;
+    shaft.parent = root;
+    return root;
   }
 
   /** Brilho na mão de quem conjura. */
