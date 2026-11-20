@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -81,6 +82,7 @@ func (a *API) Register(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/account", a.handleDeleteAccount)
 	mux.HandleFunc("GET /api/characters", a.handleListCharacters)
 	mux.HandleFunc("POST /api/characters", a.handleCreateCharacter)
+	mux.HandleFunc("DELETE /api/characters/{id}", a.handleDeleteCharacter)
 	mux.HandleFunc("GET /api/creation", a.handleCreation)
 	mux.HandleFunc("GET /api/channels", a.handleChannels)
 	mux.HandleFunc("POST /api/client-errors", a.handleClientErrors)
@@ -308,6 +310,62 @@ func (a *API) handleListCharacters(w http.ResponseWriter, r *http.Request) {
 		chars = []store.Character{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"characters": chars, "max": store.MaxCharsPerAccount})
+}
+
+// handleDeleteCharacter apaga um personagem da conta. Para confirmar, o corpo traz o nome dele
+// (o jogador digita; maiúsculas não importam). Quem estiver jogando com ele é desconectado.
+func (a *API) handleDeleteCharacter(w http.ResponseWriter, r *http.Request) {
+	if !a.checkPost(w, r) {
+		return
+	}
+	accountID, ok := a.requireAccount(w, r)
+	if !ok {
+		return
+	}
+	charID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || charID <= 0 {
+		writeError(w, http.StatusBadRequest, "Personagem inválido.")
+		return
+	}
+	var body struct {
+		Confirm string `json:"confirm"`
+	}
+	if !readJSON(w, r, &body) {
+		return
+	}
+	chars, err := a.store.ListCharacters(r.Context(), accountID)
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	name := ""
+	for _, c := range chars {
+		if c.ID == charID {
+			name = c.Name
+		}
+	}
+	if name == "" {
+		writeError(w, http.StatusNotFound, "Personagem não encontrado.")
+		return
+	}
+	if !strings.EqualFold(strings.TrimSpace(body.Confirm), name) {
+		writeError(w, http.StatusBadRequest, "Digite o nome do personagem para confirmar.")
+		return
+	}
+	d, err := a.store.DeleteCharacter(r.Context(), accountID, charID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Personagem não encontrado.")
+		return
+	}
+	if err != nil {
+		a.internalError(w, err)
+		return
+	}
+	a.log.Info("character deleted", "account", accountID, "character", charID, "clans", len(d.Clans))
+	if a.onAccountDeleted != nil {
+		a.onAccountDeleted(d)
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (a *API) handleCreateCharacter(w http.ResponseWriter, r *http.Request) {

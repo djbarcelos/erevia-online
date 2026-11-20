@@ -140,3 +140,27 @@ func TestAccountDeletedWhileCreatingClan(t *testing.T) {
 		t.Fatalf("ops = %+v", f.ops)
 	}
 }
+
+// Só um personagem apagado: ele cai com o aviso do personagem, o armazém da conta fica.
+func TestCharacterDeletedKeepsStorage(t *testing.T) {
+	cfg := testConfig()
+	cfg.Spawns = nil
+	z := newZoneWith(cfg)
+	alfa := join(z, 10, "Alfa")
+	join(z, 11, "Irmão")
+	z.players[10].pl.accountID = 7
+	z.players[11].pl.accountID = 7
+	z.storages[7] = newStorage(7, nil)
+
+	z.handle(accountGoneEvent{d: AccountGone{AccountID: 7, Characters: []int64{10}, CharacterOnly: true}})
+
+	if alfa.kicked() != characterGoneReason || alfa.closed == "" {
+		t.Fatalf("alfa kicked=%q closed=%q", alfa.kicked(), alfa.closed)
+	}
+	if z.players[10] != nil || z.players[11] == nil {
+		t.Fatalf("players = %v", z.players)
+	}
+	if z.storages[7] == nil {
+		t.Fatal("o armazém da conta sumiu ao apagar um personagem só")
+	}
+}

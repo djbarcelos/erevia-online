@@ -1678,3 +1678,14 @@
 .channel-pick {
   min-width: 170px;
 }
+
+/* Apagar personagem (nos detalhes): discreto, no pé do painel. */
+.char-delete.btn-danger-ghost {
+  align-self: flex-start;
+  margin-top: 4px;
+  border-color: var(--danger-line);
+  color: var(--danger-text);
+}
+.char-delete.btn-danger-ghost:hover {
+  background: rgba(106, 36, 32, 0.35);
+}

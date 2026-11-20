@@ -8,6 +8,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -138,8 +139,9 @@ func TestLoginAndCharacters(t *testing.T) {
 		t.Fatalf("created with look = %+v", beto)
 	}
 	c.do("POST", "/api/characters", `{"name":"Caio","class":"barbarian"}`, nil)
-	if code := c.do("POST", "/api/characters", `{"name":"Dani","class":"knight"}`, nil); code != http.StatusConflict {
-		t.Fatalf("4th character = %d, want 409", code)
+	c.do("POST", "/api/characters", `{"name":"Dani","class":"knight"}`, nil)
+	if code := c.do("POST", "/api/characters", `{"name":"Ema","class":"knight"}`, nil); code != http.StatusConflict {
+		t.Fatalf("5th character = %d, want 409", code)
 	}
 
 	var list struct {
@@ -152,7 +154,7 @@ func TestLoginAndCharacters(t *testing.T) {
 		Max int
 	}
 	c.do("GET", "/api/characters", "", &list)
-	if len(list.Characters) != 3 || list.Max != 3 {
+	if len(list.Characters) != 4 || list.Max != 4 {
 		t.Fatalf("list = %+v", list)
 	}
 	// A lista mostra o que cada um tem nas mãos e a cor (padrão da classe quando não escolhida).
@@ -372,5 +374,69 @@ func TestDeleteAccount(t *testing.T) {
 	c.do("POST", "/api/auth/dev", `{"username":"Ana"}`, nil)
 	if c.do("GET", "/api/characters", "", &list); len(list.Characters) != 0 {
 		t.Fatalf("ana after delete = %+v", list)
+	}
+}
+
+func TestDeleteCharacter(t *testing.T) {
+	st := storetest.New(t)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	a := api.New(st, api.Config{PublicURL: "http://example.test", DevLogin: true}, log)
+	var mu sync.Mutex
+	var deleted []store.DeletedAccount
+	a.OnAccountDeleted(func(d store.DeletedAccount) { mu.Lock(); deleted = append(deleted, d); mu.Unlock() })
+	notified := func() []store.DeletedAccount { mu.Lock(); defer mu.Unlock(); return slices.Clone(deleted) }
+	mux := http.NewServeMux()
+	a.Register(mux)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	newClient := func() *client {
+		jar, _ := cookiejar.New(nil)
+		return &client{t: t, base: srv.URL, http: &http.Client{Jar: jar}}
+	}
+
+	c := newClient()
+	c.do("POST", "/api/auth/dev", `{"username":"Ana"}`, nil)
+	var aria, bela struct{ ID int64 }
+	c.do("POST", "/api/characters", `{"name":"Aria","class":"mage"}`, &aria)
+	c.do("POST", "/api/characters", `{"name":"Bela","class":"rogue"}`, &bela)
+	bob := newClient()
+	bob.do("POST", "/api/auth/dev", `{"username":"Bob"}`, nil)
+	path := "/api/characters/" + strconv.FormatInt(aria.ID, 10)
+
+	// Sem sessão, de outra conta, com id ruim ou sem o nome certo: nada acontece.
+	if code := newClient().do("DELETE", path, `{"confirm":"Aria"}`, nil); code != http.StatusUnauthorized {
+		t.Fatalf("anon = %d", code)
+	}
+	if code := bob.do("DELETE", path, `{"confirm":"Aria"}`, nil); code != http.StatusNotFound {
+		t.Fatalf("other account = %d", code)
+	}
+	if code := c.do("DELETE", "/api/characters/abc", `{"confirm":"Aria"}`, nil); code != http.StatusBadRequest {
+		t.Fatalf("bad id = %d", code)
+	}
+	for _, body := range []string{`{}`, `{"confirm":"Bela"}`, `{"confirm":"Ari"}`} {
+		if code := c.do("DELETE", path, body, nil); code != http.StatusBadRequest {
+			t.Errorf("%s → %d, want 400", body, code)
+		}
+	}
+	if len(notified()) != 0 {
+		t.Fatalf("deleted before confirming: %+v", notified())
+	}
+
+	// O nome confere (maiúsculas não importam): apaga só a Aria e avisa a zona.
+	if code := c.do("DELETE", path, `{"confirm":" aria "}`, nil); code != http.StatusOK {
+		t.Fatalf("delete = %d", code)
+	}
+	if d := notified(); len(d) != 1 || !d[0].CharacterOnly || !slices.Equal(d[0].Characters, []int64{aria.ID}) {
+		t.Fatalf("notified = %+v", d)
+	}
+	var list struct {
+		Characters []struct{ Name string }
+		Max        int
+	}
+	if code := c.do("GET", "/api/characters", "", &list); code != http.StatusOK || list.Max != 4 || len(list.Characters) != 1 || list.Characters[0].Name != "Bela" {
+		t.Fatalf("list after delete = %d %+v", code, list)
+	}
+	if code := c.do("GET", "/api/me", "", nil); code != http.StatusOK {
+		t.Fatalf("session gone after deleting a character: %d", code)
 	}
 }
