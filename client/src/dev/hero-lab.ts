@@ -10,12 +10,12 @@
 import { ArcRotateCamera, Axis, Color3, PBRMaterial, SceneInstrumentation, Quaternion, Color4, Engine, HemisphericLight, DirectionalLight, Scene, TransformNode, Vector3, type AnimationGroup } from "@babylonjs/core";
 import { configureKtx2 } from "../world/assets";
 import { AnimController } from "../world/anim";
-import { CharacterModels, WEAPON_GRIPS, type AnimRole, type CharacterInstance, type Grip } from "../world/models";
+import { CharacterModels, V4_GRIPS, WEAPON_GRIPS, type AnimRole, type CharacterInstance, type Grip } from "../world/models";
 import { setBodyPalettes, type BodyLook } from "../world/body-look";
 import { toArmorGrades, type ArmorGrades } from "../world/armor";
 
 interface Item { model: string; tint?: string; yaw?: number; right?: string | null; left?: string | null; role?: AnimRole; t?: number; look?: BodyLook; grade?: number; armor?: Partial<ArmorGrades> }
-interface Spec { grips?: Record<string, Grip>; radius?: number; cam?: "front" | "side" | "back" | "three"; items: Item[]; gap?: number; height?: number; settle?: number }
+interface Spec { grips?: Record<string, Grip>; keepCam?: boolean; radius?: number; cam?: "front" | "side" | "back" | "three"; items: Item[]; gap?: number; height?: number; settle?: number }
 
 configureKtx2();
 // Paletas de mentira (o laboratório não tem servidor): 1-3 em cada eixo.
@@ -36,6 +36,8 @@ const sun = new DirectionalLight("s", new Vector3(-0.4, -1, 0.6), scene);
 sun.intensity = 0.8;
 const cam = new ArcRotateCamera("cam", 0, 1.3, 5, new Vector3(0, 1, 0), scene);
 cam.minZ = 0.05;
+cam.attachControl(canvas, true); // girar com o mouse (o painel de ajuste usa)
+cam.wheelPrecision = 60;
 let models: CharacterModels | null = null;
 let live: CharacterInstance[] = [];
 
@@ -47,6 +49,7 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
     await ready;
     await Promise.all(spec.items.map((i) => models!.ensure(i.model))); // NPCs das outras regiões carregam sob demanda
     Object.assign(WEAPON_GRIPS, spec.grips ?? {});
+    for (const [k, g] of Object.entries(spec.grips ?? {})) if (k in V4_GRIPS) V4_GRIPS[k] = g; // heróis v4 olham primeiro aqui
     for (const i of live) i.dispose();
     live = [];
     const gap = spec.gap ?? 1.4;
@@ -75,9 +78,11 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
     });
     const alpha = { front: Math.PI / 2, side: 0, back: -Math.PI / 2, three: Math.PI / 4 }[spec.cam ?? "front"];
     const h = spec.height ?? 1;
-    cam.target = new Vector3(0, h, 0);
-    cam.alpha = alpha; cam.beta = 1.45;
-    cam.radius = spec.radius ?? Math.max(3.2, n * gap * 0.8 + 1.5);
+    if (!spec.keepCam) {
+      cam.target = new Vector3(0, h, 0);
+      cam.alpha = alpha; cam.beta = 1.45;
+      cam.radius = spec.radius ?? Math.max(3.2, n * gap * 0.8 + 1.5);
+    }
     for (let f = 0; f < 6; f++) await new Promise((r) => requestAnimationFrame(r));
     await new Promise((r) => setTimeout(r, spec.settle ?? 1500)); // texturas e peças de armadura carregam sob demanda
     return live.map((i) => (i.root as TransformNode).name).join(",");
@@ -276,3 +281,6 @@ const ready = CharacterModels.load(scene).then((m) => { models = m; });
   find: (re: string) => scene.transformNodes.concat(scene.meshes as never[]).filter((n) => new RegExp(re).test(n.name)).map((n) => ({ name: n.name, parent: n.parent?.name, on: n.isEnabled(), pos: (n as TransformNode).position?.asArray(), sc: (n as TransformNode).scaling?.asArray(), rq: (n as TransformNode).rotationQuaternion?.asArray() })),
   cam: () => ({ a: cam.alpha, b: cam.beta, r: cam.radius, p: cam.position.asArray() }),
 };
+
+// Painel de ajuste do escudo (lab.html?ajuste=escudo): o usuário posiciona e copia os valores.
+if (new URLSearchParams(location.search).get("ajuste") === "escudo") void import("./shield-tuner").then((m) => m.start());
