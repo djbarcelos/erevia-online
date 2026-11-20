@@ -112,9 +112,9 @@ test('checkAssets: exceção documentada passa; sem motivo falha', async () => {
 test('checkAssets: variantes do manifesto evitam contar cabeças duas vezes', async () => {
   const dir = tmp();
   try {
-    await writeGlb(join(dir, 'heroi.glb'), makeDoc({ nodes: [['Corpo', 5000], ['Head_a', 1500], ['Head_b', 1500], ['Head_c', 1500]], bones: 20 }));
+    await writeGlb(join(dir, 'heroi.glb'), makeDoc({ nodes: [['Corpo', 15000], ['Head_a', 3000], ['Head_b', 3000], ['Head_c', 3000]], bones: 20 }));
     const sem = await checkAssets({ dir, manifest: { modelos: { 'heroi.glb': { categoria: 'personagem' } } } });
-    assert.equal(sem.failures.length, 1, '9500 tri passa de 8000');
+    assert.equal(sem.failures.length, 1, '24000 tri passa de 20000 (orçamento de personagem)');
     const com = await checkAssets({ dir, manifest: { modelos: { 'heroi.glb': { categoria: 'personagem', variantes: ['^Head_'] } } } });
     assert.deepEqual(com.failures, []);
   } finally {

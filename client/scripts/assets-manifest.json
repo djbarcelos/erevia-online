@@ -53,13 +53,7 @@
       "categoria": "personagem",
       "variantes": [
         "^Head_"
-      ],
-      "excecoes": {
-        "tris": {
-          "max": 8708,
-          "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
-        }
-      }
+      ]
     },
     "bone_lord_b.glb": {
       "categoria": "chefe"
@@ -206,13 +200,7 @@
       "categoria": "personagem"
     },
     "npc_smith.glb": {
-      "categoria": "personagem",
-      "excecoes": {
-        "tris": {
-          "max": 8900,
-          "motivo": "KayKit legado (chibi), substituído pelo remaster na #94"
-        }
-      }
+      "categoria": "personagem"
     },
     "npc_teodoro_b.glb": {
       "categoria": "personagem"
