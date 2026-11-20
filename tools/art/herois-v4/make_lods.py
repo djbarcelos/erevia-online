@@ -11,7 +11,7 @@ import bpy
 
 args = sys.argv[sys.argv.index("--") + 1:]
 out_blend, out_glb = args[:2]
-targets = [int(x) for x in args[2:5]] if len(args) >= 5 else [5000, 2000, 800]
+targets = [int(x) for x in args[2:5]] if len(args) >= 5 else [8000, 3000, 1000]  # o teto do contrato (personagem)
 
 src = bpy.data.objects["corpo"]
 src.name = "corpo_alta"
