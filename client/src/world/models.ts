@@ -1046,6 +1046,9 @@ export class CharacterModels {
     const refreshMaterial = () => {
       const base = tierMat ?? baseMat;
       if (!base) return;
+      // v4: cada parte do kit tem o material dela (armadura, mãos, capa); trocar todas pelo primeiro punha a
+      // textura da armadura na capa e nas mãos. Sem repintura nem raridade até o kit ter as dele.
+      if (isV4Hero(model)) return;
       const l = lookNow;
       if (painted && painted.tier === tierId && colorKey(model, painted.look) === colorKey(model, l)) return;
       if (painted) this.releasePaint(model, painted.tier, painted.look);
