@@ -18,6 +18,8 @@ export const REMASTER = new URLSearchParams(location.search).get("remaster") !==
  * (masculino), andar, correr e o parado do recruta (os outros papéis caem no parado até ganharem clipe).
  */
 export const HEROIS_V4 = REMASTER && new URLSearchParams(location.search).get("herois") === "v4";
+/** Kits dos heróis v4 já prontos (o resto usa o corpo base, sem roupa). */
+export const V4_KITS: Record<string, string> = { knight: "heroi_v4_kn" };
 export const HERO_MODELS = ["knight", "barbarian", "mage", "rogue"];
 
 /**
@@ -61,7 +63,8 @@ export const REMASTER_FILES: Record<string, string> = {
   // NPCs (REMASTER_NPC_BY_NAME): o arquivo é <modelo>_b; o servidor não conhece estes modelos.
   ...Object.fromEntries(Object.values(REMASTER_NPC_BY_NAME).map((m) => [m, `${m}_b`])),
   // Heróis v4: as 4 classes usam o mesmo corpo (?herois=v4).
-  ...(HEROIS_V4 ? Object.fromEntries(HERO_MODELS.map((m) => [m, "heroi_v4"])) : {}),
+  // heróis v4: o corpo base; a classe com kit pronto usa o arquivo dela (heroi_v4_<kit>, mesmo esqueleto e clipes)
+  ...(HEROIS_V4 ? Object.fromEntries(HERO_MODELS.map((m) => [m, V4_KITS[m] ?? "heroi_v4"])) : {}),
 };
 
 /**

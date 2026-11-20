@@ -34,3 +34,16 @@ run "exportar"    $B --background --factory-startup $A/base.blend --python $T/ex
 node $T/slots-glb.mjs assets-src/herois-v4/heroi_v4_raw.glb | tail -1
 cd client && node scripts/import-asset.mjs ../assets-src/herois-v4/heroi_v4_raw.glb personagem heroi_v4 --resize=1024 2>&1 | grep -E "→|FORA|triângulos"
 node scripts/qa-heroi-v4.mjs
+
+# ---- kits (cada um: o personagem vestido, com o mesmo esqueleto e as mesmas animações do base.blend) ----
+cd ..
+for kit in cavaleiro:kn; do
+  dir=${kit%%:*}; id=${kit##*:}; K=assets-src/herois-v4/kits/$dir
+  run "kit $dir: encaixe" $B --background --factory-startup $C/corpo.blend --python $T/fit_kit.py -- $K/kit-rigado.glb $K/kit-corpo.blend
+  run "kit $dir: LODs"    $B --background --factory-startup $K/kit-corpo.blend --python $T/make_lods.py -- $K/kit-lod.blend $K/kit-lod.glb
+  run "kit $dir: normais" $B --background --factory-startup $K/kit-lod.blend --python $T/bake_normal.py -- $K/kit-normal.png 2048
+  run "kit $dir: animado" $B --background --factory-startup $A/base.blend --python $T/swap_kit.py -- $K/kit-lod.blend $K/kit-anim.blend
+  run "kit $dir: exportar" $B --background --factory-startup $K/kit-anim.blend --python $T/export_v4.py -- $K/heroi_v4_${id}_raw.glb
+  node $T/slots-glb.mjs $K/heroi_v4_${id}_raw.glb | tail -1
+  (cd client && node scripts/import-asset.mjs ../$K/heroi_v4_${id}_raw.glb personagem heroi_v4_$id --resize=1024 2>&1 | grep -E "→|FORA|triângulos" && node scripts/qa-heroi-v4.mjs public/models/heroi_v4_$id.glb)
+done
