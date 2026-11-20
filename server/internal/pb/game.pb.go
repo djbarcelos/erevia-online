@@ -1506,6 +1506,9 @@ const (
 	Effect_EFFECT_GUARDED        Effect = 25 // value do dano vai para quem protege (source)
 	Effect_EFFECT_SACRIFICE      Effect = 26 // a vida não cai abaixo de value × máx.; o excesso vai para source
 	Effect_EFFECT_REGEN          Effect = 27 // regenera value de vida por segundo (Renovação)
+	Effect_EFFECT_BLEED          Effect = 28 // dano por segundo (value), sangramento
+	Effect_EFFECT_FURY_DOUBLE    Effect = 29 // os ataques básicos geram o dobro de recurso
+	Effect_EFFECT_UNSTOPPABLE    Effect = 30 // imune a lentidão e a prender
 )
 
 // Enum value maps for Effect.
@@ -1539,6 +1542,9 @@ var (
 		25: "EFFECT_GUARDED",
 		26: "EFFECT_SACRIFICE",
 		27: "EFFECT_REGEN",
+		28: "EFFECT_BLEED",
+		29: "EFFECT_FURY_DOUBLE",
+		30: "EFFECT_UNSTOPPABLE",
 	}
 	Effect_value = map[string]int32{
 		"EFFECT_UNSPECIFIED":    0,
@@ -1569,6 +1575,9 @@ var (
 		"EFFECT_GUARDED":        25,
 		"EFFECT_SACRIFICE":      26,
 		"EFFECT_REGEN":          27,
+		"EFFECT_BLEED":          28,
+		"EFFECT_FURY_DOUBLE":    29,
+		"EFFECT_UNSTOPPABLE":    30,
 	}
 )
 
@@ -19772,7 +19781,7 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x16MONSTER_ARCHETYPE_PACK\x10\x05\x12\x1c\n" +
 	"\x18MONSTER_ARCHETYPE_SHIELD\x10\x06\x12\x1e\n" +
 	"\x1aMONSTER_ARCHETYPE_SPLITTER\x10\a\x12\x1e\n" +
-	"\x1aMONSTER_ARCHETYPE_EXPLODER\x10\b*\xc0\x04\n" +
+	"\x1aMONSTER_ARCHETYPE_EXPLODER\x10\b*\x82\x05\n" +
 	"\x06Effect\x12\x16\n" +
 	"\x12EFFECT_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vEFFECT_STUN\x10\x01\x12\x0f\n" +
@@ -19802,7 +19811,10 @@ const file_erevia_v1_game_proto_rawDesc = "" +
 	"\x11EFFECT_BUFF_BLOCK\x10\x18\x12\x12\n" +
 	"\x0eEFFECT_GUARDED\x10\x19\x12\x14\n" +
 	"\x10EFFECT_SACRIFICE\x10\x1a\x12\x10\n" +
-	"\fEFFECT_REGEN\x10\x1b*q\n" +
+	"\fEFFECT_REGEN\x10\x1b\x12\x10\n" +
+	"\fEFFECT_BLEED\x10\x1c\x12\x16\n" +
+	"\x12EFFECT_FURY_DOUBLE\x10\x1d\x12\x16\n" +
+	"\x12EFFECT_UNSTOPPABLE\x10\x1e*q\n" +
 	"\vSkillTarget\x12\x1c\n" +
 	"\x18SKILL_TARGET_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12SKILL_TARGET_ENEMY\x10\x01\x12\x15\n" +

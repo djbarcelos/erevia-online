@@ -56,6 +56,8 @@ func ApplyPassives(s Stats, ranks map[uint32]int, weaponType string) Stats {
 			s.Crit += v
 		case PassiveEvasion:
 			s.Evasion += v
+		case PassivePAtkPct: // Braço de Guerra
+			s.PAtk *= 1 + v
 		case PassiveBlockPct: // Guarda do Escudo: só com escudo (o bloqueio vem dele)
 			if s.Block > 0 {
 				s.Block += v
@@ -81,6 +83,9 @@ func SkillMPCost(s *SkillDef, rank int, pv Passives) float64 {
 	cost := s.MPCost(rank)
 	if pv.Has(PassiveOverload) {
 		cost *= OverloadMPCost
+	}
+	if s.CommandSkill && pv.Has(PassiveCommand) { // Comando Absoluto
+		cost *= CommandMPMult
 	}
 	cost *= 1 - math.Min(MPEfficiencyCap, pv.Of(PassiveMPEfficiency))
 	return math.Round(cost)

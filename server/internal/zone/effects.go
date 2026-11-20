@@ -160,6 +160,7 @@ func (z *Zone) updateAuras() {
 			}
 		}
 	}
+	z.dominanceAuras()
 	for _, k := range z.players {
 		v := k.pl.passives.Of(game.PassiveCourage)
 		if v <= 0 || k.dead {

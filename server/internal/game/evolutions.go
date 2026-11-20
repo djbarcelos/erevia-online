@@ -49,6 +49,12 @@ type SkillMod struct {
 	BonusVs    []EffectKind
 	BonusVsPct Scale
 	ResOnHit   Scale // recurso a mais por alvo atingido
+	ResOnCrit  Scale // recurso a mais por crítico
+	ResOnAlly  Scale // recurso a mais por aliado ajudado
+	// Efeitos a mais em si (e nos aliados, pela regra da skill).
+	ExtraOnSelf []*EffectSpec
+	// Estandarte: +raio e +duração.
+	BannerRadius, BannerDuration Scale
 }
 
 // EvolutionMilestones: os marcos da árvore evoluída até o teto 40 (45–60 com o teto 60).
@@ -303,6 +309,17 @@ func EffectiveSkill(s *SkillDef, ranks map[uint32]int) *SkillDef {
 			out.BonusVsPct += mod.BonusVsPct.atOrZero(r)
 		}
 		out.ResOnHit += mod.ResOnHit.atOrZero(r)
+		out.ResOnCrit += mod.ResOnCrit.atOrZero(r)
+		out.ResOnAlly += mod.ResOnAlly.atOrZero(r)
+		if len(mod.ExtraOnSelf) > 0 {
+			out.ExtraOnSelf = append(append([]*EffectSpec{}, out.ExtraOnSelf...), mod.ExtraOnSelf...)
+		}
+		if out.Banner != nil && (mod.BannerRadius != (Scale{}) || mod.BannerDuration != (Scale{})) {
+			b := *out.Banner
+			b.Radius += mod.BannerRadius.atOrZero(r)
+			b.Duration += mod.BannerDuration.atOrZero(r)
+			out.Banner = &b
+		}
 		dur, val, valPct := mod.EffectDur.atOrZero(r), mod.EffectValue.atOrZero(r), mod.EffectValPct.atOrZero(r)
 		if dur != 0 || val != 0 || valPct != 0 {
 			change := func(e *EffectSpec) *EffectSpec {

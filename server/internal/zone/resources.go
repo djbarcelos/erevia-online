@@ -21,6 +21,9 @@ func resDef(p *entity) *game.ResourceDef {
 // gainRes soma n na barra do jogador (respeitando o teto por segundo e o máximo).
 func (z *Zone) gainRes(p *entity, n float64) {
 	if d := resDef(p); d != nil && n > 0 && !p.dead {
+		if p.pl.passives.Has(game.PassiveCommand) && len(z.alliesNear(p, game.LeaderRadius)) > 0 {
+			n *= game.CommandResMult // Comando Absoluto
+		}
 		p.pl.res.Gain(d, n, z.now)
 	}
 }
@@ -71,7 +74,11 @@ func (z *Zone) hitGains(src, dst *entity, skillID uint32, crit, blocked, engaged
 		if d := resDef(src); d != nil {
 			n := 0.0
 			if skillID == 0 {
-				n += d.Gen(game.GenBasicHit)
+				basic := d.Gen(game.GenBasicHit)
+				if src.has(game.EffectFuryDouble, z.now) { // Fúria Incontrolável
+					basic *= 2
+				}
+				n += basic
 			}
 			if crit {
 				n += d.Gen(game.GenCrit)
@@ -136,10 +143,11 @@ func (z *Zone) castResource(p *entity, s *game.SkillDef) (float64, bool) {
 		}
 		spent = p.pl.res.SpendAll()
 	case s.ResCost > 0:
-		if !p.pl.res.Spend(s.ResCost) {
+		cost := game.ResCostFor(s, p.pl.passives)
+		if !p.pl.res.Spend(cost) {
 			return 0, false
 		}
-		spent = s.ResCost
+		spent = cost
 	}
 	p.pl.castTargets = 0
 	z.faithShield(p, spent)
@@ -154,7 +162,7 @@ func (z *Zone) castResource(p *entity, s *game.SkillDef) (float64, bool) {
 
 // resShort: a skill pede mais recurso do que há (mensagem de recusa; "" = dá).
 func resShort(p *entity, s *game.SkillDef) string {
-	cost := game.SkillResCost(s)
+	cost := game.ResCostFor(s, p.pl.passives)
 	if cost <= 0 {
 		return ""
 	}
@@ -178,6 +186,26 @@ func (z *Zone) killGains(dead *entity) {
 			z.gainEvent(p, game.GenKill)
 		}
 	}
+	// Marca da Presa: matar quem você marcou devolve recurso.
+	for _, ef := range dead.effects {
+		if ef.kind != game.EffectMark || ef.until <= z.now {
+			continue
+		}
+		if p := z.players[ef.source]; p != nil {
+			z.gainRes(p, markKillRes(p))
+		}
+	}
+}
+
+// markKillRes: o maior ResOnMarkKill entre as skills aprendidas.
+func markKillRes(p *entity) float64 {
+	best := 0.0
+	for id, r := range p.pl.ranks {
+		if s := game.Skills[id]; s != nil && r > 0 && s.ResOnMarkKill > best && game.SkillAvailable(s, p.pl.class, p.pl.spec) {
+			best = s.ResOnMarkKill
+		}
+	}
+	return best
 }
 
 // fervorFaith: Fé por crítico sagrado com Fervor.

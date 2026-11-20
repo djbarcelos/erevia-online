@@ -24,6 +24,7 @@ const (
 	GenEngage                       // primeiro golpe num inimigo que não estava lutando
 	GenBackstab                     // golpe pelas costas (cone de BackstabCone atrás do alvo)
 	GenExtraTarget                  // cada alvo além do primeiro numa skill (até o teto)
+	GenInterrupt                    // atordoar um monstro durante o aviso no chão (cancela o golpe)
 	genEventCount
 )
 
@@ -160,6 +161,15 @@ func ResourceOf(class, spec string) *ResourceDef {
 	return nil
 }
 
+// ResCostFor: o custo com as passivas (Ira Desmedida corta, arredondado).
+func ResCostFor(s *SkillDef, pv Passives) float64 {
+	c := SkillResCost(s)
+	if c > 0 && !s.ResSpendAll {
+		c = math.Round(c * (1 - math.Min(0.9, pv.Of(PassiveResCostCut))))
+	}
+	return c
+}
+
 // SkillResCost: o custo em recurso da skill (0 = nenhum; ResSpendAll pede ao menos 1).
 func SkillResCost(s *SkillDef) float64 {
 	if s.ResSpendAll {
@@ -198,7 +208,7 @@ func resources() map[string]*ResourceDef {
 		"bastion":      newResource("Determinação", "#8fb4ff", map[GenEvent]float64{GenBlock: 6, GenMeleeTaken: 1}),
 		"herald":       newResource("Fé", "#ffd86a", map[GenEvent]float64{GenKill: 10}),
 		"bloodrager":   newResource("Fúria", "#e85050", map[GenEvent]float64{GenBasicHit: 6, GenSkillHit: 4, GenCrit: 3, GenDamageTaken: 2}),
-		"warlord":      newResource("Ímpeto", "#e0a848", map[GenEvent]float64{GenEngage: 15, GenBasicHit: 3, GenExtraTarget: 3}),
+		"warlord":      newResource("Ímpeto", "#e0a848", map[GenEvent]float64{GenEngage: 15, GenBasicHit: 3, GenExtraTarget: 3, GenInterrupt: 15}),
 		"elementalist": newResource("Concentração", "#ff9a3c", map[GenEvent]float64{GenDistinctCast: 10, GenBasicHit: 4, GenCrit: 3}),
 		"occultist":    newResource("Carga Arcana", "#b46ae0", map[GenEvent]float64{GenNewEffect: 8}),
 		"cutthroat":    combo,

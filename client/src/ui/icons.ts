@@ -201,6 +201,9 @@ const EFFECT_THEMES: Partial<Record<Effect, SkillTheme>> = {
   [Effect.GUARDED]: { glyph: "shield", bg: ["#5fc4a6", "#0a2a22"], accent: "#e0fff4" },
   [Effect.SACRIFICE]: { glyph: "heart", bg: ["#ffd86a", "#3a2a08"], accent: "#fff6d0" },
   [Effect.REGEN]: { glyph: "heart", bg: ["#7ad07a", "#0c2a0c"], accent: "#e8ffe0" },
+  [Effect.BLEED]: { glyph: "drop", bg: ["#c02a2a", "#2a0606"], accent: "#ffb0a0" },
+  [Effect.FURY_DOUBLE]: { glyph: "bolt", bg: ["#e85050", "#3a0808"], accent: "#ffe08a" },
+  [Effect.UNSTOPPABLE]: { glyph: "banner", bg: ["#e0a848", "#3a2808"], accent: "#fff0c0" },
 };
 
 export function effectIcon(effect: Effect): string {
@@ -265,6 +268,12 @@ export function effectName(effect: Effect): string {
       return "Sacrifício";
     case Effect.REGEN:
       return "Renovação";
+    case Effect.BLEED:
+      return "Sangrando";
+    case Effect.FURY_DOUBLE:
+      return "Fúria incontrolável";
+    case Effect.UNSTOPPABLE:
+      return "Implacável";
     default:
       return "Efeito";
   }
@@ -326,6 +335,12 @@ export function effectText(effect: Effect, value: number, ms: number): string {
       return `A vida não cai abaixo de ${pct}: o resto vai para quem se sacrifica (${dur})`;
     case Effect.REGEN:
       return `Regenera ${Math.round(value)} de vida por segundo por ${dur}`;
+    case Effect.BLEED:
+      return `Perde ${Math.round(value)} de vida por segundo por ${dur}`;
+    case Effect.FURY_DOUBLE:
+      return `Os ataques básicos geram o dobro de Fúria por ${dur}`;
+    case Effect.UNSTOPPABLE:
+      return `Imune a lentidão e a prender por ${dur}`;
     default:
       return "";
   }
@@ -333,7 +348,7 @@ export function effectText(effect: Effect, value: number, ms: number): string {
 
 /** Efeitos ruins (bordas vermelhas). */
 export function isDebuff(effect: Effect): boolean {
-  return [Effect.STUN, Effect.SLOW, Effect.ROOT, Effect.POISON, Effect.BURN, Effect.TAUNT, Effect.MARK, Effect.BLIND, Effect.WEAKEN, Effect.PLAGUE].includes(effect);
+  return [Effect.STUN, Effect.SLOW, Effect.ROOT, Effect.POISON, Effect.BURN, Effect.TAUNT, Effect.MARK, Effect.BLIND, Effect.WEAKEN, Effect.PLAGUE, Effect.BLEED].includes(effect);
 }
 
 export function formatSeconds(ms: number): string {

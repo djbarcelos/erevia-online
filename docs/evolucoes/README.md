@@ -8,8 +8,8 @@ Cada evolução tem um doc próprio nesta pasta. **O DIogo revisa cada doc antes
 |---|---|---|---|---|
 | Cavaleiro | Bastião (`bastion`) | Determinação | [bastion.md](bastion.md) | **no jogo** (Fase 9) |
 | Cavaleiro | Paladino (`herald`) | Fé | [herald.md](herald.md) | **no jogo** (Fase 9) |
-| Bárbaro | Berserker (`bloodrager`) | Fúria | [bloodrager.md](bloodrager.md) | aprovado (19/11) |
-| Bárbaro | Senhor da Guerra (`warlord`) | Ímpeto | [warlord.md](warlord.md) | aprovado (19/11) |
+| Bárbaro | Berserker (`bloodrager`) | Fúria | [bloodrager.md](bloodrager.md) | **no jogo** (Fase 10) |
+| Bárbaro | Senhor da Guerra (`warlord`) | Ímpeto | [warlord.md](warlord.md) | **no jogo** (Fase 10) |
 | Mago | Elementalista (`elementalist`) | Concentração | [elementalist.md](elementalist.md) | aprovado (19/11) |
 | Mago | Arcanista (`occultist`) | Carga Arcana | [occultist.md](occultist.md) | aprovado (19/11) |
 | Ladino | Assassino (`cutthroat`) | Combo | [cutthroat.md](cutthroat.md) | aprovado (19/11) |

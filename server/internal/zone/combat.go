@@ -100,6 +100,9 @@ func (z *Zone) hitInput(src, dst *entity, magic bool, mult, extraCrit float64) g
 		Accuracy: src.accuracy(z.now), Evasion: dst.stats.Evasion,
 	}
 	in.Mult *= 1 + z.bestiaryBonus(src, dst) // Bestiário: +1% contra o tipo no 500º abate (bestiary.go)
+	if src.pl != nil {
+		in.Mult *= 1 + z.leaderAura(src) // Liderança
+	}
 	// Saindo da invisibilidade: o primeiro golpe é crítico garantido.
 	if src.pl != nil && src.pl.ambushCrit {
 		in.ForceCrit = true
@@ -119,6 +122,9 @@ func (z *Zone) basicAttack(src, dst *entity) {
 	magic := src.stats.Magic
 	hit := game.RollHit(z.rng, z.hitInput(src, dst, magic, 1, 0))
 	z.applyHit(src, dst, 0, hit, magic)
+	if src.pl != nil && !hit.Miss {
+		z.frenzyStack(src, dst)
+	}
 }
 
 // skillMP: custo de mana no rank (Sobrecarga encarece 10%; Mente Clara barateia).
@@ -254,6 +260,7 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		z.sendCooldown(src, s.ID, cd)
 		if s.Charge && target != nil {
 			src.teleportTo(landing)
+			z.chargeMomentum(src)
 		}
 	}
 	if s.Mult.At(rank) > 0 || s.OnTarget != nil {
@@ -277,6 +284,10 @@ func (z *Zone) castSkill(src *entity, s *game.SkillDef, target *entity) {
 		z.blink(src, s.Blink.At(rank))
 	}
 
+	if s.ChainCharge > 0 && src.pl != nil {
+		z.chainCharge(src, s, rank, target)
+		return
+	}
 	switch s.Target {
 	case game.TargetEnemy:
 		if s.Mult.At(rank) <= 0 {
@@ -337,9 +348,16 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int, splash boo
 	landed := s.Mult.At(rank) <= 0 // sem dano: o efeito sempre pega
 	if mult := s.Mult.At(rank); mult > 0 {
 		if s.ExecuteBelow > 0 && dst.hp < dst.stats.MaxHP*s.ExecuteBelow {
-			mult *= s.ExecuteMult
+			em := s.ExecuteMult
+			if dst.mon != nil && dst.mon.def.Boss {
+				em = math.Min(em, game.BossExecuteCap) // execução em chefe: no máximo +50%
+			}
+			mult *= em
 		}
 		extraCrit := s.ExtraCrit
+		if src.pl != nil && game.SkillResCost(s) > 0 && src.pl.passives.Has(game.PassiveResCostCut) {
+			extraCrit += game.ResSkillCrit // Ira Desmedida
+		}
 		mult *= z.skillDamageBonus(src, dst, s)
 		if s.Holy && src.pl != nil {
 			extraCrit += src.pl.passives.Of(game.PassiveHolyCrit)
@@ -355,6 +373,12 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int, splash boo
 			landed = landed || !hit.Miss
 			if hit.Crit && s.Holy && src.pl != nil && src.pl.passives.Has(game.PassiveHolyCrit) {
 				z.gainRes(src, fervorFaith) // Fervor: crítico sagrado gera Fé
+			}
+			if hit.Crit && s.ResOnCrit > 0 {
+				z.gainRes(src, s.ResOnCrit) // Golpe Esmagador
+			}
+			if dst.dead && s.ResetOnKill {
+				z.killReset(src, s) // Carnificina Final
 			}
 		}
 	}
@@ -402,6 +426,26 @@ func (z *Zone) skillHit(src, dst *entity, s *game.SkillDef, rank int, splash boo
 func (z *Zone) applyEffect(src, e *entity, def *game.EffectDef) {
 	if e.dead || (e.mon != nil && e.mon.def.ImmuneTo(def.Kind)) {
 		return
+	}
+	if (def.Kind == game.EffectSlow || def.Kind == game.EffectRoot) && e.has(game.EffectUnstoppable, z.now) {
+		return // Grito de Reagrupar
+	}
+	if def.Kind == game.EffectUnstoppable {
+		for _, k := range []game.EffectKind{game.EffectSlow, game.EffectRoot} {
+			if e.removeEffect(k) {
+				z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: e.id, Effect: pb.Effect(k)})
+			}
+		}
+	}
+	if def.Kind == game.EffectStun && src.pl != nil && src != e {
+		if src.pl.passives.Has(game.PassiveDominance) { // Presença Dominante
+			d := *def
+			d.Duration += game.DominanceStun
+			def = &d
+		}
+		if e.mon != nil {
+			z.interrupt(src, e)
+		}
 	}
 	if e.pl != nil && (def.Kind == game.EffectStun || def.Kind == game.EffectSlow) {
 		if v := e.pl.mastery.of(game.MStatCCResist); v > 0 { // Firmeza (Maestria)
@@ -497,6 +541,9 @@ func (z *Zone) applyHit(src, dst *entity, skillID uint32, hit game.Hit, magic bo
 	if src.pl != nil && taken > 0 && !src.dead {
 		// Sede de Sangue
 		if pv := src.pl.passives.Of(game.PassiveLifesteal); pv > 0 {
+			if src.pl.passives.Has(game.PassiveBloodFrenzy) && src.hp < src.stats.MaxHP*game.BloodFrenzyBelow {
+				pv *= 2 // Sede Insaciável
+			}
 			heal := math.Round(taken * pv)
 			if heal > 0 && src.hp < src.stats.MaxHP {
 				src.hp = math.Min(src.stats.MaxHP, src.hp+heal)

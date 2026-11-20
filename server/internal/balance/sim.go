@@ -68,7 +68,8 @@ type rotSkill struct {
 func modeledOnSelf(k game.EffectKind) bool {
 	switch k {
 	case game.EffectBuffAtk, game.EffectWarCry, game.EffectBuffAtkSpeed, game.EffectBuffDef,
-		game.EffectFrostArmor, game.EffectShield, game.EffectBuffBlock, game.EffectRegen:
+		game.EffectFrostArmor, game.EffectShield, game.EffectBuffBlock, game.EffectRegen, game.EffectFuryDouble,
+		game.EffectBuffSpeed:
 		return true
 	}
 	return false
@@ -77,7 +78,7 @@ func modeledOnSelf(k game.EffectKind) bool {
 func modeledOnTarget(k game.EffectKind) bool {
 	switch k {
 	case game.EffectStun, game.EffectWeaken, game.EffectBlind, game.EffectMark,
-		game.EffectPoison, game.EffectBurn, game.EffectPlague:
+		game.EffectPoison, game.EffectBurn, game.EffectPlague, game.EffectBleed:
 		return true
 	}
 	return false
@@ -171,6 +172,7 @@ type fight struct {
 	rd      *game.ResourceDef
 	res     game.ResourceState
 	engaged bool // o primeiro golpe neste monstro já saiu (Ímpeto)
+	basics  int  // básicos seguidos neste monstro (Sequência Selvagem)
 }
 
 // newFight prepara o caçador (vida e mana cheias, nada em recarga). O mesmo caçador luta
@@ -194,7 +196,7 @@ func (f *fight) engage(def *game.MonsterDef, level int) {
 	f.bodyRadius, f.mRange = def.BodyRadius, f.m.Range
 	f.dist = f.p.Range*approachFactor + f.bodyRadius
 	f.out = Fight{}
-	f.engaged = false
+	f.engaged, f.basics = false, 0
 }
 
 // gain soma no recurso (o teto por segundo e o máximo valem como na zona).
@@ -256,10 +258,16 @@ func (f *fight) pDef(magic bool) float64 {
 
 func (f *fight) pInterval() float64 {
 	iv := f.p.AtkInterval
+	speed := 0.0
 	if v, ok := f.pfx.active(game.EffectBuffAtkSpeed, f.now); ok {
-		iv /= 1 + v
+		speed += v
 	}
-	return iv
+	// Sequência Selvagem: contra um alvo só, os acúmulos sobem a cada básico (até 5).
+	speed += float64(min(f.basics, game.FrenzyStackMax)) * f.pv.Of(game.PassiveFrenzyStacks)
+	if v := f.pv.Of(game.PassiveBloodFrenzy); v > 0 && f.hp < f.p.MaxHP*game.BloodFrenzyBelow {
+		speed += v // Sede Insaciável
+	}
+	return iv / (1 + speed)
 }
 
 func (f *fight) mAtk() float64 {
@@ -302,7 +310,7 @@ func (f *fight) monHP() float64 {
 // da Lâmina Envenenada.
 // hit: o golpe pelo valor esperado; devolve a chance de acertar (para os ganhos de recurso).
 func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) float64 {
-	in := game.HitInput{Atk: f.pAtk(magic), Def: f.mDef(magic), Mult: mult * (1 + f.b.Bestiary), // como zone.hitInput
+	in := game.HitInput{Atk: f.pAtk(magic), Def: f.mDef(magic), Mult: mult * (1 + f.b.Bestiary) * (1 + f.pv.Of(game.PassiveAllyDamageAura)), // como zone.hitInput
 		Crit: f.p.Crit + extraCrit, CritMult: f.p.CritDamage, Accuracy: f.p.Accuracy, Evasion: f.m.Evasion, NoMiss: noMiss}
 	dmg := game.ExpectedHit(in)
 	chance := 1.0
@@ -322,6 +330,9 @@ func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) float64 {
 	}
 	f.damageMonster(dmg)
 	if pv := f.pv.Of(game.PassiveLifesteal); pv > 0 {
+		if f.pv.Has(game.PassiveBloodFrenzy) && f.hp < f.p.MaxHP*game.BloodFrenzyBelow {
+			pv *= 2 // Sede Insaciável
+		}
 		f.hp = math.Min(f.p.MaxHP, f.hp+dmg*pv)
 	}
 	if pv := f.pv.Of(game.PassivePoisonProc); pv > 0 && !f.mDead() {
@@ -355,8 +366,8 @@ func (f *fight) cast(rs rotSkill) {
 	if f.rd != nil {
 		if s.ResSpendAll {
 			spent = f.res.SpendAll()
-		} else if f.res.Spend(s.ResCost) {
-			spent = s.ResCost
+		} else if c := game.ResCostFor(s, f.pv); f.res.Spend(c) {
+			spent = c
 		}
 		n := s.ResOnCast
 		if f.res.LastCast != s.ID {
@@ -386,6 +397,10 @@ func (f *fight) cast(rs rotSkill) {
 	if s.Banner != nil {
 		f.pfx.add(s.Banner.Effect, s.Banner.Value, s.Banner.Duration, f.now)
 	}
+	if (s.Charge || s.ChainCharge > 0) && f.pv.Has(game.PassiveChargeMomentum) { // Ímpeto de Carga
+		v := f.pv.Of(game.PassiveChargeMomentum)
+		f.pfx.add(game.EffectBuffAtk, v, game.MomentumSecs, f.now)
+	}
 	if s.Target == game.TargetSelf {
 		return
 	}
@@ -398,6 +413,12 @@ func (f *fight) cast(rs rotSkill) {
 			mult *= game.SpendAllMult(s, spent)
 		}
 		extraCrit := s.ExtraCrit
+		if game.SkillResCost(s) > 0 && f.pv.Has(game.PassiveResCostCut) {
+			extraCrit += game.ResSkillCrit // Ira Desmedida
+		}
+		if s.ResOnCrit > 0 && f.rd != nil { // Golpe Esmagador, pela chance de crítico
+			f.gain(s.ResOnCrit * math.Min(1, f.p.Crit+extraCrit))
+		}
 		if s.Holy { // Zelo e Fervor (como zone.skillDamageBonus)
 			mult *= 1 + f.pv.Of(game.PassiveHolyDamagePct)
 			extraCrit += f.pv.Of(game.PassiveHolyCrit)
@@ -460,7 +481,7 @@ func (f *fight) wants(rs rotSkill) bool {
 	if f.now+timeEps < f.cds[s.ID] || f.mp < rs.mp {
 		return false
 	}
-	if c := game.SkillResCost(s); c > 0 && (f.rd == nil || f.res.Value+1e-9 < c) {
+	if c := game.ResCostFor(s, f.pv); c > 0 && (f.rd == nil || f.res.Value+1e-9 < c) {
 		return false
 	}
 	if s.Target != game.TargetSelf && !f.inRange(s.Range) {
@@ -531,7 +552,7 @@ func (f *fight) monsterHit() {
 
 // tickDoTs: venenos, queimaduras e pragas no monstro, 1×/s (sem defesa nem Marca).
 func (f *fight) tickDoTs() {
-	for _, k := range []game.EffectKind{game.EffectPoison, game.EffectBurn, game.EffectPlague} {
+	for _, k := range []game.EffectKind{game.EffectPoison, game.EffectBurn, game.EffectPlague, game.EffectBleed} {
 		ef := &f.mfx[k]
 		for ef.until > f.now-0.001 && f.now+timeEps >= ef.nextTick && !f.mDead() {
 			ef.nextTick++
@@ -635,8 +656,13 @@ func (f *fight) playerActs() {
 	}
 	if !f.mDead() && f.now+timeEps >= f.pNext && f.inRange(f.p.Range) {
 		if chance := f.hit(f.p.Magic, 1, 0, false); f.rd != nil {
-			f.gain(chance * f.rd.Gen(game.GenBasicHit))
+			g := f.rd.Gen(game.GenBasicHit)
+			if _, ok := f.pfx.active(game.EffectFuryDouble, f.now); ok {
+				g *= 2 // Fúria Incontrolável
+			}
+			f.gain(chance * g)
 		}
+		f.basics++
 		f.pNext = f.now + f.pInterval()
 	}
 }
