@@ -189,7 +189,7 @@ As animações ficam em arquivos próprios, sem malha: o jogo carrega a base uma
 
 ---
 
-## 7. Em aberto
+## 7. Backup e capa (decididos em 19/11)
 
-1. **Backup das fontes:** `assets-src/` está no `.gitignore`. Os `.blend` precisam de um lugar seguro (Git LFS ou uma pasta sincronizada) antes da Fase 2.
-2. **Capa:** só os 4 ossos animados à mão em cada clipe, ou também uma mola simples no cliente por cima.
+- **Fontes:** `assets-src/` é um repositório git **privado** à parte (`erevia-arte`), com Git LFS para `.blend`, `.png`, `.jpg`, `.glb` e `.fbx`. O repositório do jogo é público e continua ignorando `assets-src/`. Os `.blend` são salvos com a compressão do Blender, e o commit é feito nos marcos (peça ou clipe pronto), com push em seguida.
+- **Capa e tecido:** **mola no cliente** como padrão (andar, correr, parar, virar, parado), nos 4 ossos `cape_*`, desligada a partir do LOD1 (≥ 20 m). Nos clipes em que a capa faz parte da ação (giro, salto, esquiva, sumir, morte), ela é animada à mão e a mola fica desligada: `clips.json` ganha o campo `"capeSpring": 0` a `1` (peso da mola; padrão 1).
