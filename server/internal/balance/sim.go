@@ -40,7 +40,7 @@ type effect struct {
 	value, until, nextTick float64
 }
 
-type effects [32]effect
+type effects [game.EffectKinds]effect
 
 func (e *effects) active(k game.EffectKind, now float64) (float64, bool) {
 	ef := e[k]
@@ -78,7 +78,8 @@ func modeledOnSelf(k game.EffectKind) bool {
 func modeledOnTarget(k game.EffectKind) bool {
 	switch k {
 	case game.EffectStun, game.EffectWeaken, game.EffectBlind, game.EffectMark,
-		game.EffectPoison, game.EffectBurn, game.EffectPlague, game.EffectBleed:
+		game.EffectPoison, game.EffectBurn, game.EffectPlague, game.EffectBleed,
+		game.EffectSlow, game.EffectRoot, game.EffectCurse, game.EffectArmorBreak:
 		return true
 	}
 	return false
@@ -285,10 +286,14 @@ func (f *fight) mAtk() float64 {
 }
 
 func (f *fight) mDef(magic bool) float64 {
+	d := f.m.PDef
 	if magic {
-		return f.m.MDef
+		d = f.m.MDef
 	}
-	return f.m.PDef
+	if v, ok := f.mfx.active(game.EffectArmorBreak, f.now); ok { // Fraqueza
+		d *= math.Max(0, 1-v)
+	}
+	return d
 }
 
 func (f *fight) mStunned() bool {
@@ -312,6 +317,16 @@ func (f *fight) monHP() float64 {
 func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) float64 {
 	in := game.HitInput{Atk: f.pAtk(magic), Def: f.mDef(magic), Mult: mult * (1 + f.b.Bestiary) * (1 + f.pv.Of(game.PassiveAllyDamageAura)), // como zone.hitInput
 		Crit: f.p.Crit + extraCrit, CritMult: f.p.CritDamage, Accuracy: f.p.Accuracy, Evasion: f.m.Evasion, NoMiss: noMiss}
+	if v := f.pv.Of(game.PassiveSlowedDamagePct); v > 0 && f.mfxActive(game.EffectSlow) {
+		in.Mult *= 1 + v // Frio Penetrante
+	}
+	if v := f.pv.Of(game.PassiveCursedDamagePct); v > 0 && (f.mfxActive(game.EffectWeaken) || f.mfxActive(game.EffectMark) ||
+		f.mfxActive(game.EffectArmorBreak) || f.mfxActive(game.EffectCurse)) {
+		in.Mult *= 1 + v // Agonia
+	}
+	if f.pv.Has(game.PassiveWinterHeart) && (f.mfxActive(game.EffectStun) || f.mfxActive(game.EffectRoot)) {
+		in.ForceCrit = true // Coração do Inverno
+	}
 	dmg := game.ExpectedHit(in)
 	chance := 1.0
 	if !noMiss {
@@ -369,6 +384,9 @@ func (f *fight) cast(rs rotSkill) {
 		} else if c := game.ResCostFor(s, f.pv); f.res.Spend(c) {
 			spent = c
 		}
+		if v := f.pv.Of(game.PassiveManaOnSpend); v > 0 && spent >= 10 { // Fluxo Arcano
+			f.mp = math.Min(f.p.MaxMP, f.mp+f.p.MaxMP*v*math.Floor(spent/10))
+		}
 		n := s.ResOnCast
 		if f.res.LastCast != s.ID {
 			n += f.rd.Gen(game.GenDistinctCast)
@@ -411,6 +429,18 @@ func (f *fight) cast(rs rotSkill) {
 		}
 		if s.ResSpendAll {
 			mult *= game.SpendAllMult(s, spent)
+		}
+		if s.ResBonusCost > 0 && f.res.Spend(s.ResBonusCost) { // Rajada Concentrada
+			mult *= 1 + s.ResBonusPct
+			spent += s.ResBonusCost
+		}
+		if s.Reaction && f.mfxActive(game.EffectBurn) && f.mfxActive(game.EffectSlow) {
+			mult *= 2 // Reação Elemental
+			f.mfx[game.EffectBurn].until, f.mfx[game.EffectSlow].until = 0, 0
+			f.gain(s.ResOnReaction)
+		}
+		if s.Fire && f.pv.Has(game.PassiveFireHeart) && f.mfxActive(game.EffectBurn) {
+			mult *= 1 + game.FireHeartBonus // Coração do Vulcão
 		}
 		extraCrit := s.ExtraCrit
 		if game.SkillResCost(s) > 0 && f.pv.Has(game.PassiveResCostCut) {
@@ -463,7 +493,7 @@ func (f *fight) cast(rs rotSkill) {
 	if s.Fire && (s.OnTarget == nil || s.OnTarget.Kind != game.EffectBurn) {
 		if pv := f.pv.Of(game.PassiveFireBurn); pv > 0 {
 			v := math.Round(f.pAtk(true) * pv)
-			f.mfx.add(game.EffectBurn, math.Max(1, v), game.FireBurnSeconds, f.now)
+			f.mfx.add(game.EffectBurn, math.Max(1, v), game.FireBurnSeconds+s.BurnExtra, f.now)
 		}
 	}
 }
@@ -552,11 +582,17 @@ func (f *fight) monsterHit() {
 
 // tickDoTs: venenos, queimaduras e pragas no monstro, 1×/s (sem defesa nem Marca).
 func (f *fight) tickDoTs() {
-	for _, k := range []game.EffectKind{game.EffectPoison, game.EffectBurn, game.EffectPlague, game.EffectBleed} {
+	for _, k := range []game.EffectKind{game.EffectPoison, game.EffectBurn, game.EffectPlague, game.EffectBleed, game.EffectCurse} {
 		ef := &f.mfx[k]
 		for ef.until > f.now-0.001 && f.now+timeEps >= ef.nextTick && !f.mDead() {
 			ef.nextTick++
-			f.damageMonster(math.Max(1, math.Round(ef.value)))
+			dmg := math.Max(1, math.Round(ef.value))
+			if k == game.EffectPlague || k == game.EffectCurse { // Putrefação, pelo valor esperado
+				if c := math.Min(1, f.pv.Of(game.PassiveDotCrit)); c > 0 {
+					dmg *= 1 + c*(f.p.CritDamage-1)
+				}
+			}
+			f.damageMonster(dmg)
 		}
 	}
 }

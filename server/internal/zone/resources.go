@@ -150,7 +150,7 @@ func (z *Zone) castResource(p *entity, s *game.SkillDef) (float64, bool) {
 		spent = cost
 	}
 	p.pl.castTargets = 0
-	z.faithShield(p, spent)
+	z.afterResSpend(p, spent)
 	n := s.ResOnCast
 	if p.pl.res.LastCast != s.ID {
 		n += d.Gen(game.GenDistinctCast)
@@ -227,4 +227,12 @@ func (z *Zone) skillDamageBonus(src, dst *entity, s *game.SkillDef) float64 {
 		}
 	}
 	return m
+}
+
+// afterResSpend: o que gastar recurso dispara (Escudo da Fé, Fluxo Arcano).
+func (z *Zone) afterResSpend(p *entity, spent float64) {
+	z.faithShield(p, spent)
+	if v := p.pl.passives.Of(game.PassiveManaOnSpend); v > 0 && spent >= 10 {
+		p.mp = math.Min(p.stats.MaxMP, p.mp+p.stats.MaxMP*v*math.Floor(spent/10))
+	}
 }

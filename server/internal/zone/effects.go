@@ -191,7 +191,13 @@ func (z *Zone) tickDoTs(e *entity) {
 			src = e // quem envenenou saiu: o dano continua, sem dono
 		}
 		dmg := math.Max(1, math.Round(ef.value))
-		ev := &pb.CombatEvent{SourceId: ef.source, TargetId: e.id, Damage: uint32(dmg), Dot: pb.Effect(ef.kind)}
+		crit := false
+		if src.pl != nil && (ef.kind == game.EffectPlague || ef.kind == game.EffectCurse) {
+			if c := src.pl.passives.Of(game.PassiveDotCrit); c > 0 && z.rng.Float64() < c { // Putrefação
+				dmg, crit = math.Round(dmg*src.stats.CritDamage), true
+			}
+		}
+		ev := &pb.CombatEvent{SourceId: ef.source, TargetId: e.id, Damage: uint32(dmg), Dot: pb.Effect(ef.kind), Crit: crit}
 		z.frame.combat = append(z.frame.combat, ev)
 		e.lastCombat = z.now
 		if e.mon != nil && src.pl != nil {
@@ -235,9 +241,17 @@ func (z *Zone) spreadPlague(dead *entity) {
 		return
 	}
 	def := &game.EffectDef{Kind: game.EffectPlague, Duration: ef.duration, Value: ef.value}
+	if src.pl != nil { // Contágio: a praga que pula leva mais força
+		def.Value = math.Round(def.Value * (1 + src.pl.passives.Of(game.PassiveSpreadPower)))
+	}
+	jumps := 0
 	for _, m := range z.monsters {
 		if m != dead && !m.dead && !m.mon.unseen() && dist(m.pos, dead.pos)-m.bodyRadius() <= game.PlagueSpread {
 			z.applyEffect(src, m, def)
+			if jumps < game.PlagueJumpResMax { // Carga Arcana por salto (até 3 por morte)
+				z.gainRes(src, game.PlagueJumpRes)
+				jumps++
+			}
 		}
 	}
 }

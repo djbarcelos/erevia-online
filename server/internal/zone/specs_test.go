@@ -297,7 +297,8 @@ func TestSpecActiveSkillsWork(t *testing.T) {
 		for _, s := range game.EvolutionTree(sp.ID) {
 			// Modificadores, as que agem só nos aliados e as de suporte têm testes próprios
 			// (evo_knight_test.go).
-			if s.IsPassive() || s.Node == game.NodeModifier || s.AllyOnly || s.RenewBlessings || s.CleanseAllies != (game.Scale{}) || s.Zone != nil {
+			if s.IsPassive() || s.Node == game.NodeModifier || s.AllyOnly || s.RenewBlessings || s.CleanseAllies != (game.Scale{}) || s.Zone != nil ||
+				s.Pandemic || s.Blink != (game.Scale{}) {
 				continue
 			}
 			t.Run(s.Name, func(t *testing.T) {

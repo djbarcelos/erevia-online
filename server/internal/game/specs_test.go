@@ -93,7 +93,7 @@ func TestSpecDataIsConsistent(t *testing.T) {
 					t.Errorf("%s: ativa sem alvo, custo ou recarga", s.Name)
 				}
 				if s.Mult.At(1) <= 0 && s.OnTarget == nil && s.OnSelf == nil && s.Banner == nil && s.Zone == nil &&
-					s.CleanseAllies == (Scale{}) && !s.RenewBlessings {
+					s.CleanseAllies == (Scale{}) && !s.RenewBlessings && !s.Pandemic && s.Blink == (Scale{}) {
 					t.Errorf("%s: não faz nada", s.Name)
 				}
 			}
@@ -207,7 +207,7 @@ func TestEffectiveSkillModifiers(t *testing.T) {
 }
 
 // completeEvolutions: as evoluções com a árvore inteira (fases de conteúdo já feitas).
-var completeEvolutions = []string{"bastion", "herald", "bloodrager", "warlord"}
+var completeEvolutions = []string{"bastion", "herald", "bloodrager", "warlord", "elementalist", "occultist"}
 
 // A árvore completa tem folga: pelo menos 1,4× os pontos do 40 e 26 ranks no marco 20;
 // uma chave por ramo no 40, que exige 15 pontos no ramo.

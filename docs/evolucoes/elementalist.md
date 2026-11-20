@@ -120,3 +120,13 @@ Os IDs a partir do 150 são **provisórios**. ★ marca as 2 skills iniciais. "(
 1. **Grimório** só com atributos (Int e mana), sem regra de combate própria.
 2. O **Cataclismo** vai para o marco 30 e passa a ter 3 ranks.
 3. A **mana** segue como o custo principal das magias, e a Concentração só reforça.
+
+## Calibragem no simulador (Fase 11, 19/11)
+
+O Mago base já matava rápido demais (−50% da média no 19), e a mana não pesava. Na árvore do Elementalista, todas as skills de dano ficaram com **50% do dano do doc** e **1,5× o custo de mana**:
+- **Dano:** a Bola de Fogo, por exemplo, ficou em 125→155% e 23 MP.
+- **Tooltips:** o texto de cada skill mostra o valor calibrado.
+
+Resultado:
+- **Tempo para matar** (distância da média): 20–24 **−21%**, 25–29 −22%, 30–34 −27%, 35–40 **−26%**, na borda da meta (−25% a −10%).
+- **Mana:** numa luta de 60 s sem poções, ela acaba em cerca de 40 s. Lançando tudo, não dá: é preciso escolher (meta 2).
