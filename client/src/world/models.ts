@@ -322,7 +322,8 @@ export const WEAPON_GRIPS: Record<string, Grip> = {
   shield_spikes_color: SHIELD,
   // Patrulheiro (Fase 3, calibrado no laboratório): o arco na mão esquerda, pelo meio, de pé ao
   // lado do corpo; as bestas na direita, ao longo do antebraço (penduradas no descanso, para a frente no tiro).
-  bow_withString: { ...BLADE, scale: 1.1, fist: { pre: [90, 0, 0], tilt: -70 } },
+  // Arco atravessando o punho, em pé no tiro (RB_Shoot) com a corda para o lado do corpo.
+  bow_withString: { ...BLADE, scale: 1.1, fist: { pre: [45, 180, 0], tilt: 0 } },
   crossbow_1handed: { ...BLADE, scale: 1.1, fist: { pre: [-90, 0, 0], tilt: -90 } },
   crossbow_2handed: { ...BLADE, scale: 1.2, fist: { pre: [-90, 0, 0], tilt: -90 } },
 };

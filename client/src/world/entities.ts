@@ -1,4 +1,6 @@
 import {
+  Quaternion,
+  Axis,
   AbstractMesh,
   BoundingInfo,
   Color3,
@@ -108,6 +110,12 @@ const FOLLOW_UP_MS = 140;
 const DEATH_AFTER_HIT_MS = 70;
 /** Quão rápido alguém se vira para o alvo do golpe (1/s): ~95% em 0,12 s. */
 const FACE_RATE = 25;
+/**
+ * O tiro de arco (RB_Shoot) mira para o lado esquerdo do corpo, como um arqueiro de verdade: durante o tiro o
+ * modelo gira este tanto (radianos) para o braço do arco apontar para o alvo, e depois volta (AIM_RATE).
+ */
+const BOW_AIM_YAW = Math.PI * 0.6;
+const AIM_RATE = 18;
 /** Corpo sumindo (s) e monstro nascendo (s). */
 const CORPSE_SINK_S = 0.9;
 const SPAWN_FADE_S = 0.5;
@@ -298,6 +306,9 @@ interface View extends EntityInfo {
   lastLand: number;
   /** Para onde virar (golpes): gira suave até lá; null = segue o movimento. */
   faceYaw: number | null;
+  /** Arco: até quando o modelo fica girado para mirar (performance.now()) e o giro atual (radianos). */
+  aimUntil: number;
+  aimYaw: number;
   /** NPC do remaster que cumprimentou: até quando fica virado para o jogador (performance.now(); 0 = parado como sempre). */
   greetUntil: number;
   /** Monstros: último golpe entre ele e você (performance.now(); a auto-caça vê quem briga). */
@@ -732,7 +743,7 @@ export class EntityManager {
       target: { x: e.targetX, z: e.targetZ },
       root, visual, head, ferryBoat, capsule: null, model3d: null, anim: null, meshes: [], awaitingModel: false, castsShadow: false,
       label, nameText, hpBar, hpFill, lastHurt: 0, effects: new Map(),
-      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, greetUntil: 0, fightAt: 0, hand: undefined,
+      impactUntil: 0, pendingHp: null, shownDead: e.dead, lastSwing: 0, swingImpact: 0, lastLand: 0, faceYaw: null, aimUntil: 0, aimYaw: 0, greetUntil: 0, fightAt: 0, hand: undefined,
       bounds: null, boundsAt: Matrix.Identity(), boundsX: NaN, boundsY: NaN, boundsZ: NaN,
     };
     this.views.set(e.id, v);
@@ -1291,6 +1302,8 @@ export class EntityManager {
       lead = src.anim.play(role, { lead: SWING_LEAD, speed });
     }
     src.swingImpact = src.lastLand = now + lead * 1000;
+    // Arco: o corpo gira de lado enquanto mira e solta (BOW_AIM_YAW).
+    if (projectileOf(src) === "arrow") src.aimUntil = src.swingImpact + 450;
     return src.swingImpact;
   }
 
@@ -1846,6 +1859,7 @@ export class EntityManager {
           v.visual.rotation.y = yaw;
         }
       }
+      this.updateAim(v, dt);
       if (v.bounds) this.moveBounds(v);
       if (v.anim) {
         // LOD de animação: quem está fora da tela ou longe não tem os ossos recalculados.
@@ -2013,6 +2027,20 @@ export class EntityManager {
       });
     }
     return out;
+  }
+
+  /** Giro de mira do arco (BOW_AIM_YAW) no modelo, por cima do giro do corpo (visual). */
+  private updateAim(v: View, dt: number): void {
+    const root = v.model3d?.root;
+    if (!root) return;
+    const want = performance.now() < v.aimUntil && !v.walking && !v.dead ? BOW_AIM_YAW : 0;
+    if (want === v.aimYaw) return;
+    v.aimYaw += (want - v.aimYaw) * (1 - Math.exp(-AIM_RATE * dt));
+    if (Math.abs(want - v.aimYaw) < 1e-3) v.aimYaw = want;
+    const base = (root.metadata ??= {}) as { aimBase?: Quaternion | null };
+    if (base.aimBase === undefined) base.aimBase = root.rotationQuaternion?.clone() ?? null;
+    const turn = Quaternion.RotationAxis(Axis.Y, v.aimYaw);
+    root.rotationQuaternion = base.aimBase ? turn.multiply(base.aimBase) : turn;
   }
 
   /** Vira para o alvo do golpe (suave, no update). */
