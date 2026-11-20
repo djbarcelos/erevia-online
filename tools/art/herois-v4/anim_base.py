@@ -147,6 +147,17 @@ def foot_track(phase, stride, lift, duty):
     return fwd, h, 30 * math.sin(math.pi * u) * (1 - u)
 
 
+def fist(f):
+    """Mãos fechadas na arma (o herói está sempre armado): punho do teste de pose (pose_test.py)."""
+    for s in ("l", "r"):
+        for k, ang in ((1, 55), (2, 70), (3, 45)):
+            key(f"index_{k:02d}_{s}", f, rot=(ang, 0, 0))
+        for k, ang in ((1, 75), (2, 85)):
+            key(f"fingers_{k:02d}_{s}", f, rot=(ang, 0, 0))
+        for k, ang in ((1, 20), (2, 25), (3, 20)):
+            key(f"thumb_{k:02d}_{s}", f, rot=(ang, 0, 0))
+
+
 def make_locomotion(name, frames, speed, lift, duty, bob, lean, arm_swing, spine_twist, elbow=15):
     clear()
     act = bpy.data.actions.new(name)
@@ -169,6 +180,7 @@ def make_locomotion(name, frames, speed, lift, duty, bob, lean, arm_swing, spine
         key("spine_02", f, rot=(lean, 0, -spine_twist * 1.4 * math.sin(2 * math.pi * ph)))
         key("chest", f, rot=(lean * 0.5, 0, -spine_twist * 0.6 * math.sin(2 * math.pi * ph)))
         key("head", f, rot=(-lean * 0.8, 0, spine_twist * 0.8 * math.sin(2 * math.pi * ph)))
+        fist(f)
     return act
 
 
@@ -190,6 +202,7 @@ def make_idle(name, frames):
         key("spine_02", f, rot=(2 + 1.2 * br, -1.5 * shift, 0))
         key("chest", f, rot=(1.5 * br, -1 * shift, 0))
         key("head", f, rot=(-2, 0, 18 * look))
+        fist(f)
     return act
 
 

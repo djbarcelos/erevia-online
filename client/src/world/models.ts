@@ -1,4 +1,5 @@
 import { HERO_FISTS, type FistFrame } from "./hero-fists";
+import { HERO_FISTS_V4 } from "./hero-fists-v4";
 import "@babylonjs/loaders/glTF";
 import {
   AbstractMesh,
@@ -901,8 +902,9 @@ export class CharacterModels {
         child.parent = hand as TransformNode;
         child.position = Vector3.Zero();
         const grip = assets.remaster ? WEAPON_GRIPS[this.weaponFileOf.get(container) ?? ""] : undefined;
-        // v4: o corpo novo ainda não tem as medidas de punho (o encaixe é o socket_hand_* do contrato)
-        const fist = grip?.fist && !isV4Hero(model) ? HERO_FISTS[model]?.[slot === "handslot.l" ? "l" : "r"] : undefined;
+        const side = slot === "handslot.l" ? "l" : "r";
+        // v4: o punho do corpo novo (um para as 4 classes), medido no Blender com os dedos das animações
+        const fist = grip?.fist ? (isV4Hero(model) ? HERO_FISTS_V4[side] : HERO_FISTS[model]?.[side]) : undefined;
         if (grip && fist) {
           // Punho fechado: o cabo (Y da arma) segue o eixo do punho e o fio (X) acompanha os dedos.
           const a0 = Vector3.FromArray(fist.axis), f0 = Vector3.FromArray(fist.fingers).scale(-1);
