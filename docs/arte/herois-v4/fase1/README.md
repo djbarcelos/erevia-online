@@ -9,7 +9,8 @@ Conceitos 2D gerados no Meshy (`nano-banana-pro`), com o corpo escolhido como re
 | Corpo (2 variações) | 2 text-to-image | 18 |
 | Rostos e cabelos, recruta, 4 classes com as evoluções | 6 image-to-image | 54 |
 | 28 duplas nas duas ordens | 10 image-to-image | 90 |
-| **Total** | 18 | **162** (orçamento da fase: ~220) |
+| Correções: folha do Mago e 7 folhas de duplas | 8 image-to-image | 72 |
+| **Total** | 26 | **234** (orçamento da fase: ~220) |
 
 ## Folhas
 
@@ -28,29 +29,33 @@ Conceitos 2D gerados no Meshy (`nano-banana-pro`), com o corpo escolhido como re
 
 ## Teste de silhueta (85 px, em cinza)
 
+Depois das correções (segunda rodada):
+
 | Nível | Resultado |
 |---|---|
 | Recruta | ✅ o "antes": silhueta lisa, sem nenhuma peça |
 | Classes | ✅ as 4 se distinguem: escudo e elmo; chifres e machado; chapéu e cajado; capuz |
-| Evoluções | ✅ Bastião (ameias, elmo de balde), Paladino (asas), Berserker (crânio de chifre), Senhor da Guerra (elmo de chifre), Assassino (capa em tiras), Patrulheiro (penas e arco). ⚠️ **Elementalista e Arcanista** viram o mesmo capuz pontudo de manto: cristais e correntes somem a 85 px |
-| Duplas | ⚠️ metade se lê pela peça grande (estandarte, chifres, chapéu de aba, capuz de lobo, capa de fumaça). Na outra metade, a peça própria é pequena e a figura vira um bloco de manto ou placa |
+| Evoluções | ✅ as 8 se distinguem. O Elementalista ganhou uma coroa de cristais e chamas acima da cabeça; o Arcanista ficou com capuz e correntes, que agora não se confunde com o chapéu do Mago nem com a coroa do Elementalista |
+| Duplas | ✅ cada figura tem uma peça grande saindo do contorno: asas de penas, penacho, coroa de cristais, disco de sol, lanterna, capuz branco em ponta, máscara de bico, chapéu de aba com penas, círculo de runas, cântaro nas costas, estandartes e chifres |
 
-## Problemas e correções propostas
+## O que foi corrigido
 
-| # | Onde | Problema | Correção |
+| # | Onde | Antes | Depois |
 |---|---|---|---|
-| 1 | Elementalista × Arcanista | mesma silhueta | Elementalista: **cristais flutuando acima dos ombros**, maiores que a cabeça. Arcanista: **capuz caído para a frente e correntes pendendo até o chão** |
-| 2 | Duplas que viram bloco | peça própria pequena | a peça de silhueta da dupla **30–50% maior** e saindo do contorno (para cima ou para os lados), como nos que passaram |
-| 3 | Penitente (Assassino → Paladino) | saiu um macacão branco liso | refazer: gibão de couro tingido de branco, capuz e uma asa de placa num ombro |
-| 4 | Espreitador | veio uma figura a mais (a do meio) | as válidas são a 1ª (capuz de lobo e arco) e a 3ª (capa de fumaça); a do meio é descartada |
-| 5 | Chefe de Clã (Senhor da Guerra → Berserker) | couro em vez de bronze | refazer com a couraça de bronze |
+| 1 | Elementalista × Arcanista | mesma silhueta | Elementalista com coroa de cristais e chamas acima da cabeça ([classe-mago.jpg](classe-mago.jpg)) |
+| 2 | Duplas que viravam bloco (folhas 2, 3, 4, 7, 8 e 9) | peça própria pequena | peça própria grande, saindo do contorno |
+| 3 | Penitente (Assassino → Paladino) | macacão branco liso | couro tingido de branco, capuz e uma asa de placa num ombro |
+| 5 | Chefe de Clã (Senhor da Guerra → Berserker) | couro | couraça de bronze, elmo de chifres grandes e crânio no ombro |
 
-Refazer 1, 2, 3 e 5 custa ~5 folhas (45 créditos), dentro do orçamento da fase.
+**Ficou como está:**
+- **Espreitador** ([duplas-10.jpg](duplas-10.jpg)): veio uma figura a mais. Valem a 1ª (capuz de lobo) e a 3ª (capa de fumaça).
+- **Incendiário** (Berserker → Elementalista): a pele em brasa se lê pela cor, não pela silhueta. A 85 px em cinza ele fica parecido com o Berserker; no jogo, o brilho do emissivo resolve.
+- **Campeão:** o estandarte de uma figura encosta na outra na folha; é só a composição da imagem.
 
 ## Portão da Fase 1
 
 - [ ] Corpo A aprovado como base.
 - [ ] Rostos e cabelos aprovados.
-- [ ] Recruta, as 4 classes e as 8 evoluções aprovadas (com a correção 1).
-- [ ] As 28 duplas aprovadas (com as correções 2 a 5).
-- [ ] Teste de silhueta refeito depois das correções.
+- [ ] Recruta, as 4 classes e as 8 evoluções aprovadas.
+- [ ] As 28 duplas aprovadas.
+- [x] Teste de silhueta refeito depois das correções.
