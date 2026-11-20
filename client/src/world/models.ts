@@ -216,15 +216,16 @@ const V4_SET: AnimSet = {
   idle: "rc.idle", walk: "base.walk", run: "base.run", attack: "rc.idle", skill: "rc.idle", buff: "rc.idle",
   hit: "base.hit", hit2: "base.hit2", death: "base.death", death2: "base.death2",
 };
-/** Camada do Cavaleiro (docs/arte/herois-v4/movimento.md, seção 4; tools/art/herois-v4/anim_knight.py). */
+/** Camada do Cavaleiro: golpes, guarda e bloqueio capturados (Meshy, retarget_meshy.py); o parado é o do recruta (Idle 3). */
 const V4_KNIGHT: AnimSet = {
-  ...V4_SET, idle: "kn.idle", attack: "kn.attack.sword.1", attack2: "kn.attack.sword.2", attack3: "kn.attack.sword.3",
-  skill: "kn.attack.sword.3", stance: "kn.stance", block: "kn.block",
+  ...V4_SET, attack: "kn.attack.sword.1", attack2: "kn.attack.sword.2", attack3: "kn.attack.sword.3",
+  skill: "kn.skill.heavy", stance: "kn.stance", block: "kn.block",
 };
-// impacto dos golpes do Cavaleiro (quadro do contrato / 30)
-CLIP_IMPACT["kn.attack.sword.1"] = 13 / 30;
-CLIP_IMPACT["kn.attack.sword.2"] = 12 / 30;
-CLIP_IMPACT["kn.attack.sword.3"] = 16 / 30;
+// impacto dos golpes do Cavaleiro: pico de velocidade da mão (tools/art/herois-v4/impacts.py, quadros a 30 fps)
+CLIP_IMPACT["kn.attack.sword.1"] = 16 / 30;
+CLIP_IMPACT["kn.attack.sword.2"] = 40 / 30;
+CLIP_IMPACT["kn.attack.sword.3"] = 33 / 30;
+CLIP_IMPACT["kn.skill.heavy"] = 31 / 30;
 /** Golpes v4 com preparação inteira: o clipe começa até 0,45 s antes do impacto (RoleMap.swingLead). */
 const V4_SWING_LEAD = 0.45;
 const V4_FOOT_SPEEDS = { walk: 1.1, run: 4.41 }; // medidos no Blender (tools/art/herois-v4/retarget_meshy.py, clips-base.json)
