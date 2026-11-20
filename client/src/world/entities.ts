@@ -106,6 +106,13 @@ const THROWN_COLOR = new Color3(0.86, 0.8, 0.62);
 const SWING_LEAD = 0.18;
 /** Arco e besta: o tiro começa este tanto antes da soltura, para a puxada da corda aparecer antes de a flecha sair. */
 const SHOT_LEAD = 0.6;
+/**
+ * Arco e besta: tiros que chegam colados (skill + básico no mesmo instante) saem um de cada vez, este tanto (ms)
+ * depois da soltura anterior, cada um com a sua soltura (o fim da puxada, SHOT_REPLAY_LEAD s). Corpo a corpo
+ * continua com FOLLOW_UP_MS (vira combo); com o arco seriam várias flechas numa animação só.
+ */
+const SHOT_FOLLOW_MS = 450;
+const SHOT_REPLAY_LEAD = 0.35;
 /** Segundo golpe que chega enquanto o primeiro ainda sobe: encosta este tempo depois (ms). */
 const FOLLOW_UP_MS = 140;
 /** Quanto a morte espera depois do último impacto, para o golpe ser visto antes da queda (ms). */
@@ -1289,6 +1296,16 @@ export class EntityManager {
    */
   private swing(src: View, dst: View, role: "attack" | "skill", now: number): number {
     this.face(src, dst);
+    const shot = projectileOf(src);
+    const ranged = shot === "arrow" || shot === "bolt";
+    if (ranged && now < src.swingImpact + SHOT_FOLLOW_MS) {
+      const land = Math.max(src.swingImpact, src.lastLand, now) + SHOT_FOLLOW_MS;
+      src.swingImpact = src.lastLand = land;
+      src.lastSwing = land - SHOT_REPLAY_LEAD * 1000;
+      this.at(src.lastSwing, src.id, () => src.anim?.play(role, { lead: SHOT_REPLAY_LEAD }));
+      if (shot === "arrow") src.aimUntil = land + 450;
+      return land;
+    }
     if (now < src.swingImpact) {
       src.swingImpact = Math.max(src.swingImpact, src.lastLand) + FOLLOW_UP_MS;
       src.lastLand = src.swingImpact;
@@ -1300,8 +1317,7 @@ export class EntityManager {
     let lead = 0;
     if (src.anim) {
       let speed = 1;
-      const shot = projectileOf(src);
-      const startLead = shot === "arrow" || shot === "bolt" ? SHOT_LEAD : SWING_LEAD;
+      const startLead = ranged ? SHOT_LEAD : SWING_LEAD;
       const rest = src.anim.remaining(role, startLead);
       if (interval > 0.3 && interval < 3 && rest > interval * 0.9) speed = clamp(rest / (interval * 0.9), 1, 2);
       lead = src.anim.play(role, { lead: startLead, speed });
