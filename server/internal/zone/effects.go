@@ -23,6 +23,7 @@ type objectState struct {
 	zone     *game.ZoneDef
 	zoneRank int
 	nextTick float64
+	trap     bool // armadilha (Mestre Armadilheiro)
 }
 
 // ---------------------------------------------------------------------------------------
@@ -44,7 +45,16 @@ func (z *Zone) revealIfHidden(e *entity) {
 		z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: e.id, Effect: pb.Effect(game.EffectInvisible)})
 		if e.pl != nil {
 			e.pl.statsDirty = true
+			if v := e.pl.revealSpeed; v > 0 { // Sombra Persistente
+				z.applyEffect(e, e, &game.EffectDef{Kind: game.EffectBuffSpeed, Duration: 3, Value: v})
+			}
+			if e.pl.passives.Has(game.PassiveShadowAssassin) { // Assassino das Sombras
+				z.gainRes(e, game.ShadowAssassinRes)
+			}
 		}
+	}
+	if e.pl != nil {
+		e.pl.revealSpeed = 0
 	}
 }
 

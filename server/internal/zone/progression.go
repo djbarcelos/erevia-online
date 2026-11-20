@@ -19,6 +19,7 @@ func (z *Zone) kill(dead, killer *entity) {
 	dead.dead = true
 	dead.hp = 0
 	z.killGains(dead)
+	z.veilOnKill(killer)
 	z.spreadPlague(dead)
 	for _, ef := range dead.effects {
 		z.frame.ends = append(z.frame.ends, &pb.EffectEnd{TargetId: dead.id, Effect: pb.Effect(ef.kind)})

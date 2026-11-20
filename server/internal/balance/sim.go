@@ -69,7 +69,7 @@ func modeledOnSelf(k game.EffectKind) bool {
 	switch k {
 	case game.EffectBuffAtk, game.EffectWarCry, game.EffectBuffAtkSpeed, game.EffectBuffDef,
 		game.EffectFrostArmor, game.EffectShield, game.EffectBuffBlock, game.EffectRegen, game.EffectFuryDouble,
-		game.EffectBuffSpeed:
+		game.EffectBuffSpeed, game.EffectHunt:
 		return true
 	}
 	return false
@@ -327,10 +327,34 @@ func (f *fight) hit(magic bool, mult, extraCrit float64, noMiss bool) float64 {
 	if f.pv.Has(game.PassiveWinterHeart) && (f.mfxActive(game.EffectStun) || f.mfxActive(game.EffectRoot)) {
 		in.ForceCrit = true // Coração do Inverno
 	}
+	// Ladino evoluído (como zone.rogueHitBonus).
+	if v, ok := f.pfx.active(game.EffectHunt, f.now); ok && f.mfxActive(game.EffectMark) {
+		in.Mult *= 1 + v
+	}
+	rooted := f.mfxActive(game.EffectRoot)
+	if v := f.pv.Of(game.PassiveHunterInstinct); v > 0 && (rooted || f.mfxActive(game.EffectSlow)) {
+		in.Mult *= 1 + v
+	}
+	if f.pv.Has(game.PassiveAmbush) && rooted {
+		in.Mult *= 1 + game.AmbushBonus
+	}
+	if f.rd != nil && f.pv.Has(game.PassivePerfectAim) && f.res.Value >= f.rd.Max {
+		in.ForceCrit = true
+	}
 	dmg := game.ExpectedHit(in)
 	chance := 1.0
 	if !noMiss {
 		chance = game.HitChance(in.Accuracy, in.Evasion)
+	}
+	if pv := f.pv.Of(game.PassiveCritBleed); pv > 0 && !f.def.ImmuneTo(game.EffectBleed) { // Sangrar
+		crit := 1.0
+		if !in.ForceCrit {
+			crit = math.Min(1, in.Crit)
+		}
+		if crit*chance >= 0.5 || f.mfx[game.EffectBleed].until <= f.now { // pelo valor esperado: a ferida fica aberta
+			v := math.Max(1, math.Round(f.pAtk(false)*pv*crit*chance))
+			f.mfx.add(game.EffectBleed, v, game.CritBleedSecs, f.now)
+		}
 	}
 	if f.rd != nil {
 		n := f.rd.Gen(game.GenCrit) * math.Min(1, in.Crit)
@@ -384,6 +408,9 @@ func (f *fight) cast(rs rotSkill) {
 		} else if c := game.ResCostFor(s, f.pv); f.res.Spend(c) {
 			spent = c
 		}
+		if v := f.pv.Of(game.PassiveFinisherRefund); v > 0 && spent > 0 { // Dança das Lâminas
+			f.res.Value = math.Min(f.rd.Max, f.res.Value+spent*v)
+		}
 		if v := f.pv.Of(game.PassiveManaOnSpend); v > 0 && spent >= 10 { // Fluxo Arcano
 			f.mp = math.Min(f.p.MaxMP, f.mp+f.p.MaxMP*v*math.Floor(spent/10))
 		}
@@ -429,6 +456,9 @@ func (f *fight) cast(rs rotSkill) {
 		}
 		if s.ResSpendAll {
 			mult *= game.SpendAllMult(s, spent)
+		}
+		if s.ResAbove > 0 && f.res.Value >= s.ResAbove { // Flecha Carregada
+			mult *= 1 + s.ResAbovePct
 		}
 		if s.ResBonusCost > 0 && f.res.Spend(s.ResBonusCost) { // Rajada Concentrada
 			mult *= 1 + s.ResBonusPct

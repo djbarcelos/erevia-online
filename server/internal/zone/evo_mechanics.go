@@ -139,7 +139,7 @@ func (z *Zone) renewBlessings(src *entity, s *game.SkillDef) {
 
 // spawnZone: área no chão contra inimigos (Zona de Provocação). Usa o objeto do
 // estandarte, sem modelo próprio ainda.
-func (z *Zone) spawnZone(owner *entity, def *game.ZoneDef, rank int) {
+func (z *Zone) spawnZone(owner *entity, def *game.ZoneDef, rank int, trap bool) {
 	z.objectSeq++
 	id := objectIDBase + z.objectSeq
 	e := &entity{
@@ -147,7 +147,7 @@ func (z *Zone) spawnZone(owner *entity, def *game.ZoneDef, rank int) {
 		name: "Zona de " + owner.name, model: "banner", level: owner.level, scale: 1,
 		pos: owner.pos, dest: owner.pos,
 		stats: game.Stats{MaxHP: 1},
-		obj:   &objectState{owner: owner.id, until: z.now + def.Duration, zone: def, zoneRank: rank, nextTick: z.now},
+		obj:   &objectState{owner: owner.id, until: z.now + def.Duration, zone: def, zoneRank: rank, nextTick: z.now, trap: trap},
 	}
 	e.hp = 1
 	e.sentHP, e.sentMaxHP = 1, 1
@@ -166,9 +166,17 @@ func (z *Zone) tickZone(o *entity) {
 	if owner == nil || owner.dead {
 		return
 	}
+	power := 1.0
+	if o.obj.trap { // Mestre Armadilheiro
+		power += owner.pl.passives.Of(game.PassiveTrapPower)
+	}
+	if def.Trap {
+		z.springTrap(o, owner, power)
+		return
+	}
 	dmg := 0.0
 	if def.Damage != (game.Scale{}) {
-		dmg = math.Max(1, math.Round(owner.atk(def.Magic, z.now)*def.Damage.At(o.obj.zoneRank)))
+		dmg = math.Max(1, math.Round(owner.atk(def.Magic, z.now)*def.Damage.At(o.obj.zoneRank)*power))
 	}
 	for _, m := range z.monsters {
 		if m.dead || m.mon.unseen() || dist(o.pos, m.pos)-m.bodyRadius() > def.Radius {
@@ -444,5 +452,111 @@ func (z *Zone) pandemic(src, dst *entity) {
 		for _, d := range defs {
 			z.applyEffect(src, m, d)
 		}
+	}
+}
+
+// springTrap (Armadilha de Caça): o primeiro monstro dentro leva o golpe e fica preso; a
+// armadilha some.
+func (z *Zone) springTrap(o, owner *entity, power float64) {
+	def := o.obj.zone
+	for _, m := range z.monsters {
+		if m.dead || m.mon.unseen() || dist(o.pos, m.pos)-m.bodyRadius() > def.Radius {
+			continue
+		}
+		in := z.hitInput(owner, m, false, def.TrapMult.At(o.obj.zoneRank)*power, 0)
+		in.NoMiss = true
+		z.applyHit(owner, m, 0, game.RollHit(z.rng, in), false)
+		if !m.dead && def.Effect != game.EffectNone {
+			secs := def.EffectSecs + (power-1)*game.TrapRootPerPower
+			z.applyEffect(owner, m, &game.EffectDef{Kind: def.Effect, Duration: secs, Value: def.Value.At(o.obj.zoneRank)})
+		}
+		o.obj.until = z.now // disparou: some no próximo pulso
+		return
+	}
+}
+
+// rogueHitBonus: os bônus de dano e crítico do Ladino evoluído no golpe (Perseguição contra
+// marcado, Instinto do Caçador contra lento ou preso, Emboscada contra preso, Mira Perfeita
+// com a Precisão cheia).
+func (z *Zone) rogueHitBonus(src, dst *entity, in *game.HitInput) {
+	pv := &src.pl.passives
+	if v, ok := src.effect(game.EffectHunt, z.now); ok && dst.has(game.EffectMark, z.now) {
+		in.Mult *= 1 + v
+	}
+	rooted := dst.has(game.EffectRoot, z.now)
+	if v := pv.Of(game.PassiveHunterInstinct); v > 0 && (rooted || dst.has(game.EffectSlow, z.now)) {
+		in.Mult *= 1 + v
+	}
+	if pv.Has(game.PassiveAmbush) && rooted {
+		in.Mult *= 1 + game.AmbushBonus
+	}
+	if d := resDef(src); d != nil && pv.Has(game.PassivePerfectAim) && src.pl.res.Value >= d.Max {
+		in.ForceCrit = true
+	}
+}
+
+// pierce (Disparo Perfurante): acerta também os inimigos em linha atrás do alvo, até s.Range
+// e no máximo s.Pierce no total.
+func (z *Zone) pierce(src, first *entity, s *game.SkillDef, rank int) {
+	d := dist(src.pos, first.pos)
+	if d < 0.01 {
+		return
+	}
+	dir := Vec2{X: (first.pos.X - src.pos.X) / d, Z: (first.pos.Z - src.pos.Z) / d}
+	left := s.Pierce - 1
+	for _, m := range z.monsters {
+		if left <= 0 {
+			return
+		}
+		if m == first || m.dead || m.mon.unseen() {
+			continue
+		}
+		rx, rz := m.pos.X-src.pos.X, m.pos.Z-src.pos.Z
+		along := rx*dir.X + rz*dir.Z
+		side := math.Abs(rx*dir.Z - rz*dir.X)
+		if along > 0 && along <= s.Range && side <= game.PierceWidth+m.bodyRadius() {
+			z.skillHit(src, m, s, rank, false)
+			left--
+		}
+	}
+}
+
+// perfectExecution (Execução Perfeita): matar com uma finalização zera o Passo Sombrio e o
+// Golpe das Sombras.
+func (z *Zone) perfectExecution(p *entity) {
+	if p.pl == nil || !p.pl.passives.Has(game.PassivePerfectExecution) {
+		return
+	}
+	for _, id := range []uint32{game.SkillCutStep, game.SkillShadowStrike} {
+		if _, ok := p.pl.cooldowns[id]; ok {
+			delete(p.pl.cooldowns, id)
+			z.sendCooldown(p, id, 0)
+		}
+	}
+}
+
+// veilOnKill (Véu Mortal): com o véu ativo, matar deixa invisível.
+func (z *Zone) veilOnKill(killer *entity) {
+	if killer == nil || killer.pl == nil || killer.dead {
+		return
+	}
+	if v, ok := killer.effect(game.EffectVeil, z.now); ok {
+		z.applyEffect(killer, killer, &game.EffectDef{Kind: game.EffectInvisible, Duration: v})
+	}
+}
+
+// passMark (Caçada Implacável): a marca do morto passa para o inimigo mais perto.
+func (z *Zone) passMark(p, dead *entity, ef activeEffect) {
+	var best *entity
+	for _, m := range z.monsters {
+		if m == dead || m.dead || m.mon.unseen() || dist(m.pos, dead.pos) > game.RelentlessHuntRange {
+			continue
+		}
+		if best == nil || dist(m.pos, dead.pos) < dist(best.pos, dead.pos) {
+			best = m
+		}
+	}
+	if best != nil {
+		z.applyEffect(p, best, &game.EffectDef{Kind: game.EffectMark, Duration: ef.duration, Value: ef.value})
 	}
 }

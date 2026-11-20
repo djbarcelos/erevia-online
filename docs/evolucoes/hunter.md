@@ -132,3 +132,13 @@ Os IDs a partir do 203 são **provisórios**. ★ marca as 2 skills iniciais.
 2. **Chuva de Lâminas** passa a se chamar **Chuva de Flechas** (o ID 84 continua).
 3. **Arco de presente** ao evoluir. As adagas vão para a bolsa.
 4. Adagas como secundária ficam **para depois do lançamento**.
+
+## Calibragem no simulador (Fase 12, 19/11)
+
+Na árvore do Patrulheiro, as skills de dano ficaram com **75% do dano do doc**.
+
+Com as 8 árvores completas, ele ficou entre **−5% e −17%** da média (20–40), perto da meta (−10% a +5%).
+
+**Armas:** o arco e as bestas dependem da Fase 3 (modelo, animação de tiro e projéteis no cliente). Até lá, o Patrulheiro usa as adagas, e o Tiro Preciso e os outros tiros têm alcance próprio (14 m). Quando a Fase 3 entrar:
+- a evolução passa a exigir arco ou besta;
+- ele ganha o Arco comum ao evoluir.

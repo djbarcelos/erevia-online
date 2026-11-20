@@ -186,13 +186,20 @@ func (z *Zone) killGains(dead *entity) {
 			z.gainEvent(p, game.GenKill)
 		}
 	}
-	// Marca da Presa: matar quem você marcou devolve recurso.
+	// Marca da Presa: matar quem você marcou devolve recurso; Caçada Implacável devolve
+	// mais e passa a marca para o inimigo mais perto.
 	for _, ef := range dead.effects {
 		if ef.kind != game.EffectMark || ef.until <= z.now {
 			continue
 		}
-		if p := z.players[ef.source]; p != nil {
-			z.gainRes(p, markKillRes(p))
+		p := z.players[ef.source]
+		if p == nil {
+			continue
+		}
+		z.gainRes(p, markKillRes(p))
+		if p.pl.passives.Has(game.PassiveRelentlessHunt) {
+			z.gainRes(p, game.RelentlessHuntRes)
+			z.passMark(p, dead, ef)
 		}
 	}
 }
@@ -232,6 +239,9 @@ func (z *Zone) skillDamageBonus(src, dst *entity, s *game.SkillDef) float64 {
 // afterResSpend: o que gastar recurso dispara (Escudo da Fé, Fluxo Arcano).
 func (z *Zone) afterResSpend(p *entity, spent float64) {
 	z.faithShield(p, spent)
+	if v := p.pl.passives.Of(game.PassiveFinisherRefund); v > 0 && spent > 0 { // Dança das Lâminas
+		p.pl.res.Value = math.Min(resDef(p).Max, p.pl.res.Value+spent*v)
+	}
 	if v := p.pl.passives.Of(game.PassiveManaOnSpend); v > 0 && spent >= 10 {
 		p.mp = math.Min(p.stats.MaxMP, p.mp+p.stats.MaxMP*v*math.Floor(spent/10))
 	}

@@ -1718,6 +1718,8 @@ enum Effect {
   EFFECT_CURSE = 31; // dano por segundo (value), maldição
   EFFECT_ARMOR_BREAK = 32; // -value de defesa
   EFFECT_BANISH = 33; // fora de cena: não age, não bate e não apanha
+  EFFECT_VEIL = 34; // matar um inimigo deixa invisível por value s
+  EFFECT_HUNT = 35; // +value de dano contra alvos marcados
 }
 
 message EffectEvent {

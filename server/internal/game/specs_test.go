@@ -173,7 +173,8 @@ func TestEvolvedHotbar(t *testing.T) {
 		{"mage", "occultist", SkillFireball, SkillOccDrain},
 		{"rogue", "hunter", SkillShadowStep, SkillHuntKnife},
 		{"rogue", "cutthroat", SkillBackstab, SkillCutBackstab},
-		{"rogue", "cutthroat", SkillTwinBlades, 0},
+		{"rogue", "cutthroat", SkillTwinBlades, SkillCutTwin}, // versão evoluída (EvolvedFrom)
+		{"rogue", "cutthroat", SkillPlague, 0},
 	}
 	for _, c := range cases {
 		if got := EvolvedHotbarID(c.class, c.spec, c.from); got != c.to {
@@ -207,7 +208,7 @@ func TestEffectiveSkillModifiers(t *testing.T) {
 }
 
 // completeEvolutions: as evoluções com a árvore inteira (fases de conteúdo já feitas).
-var completeEvolutions = []string{"bastion", "herald", "bloodrager", "warlord", "elementalist", "occultist"}
+var completeEvolutions = []string{"bastion", "herald", "bloodrager", "warlord", "elementalist", "occultist", "cutthroat", "hunter"}
 
 // A árvore completa tem folga: pelo menos 1,4× os pontos do 40 e 26 ranks no marco 20;
 // uma chave por ramo no 40, que exige 15 pontos no ramo.

@@ -12,8 +12,8 @@ Cada evolução tem um doc próprio nesta pasta. **O DIogo revisa cada doc antes
 | Bárbaro | Senhor da Guerra (`warlord`) | Ímpeto | [warlord.md](warlord.md) | **no jogo** (Fase 10) |
 | Mago | Elementalista (`elementalist`) | Concentração | [elementalist.md](elementalist.md) | **no jogo** (Fase 11) |
 | Mago | Arcanista (`occultist`) | Carga Arcana | [occultist.md](occultist.md) | **no jogo** (Fase 11) |
-| Ladino | Assassino (`cutthroat`) | Combo | [cutthroat.md](cutthroat.md) | aprovado (19/11) |
-| Ladino | Patrulheiro (`hunter`) | Precisão | [hunter.md](hunter.md) | aprovado (19/11) |
+| Ladino | Assassino (`cutthroat`) | Combo | [cutthroat.md](cutthroat.md) | **no jogo** (Fase 12) |
+| Ladino | Patrulheiro (`hunter`) | Precisão | [hunter.md](hunter.md) | **no jogo** (Fase 12; arco na Fase 3) |
 
 Os IDs das evoluções são os das especializações de hoje (`spec` no banco e no protocolo) e não mudam. Mudam só os nomes exibidos: Arauto → Paladino, Sanguinário → Berserker, Caudilho → Senhor da Guerra, Ocultista → Arcanista, Sicário → Assassino, Caçador → Patrulheiro. Bastião e Elementalista continuam com o mesmo nome.
 
