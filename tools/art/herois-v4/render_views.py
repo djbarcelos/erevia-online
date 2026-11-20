@@ -42,6 +42,10 @@ for f in files:
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=f)
     objs = [o for o in bpy.data.objects if o not in before]
+    for o in list(objs):  # o importador cria uma esfera para desenhar os ossos; não é do modelo
+        if o.type == "MESH" and o.name.startswith("Icosphere"):
+            objs.remove(o)
+            bpy.data.objects.remove(o)
     meshes = [o for o in objs if o.type == "MESH"]
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in meshes)
     pts = [o.matrix_world @ Vector(c) for o in meshes for c in o.bound_box]
