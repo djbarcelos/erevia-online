@@ -81,7 +81,7 @@ export type EmoteRole = "wave" | "sit" | "dance";
 /** Papéis que só alguns modelos têm: os emotes e o andar (o remaster; os outros só correm). */
 /** Variantes (heróis do remaster): o golpe alterna attack → attack2 → attack3; dano e morte sorteiam. */
 export type VariantRole = "attack2" | "attack3" | "hit2" | "death2";
-export type OptionalRole = EmoteRole | "walk" | "break1" | "break2" | "break3" | VariantRole;
+export type OptionalRole = EmoteRole | "walk" | "break1" | "break2" | "break3" | "stance" | "block" | VariantRole;
 export type AnimRole = "idle" | "run" | "attack" | "skill" | "buff" | "hit" | "death" | OptionalRole;
 type AnimSet = Record<Exclude<AnimRole, OptionalRole>, string> & Partial<Record<OptionalRole, string>>;
 
@@ -213,11 +213,21 @@ for (const [m, p] of Object.entries(NPC_CLIP_PREFIX)) REMASTER_SETS[m] = npcSet(
  * recruta, o andar e o correr; os outros papéis caem no parado até ganharem clipe.
  */
 const V4_SET: AnimSet = {
-  idle: "rc.idle", walk: "base.walk", run: "base.run", attack: "rc.idle", skill: "rc.idle", buff: "rc.idle", hit: "rc.idle", death: "rc.idle",
+  idle: "rc.idle", walk: "base.walk", run: "base.run", attack: "rc.idle", skill: "rc.idle", buff: "rc.idle",
+  hit: "base.hit", hit2: "base.hit2", death: "base.death", death2: "base.death2",
 };
+/** Camada do Cavaleiro (docs/arte/herois-v4/movimento.md, seção 4; tools/art/herois-v4/anim_knight.py). */
+const V4_KNIGHT: AnimSet = {
+  ...V4_SET, idle: "kn.idle", attack: "kn.attack.sword.1", attack2: "kn.attack.sword.2", attack3: "kn.attack.sword.3",
+  skill: "kn.attack.sword.3", stance: "kn.stance", block: "kn.block",
+};
+// impacto dos golpes do Cavaleiro (quadro do contrato / 30)
+CLIP_IMPACT["kn.attack.sword.1"] = 13 / 30;
+CLIP_IMPACT["kn.attack.sword.2"] = 12 / 30;
+CLIP_IMPACT["kn.attack.sword.3"] = 16 / 30;
 const V4_FOOT_SPEEDS = { walk: 1.1, run: 4.41 }; // medidos no Blender (tools/art/herois-v4/retarget_meshy.py, clips-base.json)
 const isV4Hero = (model: string) => HEROIS_V4 && HERO_MODELS.includes(model);
-if (HEROIS_V4) for (const m of HERO_MODELS) REMASTER_SETS[m] = V4_SET;
+if (HEROIS_V4) for (const m of HERO_MODELS) REMASTER_SETS[m] = m === "knight" ? V4_KNIGHT : V4_SET;
 
 /**
  * Conjunto de clipes quando o herói segura uma arma de duas mãos (e a esquerda está vazia): parado, andar e

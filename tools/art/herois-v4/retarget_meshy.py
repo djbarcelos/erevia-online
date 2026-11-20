@@ -22,7 +22,7 @@ from anim_util import fist_basis, foot_speed, palm_twist, rot_y  # noqa: E402
 
 args = sys.argv[sys.argv.index("--") + 1:]
 src_glb, clips_json = args[0], args[1]
-pairs = [a.split("=", 1) for a in args[2:] if "=" in a]
+pairs = [a.split("=", 1) for a in args[2:] if "=" in a]  # alvo=fonte, ou alvo=fonte:once (sem laço)
 TWIST_ON = "--no-twist" not in args
 FPS = 30
 P = "mixamorig:"
@@ -81,13 +81,14 @@ def set_action(obj, act):
         pass
 
 
-def sample(src_act):
-    """Pose do alvo (matriz de base por osso) em cada quadro da ação da fonte."""
+def sample(src_act, once=False):
+    """Pose do alvo (matriz de base por osso) em cada quadro da ação da fonte. `once`: clipe único (dano,
+    morte): o quadril guarda o deslocamento todo (cai e fica no chão) e o laço não fecha."""
     set_action(src, src_act)
     n = max(2, round(src_act.frame_range[1]))
     hips = []
     frames = []
-    for f in range(n):
+    for f in range(n + (1 if once else 0)):  # o clipe único vai até o último quadro
         sc.frame_set(f)
         W = {s: smw @ src.pose.bones[s].matrix for s in MAP.values()}
         hips.append(W[P + "Hips"].to_translation())
@@ -98,8 +99,12 @@ def sample(src_act):
     for f, W in enumerate(frames):
         u = f / n
         d = hips[f] - hips_rest
-        d.x -= (h0.x - hips_rest.x) + (h1.x - h0.x) * u
-        d.y -= (h0.y - hips_rest.y) + (h1.y - h0.y) * u
+        if not once:
+            d.x -= (h0.x - hips_rest.x) + (h1.x - h0.x) * u
+            d.y -= (h0.y - hips_rest.y) + (h1.y - h0.y) * u
+        else:  # começa no lugar (o personagem não pula no primeiro quadro)
+            d.x -= h0.x - hips_rest.x
+            d.y -= h0.y - hips_rest.y
         d *= k_hip
         Pp, Ps, basis = {}, {}, {}
         for b in TB:
@@ -127,14 +132,14 @@ def sample(src_act):
     return out
 
 
-def write(name, poses):
+def write(name, poses, once=False):
     old = bpy.data.actions.get(name)
     if old:
         bpy.data.actions.remove(old)
     act = bpy.data.actions.new(name)
     set_action(arm, act)
     prevq = {}
-    seq = poses + [poses[0]]  # o último quadro repete o primeiro
+    seq = poses if once else poses + [poses[0]]  # no laço, o último quadro repete o primeiro
     for f, basis in enumerate(seq):
         for b in TB:
             pb = arm.pose.bones[b.name]
@@ -155,10 +160,12 @@ def write(name, poses):
 
 clips = json.load(open(clips_json)) if os.path.exists(clips_json) else {}
 for target, src_name in pairs:
+    once = src_name.endswith(":once")
+    src_name = src_name.split(":")[0]
     sa = bpy.data.actions[src_name]
-    act, frames = write(target, sample(sa))
-    fs = None if "idle" in target else foot_speed(arm, sc, act, frames, FPS)
-    clips[target] = {"frames": frames, "loop": True, "impact": [], "footSpeed": fs, "capeSpring": 1, "fonte": f"meshy:{src_name}"}
+    act, frames = write(target, sample(sa, once), once)
+    fs = None if ("idle" in target or once) else foot_speed(arm, sc, act, frames, FPS)
+    clips[target] = {"frames": frames, "loop": not once, "impact": [], "footSpeed": fs, "capeSpring": 1, "fonte": f"meshy:{src_name}"}
     print("CLIPE", target, "<-", src_name, clips[target])
 
 for o in new:

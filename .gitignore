@@ -13,3 +13,5 @@ client/public/ktx2/
 
 # Resultados brutos das medições de FPS com GPU (e2e/bench-gpu.mjs)
 .bench/
+
+__pycache__/
