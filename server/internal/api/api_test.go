@@ -139,8 +139,9 @@ func TestLoginAndCharacters(t *testing.T) {
 		t.Fatalf("created with look = %+v", beto)
 	}
 	c.do("POST", "/api/characters", `{"name":"Caio","class":"barbarian"}`, nil)
-	if code := c.do("POST", "/api/characters", `{"name":"Dani","class":"knight"}`, nil); code != http.StatusConflict {
-		t.Fatalf("4th character = %d, want 409", code)
+	c.do("POST", "/api/characters", `{"name":"Dani","class":"knight"}`, nil)
+	if code := c.do("POST", "/api/characters", `{"name":"Ema","class":"knight"}`, nil); code != http.StatusConflict {
+		t.Fatalf("5th character = %d, want 409", code)
 	}
 
 	var list struct {
@@ -153,7 +154,7 @@ func TestLoginAndCharacters(t *testing.T) {
 		Max int
 	}
 	c.do("GET", "/api/characters", "", &list)
-	if len(list.Characters) != 3 || list.Max != 3 {
+	if len(list.Characters) != 4 || list.Max != 4 {
 		t.Fatalf("list = %+v", list)
 	}
 	// A lista mostra o que cada um tem nas mãos e a cor (padrão da classe quando não escolhida).

@@ -72,12 +72,13 @@ func TestCharacters(t *testing.T) {
 
 	s.CreateCharacter(ctx, acc, "Beto", "rogue", game.DefaultLook("rogue"))
 	s.CreateCharacter(ctx, acc, "Caio", "knight", game.DefaultLook("knight"))
-	if _, err := s.CreateCharacter(ctx, acc, "Dani", "barbarian", game.DefaultLook("barbarian")); !errors.Is(err, store.ErrTooManyCharacters) {
-		t.Fatalf("4th character: %v", err)
+	s.CreateCharacter(ctx, acc, "Dani", "barbarian", game.DefaultLook("barbarian"))
+	if _, err := s.CreateCharacter(ctx, acc, "Ema", "barbarian", game.DefaultLook("barbarian")); !errors.Is(err, store.ErrTooManyCharacters) {
+		t.Fatalf("5th character: %v", err)
 	}
 
 	list, err := s.ListCharacters(ctx, acc)
-	if err != nil || len(list) != 3 {
+	if err != nil || len(list) != store.MaxCharsPerAccount {
 		t.Fatalf("list = %v, %v", list, err)
 	}
 
