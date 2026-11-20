@@ -121,9 +121,9 @@ func (z *Zone) basicAttack(src, dst *entity) {
 	z.applyHit(src, dst, 0, hit, magic)
 }
 
-// skillMP: custo de mana no rank (Sobrecarga encarece 10%).
+// skillMP: custo de mana no rank (Sobrecarga encarece 10%; Mente Clara barateia).
 func skillMP(p *entity, s *game.SkillDef) float64 {
-	return game.SkillMPCost(s, p.pl.rank(s.ID), p.pl.passives.Has(game.PassiveOverload))
+	return game.SkillMPCost(s, p.pl.rank(s.ID), p.pl.passives)
 }
 
 // skillCD: recarga no rank, dividida pela velocidade de conjuração.

@@ -84,21 +84,21 @@ const (
 type PassiveKind uint8
 
 const (
-	PassiveNone       PassiveKind = iota
-	PassivePDefPct                // +Value de defesa física
-	PassiveSwordPAtk              // +Value de ataque físico com espada
-	PassiveLastStand              // abaixo de 30% de vida: escudo de Value × vida máx. (recarga 60 s)
-	PassiveCourage                // aliados a até 10 m regeneram Value de vida por segundo
-	PassiveCritDamage             // +Value no multiplicador do crítico
-	PassiveLifesteal              // recupera Value do dano causado como vida
-	PassiveMaxHPPct               // +Value de vida máxima
-	PassiveBearSpirit             // abaixo de 50% de vida: regenera Value × vida máx. por segundo
-	PassiveFireBurn               // skills de fogo queimam: Value × ataque mágico por segundo, 3 s
-	PassiveMPRegenPct             // +Value de regeneração de mana
-	PassiveOverload               // +Value de ataque mágico; skills custam 10% a mais de mana
-	PassiveCrit                   // +Value de chance de crítico
-	PassiveEvasion                // +Value de esquiva
-	PassivePoisonProc             // Value = chance de envenenar ao acertar (4% do ataque/s, 5 s)
+	PassiveNone         PassiveKind = iota
+	PassivePDefPct                  // +Value de defesa física
+	PassiveSwordPAtk                // +Value de ataque físico com espada
+	PassiveLastStand                // abaixo de 30% de vida: escudo de Value × vida máx. (recarga 60 s)
+	PassiveCourage                  // aliados a até 10 m regeneram Value de vida por segundo
+	PassiveCritDamage               // +Value no multiplicador do crítico
+	PassiveLifesteal                // recupera Value do dano causado como vida
+	PassiveMaxHPPct                 // +Value de vida máxima
+	PassiveBearSpirit               // abaixo de 50% de vida: regenera Value × vida máx. por segundo
+	PassiveFireBurn                 // skills de fogo queimam: Value × ataque mágico por segundo, 3 s
+	PassiveMPEfficiency             // -Value no custo de mana (teto MPEfficiencyCap)
+	PassiveOverload                 // +Value de ataque mágico; skills custam 10% a mais de mana
+	PassiveCrit                     // +Value de chance de crítico
+	PassiveEvasion                  // +Value de esquiva
+	PassivePoisonProc               // Value = chance de envenenar ao acertar (4% do ataque/s, 5 s)
 
 	passiveKindCount // sempre o último: tamanho de Passives
 )
@@ -146,6 +146,7 @@ const (
 	BearBelow        = 0.50 // Espírito do Urso
 	FireBurnSeconds  = 3.0  // Brasa Viva
 	OverloadMPCost   = 1.10 // Sobrecarga
+	MPEfficiencyCap  = 0.25 // Mente Clara: no máximo −25% no custo de mana
 	PoisonProcFrac   = 0.04 // Lâmina Envenenada: 4% do ataque por segundo…
 	PoisonProcSecs   = 5.0  // …por 5 s
 	PlagueSpread     = 6.0  // Praga: raio do contágio
@@ -661,9 +662,9 @@ func mageTree() []*SkillDef {
 			FX:       "m_prison", Description: "Prende o alvo num bloco de gelo.",
 			Text: func(int) string { return "Causa 50% do ataque mágico e prende o alvo no lugar por 4 s." }},
 		{ID: SkillClearMind, Class: c, Name: "Mente Clara", Branch: 2, Tier: 0, MaxRank: 5,
-			Passive: PassiveMPRegenPct, PValue: Scale{0.1, 0.1}, FX: "m_mind",
-			Description: "Meditação constante.",
-			Text:        func(r int) string { return fmt.Sprintf("+%s de regeneração de mana.", pct(0.1*float64(r))) }},
+			Passive: PassiveMPEfficiency, PValue: Scale{0.05, 0.05}, FX: "m_mind",
+			Description: "Meditação constante: cada feitiço gasta menos.",
+			Text:        func(r int) string { return fmt.Sprintf("−%s no custo de mana das skills.", pct(0.05*float64(r))) }},
 		{ID: SkillArcaneShield, Class: c, Name: "Escudo Arcano", Branch: 2, Tier: 1, MaxRank: 3,
 			Target: TargetSelf, MP: Scale{25, 0}, CD: Scale{30, 0},
 			OnSelf: &EffectSpec{Kind: EffectManaShield, Duration: Scale{8, 2}, Value: Scale{1, 0}},

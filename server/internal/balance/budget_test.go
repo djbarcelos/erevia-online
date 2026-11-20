@@ -72,32 +72,33 @@ var knownExceptions = map[string]float64{
 	"item:ear_epic":                      0.26,  // Lágrima da Lua (épica, nível 18): poder 31,0, orçamento 24,6
 	"item:neck_epic":                     0.26,  // Coração do Abismo (épica, nível 18): poder 45,0, orçamento 35,8
 	"item:neck_legend":                   0.29,  // Colar do Rei Ossário (lendária, nível 20): poder 57,0, orçamento 44,3
-	"ttk:13–19:Cavaleiro":                0.53,  // Cavaleiro no 13–19: 2,6 s para matar, média da faixa 1,7 s
-	"ttk:13–19:Mago":                     -0.45, // Mago no 13–19: 0,9 s para matar, média da faixa 1,7 s
-	"ttk:1–5:Cavaleiro":                  0.96,  // Cavaleiro no 1–5: 3,1 s para matar, média da faixa 1,6 s
-	"ttk:1–5:Mago":                       -0.86, // Mago no 1–5: 0,2 s para matar, média da faixa 1,6 s
-	"ttk:20–24:Bárbaro/Berserker":        -0.37, // Bárbaro/Berserker no 20–24: 3,0 s para matar, média da faixa 4,7 s
-	"ttk:20–24:Bárbaro/Senhor da Guerra": 0.24,  // Bárbaro/Senhor da Guerra no 20–24: 5,9 s para matar, média da faixa 4,7 s
-	"ttk:20–24:Cavaleiro/Bastião":        1.34,  // Cavaleiro/Bastião no 20–24: 11,1 s para matar, média da faixa 4,7 s
-	"ttk:20–24:Cavaleiro/Paladino":       0.24,  // Cavaleiro/Paladino no 20–24: 5,8 s para matar, média da faixa 4,7 s
-	"ttk:20–24:Ladino/Assassino":         -0.42, // Ladino/Assassino no 20–24: 2,7 s para matar, média da faixa 4,7 s
-	"ttk:20–24:Mago/Arcanista":           -0.25, // Mago/Arcanista no 20–24: 3,6 s para matar, média da faixa 4,7 s
-	"ttk:20–24:Mago/Elementalista":       -0.65, // Mago/Elementalista no 20–24: 1,7 s para matar, média da faixa 4,7 s
-	"ttk:25–29:Bárbaro/Berserker":        -0.37, // Bárbaro/Berserker no 25–29: 2,9 s para matar, média da faixa 4,6 s
-	"ttk:25–29:Bárbaro/Senhor da Guerra": 0.25,  // Bárbaro/Senhor da Guerra no 25–29: 5,8 s para matar, média da faixa 4,6 s
-	"ttk:25–29:Cavaleiro/Bastião":        1.44,  // Cavaleiro/Bastião no 25–29: 11,3 s para matar, média da faixa 4,6 s
-	"ttk:25–29:Cavaleiro/Paladino":       0.27,  // Cavaleiro/Paladino no 25–29: 5,9 s para matar, média da faixa 4,6 s
-	"ttk:25–29:Ladino/Assassino":         -0.45, // Ladino/Assassino no 25–29: 2,6 s para matar, média da faixa 4,6 s
-	"ttk:25–29:Ladino/Patrulheiro":       -0.15, // Ladino/Patrulheiro no 25–29: 3,9 s para matar, média da faixa 4,6 s
-	"ttk:25–29:Mago/Arcanista":           -0.35, // Mago/Arcanista no 25–29: 3,0 s para matar, média da faixa 4,6 s
-	"ttk:25–29:Mago/Elementalista":       -0.64, // Mago/Elementalista no 25–29: 1,7 s para matar, média da faixa 4,6 s
+	"ttk:13–19:Cavaleiro":                0.55,  // Cavaleiro no 13–19: 2,8 s para matar, média da faixa 1,8 s
+	"ttk:13–19:Mago":                     -0.47, // Mago no 13–19: 0,9 s para matar, média da faixa 1,8 s
+	"ttk:1–5:Bárbaro":                    0.24,  // Bárbaro no 1–5: 2,1 s para matar, média da faixa 1,7 s
+	"ttk:1–5:Cavaleiro":                  0.79,  // Cavaleiro no 1–5: 3,0 s para matar, média da faixa 1,7 s
+	"ttk:1–5:Mago":                       -0.89, // Mago no 1–5: 0,2 s para matar, média da faixa 1,7 s
+	"ttk:20–24:Bárbaro/Berserker":        -0.38, // Bárbaro/Berserker no 20–24: 3,0 s para matar, média da faixa 4,8 s
+	"ttk:20–24:Bárbaro/Senhor da Guerra": 0.24,  // Bárbaro/Senhor da Guerra no 20–24: 5,9 s para matar, média da faixa 4,8 s
+	"ttk:20–24:Cavaleiro/Bastião":        1.39,  // Cavaleiro/Bastião no 20–24: 11,4 s para matar, média da faixa 4,8 s
+	"ttk:20–24:Cavaleiro/Paladino":       0.24,  // Cavaleiro/Paladino no 20–24: 5,9 s para matar, média da faixa 4,8 s
+	"ttk:20–24:Ladino/Assassino":         -0.43, // Ladino/Assassino no 20–24: 2,7 s para matar, média da faixa 4,8 s
+	"ttk:20–24:Mago/Arcanista":           -0.26, // Mago/Arcanista no 20–24: 3,6 s para matar, média da faixa 4,8 s
+	"ttk:20–24:Mago/Elementalista":       -0.66, // Mago/Elementalista no 20–24: 1,7 s para matar, média da faixa 4,8 s
+	"ttk:25–29:Bárbaro/Berserker":        -0.37, // Bárbaro/Berserker no 25–29: 2,9 s para matar, média da faixa 4,7 s
+	"ttk:25–29:Bárbaro/Senhor da Guerra": 0.26,  // Bárbaro/Senhor da Guerra no 25–29: 5,8 s para matar, média da faixa 4,7 s
+	"ttk:25–29:Cavaleiro/Bastião":        1.45,  // Cavaleiro/Bastião no 25–29: 11,4 s para matar, média da faixa 4,7 s
+	"ttk:25–29:Cavaleiro/Paladino":       0.27,  // Cavaleiro/Paladino no 25–29: 5,9 s para matar, média da faixa 4,7 s
+	"ttk:25–29:Ladino/Assassino":         -0.45, // Ladino/Assassino no 25–29: 2,6 s para matar, média da faixa 4,7 s
+	"ttk:25–29:Ladino/Patrulheiro":       -0.16, // Ladino/Patrulheiro no 25–29: 3,9 s para matar, média da faixa 4,7 s
+	"ttk:25–29:Mago/Arcanista":           -0.35, // Mago/Arcanista no 25–29: 3,0 s para matar, média da faixa 4,7 s
+	"ttk:25–29:Mago/Elementalista":       -0.65, // Mago/Elementalista no 25–29: 1,7 s para matar, média da faixa 4,7 s
 	"ttk:30–34:Bárbaro/Berserker":        -0.31, // Bárbaro/Berserker no 30–34: 3,7 s para matar, média da faixa 5,3 s
-	"ttk:30–34:Bárbaro/Senhor da Guerra": 0.26,  // Bárbaro/Senhor da Guerra no 30–34: 6,7 s para matar, média da faixa 5,3 s
-	"ttk:30–34:Cavaleiro/Bastião":        1.36,  // Cavaleiro/Bastião no 30–34: 12,5 s para matar, média da faixa 5,3 s
-	"ttk:30–34:Cavaleiro/Paladino":       0.29,  // Cavaleiro/Paladino no 30–34: 6,8 s para matar, média da faixa 5,3 s
+	"ttk:30–34:Bárbaro/Senhor da Guerra": 0.30,  // Bárbaro/Senhor da Guerra no 30–34: 6,9 s para matar, média da faixa 5,3 s
+	"ttk:30–34:Cavaleiro/Bastião":        1.34,  // Cavaleiro/Bastião no 30–34: 12,5 s para matar, média da faixa 5,3 s
+	"ttk:30–34:Cavaleiro/Paladino":       0.28,  // Cavaleiro/Paladino no 30–34: 6,8 s para matar, média da faixa 5,3 s
 	"ttk:30–34:Ladino/Assassino":         -0.43, // Ladino/Assassino no 30–34: 3,0 s para matar, média da faixa 5,3 s
 	"ttk:30–34:Ladino/Patrulheiro":       -0.23, // Ladino/Patrulheiro no 30–34: 4,1 s para matar, média da faixa 5,3 s
-	"ttk:30–34:Mago/Arcanista":           -0.31, // Mago/Arcanista no 30–34: 3,6 s para matar, média da faixa 5,3 s
+	"ttk:30–34:Mago/Arcanista":           -0.32, // Mago/Arcanista no 30–34: 3,6 s para matar, média da faixa 5,3 s
 	"ttk:30–34:Mago/Elementalista":       -0.64, // Mago/Elementalista no 30–34: 1,9 s para matar, média da faixa 5,3 s
 	"ttk:35–40:Bárbaro/Berserker":        -0.35, // Bárbaro/Berserker no 35–40: 2,6 s para matar, média da faixa 4,0 s
 	"ttk:35–40:Bárbaro/Senhor da Guerra": 0.29,  // Bárbaro/Senhor da Guerra no 35–40: 5,1 s para matar, média da faixa 4,0 s
@@ -107,9 +108,9 @@ var knownExceptions = map[string]float64{
 	"ttk:35–40:Ladino/Patrulheiro":       -0.32, // Ladino/Patrulheiro no 35–40: 2,7 s para matar, média da faixa 4,0 s
 	"ttk:35–40:Mago/Arcanista":           -0.35, // Mago/Arcanista no 35–40: 2,6 s para matar, média da faixa 4,0 s
 	"ttk:35–40:Mago/Elementalista":       -0.67, // Mago/Elementalista no 35–40: 1,3 s para matar, média da faixa 4,0 s
-	"ttk:6–12:Bárbaro":                   0.20,  // Bárbaro no 6–12: 2,1 s para matar, média da faixa 1,7 s
-	"ttk:6–12:Cavaleiro":                 0.69,  // Cavaleiro no 6–12: 2,9 s para matar, média da faixa 1,7 s
-	"ttk:6–12:Mago":                      -0.80, // Mago no 6–12: 0,3 s para matar, média da faixa 1,7 s
+	"ttk:6–12:Bárbaro":                   0.24,  // Bárbaro no 6–12: 2,2 s para matar, média da faixa 1,8 s
+	"ttk:6–12:Cavaleiro":                 0.69,  // Cavaleiro no 6–12: 3,0 s para matar, média da faixa 1,8 s
+	"ttk:6–12:Mago":                      -0.81, // Mago no 6–12: 0,3 s para matar, média da faixa 1,8 s
 }
 
 func TestPowerBudget(t *testing.T) {

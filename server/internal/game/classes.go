@@ -43,29 +43,37 @@ type ClassDef struct {
 	// Tipos de arma (Weapons) e de mão secundária (Offhands) que a classe usa; a
 	// especialização pode trocar a lista (SpecDef.Weapons/Offhands).
 	Weapons, Offhands []string
+	// MPRegenMult: multiplica a regeneração de mana (0 = 1). O Mago regenera menos e
+	// escolhe quando conjurar; o Bárbaro (mana pequena) regenera mais para o kit base não
+	// secar numa luta de 60 s (TestManaSustain), e o Cavaleiro um pouco mais
+	// (docs/evolucoes/README.md, seção 4).
+	MPRegenMult float64
 }
 
 var Classes = map[string]*ClassDef{
 	"knight": {
 		ID: "knight", Name: "Cavaleiro",
-		Base:     Stats{MaxHP: 160, MaxMP: 40, PAtk: 8, MAtk: 4, PDef: 24, MDef: 15, Range: 2.2, AtkInterval: 1.2, Crit: 0.05, Speed: 5},
-		PerLevel: Stats{MaxHP: 22, MaxMP: 4, PAtk: 2.2, MAtk: 0.5, PDef: 3.5, MDef: 2},
-		Skills:   [2]uint32{SkillShieldBash, SkillFortress},
-		Weapons:  []string{WeaponSword}, Offhands: []string{OffhandShield},
+		MPRegenMult: 1.3,
+		Base:        Stats{MaxHP: 160, MaxMP: 40, PAtk: 8, MAtk: 4, PDef: 24, MDef: 15, Range: 2.2, AtkInterval: 1.2, Crit: 0.05, Speed: 5},
+		PerLevel:    Stats{MaxHP: 22, MaxMP: 4, PAtk: 2.2, MAtk: 0.5, PDef: 3.5, MDef: 2},
+		Skills:      [2]uint32{SkillShieldBash, SkillFortress},
+		Weapons:     []string{WeaponSword}, Offhands: []string{OffhandShield},
 	},
 	"barbarian": {
 		ID: "barbarian", Name: "Bárbaro",
-		Base:     Stats{MaxHP: 150, MaxMP: 35, PAtk: 10, MAtk: 3, PDef: 16, MDef: 12, Range: 2.2, AtkInterval: 1.4, Crit: 0.10, Speed: 5},
-		PerLevel: Stats{MaxHP: 20, MaxMP: 3, PAtk: 3.0, MAtk: 0.4, PDef: 2.5, MDef: 1.5},
-		Skills:   [2]uint32{SkillBrutalStrike, SkillFury},
-		Weapons:  []string{WeaponAxe}, Offhands: []string{OffhandShield},
+		MPRegenMult: 1.5,
+		Base:        Stats{MaxHP: 150, MaxMP: 35, PAtk: 10, MAtk: 3, PDef: 16, MDef: 12, Range: 2.2, AtkInterval: 1.4, Crit: 0.10, Speed: 5},
+		PerLevel:    Stats{MaxHP: 20, MaxMP: 3, PAtk: 3.0, MAtk: 0.4, PDef: 2.5, MDef: 1.5},
+		Skills:      [2]uint32{SkillBrutalStrike, SkillFury},
+		Weapons:     []string{WeaponAxe}, Offhands: []string{OffhandShield},
 	},
 	"mage": {
 		ID: "mage", Name: "Mago",
-		Base:     Stats{MaxHP: 95, MaxMP: 120, PAtk: 6, MAtk: 12, PDef: 12, MDef: 25, Range: 12, AtkInterval: 1.6, Crit: 0.05, Speed: 5, Magic: true},
-		PerLevel: Stats{MaxHP: 11, MaxMP: 14, PAtk: 0.6, MAtk: 3.2, PDef: 1.5, MDef: 3},
-		Skills:   [2]uint32{SkillFireball, SkillIceNova},
-		Weapons:  []string{WeaponStaff, WeaponWand},
+		MPRegenMult: 0.75,
+		Base:        Stats{MaxHP: 95, MaxMP: 120, PAtk: 6, MAtk: 12, PDef: 12, MDef: 25, Range: 12, AtkInterval: 1.6, Crit: 0.05, Speed: 5, Magic: true},
+		PerLevel:    Stats{MaxHP: 11, MaxMP: 14, PAtk: 0.6, MAtk: 3.2, PDef: 1.5, MDef: 3},
+		Skills:      [2]uint32{SkillFireball, SkillIceNova},
+		Weapons:     []string{WeaponStaff, WeaponWand},
 	},
 	"rogue": {
 		ID: "rogue", Name: "Ladino",

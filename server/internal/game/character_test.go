@@ -37,11 +37,14 @@ func TestCharacterStatsPipeline(t *testing.T) {
 	for class := range Classes {
 		got := CharacterStats(class, "", 9, Attrs{}, Stats{}, nil, "")
 		want := FinishRegen(ApplyAttrs(ClassStats(class, 9), class, 9, ClassBaseAttrs[class]), class, ClassBaseAttrs[class])
+		if m := Classes[class].MPRegenMult; m > 0 {
+			want.MPRegen *= m
+		}
 		if got != want {
 			t.Errorf("%s: %+v, want %+v", class, got, want)
 		}
 	}
-	// Esgrima só com espada; Mente Clara multiplica a mana regenerada.
+	// Esgrima só com espada; a Mente Clara não mexe na regeneração (barateia o custo).
 	ranks := map[uint32]int{SkillFencing: 5, SkillClearMind: 2}
 	sword := CharacterStats("knight", "", 10, Attrs{}, Stats{}, ranks, WeaponSword)
 	none := CharacterStats("knight", "", 10, Attrs{}, Stats{}, ranks, "")
@@ -49,7 +52,7 @@ func TestCharacterStatsPipeline(t *testing.T) {
 		t.Errorf("Esgrima 5: %.2f / %.2f", sword.PAtk, none.PAtk)
 	}
 	plain := CharacterStats("knight", "", 10, Attrs{}, Stats{}, nil, "")
-	if math.Abs(none.MPRegen/plain.MPRegen-1.2) > 1e-9 {
+	if none.MPRegen != plain.MPRegen {
 		t.Errorf("Mente Clara 2: %.3f / %.3f", none.MPRegen, plain.MPRegen)
 	}
 	// Bônus da especialização entra como atributo.
@@ -63,10 +66,37 @@ func TestCharacterStatsPipeline(t *testing.T) {
 	}
 	// Custo e recarga.
 	fb := Skills[SkillFireball]
-	if SkillMPCost(fb, 1, false) != 15 || SkillMPCost(fb, 1, true) != math.Round(15*OverloadMPCost) {
+	if SkillMPCost(fb, 1, Passives{}) != 15 || SkillMPCost(fb, 1, overloadOnly()) != math.Round(15*OverloadMPCost) {
 		t.Error("custo da Bola de Fogo")
 	}
 	if SkillCooldownFor(fb, 1, 1.5) != 2 || SkillCooldownFor(fb, 1, 0) != 3 {
 		t.Error("recarga da Bola de Fogo")
+	}
+}
+
+func overloadOnly() Passives {
+	var p Passives
+	p[PassiveOverload] = 0.1
+	return p
+}
+
+func TestClearMindCutsManaCost(t *testing.T) {
+	fb := Skills[SkillFireball]
+	mind := PassiveTotals(map[uint32]int{SkillClearMind: 5})
+	if got := SkillMPCost(fb, 1, mind); got != math.Round(15*0.75) {
+		t.Errorf("Mente Clara 5: custo %v, want %v", got, math.Round(15*0.75))
+	}
+	var lots Passives
+	lots[PassiveMPEfficiency] = 0.9
+	if SkillMPCost(fb, 1, lots) != math.Round(15*(1-MPEfficiencyCap)) {
+		t.Error("teto de 25% na eficiência de mana")
+	}
+	// O Mago regenera 0,75× a mana; a Mente Clara não mexe mais na regeneração.
+	with := CharacterStats("mage", "", 10, Attrs{}, Stats{}, map[uint32]int{SkillClearMind: 5}, WeaponStaff).MPRegen
+	Classes["mage"].MPRegenMult = 1
+	without := CharacterStats("mage", "", 10, Attrs{}, Stats{}, nil, WeaponStaff).MPRegen
+	Classes["mage"].MPRegenMult = 0.75
+	if math.Abs(with-without*0.75) > 1e-9 {
+		t.Errorf("regeneração do Mago %v, want 0,75 × %v", with, without)
 	}
 }

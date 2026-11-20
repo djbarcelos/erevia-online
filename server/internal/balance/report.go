@@ -147,6 +147,29 @@ func (r *Report) WriteMarkdown(w io.Writer) {
 		pf("%s\n", strings.Join(parts, " · "))
 	}
 
+	pf("\n## Mana numa luta de %.0f s (sem poções)\n\n", ManaFightTime)
+	pf("Em quanto tempo a mana não paga mais a skill de dano mais barata da rotação, contra o primeiro monstro da caça; \"dura\" = a luta inteira. O Bárbaro tem que durar sempre (TestManaSustain).\n\n")
+	for _, b := range Bands {
+		pf("- **%s**: ", b)
+		var parts []string
+		for _, p := range BandEntities(b) {
+			worst := math.Inf(1)
+			for l := b.Lo; l <= b.Hi; l++ {
+				pp := p
+				if l < game.SpecLevel {
+					pp.Spec = ""
+				}
+				worst = math.Min(worst, ManaDry(NewBuild(pp, l, 0), HuntFor(l).Monsters[0].Def, l))
+			}
+			v := "dura"
+			if !math.IsInf(worst, 1) {
+				v = num(worst, 0) + " s"
+			}
+			parts = append(parts, fmt.Sprintf("%s %s", p.Name(), v))
+		}
+		pf("%s\n", strings.Join(parts, " · "))
+	}
+
 	pf("\n## Orçamento de poder dos itens\n\n")
 	pf("Poder = ataque + defesas + vida/10 + mana/10 + 1 por 1%% de crítico e de velocidade + … (pesos em `power.go`). Orçamento = (%s + %s × (nível − 1)) × raridade (%s) × peso do encaixe. **%% orç.**: poder +0 ÷ orçamento (tolerância +%s). **+10 ÷ próxima**: o +10 contra a peça seguinte da escada +0 (tolerância +%s).\n\n",
 		num(budgetBase, 0), num(budgetPerLevel, 1), gradeList(), pct(ItemTolerance)[1:], pct(EnchantTolerance)[1:])

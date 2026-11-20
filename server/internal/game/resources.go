@@ -12,18 +12,18 @@ import "math"
 type GenEvent uint8
 
 const (
-	GenBasicHit       GenEvent = iota // ataque básico acertado
-	GenSkillHit                       // skill de dano acertada (por alvo, até o teto de alvos)
-	GenCrit                           // golpe crítico (básico ou skill)
-	GenDamageTaken                    // golpe de inimigo recebido
-	GenMeleeTaken                     // golpe de inimigo a até MeleeTakenRange recebido
-	GenBlock                          // golpe bloqueado com escudo
-	GenDistinctCast                   // lançar uma skill diferente da última
-	GenNewEffect                      // aplicar num inimigo um efeito que ele ainda não tinha
-	GenKill                           // abate de inimigo em que você causou dano
-	GenEngage                         // primeiro golpe num inimigo que não estava lutando
-	GenBackstab                       // golpe pelas costas (cone de BackstabCone atrás do alvo)
-	GenExtraTarget                    // cada alvo além do primeiro numa skill (até o teto)
+	GenBasicHit     GenEvent = iota // ataque básico acertado
+	GenSkillHit                     // skill de dano acertada (por alvo, até o teto de alvos)
+	GenCrit                         // golpe crítico (básico ou skill)
+	GenDamageTaken                  // golpe de inimigo recebido
+	GenMeleeTaken                   // golpe de inimigo a até MeleeTakenRange recebido
+	GenBlock                        // golpe bloqueado com escudo
+	GenDistinctCast                 // lançar uma skill diferente da última
+	GenNewEffect                    // aplicar num inimigo um efeito que ele ainda não tinha
+	GenKill                         // abate de inimigo em que você causou dano
+	GenEngage                       // primeiro golpe num inimigo que não estava lutando
+	GenBackstab                     // golpe pelas costas (cone de BackstabCone atrás do alvo)
+	GenExtraTarget                  // cada alvo além do primeiro numa skill (até o teto)
 	genEventCount
 )
 
